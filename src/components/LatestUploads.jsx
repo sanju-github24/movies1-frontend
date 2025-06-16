@@ -1,64 +1,45 @@
-// src/pages/LatestUploads.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useContext, useState } from 'react';
 import { formatDistanceToNow, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { supabase } from '../utils/supabaseClient';   // ← make sure this exists
+import { AppContext } from '../context/AppContext';
 
 const LatestUploads = () => {
-  const [movies, setMovies]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tick, setTick]       = useState(0);          // forces “time‑ago” refresh
+  const { movies, fetchMovies } = useContext(AppContext);
+  const [tick, setTick] = useState(0);
 
-  /* 🔄 auto‑refresh “x minutes ago” every 60 s */
+  // 🔄 Update "x minutes ago" text every minute
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  /* 🗄️ fetch last‑week movies from Supabase */
+  // 📦 Refetch movies once on mount
   useEffect(() => {
-    const fetchMovies = async () => {
-      setLoading(true);
-
-      // 1 week ago (UTC)
-      const oneWeekAgo = subDays(new Date(), 7).toISOString();
-
-      const { data, error } = await supabase
-        .from('movies')
-        .select('*')
-        .gte('createdAt', oneWeekAgo)          // created in last 7 days
-        .order('createdAt', { ascending: false });
-
-      if (error) {
-        console.error('Supabase fetch error:', error.message);
-        setMovies([]);
-      } else {
-        setMovies(data || []);
-      }
-      setLoading(false);
-    };
-
     fetchMovies();
-  }, []);  // run once on mount
+  }, []);
+
+  // Filter movies uploaded in the last 7 days
+  const recentMovies = movies.filter((movie) => {
+    const created = new Date(movie.createdAt || movie.created_at);
+    const oneWeekAgo = subDays(new Date(), 7);
+    return created > oneWeekAgo;
+  });
 
   return (
     <div className="px-4 sm:px-10 py-8">
       <h2 className="text-2xl font-bold mb-4 text-white bg-blue-600 inline-block px-7 py-3 rounded-md shadow hover:bg-blue-700 transition">
-        Week Releases
+        Week Releases
       </h2>
 
-      {loading ? (
-        <p className="text-gray-400">Loading…</p>
-      ) : movies.length === 0 ? (
-        <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
+      {recentMovies.length === 0 ? (
+        <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {movies.map((movie) => {
-            const created = new Date(movie.createdAt);
-            const timeAgo =
-              isNaN(created)
-                ? 'Unknown date'
-                : formatDistanceToNow(created, { addSuffix: true });
+          {recentMovies.map((movie) => {
+            const created = new Date(movie.createdAt || movie.created_at);
+            const timeAgo = isNaN(created)
+              ? 'Unknown date'
+              : formatDistanceToNow(created, { addSuffix: true });
 
             const languages = Array.isArray(movie.language)
               ? movie.language.join(', ')
@@ -73,7 +54,9 @@ const LatestUploads = () => {
                 <img
                   src={movie.poster || '/default-poster.jpg'}
                   alt={movie.title}
-                  onError={(e) => { e.currentTarget.src = '/default-poster.jpg'; }}
+                  onError={(e) => {
+                    e.currentTarget.src = '/default-poster.jpg';
+                  }}
                   className="w-full h-56 object-cover"
                 />
                 <div className="p-2 text-center font-medium text-white">
@@ -92,4 +75,3 @@ const LatestUploads = () => {
 };
 
 export default LatestUploads;
-
