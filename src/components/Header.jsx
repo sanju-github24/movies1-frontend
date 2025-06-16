@@ -141,30 +141,29 @@ const renderMovieItem = (movie, index) => {
 
 
       {/* 🎬 Latest Movies - Visible to All Users */}
-{movies?.length > 0 && (
+      {movies?.length > 0 && (
   <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
     <div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
-     
       {movies
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 10)
         .map((movie) => (
           <div
             key={movie.id}
-            className="flex items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-2 text-white text-sm flex-wrap gap-2"
+            className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-2 text-white text-sm gap-2"
           >
-            <div className="flex-1 min-w-0">
+            <div className="w-full sm:flex-1">
               <Link
                 to={`/movie/${movie.slug}`}
-                className="font-medium text-blue-500 hover:text-blue-800 truncate block"
+                className="font-medium text-blue-400 hover:text-blue-600 break-words"
                 title={movie.title}
               >
-                 {movie.title}
+                {movie.title}
               </Link>
             </div>
-            <span className="text-xs text-gray-300">
+            <div className="text-xs text-gray-300 whitespace-nowrap">
               {movie.created_at ? new Date(movie.created_at).toLocaleDateString() : ''}
-            </span>
+            </div>
           </div>
         ))}
     </div>

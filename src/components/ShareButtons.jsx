@@ -1,6 +1,6 @@
 import { FaWhatsapp, FaInstagram } from 'react-icons/fa';
 
-const WEBSITE_URL = 'https://1tamilmv.app';
+const WEBSITE_URL = 'https://movies1-frontend.vercel.app/';
 
 const ShareButtons = () => {
   const whatsappLink = `https://wa.me/?text=${encodeURIComponent(`Check out this site for movies: ${WEBSITE_URL}`)}`;

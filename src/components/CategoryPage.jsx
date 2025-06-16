@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 
-const subCategories = ['All', 'PreDVD', 'WEB-HD', 'HD-Rips', 'DVDScr', 'WEB-DL', 'Bluray'];
-
 const CategoryPage = () => {
   const { name } = useParams();
   const navigate = useNavigate();
@@ -11,6 +9,7 @@ const CategoryPage = () => {
   const [activeSub, setActiveSub] = useState('All');
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [subCategories, setSubCategories] = useState(['All']);
 
   const fetchMovies = async () => {
     setLoading(true);
@@ -18,14 +17,35 @@ const CategoryPage = () => {
     const { data, error } = await supabase
       .from('movies')
       .select('*')
-      .contains('categories', [categoryName]) // Use .ilike if 'categories' is a string
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching movies:', error.message);
       setMovies([]);
     } else {
-      setMovies(data || []);
+      // Filter by category
+      const categoryFiltered = (data || []).filter((movie) =>
+        Array.isArray(movie.categories)
+          ? movie.categories.map(c => c.toLowerCase()).includes(categoryName.toLowerCase())
+          : typeof movie.categories === 'string' &&
+            movie.categories.toLowerCase() === categoryName.toLowerCase()
+      );
+
+      setMovies(categoryFiltered);
+
+      // Extract unique subcategories
+      const subs = new Set();
+      categoryFiltered.forEach((movie) => {
+        const subList = Array.isArray(movie.subCategory)
+          ? movie.subCategory
+          : movie.subCategory
+          ? [movie.subCategory]
+          : [];
+
+        subList.forEach((s) => subs.add(s));
+      });
+
+      setSubCategories(['All', ...Array.from(subs)]);
     }
 
     setLoading(false);
@@ -33,11 +53,8 @@ const CategoryPage = () => {
 
   useEffect(() => {
     fetchMovies();
+    setActiveSub('All');
   }, [categoryName]);
-
-  const handleSubCategoryClick = (sub) => {
-    setActiveSub(sub);
-  };
 
   const filteredMovies = movies.filter((movie) => {
     const subCategoryArray = Array.isArray(movie.subCategory)
@@ -57,28 +74,30 @@ const CategoryPage = () => {
           {categoryName}
         </h1>
         <p className="text-gray-400 mt-2 text-sm">
-          Select a subcategory to explore movies
+          {subCategories.length > 1 ? 'Select a subcategory to explore movies' : 'No subcategories found'}
         </p>
       </div>
 
       {/* Subcategory Buttons */}
-      <div className="overflow-x-auto pb-4">
-        <div className="flex gap-4 w-max">
-          {subCategories.map((sub) => (
-            <button
-              key={sub}
-              onClick={() => handleSubCategoryClick(sub)}
-              className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition duration-200 shadow text-center ${
-                activeSub === sub
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
-              }`}
-            >
-              {sub}
-            </button>
-          ))}
+      {subCategories.length > 1 && (
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-4 w-max">
+            {subCategories.map((sub) => (
+              <button
+                key={sub}
+                onClick={() => setActiveSub(sub)}
+                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition duration-200 shadow text-center ${
+                  activeSub === sub
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
+                }`}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Movie List */}
       <div className="mt-10 space-y-4">
@@ -96,14 +115,14 @@ const CategoryPage = () => {
               className="bg-white/5 hover:bg-white/10 p-4 rounded shadow flex flex-col sm:flex-row items-center gap-4"
             >
               <img
-                src={movie.poster}
+                src={movie.poster || '/default-poster.jpg'}
                 alt={movie.title}
                 className="w-24 h-36 object-cover rounded"
               />
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-blue-300 break-words">{movie.title}</h2>
                 <p className="text-sm text-gray-400 line-clamp-2 mt-1">
-                  {movie.description}
+                  {movie.description || 'No description available.'}
                 </p>
                 <Link
                   to={`/movie/${movie.slug}`}
@@ -131,3 +150,4 @@ const CategoryPage = () => {
 };
 
 export default CategoryPage;
+
