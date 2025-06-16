@@ -10,7 +10,7 @@ const Header = () => {
 
   const adminEmail = 'sanjusanjay0444@gmail.com';
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
-  const siteUrl = 'https://1tamilmv.app';
+  const siteUrl = 'https://anchormovies.vercel.app';
 
   // 🔁 Filter recent 10 admin uploads
   const latestAdminMovies = isAdmin

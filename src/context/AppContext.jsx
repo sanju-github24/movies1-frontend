@@ -162,6 +162,7 @@ export const AppContextProvider = ({ children }) => {
         deleteMovie,
         getUserData,
         isAdmin,
+        setIsAdmin,
       }}
     >
       {children}

@@ -7,7 +7,7 @@ import { AppContext } from '../context/AppContext';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { backendUrl, setIsLoggedIn, getUserData} = useContext(AppContext);
+  const { backendUrl, setIsLoggedIn, getUserData,setUserData} = useContext(AppContext);
 
   const [mode, setMode] = useState('Sign Up');
   const [name, setName] = useState('');
@@ -32,11 +32,17 @@ const Login = () => {
   
       if (data.success) {
         localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userData', JSON.stringify(data.user)); // adapt key if needed
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        localStorage.setItem('token', data.token); // ✅ save token if using auth headers
+      
         setIsLoggedIn(true);
-        getUserData(data.user); // optional, if available now
+        setUserData(data.user); // ✅ correctly set user context
+        setIsAdmin(data.user.email === "sanjusanjay0444@gmail.com"); // ✅ admin check if needed
+      
         navigate('/');
-      } else {
+      }
+      
+       else {
         toast.error(data.message || 'Unknown error occurred.');
       }
     } catch (error) {
