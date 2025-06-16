@@ -13,43 +13,49 @@ export const AppContextProvider = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // ✅ On first load — get userData & login status from localStorage
-  useEffect(() => {
-    try {
-      const storedLogin = localStorage.getItem("isLoggedIn") === "true";
-      const storedUser = JSON.parse(localStorage.getItem("userData") || "null");
+  // ✅ On first load — get userData & login status from localStorage
+useEffect(() => {
+  try {
+    const storedLogin = localStorage.getItem("isLoggedIn") === "true";
+    const rawUser = localStorage.getItem("userData");
 
-      if (storedLogin && storedUser) {
-        setIsLoggedIn(true);
-        setUserData(storedUser);
-        setIsAdmin(storedUser.email === "sanjusanjay0444@gmail.com");
-      } else {
-        setIsLoggedIn(false);
-        setUserData(null);
-        setIsAdmin(false);
-      }
-    } catch (error) {
-      console.error("Error loading localStorage:", error.message);
+    // Prevent breaking on "undefined" string
+    const storedUser =
+      rawUser && rawUser !== "undefined" ? JSON.parse(rawUser) : null;
+
+    if (storedLogin && storedUser) {
+      setIsLoggedIn(true);
+      setUserData(storedUser);
+      setIsAdmin(storedUser.email === "sanjusanjay0444@gmail.com");
+    } else {
       setIsLoggedIn(false);
       setUserData(null);
       setIsAdmin(false);
     }
-  }, []);
+  } catch (error) {
+    console.error("Error loading localStorage:", error.message);
+    setIsLoggedIn(false);
+    setUserData(null);
+    setIsAdmin(false);
+  }
+}, []);
 
   // 🔐 Check if user is authenticated
   const getAuthState = async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-
+  
       const { data } = await axios.get(`${backendUrl}/api/auth/is-auth`, {
+        withCredentials: true,
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
+  
       if (data.success) {
         setIsLoggedIn(true);
-        await getUserData(); // will also update localStorage
+        await getUserData();
       } else {
         setIsLoggedIn(false);
       }
@@ -59,11 +65,20 @@ export const AppContextProvider = ({ children }) => {
       toast.error(error.response?.data?.message || error.message);
     }
   };
+  
 
   // ✅ Get user data from backend and store it
   const getUserData = async () => {
     try {
-      const { data } = await axios.get(`${backendUrl}/api/user/data`);
+      const token = localStorage.getItem("token");
+  
+      const { data } = await axios.get(`${backendUrl}/api/user/data`, {
+        withCredentials: true,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+  
       if (data.success) {
         setUserData(data.userData);
         localStorage.setItem("userData", JSON.stringify(data.userData));
@@ -73,10 +88,11 @@ export const AppContextProvider = ({ children }) => {
         toast.error(data.message);
       }
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
+      console.error("getUserData error:", error);
     }
   };
-
+  
   // 🎬 Get all movies
   const fetchMovies = async () => {
     try {

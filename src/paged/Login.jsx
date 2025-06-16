@@ -7,7 +7,7 @@ import { AppContext } from '../context/AppContext';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { backendUrl, setIsLoggedIn, getUserData,setUserData} = useContext(AppContext);
+  const { backendUrl, setIsLoggedIn,setUserData,setIsAdmin} = useContext(AppContext);
 
   const [mode, setMode] = useState('Sign Up');
   const [name, setName] = useState('');
@@ -31,18 +31,21 @@ const Login = () => {
       console.log('✅ Response:', data);
   
       if (data.success) {
+        // 🔐 Clean up any old corrupted localStorage values
+        if (localStorage.getItem('userData') === 'undefined') {
+          localStorage.removeItem('userData');
+        }
+  
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('userData', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token); // ✅ save token if using auth headers
-      
+        localStorage.setItem('token', data.token); // ✅ save token
+  
         setIsLoggedIn(true);
-        setUserData(data.user); // ✅ correctly set user context
-        setIsAdmin(data.user.email === "sanjusanjay0444@gmail.com"); // ✅ admin check if needed
-      
+        setUserData(data.user); // ✅ set context
+        setIsAdmin(data.user.email === "sanjusanjay0444@gmail.com"); // ✅ admin check
+  
         navigate('/');
-      }
-      
-       else {
+      } else {
         toast.error(data.message || 'Unknown error occurred.');
       }
     } catch (error) {
