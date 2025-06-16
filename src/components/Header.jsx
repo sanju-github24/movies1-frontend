@@ -82,47 +82,47 @@ const renderMovieItem = (movie, index) => {
           </a>
         </div>
       </div>
-
-       {/* 🔗 Share Button */}
-       <div className="flex justify-end w-full max-w-7xl px-2 sm:px-4 mb-4">
-        <div
-          className="relative"
-          onMouseEnter={() => setShowDropdown(true)}
-          onMouseLeave={() => setShowDropdown(false)}
+{/* 🔗 Share Button */}
+<div className="flex justify-end w-full max-w-7xl px-2 sm:px-4 mb-4">
+  <div
+    className="relative"
+    onMouseEnter={() => setShowDropdown(true)}
+    onMouseLeave={() => setShowDropdown(false)}
+  >
+    <img
+      src="/share.png"
+      alt="Share"
+      className="w-8 h-8 sm:w-10 sm:h-10 cursor-pointer hover:opacity-80 transition"
+    />
+    {showDropdown && (
+      <div className="absolute right-0 mt-2 w-40 sm:w-48 bg-white shadow-lg rounded-md p-1 sm:p-2 z-50 text-xs sm:text-sm text-black">
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent('Check out this site: ' + siteUrl)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block px-2 py-1 sm:px-3 sm:py-2 hover:bg-gray-100 rounded"
         >
-          <img
-            src="/share.png"
-            alt="Share"
-            className="w-10 h-10 cursor-pointer hover:opacity-80"
-          />
-          {showDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-md p-2 z-50 text-sm text-black">
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent('Check out this site: ' + siteUrl)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block px-3 py-2 hover:bg-gray-100 rounded"
-              >
-                Share on WhatsApp
-              </a>
-              <a
-                href="https://www.instagram.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block px-3 py-2 hover:bg-gray-100 rounded"
-              >
-                Share on Instagram
-              </a>
-              <button
-                onClick={handleCopy}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded"
-              >
-                {copied ? '✅ Link Copied!' : 'Copy Link'}
-              </button>
-            </div>
-          )}
-        </div>
+          WhatsApp
+        </a>
+        <a
+          href="https://www.instagram.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block px-2 py-1 sm:px-3 sm:py-2 hover:bg-gray-100 rounded"
+        >
+          Instagram
+        </a>
+        <button
+          onClick={handleCopy}
+          className="w-full text-left px-2 py-1 sm:px-3 sm:py-2 hover:bg-gray-100 rounded"
+        >
+          {copied ? '✅ Copied!' : 'Copy Link'}
+        </button>
       </div>
+    )}
+  </div>
+</div>
+
 
       {/* 🛠 Admin Panel Link - Only for Admin */}
 {isAdmin && (
