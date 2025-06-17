@@ -4,15 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
 
+// Create slug from title
 function slugify(title) {
-  return title.toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
 
 const AdminUpload = () => {
   const { userData } = useContext(AppContext);
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [editingMovieId, setEditingMovieId] = useState(null);
@@ -25,7 +25,8 @@ const AdminUpload = () => {
     categories: [],
     subCategory: [],
     language: [],
-    downloads: []
+    downloads: [],
+    linkColor:"#60a5fa"
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
@@ -36,77 +37,88 @@ const AdminUpload = () => {
   const [selectedLanguage, setSelectedLanguage] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
+  useEffect(() => {
+    fetchMovies();
+  }, []);
+
   const fetchMovies = async () => {
     const { data, error } = await supabase
       .from("movies")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) {
-      toast.error("Failed to load movies");
-    } else {
-      setMovies(data || []);
-    }
+
+    if (error) toast.error("Failed to load movies");
+    else setMovies(data || []);
   };
 
-  useEffect(() => {
-    fetchMovies();
-  }, []);
+  const resetForm = () => {
+    setMovie({
+      slug: "",
+      title: "",
+      poster: "",
+      description: "",
+      categories: [],
+      subCategory: [],
+      language: [],
+      downloads: []
+    });
+    setDownloadBlocks([{ quality: "", size: "", format: "", file: null, manualUrl: "" }]);
+    setEditingMovieId(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-  
-    // Validate fields
-    if (!movie.title.trim() || !movie.poster.trim() || !movie.description.trim()) {
-      toast.error("Please fill in all required fields (Title, Poster, Description)");
-      setLoading(false);
-      return;
+
+    // Validation
+    const { title, poster, description, categories, subCategory, language } = movie;
+
+    if (!title.trim() || !poster.trim() || !description.trim()) {
+      toast.error("Please fill in Title, Poster, and Description.");
+      return setLoading(false);
     }
-  
-    if (!movie.categories.length || !movie.subCategory.length || !movie.language.length) {
-      toast.error("Categories, SubCategories, and Language fields cannot be empty.");
-      setLoading(false);
-      return;
+
+    if (!categories.length || !subCategory.length || !language.length) {
+      toast.error("Please fill in all category, subcategory, and language fields.");
+      return setLoading(false);
     }
-  
-    const validDownloadBlocks = downloadBlocks.filter((block) =>
-      block.quality && block.size && block.format && (block.file || block.manualUrl)
+
+    const validBlocks = downloadBlocks.filter(
+      (b) => b.quality && b.size && b.format && (b.file || b.manualUrl)
     );
-  
-    if (!validDownloadBlocks.length) {
+
+    if (!validBlocks.length) {
       toast.error("At least one valid download block is required.");
-      setLoading(false);
-      return;
+      return setLoading(false);
     }
-  
-    // Slug & timestamp setup
-    const nowISO = new Date().toISOString();
-    const slug = slugify(movie.title);
+
+    const slug = slugify(title);
     const uploaded_by = userData?.email || "unknown";
-  
+    const nowISO = new Date().toISOString();
+
     const updatedDownloads = await Promise.all(
-      validDownloadBlocks.map(async (block) => {
+      validBlocks.map(async (block) => {
         if (block.file) {
           const fileName = block.file.name;
           if (!fileName.endsWith(".torrent")) {
-            toast.error("Only .torrent files allowed.");
+            toast.error("Only .torrent files are allowed.");
             return null;
           }
-  
+
           const safeSlug = slug.replace(/[^a-z0-9\-]/gi, "_");
           const timestamp = Date.now();
           const newFileName = `${block.quality}_${block.size}.torrent`;
           const filePath = `files/${timestamp}_${safeSlug}/${newFileName}`;
-  
+
           const { error: uploadError } = await supabase.storage
             .from("torrents")
             .upload(filePath, block.file, { upsert: true });
-  
+
           if (uploadError) {
-            toast.error(`Upload failed: ${fileName}`);
+            toast.error(`Failed: ${fileName}`);
             return null;
           }
-  
+
           return {
             quality: block.quality,
             size: block.size,
@@ -126,80 +138,40 @@ const AdminUpload = () => {
         }
       })
     );
-  
-    const validDownloads = updatedDownloads.filter(Boolean);
-  
+
+    const downloads = updatedDownloads.filter(Boolean);
+
     const fullMovie = {
       ...movie,
       slug,
-      downloads: validDownloads,
+      downloads,
       created_at: nowISO,
       uploaded_by
     };
-  
-    const response = editingMovieId
+
+    const { error } = editingMovieId
       ? await supabase.from("movies").update(fullMovie).eq("id", editingMovieId)
       : await supabase.from("movies").insert([fullMovie]);
-  
-    if (response.error) {
+
+    if (error) {
       toast.error("Upload failed");
-      console.error("Upload error:", response.error.message);
+      console.error("Upload error:", error.message);
     } else {
       toast.success(editingMovieId ? "Movie updated" : "Movie uploaded");
       resetForm();
       fetchMovies();
     }
+
     setLoading(false);
-  };
-  
-  const resetForm = () => {
-    setMovie({
-      slug: "",
-      title: "",
-      poster: "",
-      description: "",
-      categories: [],
-      subCategory: [],
-      language: [],
-      downloads: []
-    });
-    setDownloadBlocks([{ quality: "", size: "", format: "", file: null, manualUrl: "" }]);
-    setEditingMovieId(null);
   };
 
   const handleDelete = async (slug) => {
-    const { data, error } = await supabase
-      .from("movies")
-      .select("downloads")
-      .eq("slug", slug)
-      .single();
-    if (error) {
-      toast.error("Failed to delete");
-      return;
+    const { error } = await supabase.from("movies").delete().eq("slug", slug);
+    if (error) toast.error("Failed to delete");
+    else {
+      toast.success("Deleted");
+      fetchMovies();
     }
-
-    // Optionally remove from storage if you want
-    await supabase.from("movies").delete().eq("slug", slug);
-    toast.success("Deleted");
-    fetchMovies();
-  };
-
-  const addDownloadBlock = () =>
-    setDownloadBlocks((prev) => [
-      ...prev,
-      { quality: "", size: "", format: "", file: null, manualUrl: "" }
-    ]);
-
-  const removeDownloadBlock = (i) => {
-    if (downloadBlocks.length > 1) {
-      setDownloadBlocks((prev) => prev.filter((_, idx) => idx !== i));
-    }
-  };
-
-  const handleDownloadChange = (i, field, value) => {
-    const blocks = [...downloadBlocks];
-    blocks[i][field] = value;
-    setDownloadBlocks(blocks);
   };
 
   const handleEdit = (m) => {
@@ -214,6 +186,7 @@ const AdminUpload = () => {
       language: m.language,
       downloads: m.downloads
     });
+
     setDownloadBlocks(
       m.downloads.length
         ? m.downloads.map((d) => ({
@@ -227,6 +200,19 @@ const AdminUpload = () => {
     );
   };
 
+  const addDownloadBlock = () =>
+    setDownloadBlocks((prev) => [...prev, { quality: "", size: "", format: "", file: null, manualUrl: "" }]);
+
+  const removeDownloadBlock = (i) =>
+    downloadBlocks.length > 1 &&
+    setDownloadBlocks((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleDownloadChange = (i, field, value) => {
+    const updated = [...downloadBlocks];
+    updated[i][field] = value;
+    setDownloadBlocks(updated);
+  };
+
   const filtered = movies.filter(
     (m) =>
       (selectedLanguage === "all" || m.language.includes(selectedLanguage)) &&
@@ -236,6 +222,7 @@ const AdminUpload = () => {
 
   return (
     <div className="p-4 max-w-6xl mx-auto text-white">
+      {/* Upload Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
@@ -262,15 +249,14 @@ const AdminUpload = () => {
           placeholder="Poster URL"
           className="p-2 rounded bg-gray-800 w-full"
           value={movie.poster}
-          onChange={(e) => setMovie((m) => ({ ...m, poster: e.target.value }))}
+          onChange={(e) => setMovie((m) => ({ ...m, poster: e.target.value.trim() }))}
         />
         <textarea
           placeholder="Description"
           className="p-2 rounded bg-gray-800 w-full"
           value={movie.description}
-          onChange={(e) => setMovie((m) => ({ ...m, description: e.target.value }))}
+          onChange={(e) => setMovie((m) => ({ ...m, description: e.target.value.trim() }))}
         />
-        {/* Categories/Lang */}
         <div className="grid grid-cols-3 gap-4">
           {["categories", "subCategory", "language"].map((key) => (
             <input
@@ -289,7 +275,21 @@ const AdminUpload = () => {
           ))}
         </div>
 
-        {/* Download Blocks */}
+        <input
+  type="color"
+  value={movie.linkColor}
+  onChange={(e) => setMovie((m) => ({ ...m, linkColor: e.target.value }))}
+  className="w-20 h-10 rounded bg-gray-800"
+/>
+<span className="ml-2 text-sm text-gray-300">Choose Link Color</span>
+
+
+
+
+
+
+
+        {/* Downloads */}
         <div className="space-y-2">
           <label className="font-semibold">Downloads:</label>
           {downloadBlocks.map((block, i) => (
@@ -337,57 +337,74 @@ const AdminUpload = () => {
         </button>
       </form>
 
+      {/* Filters */}
       <hr className="my-6 border-gray-700" />
-
-      {/* Display List */}
       <h2 className="text-xl font-semibold">Uploaded Movies</h2>
-      <div className="my-4 flex gap-4">
-        {["all"].concat(...new Set(movies.flatMap((m) => m.language))).map((lang) => (
-          <button
-            key={lang}
-            className={`px-2 py-1 rounded ${selectedLanguage === lang ? "bg-blue-500" : "bg-gray-600"}`}
-            onClick={() => setSelectedLanguage(lang)}
-          >
-            {lang}
-          </button>
-        ))}
-        {["all"].concat(...new Set(movies.flatMap((m) => m.categories))).map((cat) => (
-          <button
-            key={cat}
-            className={`px-2 py-1 rounded ${selectedCategory === cat ? "bg-blue-500" : "bg-gray-600"}`}
-            onClick={() => setSelectedCategory(cat)}
-          >
-            {cat}
-          </button>
-        ))}
+
+      <div className="my-6 space-y-4">
+        {/* Language Filter */}
+        <div>
+          <h3 className="text-sm font-semibold mb-2 text-gray-300">Filter by Language:</h3>
+          <div className="flex gap-2 flex-wrap">
+            {["all", ...new Set(movies.flatMap((m) => m.language))].map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setSelectedLanguage(lang)}
+                className={`px-3 py-1 rounded text-sm transition ${
+                  selectedLanguage === lang
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                }`}
+              >
+                {lang}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Category Filter */}
+        <div>
+          <h3 className="text-sm font-semibold mb-2 text-gray-300">Filter by Category:</h3>
+          <div className="flex gap-2 flex-wrap">
+            {["all", ...new Set(movies.flatMap((m) => m.categories))].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1 rounded text-sm transition ${
+                  selectedCategory === cat
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
+      {/* Movie List */}
       <div className="space-y-3">
-  {filtered.map((m) => (
-    <div key={m.id} className="flex justify-between p-2 bg-gray-800 rounded">
-      <Link to={`/movie/${m.slug}`} className="flex items-center gap-3">
-      <img
-  src={m.poster?.trim() || "https://via.placeholder.com/80x120?text=No+Image"}
-  onError={(e) => {
-    e.target.onerror = null;
-    e.target.src = "https://via.placeholder.com/80x120?text=No+Image";
-  }}
-  alt={m.title}
-  className="w-12 h-16 object-cover rounded"
-/>
-
-        <div>
+        {filtered.map((m) => (
+          <div key={m.id} className="flex justify-between p-2 bg-gray-800 rounded">
+            <Link to={`/movie/${m.slug}`} className="flex items-center gap-3">
+              <img
+                src={m.poster?.trim() || "https://via.placeholder.com/80x120?text=No+Image"}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = "https://via.placeholder.com/80x120?text=No+Image";
+                }}
+                alt={m.title}
+                className="w-12 h-16 object-cover rounded"
+              />
+              <div>
                 <h3 className="font-semibold">{m.title}</h3>
                 <p className="text-sm">{new Date(m.created_at).toLocaleDateString()}</p>
               </div>
             </Link>
             <div className="flex gap-2">
-              <button onClick={() => handleEdit(m)} className="text-yellow-400">
-                Edit
-              </button>
-              <button onClick={() => handleDelete(m.slug)} className="text-red-400">
-                Delete
-              </button>
+              <button onClick={() => handleEdit(m)} className="text-yellow-400">Edit</button>
+              <button onClick={() => handleDelete(m.slug)} className="text-red-400">Delete</button>
             </div>
           </div>
         ))}
