@@ -78,47 +78,80 @@ const MovieDetail = () => {
         </div>
 
         <div className="space-y-10">
-          {movie.downloads?.map((download, index) => {
-            const quality = download.quality || 'Unknown';
-            const format = download.format || 'Unknown Format';
-            const filename = `${quality}_${format}.torrent`.replace(/[^a-z0-9_\-\.]/gi, '_');
+  {movie.downloads?.map((download, index) => {
+    const quality = download.quality || 'Unknown';
+    const format = download.format || 'Unknown Format';
+    const filename = `${quality}_${format}.torrent`.replace(/[^a-z0-9_\-\.]/gi, '_');
 
-            return (
-              <div
-                key={index}
-                className="bg-gray-100 border border-gray-300 p-5 rounded text-center text-[15px] text-black"
-              >
-                <div className="font-semibold text-[12px] mb-1">
-                  {quality} - {format}
-                </div>
+    return (
+      <React.Fragment key={index}>
+        <div className="bg-gray-100 border border-gray-300 p-5 rounded text-center text-[15px] text-black">
+          <div className="font-semibold text-[12px] mb-1">
+            {quality} - {format}
+          </div>
 
-                <button
-                  onClick={() => handleDownload(download.url, filename)}
-                  className="text-blue-600 underline hover:text-blue-800"
-                >
-                  📥 {quality}
-                </button>
+          <button
+            onClick={() => handleDownload(download.url, filename)}
+            className="text-blue-600 underline hover:text-blue-800"
+          >
+            📥 {quality}
+          </button>
 
-                <p className="text-[15px] text-gray-500 mt-1 mb-2">
-                  Downloads: {download.count || 0}
-                </p>
+          <p className="text-[15px] text-gray-500 mt-1 mb-2">
+            Downloads: {download.count || 0}
+          </p>
 
-                {download.magnet && (
-                  <a
-                    href={download.magnet}
-                    className="inline-block bg-red-200 hover:bg-red-400 text-black px-2 py-1 rounded font-medium"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    🧲 Magnet
-                  </a>
-                )}
-              </div>
-            );
-          })}
+          {download.magnet && (
+            <a
+              href={download.magnet}
+              className="inline-block bg-red-200 hover:bg-red-400 text-black px-2 py-1 rounded font-medium mr-2"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              🧲 Magnet
+            </a>
+          )}
+        </div>
+
+        {download.showGifAfter && (
+          <div className="flex justify-center my-6">
+            <img
+              src="/torrent1.gif"
+              alt="Torrent GIF"
+              className="w-24 h-24 object-contain"
+            />
+          </div>
+        )}
+      </React.Fragment>
+    );
+  })}
+
+  {/* ✅ GP Links shown at the bottom */}
+  {movie.downloads?.some((d) => d.gpLink) && (
+    <div className="bg-gray-100 border border-gray-300 p-5 rounded text-black text-sm space-y-2 mt-6">
+      <h3 className="font-semibold mb-2">GP Links:</h3>
+      {movie.downloads
+        .filter((d) => d.gpLink)
+        .map((d, idx) => (
+          <p key={idx}>
+            <strong>{d.quality || d.size}:</strong>{" "}
+            <a
+              href={d.gpLink}
+              className="text-blue-600 underline hover:text-blue-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {d.gpLink}
+            </a>
+          </p>
+        ))}
+    </div>
+  )}
+</div>
+
         </div>
       </div>
-    </div>
+   
   );
 };
 
