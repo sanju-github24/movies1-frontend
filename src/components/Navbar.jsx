@@ -1,40 +1,33 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
-import { assets } from '../assets/assets';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import axios from 'axios';
 import { toast } from 'react-toastify';
 import { backendUrl } from '../utils/api';
-import axios from 'axios';
+import { assets } from '../assets/assets';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { userData, setUserData, setIsLoggedIn } = useContext(AppContext);
 
+  /* ────── state ────── */
   const [searchTerm, setSearchTerm] = useState('');
-  const [openDropdown, setOpenDropdown] = useState(null);
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
-  const hoverTimeout = useRef(null);
 
+  /* ────── click‑away for profile drop‑down ────── */
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    const onClick = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setProfileDropdownOpen(false);
+        setProfileOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const handleMouseEnter = (menu) => {
-    clearTimeout(hoverTimeout.current);
-    setOpenDropdown(menu);
-  };
-
-  const handleMouseLeave = () => {
-    hoverTimeout.current = setTimeout(() => setOpenDropdown(null), 150);
-  };
-
+  /* ────── auth helpers (trimmed for brevity) ────── */
   const resendEmailVerification = async () => {
     try {
       axios.defaults.withCredentials = true;
@@ -67,151 +60,166 @@ const Navbar = () => {
     }
   };
 
+  /* ────── search submit ────── */
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    const query = searchTerm.trim();
-    if (query) {
-      navigate(`/search?query=${encodeURIComponent(query)}`);
+    const q = searchTerm.trim();
+    if (q) {
+      navigate(`/search?query=${encodeURIComponent(q)}`);
       setSearchTerm('');
+      setMobileOpen(false); // collapse menu on mobile
     }
   };
 
-  const isVerified = !!userData?.email_confirmed_at;
   const userInitial =
-    userData?.user_metadata?.name?.[0]?.toUpperCase() ||
-    userData?.email?.[0]?.toUpperCase() ||
+    userData?.user_metadata?.name?.[0]?.toUpperCase() ??
+    userData?.email?.[0]?.toUpperCase() ??
     'U';
 
-  const dropdownStyle = 'absolute bg-white text-black rounded mt-2 min-w-[160px] shadow-md z-50';
-
+  /* ────── JSX ────── */
   return (
-    <nav className="w-full bg-blue-700 text-white flex items-center justify-between px-4 sm:px-10 h-16 sticky top-0 z-50">
-      {/* Logo */}
-      <Link to="/" className="flex items-center">
-        <img src="/logo_3.png" alt="Logo" className="w-24 sm:w-28 md:w-32 h-auto object-contain" />
-      </Link>
+    <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow">
+      {/* top bar */}
+      <div className="flex items-center justify-between px-4 sm:px-10 h-16">
 
-      {/* Navigation Links */}
-      <div className="hidden sm:flex items-center gap-6 flex-grow justify-center relative">
-        <ul className="flex gap-6 text-sm font-medium">
-          {[
-            {
-              title: 'Browse',
-              items: [
-                <Link to="/latest" className="block w-full h-full">Latest Uploads</Link>,
-                'Trending',
-                'Genres',
-              ],
-            },
-            {
-              title: 'Movies',
-              items: ['Tamil', 'Telugu', 'Malayalam'],
-            },
-            {
-              title: 'Members Lounge',
-              items: ['Forum', 'Support'],
-            },
-            {
-              title: 'Languages',
-              items: ['Hindi', 'English', 'Kannada'],
-            },
-          ].map((menu) => (
-            <li
-              key={menu.title}
-              className="relative cursor-pointer"
-              onMouseEnter={() => handleMouseEnter(menu.title)}
-              onMouseLeave={handleMouseLeave}
-            >
-              {menu.title} ▾
-              {openDropdown === menu.title && (
-                <ul className={dropdownStyle}>
-                  {menu.items.map((item, i) => (
-                    <li key={i} className="px-4 py-2 hover:bg-gray-100 cursor-pointer">
-                      {typeof item === 'string' ? item : item}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-           {/* New Blog Link */}
-  <li className="cursor-pointer hover:underline">
-    <Link to="/blogs">Blogs</Link>
-  </li>
-        </ul>
-
-        {/* Search Bar */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="ml-6 relative bg-white text-black rounded-full px-4 py-1 w-64 flex items-center"
-          role="search"
-        >
-          <input
-            type="text"
-            placeholder="Search movies..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent w-full text-sm focus:outline-none pr-6"
-            aria-label="Search movies"
-          />
-          <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
-              alt="Search"
-              className="w-4 h-4 opacity-80"
-            />
-          </button>
-        </form>
-      </div>
-
-      {/* User Login/Profile */}
-      <div className="flex items-center gap-4">
-        {userData ? (
-          <div className="relative" ref={profileRef}>
-            <div
-              onClick={() => setProfileDropdownOpen((prev) => !prev)}
-              className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold cursor-pointer"
-            >
-              {userInitial}
-            </div>
-
-            {profileDropdownOpen && (
-              <div className="absolute top-11 right-0 bg-white text-black rounded shadow-md z-50 w-40">
-                <ul className="text-sm">
-                  {!isVerified && (
-                    <li
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        resendEmailVerification();
-                      }}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                    >
-                      Verify Email
-                    </li>
-                  )}
-                  <li
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      logout();
-                    }}
-                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                  >
-                    Logout
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : (
+        {/* left: hamburger + logo */}
+        <div className="flex items-center gap-4">
+          {/* hamburger – mobile only */}
           <button
-            onClick={() => navigate('/login')}
-            className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
+            className="sm:hidden p-2 focus:outline-none"
+            onClick={() => setMobileOpen((p) => !p)}
+            aria-label="Toggle menu"
           >
-            Login
-            <img src={assets.arrow_icon} alt="arrow" className="w-4" />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2">
+              {mobileOpen
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}
+            </svg>
           </button>
-        )}
+
+          {/* logo */}
+          <Link to="/" className="shrink-0">
+            <img src="/logo_3.png" alt="logo" className="w-24 sm:w-28 md:w-32 object-contain" />
+          </Link>
+        </div>
+
+        {/* center: nav links + desktop search */}
+        <div className="hidden sm:flex items-center gap-6 flex-grow justify-center">
+          <ul className="flex gap-6 text-sm font-medium">
+            <li><Link to="/latest" className="hover:underline">Latest Uploads</Link></li>
+            <li><Link to="/blogs" className="hover:underline">Blogs</Link></li>
+          </ul>
+
+          {/* desktop search – unchanged pill style */}
+          <form
+            onSubmit={handleSearchSubmit}
+            role="search"
+            className="ml-6 relative bg-white text-black rounded-full px-4 py-1 w-64 flex items-center"
+          >
+            <input
+              type="text"
+              placeholder="Search movies…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-transparent w-full text-sm focus:outline-none pr-6"
+            />
+            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
+              <img src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
+                   alt="search" className="w-4 h-4 opacity-80" />
+            </button>
+          </form>
+        </div>
+
+        {/* right: user avatar or login */}
+        <div className="ml-auto relative" ref={profileRef}>
+          {userData ? (
+            <>
+              <div
+                onClick={() => setProfileOpen((v) => !v)}
+                className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
+              >
+                {userInitial}
+              </div>
+              {profileOpen && (
+                <div className="absolute top-11 right-0 bg-white text-black rounded shadow-md z-50 w-40">
+                 <ul className="text-sm py-1">
+  {!userData?.email_confirmed_at && (
+    <li
+      onClick={() => {
+        setProfileOpen(false);
+        resendEmailVerification();
+      }}
+      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+    >
+      Verify Email
+    </li>
+  )}
+  <li
+    onClick={() => {
+      setProfileOpen(false);
+      logout();
+    }}
+    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+  >
+    Logout
+  </li>
+</ul>
+
+                </div>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => navigate('/login')}
+              className="hidden sm:flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
+            >
+              Login
+              <img src={assets.arrow_icon} alt="arrow" className="w-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* mobile slide‑down menu */}
+      {mobileOpen && (
+  <div className="sm:hidden bg-white border-t border-gray-200 px-4 pb-4 space-y-4 text-black shadow-md">
+    {/* Home link */}
+    <Link to="/" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
+      Home
+    </Link>
+
+    {/* Mobile search – gray input + blue button */}
+    <form onSubmit={handleSearchSubmit} className="flex rounded overflow-hidden">
+      <input
+        type="text"
+        placeholder="Search movies…"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="flex-grow p-2 bg-gray-100 placeholder-gray-500 focus:outline-none"
+      />
+      <button type="submit" className="bg-blue-600 text-white px-4">
+        🔍
+      </button>
+    </form>
+
+
+          <Link to="/latest" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
+            Latest Uploads
+          </Link>
+          <Link to="/blogs"  onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
+            Blogs
+          </Link>
+
+          {!userData && (
+            <button
+              onClick={() => { setMobileOpen(false); navigate('/login'); }}
+              className="w-full bg-blue-600 text-white py-2 rounded font-semibold"
+            >
+              Login
+            </button>
+          )}
+        </div>
+      )}
     </nav>
   );
 };

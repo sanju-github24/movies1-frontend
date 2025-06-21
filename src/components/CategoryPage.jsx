@@ -10,6 +10,7 @@ const CategoryPage = () => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subCategories, setSubCategories] = useState(['All']);
+  const [search, setSearch] = useState(''); // 🔍 ADD: search state
 
   const fetchMovies = async () => {
     setLoading(true);
@@ -23,7 +24,6 @@ const CategoryPage = () => {
       console.error('Error fetching movies:', error.message);
       setMovies([]);
     } else {
-      // Filter by category
       const categoryFiltered = (data || []).filter((movie) =>
         Array.isArray(movie.categories)
           ? movie.categories.map(c => c.toLowerCase()).includes(categoryName.toLowerCase())
@@ -33,7 +33,6 @@ const CategoryPage = () => {
 
       setMovies(categoryFiltered);
 
-      // Extract unique subcategories
       const subs = new Set();
       categoryFiltered.forEach((movie) => {
         const subList = Array.isArray(movie.subCategory)
@@ -54,6 +53,7 @@ const CategoryPage = () => {
   useEffect(() => {
     fetchMovies();
     setActiveSub('All');
+    setSearch(''); // 🔁 Reset search when category changes
   }, [categoryName]);
 
   const filteredMovies = movies.filter((movie) => {
@@ -63,19 +63,37 @@ const CategoryPage = () => {
       ? [movie.subCategory]
       : [];
 
-    return activeSub === 'All' || subCategoryArray.includes(activeSub);
+    const matchesSubCategory =
+      activeSub === 'All' || subCategoryArray.includes(activeSub);
+
+    const matchesSearch =
+      movie.title.toLowerCase().includes(search.toLowerCase()) ||
+      (movie.description || '').toLowerCase().includes(search.toLowerCase());
+
+    return matchesSubCategory && matchesSearch;
   });
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 sm:px-8 py-10 text-white">
       {/* Category Title */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-blue-400 drop-shadow-sm break-words">
-          {categoryName}
-        </h1>
-        <p className="text-gray-400 mt-2 text-sm">
-          {subCategories.length > 1 ? 'Select a subcategory to explore movies' : 'No subcategories found'}
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-blue-400">{categoryName}</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          {subCategories.length > 1
+            ? 'Select a subcategory to explore movies'
+            : 'No subcategories found'}
         </p>
+      </div>
+
+      {/* 🔍 Search bar */}
+      <div className="max-w-md mx-auto mb-6">
+        <input
+          type="text"
+          placeholder="Search movies..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full px-4 py-2 bg-gray-800 text-white rounded-md focus:outline-none focus:ring focus:border-blue-500"
+        />
       </div>
 
       {/* Subcategory Buttons */}
@@ -86,7 +104,7 @@ const CategoryPage = () => {
               <button
                 key={sub}
                 onClick={() => setActiveSub(sub)}
-                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition duration-200 shadow text-center ${
+                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition shadow ${
                   activeSub === sub
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
@@ -120,7 +138,7 @@ const CategoryPage = () => {
                 className="w-24 h-36 object-cover rounded"
               />
               <div className="flex-1">
-                <h2 className="text-lg font-bold text-blue-300 break-words">{movie.title}</h2>
+                <h2 className="text-lg font-bold text-blue-300">{movie.title}</h2>
                 <p className="text-sm text-gray-400 line-clamp-2 mt-1">
                   {movie.description || 'No description available.'}
                 </p>
@@ -150,4 +168,3 @@ const CategoryPage = () => {
 };
 
 export default CategoryPage;
-

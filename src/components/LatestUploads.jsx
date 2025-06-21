@@ -7,18 +7,15 @@ const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
   const [tick, setTick] = useState(0);
 
-  // 🔄 Update "x minutes ago" text every minute
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // 📦 Refetch movies once on mount
   useEffect(() => {
     fetchMovies();
   }, []);
 
-  // Filter movies uploaded in the last 7 days
   const recentMovies = movies.filter((movie) => {
     const created = new Date(movie.createdAt || movie.created_at);
     const oneWeekAgo = subDays(new Date(), 7);
@@ -57,10 +54,15 @@ const LatestUploads = () => {
                   onError={(e) => {
                     e.currentTarget.src = '/default-poster.jpg';
                   }}
-                  className="w-full h-56 object-cover"
+                  className="w-full h-40 sm:h-56 object-cover"
                 />
                 <div className="p-2 text-center font-medium text-white">
-                  {movie.title || 'Untitled Movie'}
+                  <div
+                    className="text-sm line-clamp-1 sm:line-clamp-2"
+                    title={movie.title}
+                  >
+                    {movie.title || 'Untitled Movie'}
+                  </div>
                   <div className="text-xs text-gray-400 mt-1">
                     {languages} • {timeAgo}
                   </div>
