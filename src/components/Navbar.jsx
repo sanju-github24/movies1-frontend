@@ -134,9 +134,10 @@ const Navbar = () => {
               )}
             </li>
           ))}
-          <li className="cursor-pointer hover:underline">
-            <Link to="/movierulz">MovieRulz</Link>
-          </li>
+           {/* New Blog Link */}
+  <li className="cursor-pointer hover:underline">
+    <Link to="/blogs">Blogs</Link>
+  </li>
         </ul>
 
         {/* Search Bar */}

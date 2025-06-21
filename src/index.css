@@ -2,6 +2,16 @@
 
 @import "tailwindcss";
 
+
+plugins: [require('@tailwindcss/typography')],
+
 *{
   font-family: "Outfit", sans-serif;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

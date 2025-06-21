@@ -112,33 +112,34 @@ const Header = () => {
         </div>
       )}
 
-      {/* 🎬 Latest Movies - All Users */}
-      {latestMovies.length > 0 && (
-        <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
-          <div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
-           
-          {latestMovies.map((movie) => (
-  <div
-    key={movie.id}
-    className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-3 text-white text-sm gap-1 sm:gap-2"
-  >
-    <Link
-      to={`/movie/${movie.slug}`}
-      className="font-medium break-words line-clamp-2"
-      style={{ color: movie.linkColor || "#60a5fa" }}
-      title={movie.title}
-    >
-      {movie.title}
-    </Link>
+    {/* 🎬 Latest Movies - All Users */}
+{latestMovies.length > 0 && (
+  <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
+    <div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
 
-                <span className="text-xs text-gray-300 whitespace-nowrap sm:text-right">
-                  {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            ))}
-          </div>
+      {latestMovies.slice(0, 50).map((movie) => (
+        <div
+          key={movie.id}
+          className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-3 text-white text-sm gap-1 sm:gap-2"
+        >
+          <Link
+            to={`/movie/${movie.slug}`}
+            className="font-medium break-words line-clamp-2"
+            style={{ color: movie.linkColor || "#60a5fa" }}
+            title={movie.title}
+          >
+            {movie.title}
+          </Link>
+
+          <span className="text-xs text-gray-300 whitespace-nowrap sm:text-right">
+            {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
+          </span>
         </div>
-      )}
+      ))}
+    </div>
+  </div>
+)}
+
 
       {/* 🆕 Admin Uploads List (Optional - Uncomment if needed) */}
       {/* 

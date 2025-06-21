@@ -1,0 +1,11 @@
+diff --git a/node_modules/react-quill/lib/component.js b/node_modules/react-quill/lib/component.js
+index 1234567..abcdefg 100644
+--- a/node_modules/react-quill/lib/component.js
++++ b/node_modules/react-quill/lib/component.js
+@@
+-import react_dom_1 from "react-dom";
++import * as react_dom_1 from "react-dom"; // Fix for React 18
+
+...
+-        const editingArea = react_dom_1.default.findDOMNode(this.editorRef);
++        const editingArea = this.editorRef?.editor?.root || null;

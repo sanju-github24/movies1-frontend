@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 
@@ -13,22 +13,18 @@ import SearchResults from './paged/SearchResults';
 import CategoryPage from './components/CategoryPage';
 import LatestUploads from './components/LatestUploads';
 
-import { useContext } from 'react';
 import { AppContext } from './context/AppContext';
-import AdminUpload from './context/AdminUpload'; // Assuming AdminUpload is a component for admin uploads
+import AdminUpload from './context/AdminUpload';
+import BlogEditor from './components/BlogEditor';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
-
-
-
-// Assuming getUserData is a function to fetch user data
-
+import BlogList from './components/BlogList';
+import BlogViewer from './components/BlogViewer';
 
 const App = () => {
-  const { isLoggedIn, isAdmin } = useContext(AppContext); // ✅ Centralized login state
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const { isLoggedIn } = useContext(AppContext);
+  const [searchTerm, setSearchTerm] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
-
 
   const hideCategoryBar = ['/login', '/email-verify', '/reset-password'].includes(location.pathname);
 
@@ -40,60 +36,57 @@ const App = () => {
     navigate(`/search?query=${encodeURIComponent(language)}`);
   };
 
-  
-
-
-
-
   return (
     <div className="bg-black min-h-screen text-white">
       <ToastContainer
-  position="top-center"
-  autoClose={3000}
-  hideProgressBar={false}
-  newestOnTop
-  closeOnClick
-  pauseOnFocusLoss
-  draggable
-  pauseOnHover
-/>
+        position="top-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
 
-<Navbar
-  searchTerm={searchTerm}
-  setSearchTerm={setSearchTerm}
-/>
+      <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
 
-{!hideCategoryBar && (
-  <CategoryBar
-    onCategoryClick={handleCategoryClick}
-    onLanguageClick={handleLanguageClick}
-  />
-)}
+      {!hideCategoryBar && (
+        <CategoryBar
+          onCategoryClick={handleCategoryClick}
+          onLanguageClick={handleLanguageClick}
+        />
+      )}
 
-<Routes>
-  {/* Public Routes */}
-  <Route path="/" element={<Home searchTerm={searchTerm} />} />
-  <Route path="/movie/:code" element={<MovieDetail />} />
-  <Route path="/search" element={<SearchResults />} />
-  <Route path="/category/:name" element={<CategoryPage />} />
-  <Route path="/latest" element={<LatestUploads />} />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<Home searchTerm={searchTerm} />} />
+        <Route path="/movie/:code" element={<MovieDetail />} />
+        <Route path="/search" element={<SearchResults />} />
+        <Route path="/category/:name" element={<CategoryPage />} />
+        <Route path="/latest" element={<LatestUploads />} />
+        <Route path="/blogs" element={<BlogList />} />
+  <Route path="/blogs/:slug" element={<BlogViewer />} />
 
-  {/* Auth Pages */}
-  {!isLoggedIn && (
-    <>
-      <Route path="/login" element={<Login />} />
-      <Route path="/email-verify" element={<EmailVerify />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-    </>
-  )}
+        <Route path="/admin" element={<ProtectedAdminRoute />}>
+  <Route index element={<Navigate to="/admin/upload" />} />
+  <Route path="upload" element={<AdminUpload />} />
+  <Route path="blog-editor" element={<BlogEditor />} />
+</Route>
 
-  {/* ✅ Always include Admin Route */}
-  <Route path="/admin" element={<ProtectedAdminRoute />} />
 
-  {/* Fallback */}
-  <Route path="*" element={<Navigate to="/" replace />} />
-</Routes>
+        {/* Auth Pages */}
+        {!isLoggedIn && (
+          <>
+            <Route path="/login" element={<Login />} />
+            <Route path="/email-verify" element={<EmailVerify />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+          </>
+        )}
 
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </div>
   );
 };

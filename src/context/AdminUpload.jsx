@@ -1,13 +1,32 @@
 import React, { useState, useEffect, useContext } from "react";
 import { toast } from "react-toastify";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
-
 
 function slugify(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
+
+// ✅ Admin Navigation Component
+const AdminNav = () => {
+  const location = useLocation();
+  const path = location.pathname;
+
+  const isActive = (target) =>
+    path === target ? "bg-white text-black font-bold" : "bg-opacity-70";
+
+  return (
+    <div className="flex gap-3 mb-6">
+      <Link to="/admin/blog-editor" className={`bg-green-600 px-4 py-2 rounded ${isActive("/admin/blog-editor")}`}>
+        ✍️ Blog Editor
+      </Link>
+      <Link to="/admin/upload" className={`bg-blue-600 px-4 py-2 rounded ${isActive("/admin/upload")}`}>
+        🎞 Uploads
+      </Link>
+    </div>
+  );
+};
 
 const AdminUpload = () => {
   const { userData } = useContext(AppContext);
@@ -39,7 +58,11 @@ const AdminUpload = () => {
   }, []);
 
   const fetchMovies = async () => {
-    const { data, error } = await supabase.from("movies").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("movies")
+      .select("*")
+      .order("created_at", { ascending: false });
+
     if (error) toast.error("Failed to load movies");
     else setMovies(data || []);
   };
@@ -159,8 +182,33 @@ const AdminUpload = () => {
       console.error("Supabase error:", error.message);
     } else {
       toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
-      resetForm();
-      fetchMovies();
+resetForm();
+
+// ✅ Clean up old movies if more than 70
+const { data: allMovies, error: fetchError } = await supabase
+  .from("movies")
+  .select("id, created_at")
+  .order("created_at", { ascending: false });
+
+if (!fetchError && allMovies.length > 70) {
+  const excessMovies = allMovies.slice(70); // oldest beyond 70
+  const idsToDelete = excessMovies.map((m) => m.id);
+
+  const { error: deleteError } = await supabase
+    .from("movies")
+    .delete()
+    .in("id", idsToDelete);
+
+  if (deleteError) {
+    console.error("Failed to delete old movies:", deleteError.message);
+    toast.warn("Cleanup failed: Couldn't delete old movies.");
+  } else {
+    console.log(`🗑 Deleted ${idsToDelete.length} oldest movies.`);
+  }
+}
+
+fetchMovies(); // Refresh after cleanup
+
     }
 
     setLoading(false);
@@ -231,24 +279,22 @@ const AdminUpload = () => {
 
   return (
     <div className="p-4 max-w-6xl mx-auto text-white">
-  
-      {/* ---- Edit banner ---- */}
+      <AdminNav />
+
       {editingMovieId && (
         <div className="text-yellow-300 font-medium mb-4">
-          ✏️ Editing: <strong>{movie.title}</strong>
+          ✏️ Editing: <strong>{movie.title}</strong>
           <button
             onClick={resetForm}
             className="ml-4 bg-red-500 px-2 py-1 rounded text-sm"
           >
-            Cancel Edit
+            Cancel Edit
           </button>
         </div>
       )}
-  
-      {/* ---- Upload / Edit Form ---- */}
+
       <form onSubmit={handleSubmit} className="space-y-4">
-  
-        {/* search bar */}
+        {/* Search + Inputs */}
         <input
           type="text"
           placeholder="Search movies…"
@@ -256,8 +302,6 @@ const AdminUpload = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-  
-        {/* core movie fields */}
         <input
           type="text"
           placeholder="Title"
@@ -267,15 +311,13 @@ const AdminUpload = () => {
             setMovie((m) => ({ ...m, title: e.target.value, slug: slugify(e.target.value) }))
           }
         />
-  
         <input
           type="text"
-          placeholder="Poster URL"
+          placeholder="Poster URL"
           className="p-2 bg-gray-800 rounded w-full"
           value={movie.poster}
           onChange={(e) => setMovie((m) => ({ ...m, poster: e.target.value }))}
         />
-  
         <textarea
           placeholder="Description"
           className="p-2 bg-gray-800 rounded w-full"
@@ -283,8 +325,6 @@ const AdminUpload = () => {
           value={movie.description}
           onChange={(e) => setMovie((m) => ({ ...m, description: e.target.value }))}
         />
-  
-        {/* categories / subCats / languages */}
         <div className="grid grid-cols-3 gap-4">
           {["categories", "subCategory", "language"].map((key) => (
             <input
@@ -302,22 +342,19 @@ const AdminUpload = () => {
             />
           ))}
         </div>
-  
-        {/* link‑color picker */}
         <div className="flex items-center gap-3">
           <input
             type="color"
             value={movie.linkColor}
             onChange={(e) => setMovie((m) => ({ ...m, linkColor: e.target.value }))}
           />
-          <span className="text-sm">Choose Link Color</span>
+          <span className="text-sm">Choose Link Color</span>
         </div>
-  
-        {/* -------------- Download blocks -------------- */}
+
+        {/* Downloads */}
         <div className="space-y-3">
           {downloadBlocks.map((block, i) => (
             <div key={i} className="flex flex-wrap gap-2 items-center">
-  
               {["quality", "size", "format"].map((field) => (
                 <input
                   key={field}
@@ -328,14 +365,12 @@ const AdminUpload = () => {
                   className="p-2 bg-gray-800 rounded flex-1 min-w-[120px]"
                 />
               ))}
-  
               <input
                 type="file"
                 accept=".torrent"
                 className="p-2 bg-gray-800 rounded flex-1 min-w-[160px]"
                 onChange={(e) => handleDownloadChange(i, "file", e.target.files[0])}
               />
-  
               <input
                 type="text"
                 placeholder="Manual URL"
@@ -343,24 +378,21 @@ const AdminUpload = () => {
                 value={block.manualUrl}
                 onChange={(e) => handleDownloadChange(i, "manualUrl", e.target.value)}
               />
-  
               <input
                 type="text"
-                placeholder="GP Link"
+                placeholder="GP Link"
                 className="p-2 bg-gray-800 rounded flex-1 min-w-[160px]"
                 value={block.gpLink}
                 onChange={(e) => handleDownloadChange(i, "gpLink", e.target.value)}
               />
-  
               <label className="flex items-center gap-1 text-sm">
                 <input
                   type="checkbox"
                   checked={block.showGifAfter}
                   onChange={(e) => handleDownloadChange(i, "showGifAfter", e.target.checked)}
                 />
-                Show GIF
+                Show GIF
               </label>
-  
               <button
                 type="button"
                 onClick={() => removeDownloadBlock(i)}
@@ -371,27 +403,24 @@ const AdminUpload = () => {
               </button>
             </div>
           ))}
-  
           <button
             type="button"
             onClick={addDownloadBlock}
             className="text-green-400 mt-2"
           >
-            + Add Another Download
+            + Add Another Download
           </button>
         </div>
-  
-        {/* submit */}
+
         <button
           type="submit"
           className="bg-blue-600 px-4 py-2 rounded"
           disabled={loading}
         >
-          {loading ? "Saving…" : editingMovieId ? "Update Movie" : "Upload Movie"}
+          {loading ? "Saving…" : editingMovieId ? "Update Movie" : "Upload Movie"}
         </button>
       </form>
-  
-      {/* ------ Recently Uploaded Movies ------ */}
+
       <div className="mt-10">
         <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -416,13 +445,13 @@ const AdminUpload = () => {
                     onClick={() => handleEdit(m)}
                     className="bg-yellow-500 px-3 py-1 rounded text-sm"
                   >
-                    ✏️ Edit
+                    ✏️ Edit
                   </button>
                   <button
                     onClick={() => handleDelete(m.slug)}
                     className="bg-red-600 px-3 py-1 rounded text-sm"
                   >
-                    🗑 Delete
+                    🗑 Delete
                   </button>
                 </div>
               </div>
@@ -434,7 +463,6 @@ const AdminUpload = () => {
       </div>
     </div>
   );
-  
 };
 
 export default AdminUpload;
