@@ -8,11 +8,9 @@ function slugify(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
 
-// ✅ Admin Navigation Component
+// ✅ Admin Navigation
 const AdminNav = () => {
-  const location = useLocation();
-  const path = location.pathname;
-
+  const path = useLocation().pathname;
   const isActive = (target) =>
     path === target ? "bg-white text-black font-bold" : "bg-opacity-70";
 
@@ -46,7 +44,8 @@ const AdminUpload = () => {
     subCategory: [],
     language: [],
     downloads: [],
-    linkColor: "#60a5fa"
+    linkColor: "#60a5fa",
+    showOnHomepage: true,
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
@@ -58,11 +57,7 @@ const AdminUpload = () => {
   }, []);
 
   const fetchMovies = async () => {
-    const { data, error } = await supabase
-      .from("movies")
-      .select("*")
-      .order("created_at", { ascending: false });
-
+    const { data, error } = await supabase.from("movies").select("*").order("created_at", { ascending: false });
     if (error) toast.error("Failed to load movies");
     else setMovies(data || []);
   };
@@ -77,7 +72,8 @@ const AdminUpload = () => {
       subCategory: [],
       language: [],
       downloads: [],
-      linkColor: "#60a5fa"
+      linkColor: "#60a5fa",
+      showOnHomepage: true,
     });
     setDownloadBlocks([
       { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }
@@ -90,7 +86,6 @@ const AdminUpload = () => {
     setLoading(true);
 
     const { title, poster, description, categories, subCategory, language } = movie;
-
     if (!title.trim() || !poster.trim() || !description.trim()) {
       toast.error("Please fill in Title, Poster, and Description.");
       setLoading(false);
@@ -98,7 +93,7 @@ const AdminUpload = () => {
     }
 
     if (!categories.length || !subCategory.length || !language.length) {
-      toast.error("Please fill in all category, subcategory, and language fields.");
+      toast.error("Please fill in category, subcategory, and language.");
       setLoading(false);
       return;
     }
@@ -182,37 +177,68 @@ const AdminUpload = () => {
       console.error("Supabase error:", error.message);
     } else {
       toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
-resetForm();
+      resetForm();
 
-// ✅ Clean up old movies if more than 70
-const { data: allMovies, error: fetchError } = await supabase
-  .from("movies")
-  .select("id, created_at")
-  .order("created_at", { ascending: false });
+      // ✅ Cleanup: Keep only 70 most recent movies
+      const { data: allMovies, error: fetchError } = await supabase
+        .from("movies")
+        .select("id, created_at")
+        .order("created_at", { ascending: false });
 
-if (!fetchError && allMovies.length > 70) {
-  const excessMovies = allMovies.slice(70); // oldest beyond 70
-  const idsToDelete = excessMovies.map((m) => m.id);
+      if (!fetchError && allMovies.length > 70) {
+        const idsToDelete = allMovies.slice(70).map((m) => m.id);
+        const { error: deleteError } = await supabase.from("movies").delete().in("id", idsToDelete);
 
-  const { error: deleteError } = await supabase
-    .from("movies")
-    .delete()
-    .in("id", idsToDelete);
+        if (deleteError) {
+          console.error("Failed to delete old movies:", deleteError.message);
+          toast.warn("Cleanup failed: Couldn't delete old movies.");
+        } else {
+          console.log(`🗑 Deleted ${idsToDelete.length} oldest movies.`);
+        }
+      }
 
-  if (deleteError) {
-    console.error("Failed to delete old movies:", deleteError.message);
-    toast.warn("Cleanup failed: Couldn't delete old movies.");
-  } else {
-    console.log(`🗑 Deleted ${idsToDelete.length} oldest movies.`);
-  }
-}
-
-fetchMovies(); // Refresh after cleanup
-
+      fetchMovies(); // Refresh
     }
-
     setLoading(false);
   };
+
+
+
+  const fixOldMoviesShowFlag = async () => {
+    const { data, error } = await supabase
+      .from("movies")
+      .select("id, showOnHomepage");
+  
+    if (error) {
+      toast.error("Error fetching movies");
+      return;
+    }
+  
+    const missing = data.filter((m) => m.showOnHomepage === null || m.showOnHomepage === undefined);
+  
+    if (!missing.length) {
+      toast.info("✅ All movies already have showOnHomepage set.");
+      return;
+    }
+  
+    const { error: updateError } = await supabase
+      .from("movies")
+      .update({ showOnHomepage: true })
+      .in("id", missing.map((m) => m.id));
+  
+    if (updateError) {
+      toast.error("❌ Failed to update some movies");
+    } else {
+      toast.success(`✅ Updated ${missing.length} old movies to show on homepage`);
+      fetchMovies(); // Refresh movie list
+    }
+  };
+  
+
+
+
+
+
 
   const handleEdit = (m) => {
     setEditingMovieId(m.id);
@@ -225,7 +251,8 @@ fetchMovies(); // Refresh after cleanup
       subCategory: m.subCategory || [],
       language: m.language || [],
       downloads: m.downloads || [],
-      linkColor: m.linkColor || "#60a5fa"
+      linkColor: m.linkColor || "#60a5fa",
+      showOnHomepage: m.showOnHomepage ?? true,
     });
 
     setDownloadBlocks(
@@ -294,7 +321,7 @@ fetchMovies(); // Refresh after cleanup
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Search + Inputs */}
+        {/* Inputs */}
         <input
           type="text"
           placeholder="Search movies…"
@@ -342,16 +369,24 @@ fetchMovies(); // Refresh after cleanup
             />
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <input
             type="color"
             value={movie.linkColor}
             onChange={(e) => setMovie((m) => ({ ...m, linkColor: e.target.value }))}
           />
           <span className="text-sm">Choose Link Color</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={movie.showOnHomepage}
+              onChange={(e) => setMovie((m) => ({ ...m, showOnHomepage: e.target.checked }))}
+            />
+            Show on Homepage
+          </label>
         </div>
 
-        {/* Downloads */}
+        {/* Download blocks */}
         <div className="space-y-3">
           {downloadBlocks.map((block, i) => (
             <div key={i} className="flex flex-wrap gap-2 items-center">
@@ -421,6 +456,16 @@ fetchMovies(); // Refresh after cleanup
         </button>
       </form>
 
+      <div className="flex justify-end mb-4">
+  <button
+    className="bg-green-700 px-3 py-1 rounded text-sm"
+    onClick={fixOldMoviesShowFlag}
+  >
+    🛠 Fix Old Movies (Show on Homepage)
+  </button>
+</div>
+
+
       <div className="mt-10">
         <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -432,8 +477,7 @@ fetchMovies(); // Refresh after cleanup
                   alt={m.title}
                   className="w-full h-56 object-cover rounded mb-2"
                   onError={(e) => {
-                    e.currentTarget.src =
-                      'https://via.placeholder.com/300x400?text=No+Image';
+                    e.currentTarget.src = 'https://via.placeholder.com/300x400?text=No+Image';
                   }}
                 />
                 <h3 className="text-lg font-semibold">{m.title}</h3>

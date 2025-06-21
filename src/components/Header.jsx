@@ -20,9 +20,12 @@ const Header = () => {
     : [];
 
   // ✅ Recent 10 movies (all users)
+  // ✅ Recent 10 movies for homepage
   const latestMovies = [...movies]
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, 10);
+  .filter((m) => m.showOnHomepage || m.showOnHomepage === undefined) // ✅ allow if true or missing
+  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  .slice(0, 10);
+
 
   const handleCopy = async () => {
     try {
@@ -38,26 +41,27 @@ const Header = () => {
     <div className="flex flex-col items-center mt-24 px-4 w-full">
 
       {/* 📢 Telegram Join Box */}
-      <div className="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-xl p-6 w-full max-w-md text-center">
-        <div className="flex flex-col items-center gap-4">
-          <img
-            src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
-            alt="Telegram"
-            className="w-14 h-14"
-          />
-          <h2 className="text-xl font-semibold text-white">
-            Join Our Official Telegram Channel For Regular Updates
-          </h2>
-          <a
-            href="https://t.me/AnchorMovies"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2.5 rounded-full shadow transition-all duration-200"
-          >
-            Join on Telegram
-          </a>
-        </div>
-      </div>
+<div className="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-xl p-4 sm:p-6 w-full max-w-md text-center">
+  <div className="flex flex-col items-center gap-3 sm:gap-4">
+    <img
+      src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+      alt="Telegram"
+      className="w-10 h-10 sm:w-14 sm:h-14"
+    />
+    <h2 className="text-lg sm:text-xl font-semibold text-white leading-tight">
+      Join Our Telegram Channel
+    </h2>
+    <a
+      href="https://t.me/AnchorMovies"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-block bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2 sm:px-6 sm:py-2.5 rounded-full shadow transition-all duration-200 text-sm sm:text-base"
+    >
+      Join on Telegram
+    </a>
+  </div>
+</div>
+
 
       {/* 🔗 Share Button */}
       <div className="flex justify-end w-full max-w-7xl px-2 sm:px-4 mb-4">

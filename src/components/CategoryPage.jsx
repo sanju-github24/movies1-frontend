@@ -24,12 +24,16 @@ const CategoryPage = () => {
       console.error('Error fetching movies:', error.message);
       setMovies([]);
     } else {
-      const categoryFiltered = (data || []).filter((movie) =>
-        Array.isArray(movie.categories)
+      const categoryFiltered = (data || []).filter((movie) => {
+        const inCategory = Array.isArray(movie.categories)
           ? movie.categories.map(c => c.toLowerCase()).includes(categoryName.toLowerCase())
           : typeof movie.categories === 'string' &&
-            movie.categories.toLowerCase() === categoryName.toLowerCase()
-      );
+            movie.categories.toLowerCase() === categoryName.toLowerCase();
+      
+        return inCategory; // ✅ Don't filter by showOnHomepage
+      });
+      
+      
 
       setMovies(categoryFiltered);
 
