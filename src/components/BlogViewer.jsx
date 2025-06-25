@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 
 const BlogViewer = () => {
   const { slug } = useParams();
   const [blog, setBlog] = useState(null);
+  const [recentBlogs, setRecentBlogs] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchBlog();
+    fetchRecentBlogs();
   }, [slug]);
 
   const fetchBlog = async () => {
@@ -26,58 +28,145 @@ const BlogViewer = () => {
     }
   };
 
-  if (error) {
-    return <div className="text-red-600 text-center py-6">{error}</div>;
-  }
+  const fetchRecentBlogs = async () => {
+    const { data, error } = await supabase
+      .from("blogs")
+      .select("id, slug, title, thumbnail_url, created_at")
+      .order("created_at", { ascending: false })
+      .limit(3);
 
-  if (!blog) {
-    return <div className="text-gray-600 text-center py-6">Loading blog...</div>;
-  }
+    if (!error) {
+      setRecentBlogs(data);
+    }
+  };
+
+  if (error) return <div className="text-red-500 text-center py-6">{error}</div>;
+  if (!blog) return <div className="text-gray-400 text-center py-6">Loading blog...</div>;
 
   return (
-    <div className="min-h-screen bg-white text-black py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-6 text-gray-800">{blog.title}</h1>
+    <div className="bg-black text-white min-h-screen py-10 px-4 sm:px-6 lg:px-8">
 
-        {blog.thumbnail_url && (
-          <img
-            src={blog.thumbnail_url}
-            alt={blog.title}
-            className="w-full max-h-[400px] object-cover rounded mb-8 shadow"
-            loading="lazy"
-          />
-        )}
+  {/* Navbar/Header */}
+<header className="bg-black border-b border-white/10 mb-6">
+  <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+    <Link to="/" className="flex items-center gap-1">
+      <img
+        src="/Logo_4.png" // Place your logo here
+        alt="AnchorMovies Logo"
+        className="h-8 sm:h-10 object-contain w-auto"
+      />
+      <span className="text-xl sm:text-2xl font-bold text-white hidden sm:inline">
+        <span className="text-blue-500">Movies</span>
+      </span>
+    </Link>
 
-        {/* Blog HTML content */}
-        {blog.content ? (
-          <div
-            className="prose prose-lg max-w-none"
-            dangerouslySetInnerHTML={{ __html: blog.content }}
-          />
-        ) : (
-          <p className="text-gray-500 italic">No content available.</p>
-        )}
+    <nav className="flex gap-4 text-sm sm:text-base">
+      <Link to="/" className="text-gray-300 hover:text-white transition">Home</Link>
+      <Link to="/blogs" className="text-gray-300 hover:text-white transition">All Blogs</Link>
+      <Link to="/about" className="text-gray-300 hover:text-white transition">About</Link>
+      <Link to="/contact" className="text-gray-300 hover:text-white transition">Contact</Link>
+    </nav>
+  </div>
+</header>
 
-        {/* Tags */}
-        {blog.tags?.length > 0 && (
-          <div className="mt-10 border-t pt-4">
-            <h4 className="text-lg font-semibold text-gray-700 mb-2">Tags:</h4>
-            <div className="flex flex-wrap gap-2">
-              {blog.tags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+
+
+
+
+
+
+     {/* Thumbnail with Title */}
+{/* Thumbnail with Title */}
+{blog.thumbnail_url && (
+  <div className="relative w-full max-w-4xl mx-auto h-[220px] sm:h-[300px] md:h-[360px] lg:h-[400px] rounded-xl overflow-hidden shadow-lg mb-10">
+    <img
+      src={blog.thumbnail_url}
+      alt={blog.title}
+      className="absolute inset-0 w-full h-full object-cover"
+    />
+    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-end px-6 pb-6">
+      <h1 className="text-xl sm:text-3xl md:text-4xl font-extrabold text-white drop-shadow-lg">
+        {blog.title}
+      </h1>
+    </div>
+  </div>
+)}
+
+
+
+      {/* Content and Sidebar */}
+      <section className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10">
+        {/* Main Blog Content */}
+<div className="md:col-span-3 space-y-10">
+  <article
+    className="prose prose-xl prose-invert leading-relaxed prose-img:rounded-md prose-img:shadow-md prose-a:text-blue-400 max-w-none text-gray-200"
+    dangerouslySetInnerHTML={{ __html: blog.content }}
+  />
+
+  {blog.tags?.length > 0 && (
+    <div className="pt-8 border-t border-white/10">
+      <h4 className="text-xl font-semibold mb-3">Tags:</h4>
+      <div className="flex flex-wrap gap-3">
+        {blog.tags.map((tag, i) => (
+          <span
+            key={i}
+            className="bg-blue-900 text-blue-200 px-4 py-1.5 rounded-full text-sm"
+          >
+            #{tag}
+          </span>
+        ))}
       </div>
+    </div>
+  )}
+</div>
+
+
+        {/* Sidebar */}
+        <aside className="md:col-span-1 sticky top-24 self-start space-y-4">
+          <h3 className="text-xs uppercase tracking-wider font-bold border-b border-gray-500 pb-2 text-white">
+            Trending Now
+          </h3>
+          {recentBlogs.map((item) => (
+  <Link
+    key={item.id}
+    to={`/blogs/${item.slug}`}
+    className="block hover:bg-white/10 p-4 rounded-xl transition duration-200"
+  >
+    <div className="flex flex-col items-start gap-4">
+      <img
+        src={item.thumbnail_url || "https://via.placeholder.com/120"}
+        alt={item.title}
+        className="w-full h-40 object-cover rounded-lg shadow"
+      />
+      <div>
+        <h4 className="text-lg font-semibold text-white leading-snug">
+          {item.title}
+        </h4>
+        <p className="text-sm text-gray-400 mt-2">
+          {new Date(item.created_at).toLocaleDateString()}
+        </p>
+      </div>
+    </div>
+  </Link>
+))}
+
+
+
+
+
+        </aside>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-16 border-t border-white/10 pt-6 text-center text-sm text-gray-400">
+        <p>
+          📫 <Link to="/contact" className="underline hover:text-white">Contact Us</Link> | 📄{" "}
+          <Link to="/about" className="underline hover:text-white">About Us</Link>
+        </p>
+        <p className="mt-2">&copy; {new Date().getFullYear()} AnchorMovies. All rights reserved.</p>
+      </footer>
     </div>
   );
 };
 
 export default BlogViewer;
-;

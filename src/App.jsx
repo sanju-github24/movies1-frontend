@@ -26,7 +26,12 @@ const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const hideCategoryBar = ['/login', '/email-verify', '/reset-password'].includes(location.pathname);
+  const hideOnPaths = ['/login', '/email-verify', '/reset-password'];
+const hideEverythingOnPaths = /^\/blogs\/[^/]+$/; // regex to match /blogs/:slug
+
+const hideNavbarAndCategoryBar = hideEverythingOnPaths.test(location.pathname);
+const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
+
 
   const handleCategoryClick = (category) => {
     navigate(`/category/${encodeURIComponent(category)}`);
@@ -49,14 +54,18 @@ const App = () => {
         pauseOnHover
       />
 
-      <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+      
 
-      {!hideCategoryBar && (
-        <CategoryBar
-          onCategoryClick={handleCategoryClick}
-          onLanguageClick={handleLanguageClick}
-        />
-      )}
+      {!hideNavbarAndCategoryBar && (
+  <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+)}
+
+{!hideNavbarAndCategoryBar && !hideOnlyCategoryBar && (
+  <CategoryBar
+    onCategoryClick={handleCategoryClick}
+    onLanguageClick={handleLanguageClick}
+  />
+)}
 
       <Routes>
         {/* Public Routes */}

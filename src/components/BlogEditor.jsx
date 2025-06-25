@@ -13,7 +13,8 @@ const BlogEditor = () => {
     thumbnail_url: "",
     tags: "",
     related_movie_ids: "",
-    content: "", // Add content field
+    content: "",
+    is_trending: false, // added
   });
   const [loading, setLoading] = useState(false);
   const [blogs, setBlogs] = useState([]);
@@ -50,6 +51,7 @@ const BlogEditor = () => {
       thumbnail_url: form.thumbnail_url,
       tags,
       related_movie_ids,
+      is_trending: form.is_trending, // include trending
     };
 
     setLoading(true);
@@ -68,6 +70,7 @@ const BlogEditor = () => {
         tags: "",
         related_movie_ids: "",
         content: "",
+        is_trending: false,
       });
       setEditingId(null);
       fetchBlogs();
@@ -83,6 +86,7 @@ const BlogEditor = () => {
       tags: (blog.tags || []).join(", "),
       related_movie_ids: (blog.related_movie_ids || []).join(", "),
       content: blog.content || "",
+      is_trending: blog.is_trending || false,
     });
     setEditingId(blog.id);
   };
@@ -126,6 +130,7 @@ const BlogEditor = () => {
           value={form.thumbnail_url}
           onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
         />
+
         <input
           type="text"
           placeholder="Tags (comma-separated)"
@@ -133,13 +138,26 @@ const BlogEditor = () => {
           value={form.tags}
           onChange={(e) => setForm({ ...form, tags: e.target.value })}
         />
+
         <input
           type="text"
-          placeholder="Related Movie IDs (UUIDs, comma-separated)"
+          placeholder="Related Movie IDs (comma-separated UUIDs)"
           className="w-full p-2 rounded border"
           value={form.related_movie_ids}
           onChange={(e) => setForm({ ...form, related_movie_ids: e.target.value })}
         />
+
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="isTrending"
+            checked={form.is_trending}
+            onChange={(e) => setForm({ ...form, is_trending: e.target.checked })}
+          />
+          <label htmlFor="isTrending" className="text-sm">
+            Mark as Trending
+          </label>
+        </div>
 
         <button
           type="submit"
@@ -157,7 +175,16 @@ const BlogEditor = () => {
         <div className="space-y-4">
           {blogs.map((blog) => (
             <div key={blog.id} className="bg-white p-4 rounded shadow">
-              <h3 className="text-lg font-semibold mb-1">{blog.title}</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  {blog.title}
+                  {blog.is_trending && (
+                    <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded">
+                      Trending
+                    </span>
+                  )}
+                </h3>
+              </div>
               <p className="text-gray-600 text-sm line-clamp-2">
                 {(blog.content || "").replace(/<[^>]+>/g, "").slice(0, 100)}...
               </p>
