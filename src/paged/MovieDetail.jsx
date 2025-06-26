@@ -63,10 +63,33 @@ const MovieDetail = () => {
   return (
     <div className="flex justify-center mt-24 px-2 sm:px-6 md:px-10 w-full bg-black">
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
-  {topTitle}
-</h1>
-
+  
+        {/* Title */}
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
+          {topTitle}
+        </h1>
+  
+        {/* Break line after title */}
+        <hr className="border-t-2 border-gray-300 mb-6 w-1/2 mx-auto" />
+  
+        {/* Blue full-width bar inside white box */}
+        <div className="w-full bg-blue-900 text-white text-sm sm:text-base px-4 sm:px-6 py-3 rounded-md shadow flex justify-between items-center mb-6">
+          <span className="font-semibold">
+             Posted {movie.created_at ? new Date(movie.created_at).toLocaleString() : "Unknown"}
+          </span>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              alert("🔗 Link copied!");
+            }}
+            className="text-blue-100 hover:text-white transition"
+          >
+           Share
+          </button>
+        </div>
+  
+        {/* ...continue your movie content */}
+  
         <hr className="border-t-2 border-gray-300 mb-6 w-1/2 mx-auto" />
 
         <div className="flex justify-center mb-8">
@@ -85,44 +108,51 @@ const MovieDetail = () => {
 
     return (
       <React.Fragment key={index}>
-        <div className="bg-gray-100 border border-gray-300 p-5 rounded text-center text-[15px] text-black">
-          <div className="font-semibold text-[12px] mb-1">
-            {quality} - {format}
-          </div>
+  <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md">
+    
+    {/* Quality + Format */}
+    <div className="font-semibold text-[15px] mb-2 text-gray-800">
+      {quality} - {format}
+    </div>
 
-          <button
-            onClick={() => handleDownload(download.url, filename)}
-            className="text-blue-600 underline hover:text-blue-800"
-          >
-            📥 {quality}
-          </button>
+    {/* Download Button */}
+    <button
+      onClick={() => handleDownload(download.url, filename)}
+      className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
+    >
+      📥 {quality}
+    </button>
 
-          <p className="text-[15px] text-gray-500 mt-1 mb-2">
-            Downloads: {download.count || 0}
-          </p>
+    {/* Download Count */}
+    <p className="text-[15px] text-gray-600 mt-2 mb-3">
+      Downloads: <span className="font-medium">{download.count || 0}</span>
+    </p>
 
-          {download.magnet && (
-            <a
-              href={download.magnet}
-              className="inline-block bg-red-200 hover:bg-red-400 text-black px-2 py-1 rounded font-medium mr-2"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              🧲 Magnet
-            </a>
-          )}
-        </div>
+    {/* Magnet Link */}
+    {download.magnet && (
+      <a
+        href={download.magnet}
+        className="inline-block bg-red-300 hover:bg-red-500 text-black px-4 py-2 rounded font-semibold text-[15px] transition"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🧲 Magnet
+      </a>
+    )}
+  </div>
 
-        {download.showGifAfter && (
-          <div className="flex justify-center my-6">
-            <img
-              src="/torrent1.gif"
-              alt="Torrent GIF"
-              className="w-24 h-24 object-contain"
-            />
-          </div>
-        )}
-      </React.Fragment>
+  {/* Optional GIF */}
+  {download.showGifAfter && (
+    <div className="flex justify-center my-6">
+      <img
+        src="/torrent1.gif"
+        alt="Torrent GIF"
+        className="w-28 h-28 object-contain"
+      />
+    </div>
+  )}
+</React.Fragment>
+
     );
   })}
 

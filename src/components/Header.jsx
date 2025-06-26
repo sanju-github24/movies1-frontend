@@ -24,7 +24,7 @@ const Header = () => {
   const latestMovies = [...movies]
   .filter((m) => m.showOnHomepage || m.showOnHomepage === undefined) // ✅ allow if true or missing
   .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  .slice(0, 10);
+  .slice(0, 40);
 
 
   const handleCopy = async () => {
@@ -122,7 +122,7 @@ const Header = () => {
 <div className="bg-white rounded-md p-3 mb-3 text-sm text-black shadow-sm">
   <strong className="block mb-1 text-base">🆕 Recently Uploaded:</strong>
   <p className="sm:inline">
-    Showing the latest 10 movies here.
+    Showing the latest movies here.
     <span className="block sm:inline mt-1">
       For more, you can use
       <span className="inline-block mx-1 mt-1 px-2 py-1 bg-blue-100 text-blue-700 rounded">
@@ -135,28 +135,28 @@ const Header = () => {
     </span>
   </p>
 </div>
+<div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
+  {latestMovies.slice(0,40).map((movie) => (
+    <div
+      key={movie.id}
+      className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-3 text-white text-sm gap-1 sm:gap-2"
+    >
+      <Link
+        to={`/movie/${movie.slug}`}
+        className="font-medium break-words line-clamp-2"
+        style={{ color: movie.linkColor || "#60a5fa" }}
+        title={movie.title}
+      >
+        {movie.title}
+      </Link>
 
-    <div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
-      {latestMovies.slice(0, 50).map((movie) => (
-        <div
-          key={movie.id}
-          className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 transition rounded-md p-3 text-white text-sm gap-1 sm:gap-2"
-        >
-          <Link
-            to={`/movie/${movie.slug}`}
-            className="font-medium break-words line-clamp-2"
-            style={{ color: movie.linkColor || "#60a5fa" }}
-            title={movie.title}
-          >
-            {movie.title}
-          </Link>
-
-          <span className="text-xs text-gray-300 whitespace-nowrap sm:text-right">
-            {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
-          </span>
-        </div>
-      ))}
+      <span className="text-xs text-gray-300 whitespace-nowrap sm:text-right">
+        {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
+      </span>
     </div>
+  ))}
+</div>
+
   </div>
 )}
 
