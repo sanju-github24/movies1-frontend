@@ -109,7 +109,6 @@ const MovieDetail = () => {
     return (
       <React.Fragment key={index}>
   <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md">
-    
     {/* Quality + Format */}
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
@@ -128,6 +127,30 @@ const MovieDetail = () => {
       Downloads: <span className="font-medium">{download.count || 0}</span>
     </p>
 
+    {/* 🔺 Red Seedr Notice with GIFs */}
+<div className="flex items-center justify-center gap-3 mb-3">
+  <img
+    src="/clapping.gif"
+    alt="Seed GIF"
+    className="w-8 h-8 object-contain"
+  />
+  <p className="text-red-600 font-semibold text-[14px] text-center">
+    🔺 Seed Back Here After Downloading {' '}
+    <a
+      href="https://www.seedr.cc/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline hover:text-red-800"
+    >
+      https://www.seedr.cc
+    </a>
+  </p>
+  <img
+    src="/clapping.gif"
+    alt="Seed GIF"
+    className="w-8 h-8 object-contain"
+  />
+</div>
     {/* Magnet Link */}
     {download.magnet && (
       <a
