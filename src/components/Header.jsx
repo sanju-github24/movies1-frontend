@@ -119,24 +119,22 @@ const Header = () => {
 {latestMovies.length > 0 && (
   <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
 
-    {/* ℹ️ Intro Text */}
-    <div className="bg-white rounded-md p-3 mb-3 text-sm text-black shadow-sm">
-      <strong className="block mb-1 text-base">🆕 Recently Uploaded:</strong>
-      Showing the latest 10 movies here.  
-      <span className="block sm:inline"> For more, you can use  
-        <span
-          className="inline-block mx-1 px-2 py-1 bg-blue-100 text-blue-700 rounded cursor-default"
-        >
-          🔍 Search
-        </span>  
-        or  
-        <span
-          className="inline-block mx-1 px-2 py-1 bg-green-100 text-green-700 rounded cursor-default"
-        >
-          📂 Browse Categories
-        </span>
+<div className="bg-white rounded-md p-3 mb-3 text-sm text-black shadow-sm">
+  <strong className="block mb-1 text-base">🆕 Recently Uploaded:</strong>
+  <p className="sm:inline">
+    Showing the latest 10 movies here.
+    <span className="block sm:inline mt-1">
+      For more, you can use
+      <span className="inline-block mx-1 mt-1 px-2 py-1 bg-blue-100 text-blue-700 rounded">
+        🔍 Search
       </span>
-    </div>
+      or
+      <span className="inline-block mx-1 mt-1 px-2 py-1 bg-green-100 text-green-700 rounded">
+        📂 Browse Categories
+      </span>
+    </span>
+  </p>
+</div>
 
     <div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
       {latestMovies.slice(0, 50).map((movie) => (

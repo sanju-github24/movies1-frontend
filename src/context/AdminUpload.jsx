@@ -3,28 +3,13 @@ import { toast } from "react-toastify";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
+import AdminLayout from "../components/AdminLayout";
+
+
 
 function slugify(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
-
-// ✅ Admin Navigation
-const AdminNav = () => {
-  const path = useLocation().pathname;
-  const isActive = (target) =>
-    path === target ? "bg-white text-black font-bold" : "bg-opacity-70";
-
-  return (
-    <div className="flex gap-3 mb-6">
-      <Link to="/admin/blog-editor" className={`bg-green-600 px-4 py-2 rounded ${isActive("/admin/blog-editor")}`}>
-        ✍️ Blog Editor
-      </Link>
-      <Link to="/admin/upload" className={`bg-blue-600 px-4 py-2 rounded ${isActive("/admin/upload")}`}>
-        🎞 Uploads
-      </Link>
-    </div>
-  );
-};
 
 const AdminUpload = () => {
   const { userData } = useContext(AppContext);
@@ -34,6 +19,7 @@ const AdminUpload = () => {
   const [search, setSearch] = useState("");
   const [editingMovieId, setEditingMovieId] = useState(null);
   const [movies, setMovies] = useState([]);
+  const [viewMode, setViewMode] = useState("upload");
 
   const [movie, setMovie] = useState({
     slug: "",
@@ -62,6 +48,7 @@ const AdminUpload = () => {
     else setMovies(data || []);
   };
 
+  
   const resetForm = () => {
     setMovie({
       slug: "",
@@ -179,7 +166,6 @@ const AdminUpload = () => {
       toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
       resetForm();
 
-      // ✅ Cleanup: Keep only 70 most recent movies
       const { data: allMovies, error: fetchError } = await supabase
         .from("movies")
         .select("id, created_at")
@@ -188,325 +174,385 @@ const AdminUpload = () => {
       if (!fetchError && allMovies.length > 70) {
         const idsToDelete = allMovies.slice(70).map((m) => m.id);
         const { error: deleteError } = await supabase.from("movies").delete().in("id", idsToDelete);
-
-        if (deleteError) {
-          console.error("Failed to delete old movies:", deleteError.message);
-          toast.warn("Cleanup failed: Couldn't delete old movies.");
-        } else {
-          console.log(`🗑 Deleted ${idsToDelete.length} oldest movies.`);
-        }
+        if (deleteError) toast.warn("Cleanup failed");
       }
 
-      fetchMovies(); // Refresh
+      fetchMovies();
     }
     setLoading(false);
   };
 
 
 
-  const fixOldMoviesShowFlag = async () => {
-    const { data, error } = await supabase
-      .from("movies")
-      .select("id, showOnHomepage");
   
-    if (error) {
-      toast.error("Error fetching movies");
-      return;
-    }
-  
-    const missing = data.filter((m) => m.showOnHomepage === null || m.showOnHomepage === undefined);
-  
-    if (!missing.length) {
-      toast.info("✅ All movies already have showOnHomepage set.");
-      return;
-    }
-  
-    const { error: updateError } = await supabase
-      .from("movies")
-      .update({ showOnHomepage: true })
-      .in("id", missing.map((m) => m.id));
-  
-    if (updateError) {
-      toast.error("❌ Failed to update some movies");
-    } else {
-      toast.success(`✅ Updated ${missing.length} old movies to show on homepage`);
-      fetchMovies(); // Refresh movie list
-    }
-  };
-  
+  // ✅ Fix and update showOnHomepage flag for old movies
+const fixOldMoviesShowFlag = async () => {
+  const { data, error } = await supabase
+    .from("movies")
+    .select("id, showOnHomepage");
 
+  if (error) {
+    toast.error("❌ Error fetching movies");
+    return;
+  }
 
+  const missing = data.filter((m) => m.showOnHomepage === null || m.showOnHomepage === undefined);
 
+  if (!missing.length) {
+    toast.info("✅ All movies already have showOnHomepage set.");
+    return;
+  }
 
+  const { error: updateError } = await supabase
+    .from("movies")
+    .update({ showOnHomepage: true })
+    .in("id", missing.map((m) => m.id));
 
+  if (updateError) {
+    toast.error("❌ Failed to update some movies");
+  } else {
+    toast.success(`✅ Updated ${missing.length} old movies to show on homepage`);
+    fetchMovies(); // Refresh movie list
+  }
+};
 
-  const handleEdit = (m) => {
-    setEditingMovieId(m.id);
-    setMovie({
-      slug: m.slug,
-      title: m.title,
-      poster: m.poster,
-      description: m.description,
-      categories: m.categories || [],
-      subCategory: m.subCategory || [],
-      language: m.language || [],
-      downloads: m.downloads || [],
-      linkColor: m.linkColor || "#60a5fa",
-      showOnHomepage: m.showOnHomepage ?? true,
-    });
+// ✅ Populate form for editing
+const handleEdit = (m) => {
+  setEditingMovieId(m.id);
+  setMovie({
+    slug: m.slug,
+    title: m.title,
+    poster: m.poster,
+    description: m.description,
+    categories: m.categories || [],
+    subCategory: m.subCategory || [],
+    language: m.language || [],
+    downloads: m.downloads || [],
+    linkColor: m.linkColor || "#60a5fa",
+    showOnHomepage: m.showOnHomepage ?? true,
+  });
 
-    setDownloadBlocks(
-      m.downloads.length
-        ? m.downloads.map((d) => ({
-            quality: d.quality,
-            size: d.size,
-            format: d.format,
-            file: null,
-            manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
-            gpLink: d.gpLink || "",
-            showGifAfter: d.showGifAfter || false
-          }))
-        : [{ quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }]
-    );
-  };
+  setDownloadBlocks(
+    (m.downloads || []).length
+      ? m.downloads.map((d) => ({
+          quality: d.quality || "",
+          size: d.size || "",
+          format: d.format || "",
+          file: null,
+          manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
+          gpLink: d.gpLink || "",
+          showGifAfter: d.showGifAfter || false,
+        }))
+      : [{ quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }]
+  );
+};
 
-  const handleDelete = async (slug) => {
-    const { error } = await supabase.from("movies").delete().eq("slug", slug);
-    if (error) toast.error("Failed to delete movie");
-    else {
-      toast.success("Movie deleted");
-      fetchMovies();
-    }
-  };
+// ✅ Delete movie by slug
+const handleDelete = async (slug) => {
+  const { error } = await supabase.from("movies").delete().eq("slug", slug);
+  if (error) {
+    toast.error("❌ Failed to delete movie");
+  } else {
+    toast.success("🗑️ Movie deleted");
+    fetchMovies(); // Refresh list
+  }
+};
 
-  const handleDownloadChange = (i, field, value) => {
-    const updated = [...downloadBlocks];
+// ✅ Update values inside a download block
+const handleDownloadChange = (i, field, value) => {
+  setDownloadBlocks((prev) => {
+    const updated = [...prev];
     updated[i][field] = value;
-    setDownloadBlocks(updated);
-  };
+    return updated;
+  });
+};
 
-  const addDownloadBlock = () => {
-    setDownloadBlocks([
-      ...downloadBlocks,
-      { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }
-    ]);
-  };
+// ✅ Add a new empty download block
+const addDownloadBlock = () => {
+  setDownloadBlocks((prev) => [
+    ...prev,
+    { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false },
+  ]);
+};
 
-  const removeDownloadBlock = (i) => {
-    if (downloadBlocks.length > 1) {
-      const updated = [...downloadBlocks];
-      updated.splice(i, 1);
-      setDownloadBlocks(updated);
-    }
-  };
+// ✅ Remove download block by index
+const removeDownloadBlock = (i) => {
+  if (downloadBlocks.length > 1) {
+    setDownloadBlocks((prev) => prev.filter((_, index) => index !== i));
+  }
+};
+
+
+
+
 
   const filteredMovies = movies.filter((m) =>
     m.title.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-4 max-w-6xl mx-auto text-white">
-      <AdminNav />
+    <AdminLayout>
 
-      {editingMovieId && (
-        <div className="text-yellow-300 font-medium mb-4">
-          ✏️ Editing: <strong>{movie.title}</strong>
-          <button
-            onClick={resetForm}
-            className="ml-4 bg-red-500 px-2 py-1 rounded text-sm"
-          >
-            Cancel Edit
-          </button>
+<div className="mb-6">
+          <input
+            type="text"
+            placeholder="🔍 Search movies…"
+            className="p-3 bg-gray-800 rounded w-full placeholder-gray-400"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Inputs */}
-        <input
-          type="text"
-          placeholder="Search movies…"
-          className="p-2 bg-gray-800 rounded w-full"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Title"
-          className="p-2 bg-gray-800 rounded w-full"
-          value={movie.title}
-          onChange={(e) =>
-            setMovie((m) => ({ ...m, title: e.target.value, slug: slugify(e.target.value) }))
-          }
-        />
-        <input
-          type="text"
-          placeholder="Poster URL"
-          className="p-2 bg-gray-800 rounded w-full"
-          value={movie.poster}
-          onChange={(e) => setMovie((m) => ({ ...m, poster: e.target.value }))}
-        />
-        <textarea
-          placeholder="Description"
-          className="p-2 bg-gray-800 rounded w-full"
-          rows={3}
-          value={movie.description}
-          onChange={(e) => setMovie((m) => ({ ...m, description: e.target.value }))}
-        />
-        <div className="grid grid-cols-3 gap-4">
-          {["categories", "subCategory", "language"].map((key) => (
+
+
+
+      <div className="max-w-7xl mx-auto text-white">
+        <h1 className="text-2xl font-bold mb-6">🎞 Upload New Movie</h1>
+  
+        {editingMovieId && (
+          <div className="bg-yellow-900 border border-yellow-500 p-4 rounded-md mb-6">
+            <span className="text-yellow-300 font-medium">
+              ✏️ Editing: <strong>{movie.title}</strong>
+            </span>
+            <button
+              onClick={resetForm}
+              className="ml-4 bg-red-500 px-3 py-1 rounded text-sm hover:bg-red-600"
+            >
+              Cancel Edit
+            </button>
+          </div>
+        )}
+  
+        
+  
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6 bg-gray-900 p-6 rounded-lg shadow border border-gray-800"
+        >
+          <div className="grid md:grid-cols-2 gap-6">
             <input
-              key={key}
               type="text"
-              placeholder={key}
-              className="p-2 bg-gray-800 rounded"
-              value={movie[key].join(",")}
+              placeholder="🎬 Title"
+              className="p-3 bg-gray-800 rounded placeholder-gray-400"
+              value={movie.title}
               onChange={(e) =>
                 setMovie((m) => ({
                   ...m,
-                  [key]: e.target.value.split(",").map((x) => x.trim()),
+                  title: e.target.value,
+                  slug: slugify(e.target.value),
                 }))
               }
             />
-          ))}
-        </div>
-        <div className="flex items-center gap-4">
-          <input
-            type="color"
-            value={movie.linkColor}
-            onChange={(e) => setMovie((m) => ({ ...m, linkColor: e.target.value }))}
-          />
-          <span className="text-sm">Choose Link Color</span>
-          <label className="flex items-center gap-2 text-sm">
             <input
-              type="checkbox"
-              checked={movie.showOnHomepage}
-              onChange={(e) => setMovie((m) => ({ ...m, showOnHomepage: e.target.checked }))}
+              type="text"
+              placeholder="🖼️ Poster URL"
+              className="p-3 bg-gray-800 rounded placeholder-gray-400"
+              value={movie.poster}
+              onChange={(e) =>
+                setMovie((m) => ({ ...m, poster: e.target.value }))
+              }
             />
-            Show on Homepage
-          </label>
-        </div>
-
-        {/* Download blocks */}
-        <div className="space-y-3">
-          {downloadBlocks.map((block, i) => (
-            <div key={i} className="flex flex-wrap gap-2 items-center">
-              {["quality", "size", "format"].map((field) => (
-                <input
-                  key={field}
-                  type="text"
-                  placeholder={field}
-                  value={block[field]}
-                  onChange={(e) => handleDownloadChange(i, field, e.target.value)}
-                  className="p-2 bg-gray-800 rounded flex-1 min-w-[120px]"
-                />
-              ))}
+          </div>
+  
+          <textarea
+            placeholder="📝 Description"
+            className="p-3 bg-gray-800 rounded w-full placeholder-gray-400"
+            rows={3}
+            value={movie.description}
+            onChange={(e) =>
+              setMovie((m) => ({ ...m, description: e.target.value }))
+            }
+          />
+  
+          <div className="grid md:grid-cols-3 gap-4">
+            {["categories", "subCategory", "language"].map((key) => (
               <input
-                type="file"
-                accept=".torrent"
-                className="p-2 bg-gray-800 rounded flex-1 min-w-[160px]"
-                onChange={(e) => handleDownloadChange(i, "file", e.target.files[0])}
-              />
-              <input
+                key={key}
                 type="text"
-                placeholder="Manual URL"
-                className="p-2 bg-gray-800 rounded flex-1 min-w-[160px]"
-                value={block.manualUrl}
-                onChange={(e) => handleDownloadChange(i, "manualUrl", e.target.value)}
+                placeholder={key}
+                className="p-3 bg-gray-800 rounded placeholder-gray-400"
+                value={movie[key].join(",")}
+                onChange={(e) =>
+                  setMovie((m) => ({
+                    ...m,
+                    [key]: e.target.value.split(",").map((x) => x.trim()),
+                  }))
+                }
               />
+            ))}
+          </div>
+  
+          <div className="flex items-center gap-6 flex-wrap">
+            <div className="flex items-center gap-2">
               <input
-                type="text"
-                placeholder="GP Link"
-                className="p-2 bg-gray-800 rounded flex-1 min-w-[160px]"
-                value={block.gpLink}
-                onChange={(e) => handleDownloadChange(i, "gpLink", e.target.value)}
+                type="color"
+                value={movie.linkColor}
+                onChange={(e) =>
+                  setMovie((m) => ({ ...m, linkColor: e.target.value }))
+                }
               />
-              <label className="flex items-center gap-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={block.showGifAfter}
-                  onChange={(e) => handleDownloadChange(i, "showGifAfter", e.target.checked)}
-                />
-                Show GIF
-              </label>
-              <button
-                type="button"
-                onClick={() => removeDownloadBlock(i)}
-                className="text-red-500 text-lg"
-                disabled={downloadBlocks.length === 1}
-              >
-                ❌
-              </button>
+              <span className="text-sm">Link Color</span>
             </div>
-          ))}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={movie.showOnHomepage}
+                onChange={(e) =>
+                  setMovie((m) => ({
+                    ...m,
+                    showOnHomepage: e.target.checked,
+                  }))
+                }
+              />
+              Show on Homepage
+            </label>
+          </div>
+  
+          {/* Download Blocks */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold">Download Blocks</h3>
+            {downloadBlocks.map((block, i) => (
+              <div
+                key={i}
+                className="bg-gray-800 p-4 rounded-md flex flex-wrap gap-3 items-center"
+              >
+                {["quality", "size", "format"].map((field) => (
+                  <input
+                    key={field}
+                    type="text"
+                    placeholder={field}
+                    value={block[field]}
+                    onChange={(e) =>
+                      handleDownloadChange(i, field, e.target.value)
+                    }
+                    className="p-2 rounded bg-gray-700 placeholder-gray-400"
+                  />
+                ))}
+                <input
+                  type="file"
+                  accept=".torrent"
+                  className="p-2 rounded bg-gray-700"
+                  onChange={(e) =>
+                    handleDownloadChange(i, "file", e.target.files[0])
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Manual URL"
+                  className="p-2 rounded bg-gray-700 placeholder-gray-400"
+                  value={block.manualUrl}
+                  onChange={(e) =>
+                    handleDownloadChange(i, "manualUrl", e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="GP Link"
+                  className="p-2 rounded bg-gray-700 placeholder-gray-400"
+                  value={block.gpLink}
+                  onChange={(e) =>
+                    handleDownloadChange(i, "gpLink", e.target.value)
+                  }
+                />
+                <label className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={block.showGifAfter}
+                    onChange={(e) =>
+                      handleDownloadChange(i, "showGifAfter", e.target.checked)
+                    }
+                  />
+                  Show GIF
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removeDownloadBlock(i)}
+                  className="text-red-400 text-lg"
+                  disabled={downloadBlocks.length === 1}
+                >
+                  ❌
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addDownloadBlock}
+              className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+            >
+              ➕ Add Another Download
+            </button>
+          </div>
+  
           <button
-            type="button"
-            onClick={addDownloadBlock}
-            className="text-green-400 mt-2"
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold text-lg"
+            disabled={loading}
           >
-            + Add Another Download
+            {loading
+              ? "Saving…"
+              : editingMovieId
+              ? "Update Movie"
+              : "Upload Movie"}
+          </button>
+        </form>
+  
+        <div className="flex justify-end mt-6">
+          <button
+            className="bg-green-700 hover:bg-green-800 px-4 py-2 rounded text-sm"
+            onClick={fixOldMoviesShowFlag}
+          >
+            🛠 Fix Old Movies (Show on Homepage)
           </button>
         </div>
-
-        <button
-          type="submit"
-          className="bg-blue-600 px-4 py-2 rounded"
-          disabled={loading}
-        >
-          {loading ? "Saving…" : editingMovieId ? "Update Movie" : "Upload Movie"}
-        </button>
-      </form>
-
-      <div className="flex justify-end mb-4">
-  <button
-    className="bg-green-700 px-3 py-1 rounded text-sm"
-    onClick={fixOldMoviesShowFlag}
-  >
-    🛠 Fix Old Movies (Show on Homepage)
-  </button>
-</div>
-
-
-      <div className="mt-10">
-        <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredMovies.length ? (
-            filteredMovies.map((m) => (
-              <div key={m.id} className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-                <img
-                  src={m.poster || 'https://via.placeholder.com/300x400?text=No+Image'}
-                  alt={m.title}
-                  className="w-full h-56 object-cover rounded mb-2"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://via.placeholder.com/300x400?text=No+Image';
-                  }}
-                />
-                <h3 className="text-lg font-semibold">{m.title}</h3>
-                <p className="text-sm text-gray-400">
-                  {(m.description || '').slice(0, 80)}…
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => handleEdit(m)}
-                    className="bg-yellow-500 px-3 py-1 rounded text-sm"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(m.slug)}
-                    className="bg-red-600 px-3 py-1 rounded text-sm"
-                  >
-                    🗑 Delete
-                  </button>
+  
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredMovies.length ? (
+              filteredMovies.map((m) => (
+                <div
+                  key={m.id}
+                  className="bg-gray-900 p-4 rounded-lg shadow border border-gray-800"
+                >
+                  <img
+                    src={
+                      m.poster ||
+                      "https://via.placeholder.com/300x400?text=No+Image"
+                    }
+                    alt={m.title}
+                    className="w-full h-56 object-cover rounded mb-3"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "https://via.placeholder.com/300x400?text=No+Image";
+                    }}
+                  />
+                  <h3 className="text-lg font-semibold">{m.title}</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {(m.description || "").slice(0, 80)}…
+                  </p>
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={() => handleEdit(m)}
+                      className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(m.slug)}
+                      className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-400">No movies uploaded yet.</p>
-          )}
+              ))
+            ) : (
+              <p className="text-gray-400">No movies uploaded yet.</p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
-};
-
-export default AdminUpload;
+}  
+export default AdminUpload;  

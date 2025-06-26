@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
+import AdminLayout from "./AdminLayout"; // <-- Ensure this path is correct
 
 const slugify = (text) =>
   text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -14,7 +15,7 @@ const BlogEditor = () => {
     tags: "",
     related_movie_ids: "",
     content: "",
-    is_trending: false, // added
+    is_trending: false,
   });
   const [loading, setLoading] = useState(false);
   const [blogs, setBlogs] = useState([]);
@@ -51,7 +52,7 @@ const BlogEditor = () => {
       thumbnail_url: form.thumbnail_url,
       tags,
       related_movie_ids,
-      is_trending: form.is_trending, // include trending
+      is_trending: form.is_trending,
     };
 
     setLoading(true);
@@ -101,106 +102,116 @@ const BlogEditor = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto bg-gray-100 text-black rounded-lg">
-      <h1 className="text-2xl font-bold mb-4">{editingId ? "Edit Blog" : "Create New Blog"}</h1>
+    <AdminLayout>
+      <div className="p-6 max-w-5xl mx-auto text-white">
+        <h1 className="text-2xl font-bold mb-6">
+          {editingId ? "✏️ Edit Blog" : "📝 Create New Blog"}
+        </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4 mb-10">
-        <input
-          type="text"
-          placeholder="Blog Title"
-          className="w-full p-2 rounded border"
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          required
-        />
-
-        <textarea
-          rows={10}
-          placeholder="Blog Content (HTML supported)"
-          className="w-full p-2 rounded border"
-          value={form.content}
-          onChange={(e) => setForm({ ...form, content: e.target.value })}
-          required
-        />
-
-        <input
-          type="text"
-          placeholder="Thumbnail URL"
-          className="w-full p-2 rounded border"
-          value={form.thumbnail_url}
-          onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
-        />
-
-        <input
-          type="text"
-          placeholder="Tags (comma-separated)"
-          className="w-full p-2 rounded border"
-          value={form.tags}
-          onChange={(e) => setForm({ ...form, tags: e.target.value })}
-        />
-
-        <input
-          type="text"
-          placeholder="Related Movie IDs (comma-separated UUIDs)"
-          className="w-full p-2 rounded border"
-          value={form.related_movie_ids}
-          onChange={(e) => setForm({ ...form, related_movie_ids: e.target.value })}
-        />
-
-        <div className="flex items-center space-x-2">
+        <form onSubmit={handleSubmit} className="space-y-4 mb-10 bg-gray-900 p-6 rounded-lg shadow border border-gray-800">
           <input
-            type="checkbox"
-            id="isTrending"
-            checked={form.is_trending}
-            onChange={(e) => setForm({ ...form, is_trending: e.target.checked })}
+            type="text"
+            placeholder="Blog Title"
+            className="w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            required
           />
-          <label htmlFor="isTrending" className="text-sm">
-            Mark as Trending
-          </label>
-        </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          {loading ? "Submitting..." : editingId ? "Update Blog" : "Create Blog"}
-        </button>
-      </form>
+          <textarea
+            rows={10}
+            placeholder="Blog Content (HTML supported)"
+            className="w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400"
+            value={form.content}
+            onChange={(e) => setForm({ ...form, content: e.target.value })}
+            required
+          />
 
-      <h2 className="text-xl font-bold mb-4">Existing Blogs</h2>
-      {blogs.length === 0 ? (
-        <p>No blogs found.</p>
-      ) : (
-        <div className="space-y-4">
-          {blogs.map((blog) => (
-            <div key={blog.id} className="bg-white p-4 rounded shadow">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  {blog.title}
-                  {blog.is_trending && (
-                    <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded">
-                      Trending
-                    </span>
-                  )}
-                </h3>
+          <input
+            type="text"
+            placeholder="Thumbnail URL"
+            className="w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400"
+            value={form.thumbnail_url}
+            onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
+          />
+
+          <input
+            type="text"
+            placeholder="Tags (comma-separated)"
+            className="w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400"
+            value={form.tags}
+            onChange={(e) => setForm({ ...form, tags: e.target.value })}
+          />
+
+          <input
+            type="text"
+            placeholder="Related Movie IDs (comma-separated UUIDs)"
+            className="w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400"
+            value={form.related_movie_ids}
+            onChange={(e) => setForm({ ...form, related_movie_ids: e.target.value })}
+          />
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="isTrending"
+              checked={form.is_trending}
+              onChange={(e) => setForm({ ...form, is_trending: e.target.checked })}
+            />
+            <label htmlFor="isTrending" className="text-sm">
+              Mark as Trending
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            {loading ? "Submitting..." : editingId ? "Update Blog" : "Create Blog"}
+          </button>
+        </form>
+
+        <h2 className="text-xl font-bold mb-4">📚 Existing Blogs</h2>
+        {blogs.length === 0 ? (
+          <p className="text-gray-400">No blogs found.</p>
+        ) : (
+          <div className="space-y-4">
+            {blogs.map((blog) => (
+              <div key={blog.id} className="bg-gray-800 p-4 rounded shadow border border-gray-700">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    {blog.title}
+                    {blog.is_trending && (
+                      <span className="bg-green-300 text-green-900 text-xs font-semibold px-2 py-0.5 rounded">
+                        Trending
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                <p className="text-gray-300 text-sm mt-1">
+                  {(blog.content || "").replace(/<[^>]+>/g, "").slice(0, 100)}...
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => handleEdit(blog)}
+                    className="bg-yellow-500 px-3 py-1 rounded text-sm text-black"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(blog.id)}
+                    className="bg-red-600 px-3 py-1 rounded text-sm text-white"
+                  >
+                    🗑 Delete
+                  </button>
+                </div>
               </div>
-              <p className="text-gray-600 text-sm line-clamp-2">
-                {(blog.content || "").replace(/<[^>]+>/g, "").slice(0, 100)}...
-              </p>
-              <div className="flex gap-2 mt-2">
-                <button onClick={() => handleEdit(blog)} className="bg-yellow-500 px-3 py-1 rounded">
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(blog.id)} className="bg-red-600 px-3 py-1 rounded text-white">
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </AdminLayout>
   );
 };
 
