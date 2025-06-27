@@ -63,7 +63,7 @@ const AdminUpload = () => {
       showOnHomepage: true,
     });
     setDownloadBlocks([
-      { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }
+      { quality: "", size: "", format: "", file: null, manualUrl: "",count: 0 , gpLink: "", showGifAfter: false }
     ]);
     setEditingMovieId(null);
   };
@@ -128,7 +128,8 @@ const AdminUpload = () => {
             url: `${supabase.storageUrl}/object/public/torrents/${filePath}`,
             filename: newFileName,
             gpLink: block.gpLink || "",
-            showGifAfter: block.showGifAfter || false
+            showGifAfter: block.showGifAfter || false,
+            count: 0,
           };
         } else {
           const url = block.manualUrl || block.gpLink;

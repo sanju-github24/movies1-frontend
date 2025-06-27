@@ -30,17 +30,42 @@ const MovieDetail = () => {
 
     fetchMovie();
   }, [code]);
-
-  const handleDownload = (url, filename) => {
+  const handleDownload = async (url, filename, index) => {
     const fullUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-    const a = document.createElement('a');
+  
+    // Deep copy downloads and increment count
+    const updatedDownloads = [...movie.downloads];
+    updatedDownloads[index] = {
+      ...updatedDownloads[index],
+      count: (updatedDownloads[index].count || 0) + 1
+    };
+  
+    // Update Supabase
+    const { error } = await supabase
+      .from('movies')
+      .update({ downloads: updatedDownloads })
+      .eq('id', movie.id);
+  
+    if (error) {
+      console.error("❌ Supabase update failed:", error.message);
+      alert("Failed to update download count.");
+    } else {
+      // Update local UI state
+      setMovie((prev) => ({ ...prev, downloads: updatedDownloads }));
+    }
+  
+    // Trigger download
+    const a = document.createElement("a");
     a.href = fullUrl;
-    a.setAttribute('download', filename);
-    a.style.display = 'none';
+    a.setAttribute("download", filename);
+    a.style.display = "none";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
+             
+  
+  
 
   if (loading) {
     return <div className="text-white text-center mt-20">Loading...</div>;
@@ -108,7 +133,7 @@ const MovieDetail = () => {
 
     return (
       <React.Fragment key={index}>
-  <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md">
+  <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md"> 
     {/* Quality + Format */}
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
@@ -116,10 +141,10 @@ const MovieDetail = () => {
 
     {/* Download Button */}
     <button
-      onClick={() => handleDownload(download.url, filename)}
+      onClick={() => handleDownload(download.url, filename, index)}
       className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
     >
-      📥 {quality}
+      📥 {download.quality}
     </button>
 
     {/* Download Count */}
