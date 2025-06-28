@@ -1,11 +1,18 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { supabase } from "../utils/supabaseClient";
+import { useRef } from 'react';
 
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [stories, setStories] = useState([]);
+  const [activeStory, setActiveStory] = useState(null);
+  const storyTimeoutRef = useRef(null);
+
 
   const adminEmail = 'sanjusanjay0444@gmail.com';
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
@@ -27,18 +34,138 @@ const Header = () => {
   .slice(0, 40);
 
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(siteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Clipboard error:', err);
-    }
+ // ✅ Fetch stories
+ useEffect(() => {
+  const fetchStories = async () => {
+    const { data, error } = await supabase
+      .from("stories")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!error) setStories(data);
   };
 
+  fetchStories();
+}, []);
+
+
+
+const handleCopy = async () => {
+  try {
+    await navigator.clipboard.writeText(siteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  } catch (err) {
+    console.error('Clipboard error:', err);
+  }
+};
+useEffect(() => {
+  if (!activeStory) return;
+
+  storyTimeoutRef.current = setTimeout(() => {
+    const currentIndex = stories.findIndex((s) => s.id === activeStory.id);
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex < stories.length) {
+      setActiveStory(stories[nextIndex]);
+    } else {
+      setActiveStory(null);
+    }
+  }, 30000);
+
+  return () => clearTimeout(storyTimeoutRef.current);
+}, [activeStory, stories]);
+
   return (
-    <div className="flex flex-col items-center mt-24 px-4 w-full">
+    <div className="flex flex-col items-center mt-1 px-5 w-full">
+
+
+     {/* 🆕 Latest Movie Stories Section */}
+{stories.length > 0 && (
+  <div className="w-full max-w-7xl px-2 sm:px-4 mt-2">
+    <div className="bg-white rounded-xl shadow p-4">
+      <div className="mb-3">
+        <h3 className="text-lg font-semibold text-black">
+          Latest Uploaded Movie Stories
+        </h3>
+      </div>
+
+      <div className="overflow-x-auto flex gap-4 scrollbar-hide py-2">
+        {stories.map((story) => (
+          <div
+            key={story.id}
+            onClick={() => setActiveStory(story)}
+            className="flex flex-col items-center text-center cursor-pointer min-w-[72px]"
+          >
+            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 p-1 shadow-lg">
+              <div className="bg-white rounded-full w-full h-full overflow-hidden">
+                <img
+                  src={story.poster_url}
+                  alt={story.title}
+                  className="w-full h-full object-cover rounded-full"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-800 mt-1 w-25 truncate font-medium">
+              {story.title}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+
+{activeStory && (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50"
+    onClick={() => {
+      clearTimeout(window.storyTimeout);
+      setActiveStory(null);
+    }}
+  >
+    {/* ❌ Close button */}
+    <button
+      className="absolute top-4 right-4 text-white text-2xl font-bold z-50"
+      onClick={(e) => {
+        e.stopPropagation();
+        clearTimeout(window.storyTimeout);
+        setActiveStory(null);
+      }}
+    >
+      ✖️
+    </button>
+
+    {/* Story Content */}
+    <div className="max-w-xs w-full p-4 relative animate-fadeIn">
+      
+      {/* Progress bar background */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
+        <div
+          className="bg-blue-500 h-full origin-left animate-progress30s"
+        />
+      </div>
+
+      {/* Story Poster */}
+      <img
+        src={activeStory.poster_url}
+        alt={activeStory.title}
+        className="rounded-lg w-full object-contain shadow-lg mt-3"
+        onClick={(e) => e.stopPropagation()}
+      />
+
+      {/* Story Info */}
+      <p className="text-white text-center mt-3 font-semibold">
+        {activeStory.title}
+      </p>
+      
+    </div>
+  </div>
+)}
+
+
 
       {/* 📢 Telegram Join Box */}
 <div className="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-xl p-4 sm:p-6 w-full max-w-md text-center">
@@ -103,9 +230,29 @@ const Header = () => {
           )}
         </div>
       </div>
+{/* 🎬 Latest Movies - All Users */}
+{latestMovies.length > 0 && (
+  <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
 
-      {/* 🛠 Admin Panel Link */}
-      {isAdmin && (
+<div className="bg-white rounded-md px-3 py-2 mt-1 text-sm text-black shadow-sm border border-gray-200">
+  <strong className="block text-sm font-semibold text-black mb-1">
+    🆕 Recently Uploaded
+  </strong>
+  <p className="text-gray-700 text-xs">
+    Latest movies are listed below. Use{" "}
+    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+      🔍 Search
+    </span>{" "}
+    or{" "}
+    <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+      📂 Categories
+    </span>{" "}
+    to explore.
+  </p>
+</div>
+
+{/* 🛠 Admin Panel Link */}
+{isAdmin && (
         <div className="w-full max-w-7xl px-2 sm:px-4 mb-4 text-left">
           <Link
             to="/admin"
@@ -115,27 +262,11 @@ const Header = () => {
           </Link>
         </div>
       )}
-{/* 🎬 Latest Movies - All Users */}
-{latestMovies.length > 0 && (
-  <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
 
-<div className="bg-white rounded-md p-3 mb-3 text-sm text-black shadow-sm">
-  <strong className="block mb-1 text-base">🆕 Recently Uploaded:</strong>
-  <p className="sm:inline">
-    Showing the latest movies here.
-    <span className="block sm:inline mt-1">
-      For more, you can use
-      <span className="inline-block mx-1 mt-1 px-2 py-1 bg-blue-100 text-blue-700 rounded">
-        🔍 Search
-      </span>
-      or
-      <span className="inline-block mx-1 mt-1 px-2 py-1 bg-green-100 text-green-700 rounded">
-        📂 Browse Categories
-      </span>
-    </span>
-  </p>
-</div>
-<div className="flex flex-col gap-3 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
+
+
+
+<div className="flex flex-col gap-0 bg-white/5 mt-1 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
   {latestMovies.slice(0,40).map((movie) => (
     <div
       key={movie.id}

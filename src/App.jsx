@@ -20,6 +20,7 @@ import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import BlogList from './components/BlogList';
 import BlogViewer from './components/BlogViewer';
 import AdminDashboard from './paged/AdminDashboard';
+import AdminStories from "./paged/AdminStories";
 
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
@@ -83,6 +84,7 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
   <Route path="upload" element={<AdminUpload />} />
   <Route path="blog-editor" element={<BlogEditor />} />
   <Route path="dashboard" element={<AdminDashboard />} />
+  <Route path="/admin/stories" element={<AdminStories />} />
 
 </Route>
 

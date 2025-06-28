@@ -58,6 +58,21 @@ const AdminLayout = ({ children }) => {
               <BsPeopleFill className="text-lg" /> Blog
             </Link>
           </li>
+
+          <li>
+            <Link
+              to="/admin/stories"
+              className={`flex items-center gap-2 px-3 py-2 rounded ${
+                isActive("/admin/stories") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+              }`}
+            >
+              <BsListCheck className="text-lg" /> Stories
+            </Link>
+          </li>
+
+
+
+
          
           
           <li>
