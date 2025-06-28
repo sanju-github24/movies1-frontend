@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { supabase } from "../utils/supabaseClient";
 import { useRef } from 'react';
+import { EyeIcon } from "@heroicons/react/outline";
 
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
@@ -77,6 +78,49 @@ useEffect(() => {
   return () => clearTimeout(storyTimeoutRef.current);
 }, [activeStory, stories]);
 
+useEffect(() => {
+  if (!activeStory) return;
+
+  const viewed = JSON.parse(localStorage.getItem("viewedStories") || "[]");
+  if (viewed.includes(activeStory.id)) return; // already counted
+
+  // Mark as viewed
+  localStorage.setItem("viewedStories", JSON.stringify([...viewed, activeStory.id]));
+
+  // 🔁 Increment views in Supabase (or your backend)
+  supabase
+    .from("stories")
+    .update({ views: activeStory.views + 1 })
+    .eq("id", activeStory.id)
+    .then(() => {
+      // Optionally update UI locally
+      setActiveStory({ ...activeStory, views: activeStory.views + 1 });
+    });
+
+}, [activeStory]);
+
+
+const formatTimeAgo = (timestamp) => {
+  const now = new Date();
+  const uploaded = new Date(timestamp);
+  const diffMs = now - uploaded;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${diffDays}d ago`;
+};
+
+
+
+
+
+
+
+
   return (
     <div className="flex flex-col items-center mt-1 px-5 w-full">
 
@@ -141,6 +185,11 @@ useEffect(() => {
     {/* Story Content */}
     <div className="max-w-xs w-full p-4 relative animate-fadeIn">
       
+
+    <p className="text-gray-400 text-center text-xs mt-1">
+  Uploaded {formatTimeAgo(activeStory.created_at)}
+</p>
+
       {/* Progress bar background */}
       <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
         <div
@@ -160,6 +209,13 @@ useEffect(() => {
       <p className="text-white text-center mt-3 font-semibold">
         {activeStory.title}
       </p>
+     
+
+<p className="text-gray-400 text-center text-xs mt-1 flex items-center justify-center gap-1">
+  <EyeIcon className="w-4 h-4 text-gray-400" />
+  {activeStory.views || 0} views
+</p>
+
       
     </div>
   </div>

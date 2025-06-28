@@ -69,18 +69,28 @@ const AdminStories = () => {
     setPosterUrl(story.poster_url);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, createdAt) => {
+    const storyTime = new Date(createdAt);
+    const now = new Date();
+    const hoursDiff = (now - storyTime) / (1000 * 60 * 60); // convert ms to hours
+  
+    if (hoursDiff < 24) {
+      toast.warn("⏳ You can only delete this story after 24 hours.");
+      return;
+    }
+  
     const confirm = window.confirm("Are you sure you want to delete this story?");
     if (!confirm) return;
-
+  
     const { error } = await supabase.from("stories").delete().eq("id", id);
-
+  
     if (error) toast.error("Delete failed");
     else {
       toast.success("Deleted successfully");
       fetchStories();
     }
   };
+  
 
   return (
     <AdminLayout>
@@ -143,11 +153,12 @@ const AdminStories = () => {
                     ✏️ Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(s.id)}
-                    className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    🗑️ Delete
-                  </button>
+  onClick={() => handleDelete(s.id, s.created_at)} // pass created_at
+  className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+>
+  🗑️ Delete
+</button>
+
                 </div>
               </div>
             ))}
