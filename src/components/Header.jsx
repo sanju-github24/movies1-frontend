@@ -130,9 +130,7 @@ const formatTimeAgo = (timestamp) => {
   <div className="w-full max-w-7xl px-2 sm:px-4 mt-2">
     <div className="bg-white rounded-xl shadow p-4">
       <div className="mb-3">
-        <h3 className="text-lg font-semibold text-black">
-          Latest Uploaded Movie Stories
-        </h3>
+        <h3 className="text-lg font-semibold text-black">Stories</h3>
       </div>
 
       <div className="overflow-x-auto flex gap-4 scrollbar-hide py-2">
@@ -187,7 +185,7 @@ const formatTimeAgo = (timestamp) => {
       
 
     <p className="text-gray-400 text-center text-xs mt-1">
-  Uploaded {formatTimeAgo(activeStory.created_at)}
+   {formatTimeAgo(activeStory.created_at)}
 </p>
 
       {/* Progress bar background */}
