@@ -146,6 +146,17 @@ const MovieDetail = () => {
     >
       📥 {download.quality}
     </button>
+    {/* Direct Download Link */}
+{download.directUrl && (
+  <a
+    href={download.directUrl}
+    download={download.filename}
+    className="block mt-2 text-sm text-blue-600 underline hover:text-blue-800"
+  >
+    ⬇️ Direct Download Link
+  </a>
+)}
+
 
     {/* Download Count */}
     <p className="text-[15px] text-gray-600 mt-2 mb-3">

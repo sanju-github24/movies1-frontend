@@ -35,7 +35,7 @@ const AdminUpload = () => {
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
-    { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }
+    { quality: "", size: "", format: "", file: null, manualUrl: "", directUrl: "", gpLink: "", showGifAfter: false }
   ]);
 
   useEffect(() => {
@@ -138,6 +138,7 @@ const AdminUpload = () => {
             size: block.size,
             format: block.format,
             url,
+            directUrl: block.directUrl || "", // ✅ Save direct link
             filename: url.split("/").pop(),
             gpLink: block.gpLink || "",
             showGifAfter: block.showGifAfter || false
@@ -217,14 +218,15 @@ const fixOldMoviesShowFlag = async () => {
   }
 };
 
-// ✅ Populate form for editing
 const handleEdit = (m) => {
   setEditingMovieId(m.id);
+
+  // Populate movie form fields
   setMovie({
-    slug: m.slug,
-    title: m.title,
-    poster: m.poster,
-    description: m.description,
+    slug: m.slug || "",
+    title: m.title || "",
+    poster: m.poster || "",
+    description: m.description || "",
     categories: m.categories || [],
     subCategory: m.subCategory || [],
     language: m.language || [],
@@ -233,18 +235,31 @@ const handleEdit = (m) => {
     showOnHomepage: m.showOnHomepage ?? true,
   });
 
+  // Populate each download block, including new fields
   setDownloadBlocks(
     (m.downloads || []).length
       ? m.downloads.map((d) => ({
           quality: d.quality || "",
           size: d.size || "",
           format: d.format || "",
-          file: null,
+          file: null, // user will need to re-upload if editing
           manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
+          directUrl: d.directUrl || "", // ✅ Include direct download URL
           gpLink: d.gpLink || "",
           showGifAfter: d.showGifAfter || false,
         }))
-      : [{ quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false }]
+      : [
+          {
+            quality: "",
+            size: "",
+            format: "",
+            file: null,
+            manualUrl: "",
+            directUrl: "", // initialize for empty form too
+            gpLink: "",
+            showGifAfter: false,
+          },
+        ]
   );
 };
 
@@ -354,6 +369,9 @@ const removeDownloadBlock = (i) => {
               }
             />
           </div>
+
+
+
   
           <textarea
             placeholder="📝 Description"
@@ -455,6 +473,17 @@ const removeDownloadBlock = (i) => {
                     handleDownloadChange(i, "gpLink", e.target.value)
                   }
                 />
+                          <input
+  type="text"
+  placeholder="Direct Download URL"
+  className="p-2 rounded bg-gray-700 placeholder-gray-400"
+  value={block.directUrl}
+  onChange={(e) =>
+    handleDownloadChange(i, "directUrl", e.target.value)
+  }
+/>
+
+
                 <label className="flex items-center gap-1 text-sm">
                   <input
                     type="checkbox"
