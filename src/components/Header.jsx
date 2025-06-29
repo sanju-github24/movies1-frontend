@@ -252,45 +252,51 @@ const Header = () => {
           </a>
         </div>
       </div>
-
-      {/* Share Button (group-hover) */}
-      <div className="flex justify-end w-full max-w-7xl px-2 sm:px-4 mb-4">
-        <div className="relative group">
-          <img src="/share.png" alt="Share" className="w-10 h-10 cursor-pointer hover:opacity-80 transition" />
-          <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-md p-2 z-50 text-sm text-black opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition duration-200">
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent("Check out this site: " + siteUrl)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-3 py-2 hover:bg-gray-100 rounded"
-            >
-              WhatsApp
-            </a>
-            <a
-              href="https://www.instagram.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-3 py-2 hover:bg-gray-100 rounded"
-            >
-              Instagram
-            </a>
-            <button onClick={handleCopy} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded">
-              {copied ? "✅ Copied!" : "Copy Link"}
-            </button>
-          </div>
-        </div>
+{/* Recently Uploaded + Share */}
+{latestMovies.length > 0 && (
+  <div className="w-full max-w-7xl px-2 sm:px-4 pt-2 pb-4 -mt-2">
+    <div className="flex justify-between items-start bg-white rounded-md px-3 py-2 text-sm text-black shadow-sm border border-gray-200 mb-2">
+      <div>
+        <strong className="block text-sm font-semibold mb-1">🆕 Recently Uploaded</strong>
+        <p className="text-gray-700 text-xs">
+          Use <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">🔍 Search</span> or{" "}
+          <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium">📂 Categories</span> to explore.
+        </p>
       </div>
 
-      {/* Latest Movies */}
-      {latestMovies.length > 0 && (
-        <div className="w-full max-w-7xl px-2 sm:px-4 py-4">
-          <div className="bg-white rounded-md px-3 py-2 text-sm text-black shadow-sm border border-gray-200 mb-2">
-            <strong className="block text-sm font-semibold mb-1">🆕 Recently Uploaded</strong>
-            <p className="text-gray-700 text-xs">
-              Use <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">🔍 Search</span> or{" "}
-              <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium">📂 Categories</span> to explore.
-            </p>
-          </div>
+      {/* Share Dropdown inside */}
+      <div className="relative group ml-2 mt-1">
+        <img
+          src="/share.png"
+          alt="Share"
+          className="w-7 h-7 sm:w-8 sm:h-8 cursor-pointer hover:opacity-80 transition"
+        />
+        <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-md p-2 text-sm text-black opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition duration-200 z-50">
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent("Check out this site: " + siteUrl)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-2 hover:bg-gray-100 rounded"
+          >
+            WhatsApp
+          </a>
+          <a
+            href="https://www.instagram.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-2 hover:bg-gray-100 rounded"
+          >
+            Instagram
+          </a>
+          <button
+            onClick={handleCopy}
+            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded"
+          >
+            {copied ? "✅ Copied!" : "Copy Link"}
+          </button>
+        </div>
+      </div>
+    </div>
 
           {isAdmin && (
             <div className="mb-2">
