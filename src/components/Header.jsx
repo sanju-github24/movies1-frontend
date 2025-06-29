@@ -151,7 +151,7 @@ const Header = () => {
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-800 mt-1 truncate w-20 font-medium">{story.title}</p>
+                  <p className="text-xs text-gray-800 mt-1 truncate w-23 font-medium">{story.title}</p>
                 </div>
               ))}
             </div>
@@ -306,26 +306,27 @@ const Header = () => {
             </div>
           )}
 
-          <div className="flex flex-col gap-1 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4">
-            {latestMovies.map((movie) => (
-              <div
-                key={movie.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 rounded-md p-3 text-white text-sm"
-              >
-                <Link
-                  to={`/movie/${movie.slug}`}
-                  className="font-medium break-words line-clamp-2"
-                  style={{ color: movie.linkColor || "#60a5fa" }}
-                  title={movie.title}
-                >
-                  {movie.title}
-                </Link>
-                <span className="text-xs text-gray-300 sm:text-right">
-                  {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            ))}
-          </div>
+<div className="flex flex-col gap-1 bg-white/5 backdrop-blur-md rounded-md shadow border border-white/10 p-4 mt-1">
+  {latestMovies.map((movie) => (
+    <div
+      key={movie.id}
+      className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/10 hover:bg-white/20 rounded-md p-3 text-white text-sm mb-0" // ⬅️ added mb-2 for spacing
+    >
+      <Link
+        to={`/movie/${movie.slug}`}
+        className="font-medium break-words line-clamp-2"
+        style={{ color: movie.linkColor || "#60a5fa" }}
+        title={movie.title}
+      >
+        {movie.title}
+      </Link>
+      <span className="text-xs text-gray-300 sm:text-right">
+        {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
+      </span>
+    </div>
+  ))}
+</div>
+
         </div>
       )}
       {/* Footer - Community Join CTA */}

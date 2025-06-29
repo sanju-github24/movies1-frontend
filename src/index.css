@@ -41,13 +41,17 @@
 }
 
 
-@keyframes marquee {
-  0%   { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+
+/* tailwind.css or global.css */
+@keyframes slow-marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
-.animate-marquee {
-  animation: marquee 25s linear infinite;
+.animate-slow-marquee {
+  animation: slow-marquee 29s linear infinite;
 }
-
-
