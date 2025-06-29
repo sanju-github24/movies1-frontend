@@ -86,7 +86,7 @@ const MovieDetail = () => {
   const topTitle = `${movie.title || ''} - ${firstDownload?.format || 'Format Unknown'}`;
 
   return (
-    <div className="flex justify-center mt-24 px-2 sm:px-6 md:px-10 w-full bg-black">
+    <div className="flex justify-center mt-4 px-2 sm:px-6 md:px-10 w-full bg-black">
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
   
         {/* Title */}
@@ -133,7 +133,7 @@ const MovieDetail = () => {
 
     return (
       <React.Fragment key={index}>
-  <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md"> 
+  <div className="bg-gray-100 border border-gray-300 p-6 rounded text-center text-[16px] text-black shadow-md "> 
     {/* Quality + Format */}
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
