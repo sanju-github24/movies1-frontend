@@ -12,6 +12,10 @@ const Header = () => {
   const [copied, setCopied] = useState(false);
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(null);
+  const [touchStartX, setTouchStartX] = useState(null);
+const [touchEndX, setTouchEndX] = useState(null);
+
   const storyTimeoutRef = useRef(null);
 
 
@@ -116,6 +120,34 @@ const formatTimeAgo = (timestamp) => {
 
 
 
+const minSwipeDistance = 50;
+
+const handleTouchStart = (e) => {
+  setTouchStartX(e.changedTouches[0].clientX);
+};
+
+const handleTouchEnd = (e) => {
+  setTouchEndX(e.changedTouches[0].clientX);
+
+  if (!touchStartX) return;
+
+  const distance = e.changedTouches[0].clientX - touchStartX;
+
+  if (distance > minSwipeDistance && activeStoryIndex > 0) {
+    // Swipe right → previous story
+    const newIndex = activeStoryIndex - 1;
+    setActiveStoryIndex(newIndex);
+    setActiveStory(stories[newIndex]);
+  } else if (distance < -minSwipeDistance && activeStoryIndex < stories.length - 1) {
+    // Swipe left → next story
+    const newIndex = activeStoryIndex + 1;
+    setActiveStoryIndex(newIndex);
+    setActiveStory(stories[newIndex]);
+  }
+};
+
+
+
 
 
 
@@ -163,39 +195,95 @@ const formatTimeAgo = (timestamp) => {
 {activeStory && (
   <div
     className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50"
-    onClick={() => {
-      clearTimeout(window.storyTimeout);
-      setActiveStory(null);
+    onClick={(e) => {
+      const x = e.clientX || e.touches?.[0]?.clientX || 0;
+      const screenWidth = window.innerWidth;
+
+      if (x > screenWidth / 2 && activeStoryIndex < stories.length - 1) {
+        const newIndex = activeStoryIndex + 1;
+        setActiveStoryIndex(newIndex);
+        setActiveStory(stories[newIndex]);
+      } else {
+        clearTimeout(window.storyTimeout);
+        setActiveStory(null);
+        setActiveStoryIndex(null);
+      }
+    }}
+    onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+    onTouchEnd={(e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const distance = touchEndX - touchStartX;
+      const threshold = 50;
+
+      if (distance < -threshold && activeStoryIndex < stories.length - 1) {
+        // swipe left → next
+        const newIndex = activeStoryIndex + 1;
+        setActiveStoryIndex(newIndex);
+        setActiveStory(stories[newIndex]);
+      } else if (distance > threshold && activeStoryIndex > 0) {
+        // swipe right → previous
+        const newIndex = activeStoryIndex - 1;
+        setActiveStoryIndex(newIndex);
+        setActiveStory(stories[newIndex]);
+      }
     }}
   >
-    {/* ❌ Close button */}
+    {/* ❌ Close */}
     <button
       className="absolute top-4 right-4 text-white text-2xl font-bold z-50"
       onClick={(e) => {
         e.stopPropagation();
         clearTimeout(window.storyTimeout);
         setActiveStory(null);
+        setActiveStoryIndex(null);
       }}
     >
       ✖️
     </button>
 
+    {/* ⬅️ Left Arrow */}
+    {activeStoryIndex > 0 && (
+      <button
+        className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white text-4xl z-50"
+        onClick={(e) => {
+          e.stopPropagation();
+          const newIndex = activeStoryIndex - 1;
+          setActiveStoryIndex(newIndex);
+          setActiveStory(stories[newIndex]);
+        }}
+      >
+        ‹
+      </button>
+    )}
+
+    {/* ➡️ Right Arrow */}
+    {activeStoryIndex < stories.length - 1 && (
+      <button
+        className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white text-4xl z-50"
+        onClick={(e) => {
+          e.stopPropagation();
+          const newIndex = activeStoryIndex + 1;
+          setActiveStoryIndex(newIndex);
+          setActiveStory(stories[newIndex]);
+        }}
+      >
+        ›
+      </button>
+    )}
+
     {/* Story Content */}
     <div className="max-w-xs w-full p-4 relative animate-fadeIn">
-      
-
-    <p className="text-gray-400 text-center text-xs mt-1">
-   {formatTimeAgo(activeStory.created_at)}
-</p>
-
-      {/* Progress bar background */}
+      {/* Progress bar */}
       <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
-        <div
-          className="bg-blue-500 h-full origin-left animate-progress30s"
-        />
+        <div className="bg-blue-500 h-full origin-left animate-progress30s" />
       </div>
 
-      {/* Story Poster */}
+      {/* Time */}
+      <p className="text-gray-400 text-center text-xs mt-1">
+        {formatTimeAgo(activeStory.created_at)}
+      </p>
+
+      {/* Image */}
       <img
         src={activeStory.poster_url}
         alt={activeStory.title}
@@ -203,21 +291,21 @@ const formatTimeAgo = (timestamp) => {
         onClick={(e) => e.stopPropagation()}
       />
 
-      {/* Story Info */}
+      {/* Title */}
       <p className="text-white text-center mt-3 font-semibold">
         {activeStory.title}
       </p>
-     
 
-<p className="text-gray-400 text-center text-xs mt-1 flex items-center justify-center gap-1">
-  <EyeIcon className="w-4 h-4 text-gray-400" />
-  {activeStory.views || 0} views
-</p>
-
-      
+      {/* Views */}
+      <p className="text-gray-400 text-center text-xs mt-1 flex items-center justify-center gap-1">
+        <EyeIcon className="w-4 h-4 text-gray-400" />
+        {activeStory.views || 0} views
+      </p>
     </div>
   </div>
 )}
+
+
 
 
 

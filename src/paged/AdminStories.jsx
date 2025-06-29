@@ -21,25 +21,58 @@ const AdminStories = () => {
       .from("stories")
       .select("*")
       .order("created_at", { ascending: false });
-
-    if (error) toast.error("Failed to load stories");
-    else setStories(data || []);
+  
+    if (error) {
+      toast.error("Failed to load stories");
+      return;
+    }
+  
+    const now = new Date();
+  
+    // Filter expired stories (older than 24 hours)
+    const expired = data.filter((story) => {
+      const storyTime = new Date(story.created_at);
+      const diff = (now - storyTime) / (1000 * 60 * 60);
+      return diff >= 24;
+    });
+  
+    // Auto-delete expired stories
+    if (expired.length) {
+      const idsToDelete = expired.map((s) => s.id);
+      const { error: deleteError } = await supabase
+        .from("stories")
+        .delete()
+        .in("id", idsToDelete);
+  
+      if (deleteError) {
+        toast.warn("⚠️ Some expired stories could not be auto-deleted");
+      }
+    }
+  
+    // Keep only non-expired stories
+    const validStories = data.filter((story) => {
+      const storyTime = new Date(story.created_at);
+      const diff = (now - storyTime) / (1000 * 60 * 60);
+      return diff < 24;
+    });
+  
+    setStories(validStories);
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !posterUrl.trim()) {
       return toast.error("Please provide both title and poster URL");
     }
-
+  
     setLoading(true);
-
+  
     if (editingId) {
       const { error } = await supabase
         .from("stories")
         .update({ title, poster_url: posterUrl.trim() })
         .eq("id", editingId);
-
+  
       if (error) toast.error("Update failed");
       else toast.success("Story updated");
     } else {
@@ -51,28 +84,28 @@ const AdminStories = () => {
           show_on_homepage: true,
         },
       ]);
-
+  
       if (error) toast.error("Upload failed");
       else toast.success("Story added");
     }
-
+  
     setTitle("");
     setPosterUrl("");
     setEditingId(null);
     fetchStories();
     setLoading(false);
   };
-
+  
   const handleEdit = (story) => {
     setEditingId(story.id);
     setTitle(story.title);
     setPosterUrl(story.poster_url);
   };
-
+  
   const handleDelete = async (id, createdAt) => {
     const storyTime = new Date(createdAt);
     const now = new Date();
-    const hoursDiff = (now - storyTime) / (1000 * 60 * 60); // convert ms to hours
+    const hoursDiff = (now - storyTime) / (1000 * 60 * 60);
   
     if (hoursDiff < 24) {
       toast.warn("⏳ You can only delete this story after 24 hours.");
@@ -90,6 +123,7 @@ const AdminStories = () => {
       fetchStories();
     }
   };
+  
   
 
   return (
