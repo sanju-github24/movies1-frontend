@@ -32,6 +32,7 @@ const AdminUpload = () => {
     downloads: [],
     linkColor: "#60a5fa",
     showOnHomepage: true,
+    directLinksOnly: false,
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
@@ -154,6 +155,7 @@ const AdminUpload = () => {
       slug,
       downloads,
       uploaded_by,
+      directLinksOnly: movie.directLinksOnly || false, // ✅
       ...(editingMovieId ? {} : { created_at: new Date().toISOString() })
     };
 
@@ -233,6 +235,7 @@ const handleEdit = (m) => {
     downloads: m.downloads || [],
     linkColor: m.linkColor || "#60a5fa",
     showOnHomepage: m.showOnHomepage ?? true,
+    directLinksOnly: m.directLinksOnly || false,
   });
 
   // Populate each download block, including new fields
@@ -426,6 +429,18 @@ const removeDownloadBlock = (i) => {
               Show on Homepage
             </label>
           </div>
+
+          <label className="flex items-center gap-2 text-sm">
+  <input
+    type="checkbox"
+    checked={movie.directLinksOnly || false}
+    onChange={(e) =>
+      setMovie((m) => ({ ...m, directLinksOnly: e.target.checked }))
+    }
+  />
+  Direct Links
+</label>
+
   
           {/* Download Blocks */}
           <div className="space-y-6">

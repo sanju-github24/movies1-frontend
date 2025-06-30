@@ -9,7 +9,8 @@ import CategoryBar from '../components/CategoryBar';
 
 const Home = () => {
   return (
-    <div className='flex flex-col items-center justify-start min-h-screen bg-[url("/bg_img.png")] bg-cover bg-center'>
+    <div className="flex flex-col items-center justify-start min-h-screen bg-white">
+
     
       <Header />
 
