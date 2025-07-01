@@ -146,6 +146,20 @@ const MovieDetail = () => {
     >
       📥 {download.quality}
     </button>
+    {/* Copy Link Button */}
+  <button
+    onClick={() => {
+      navigator.clipboard.writeText(`${window.location.origin}/movies/${movie.slug}`);
+      alert("🔗 Link copied to clipboard!");
+    }}
+    className="bg-gray-300 hover:bg-gray-400 text-black px-2 py-1 rounded text-sm"
+  >
+    Copy Link
+  </button>
+
+
+
+
     {/* Direct Download Link */}
 {download.directUrl && (
   <a
