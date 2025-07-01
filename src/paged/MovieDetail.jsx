@@ -146,19 +146,15 @@ const MovieDetail = () => {
   >
     📥 {download.quality}
   </button>
-
   <button
   onClick={() => {
-    const fileUrl = download.url;
-    const filename = fileUrl.split('/').pop(); // e.g. ogsa5m.torrent
-    const safeUrl = `${window.location.origin}/download/${filename}`;
-    navigator.clipboard.writeText(safeUrl);
-    alert("✅ Safe download link copied!");
+    navigator.clipboard.writeText(download.url);
   }}
   className="bg-gray-200 hover:bg-gray-300 text-black px-2 py-1 rounded text-sm"
 >
   Copy Link
 </button>
+
 
 
 
