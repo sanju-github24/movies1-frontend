@@ -149,9 +149,11 @@ const MovieDetail = () => {
 
   <button
   onClick={() => {
-    const fullUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(download.url)}&filename=${encodeURIComponent(filename)}`;
-    navigator.clipboard.writeText(fullUrl);
-    alert("✅ Download link copied!");
+    const encoded = encodeURIComponent(download.url);
+    const safeUrl = `${window.location.origin}/download/${encoded}`;
+    navigator.clipboard.writeText(safeUrl);
+    alert("✅ Safe download link copied!");
+    
   }}
   className="bg-gray-200 hover:bg-gray-300 text-black px-2 py-1 rounded text-sm"
 >
