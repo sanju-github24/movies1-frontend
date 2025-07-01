@@ -139,23 +139,24 @@ const MovieDetail = () => {
       {quality} - {format}
     </div>
 
-    {/* Download Button */}
-    <button
-      onClick={() => handleDownload(download.url, filename, index)}
-      className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
-    >
-      📥 {download.quality}
-    </button>
-    {/* Copy Link Button */}
+  {/* Download Button */}
   <button
-    onClick={() => {
-      navigator.clipboard.writeText(`${window.location.origin}/movies/${movie.slug}`);
-      alert("🔗 Link copied to clipboard!");
-    }}
-    className="bg-gray-300 hover:bg-gray-400 text-black px-2 py-1 rounded text-sm"
+    onClick={() => handleDownload(download.url, filename, index)}
+    className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
   >
-    Copy Link
+    📥 {download.quality}
   </button>
+
+  <button
+  onClick={() => {
+    const fullUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(download.url)}&filename=${encodeURIComponent(filename)}`;
+    navigator.clipboard.writeText(fullUrl);
+    alert("✅ Download link copied!");
+  }}
+  className="bg-gray-200 hover:bg-gray-300 text-black px-2 py-1 rounded text-sm"
+>
+  Copy Link
+</button>
 
 
 
