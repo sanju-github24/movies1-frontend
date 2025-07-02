@@ -3,6 +3,7 @@ import { AppContext } from "../context/AppContext";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
+import AdSlot from '../components/AdSlot';
 
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
@@ -158,6 +159,7 @@ const Header = () => {
           </div>
         </div>
       )}
+      <AdSlot /> 
 
       {/* Active Story Viewer */}
       {activeStory && (
@@ -252,6 +254,7 @@ const Header = () => {
           </a>
         </div>
       </div>
+      <AdSlot /> 
 {/* Recently Uploaded + Share */}
 {latestMovies.length > 0 && (
   <div className="w-full max-w-7xl px-2 sm:px-4 pt-2 pb-4 -mt-2">
@@ -314,6 +317,7 @@ const Header = () => {
         style={{ color: movie.linkColor || "#60a5fa" }}
         title={movie.title}
       >
+        <AdSlot /> 
         {movie.title}
         {movie.directLinksOnly && (
           <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">

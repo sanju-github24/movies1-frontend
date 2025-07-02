@@ -19,25 +19,7 @@ const AdSlot = () => {
     script2.type = 'text/javascript';
     container.appendChild(script2);
 
-    // Ad #3: iframe ad (atOptions + invoke.js)
-    const atOptionsScript = document.createElement('script');
-    atOptionsScript.type = 'text/javascript';
-    atOptionsScript.innerHTML = `
-      atOptions = {
-        'key': '0499e19f79be5f961a2b1a7d599740dc',
-        'format': 'iframe',
-        'height': 250,
-        'width': 300,
-        'params': {}
-      };
-    `;
-    container.appendChild(atOptionsScript);
-
-    const invokeScript = document.createElement('script');
-    invokeScript.src = 'https://www.highperformanceformat.com/0499e19f79be5f961a2b1a7d599740dc/invoke.js';
-    invokeScript.async = true;
-    invokeScript.type = 'text/javascript';
-    container.appendChild(invokeScript);
+    // ✅ Ad #3 (iframe ad) has been removed
   }, []);
 
   return (
