@@ -4,6 +4,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
 import AdminLayout from "../components/AdminLayout";
+import { v4 as uuidv4 } from "uuid"; // npm install uuid
 
 
 
@@ -72,120 +73,131 @@ const AdminUpload = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+  
     const { title, poster, description, categories, subCategory, language } = movie;
     if (!title.trim() || !poster.trim() || !description.trim()) {
       toast.error("Please fill in Title, Poster, and Description.");
       setLoading(false);
       return;
     }
-
+  
     if (!categories.length || !subCategory.length || !language.length) {
       toast.error("Please fill in category, subcategory, and language.");
       setLoading(false);
       return;
     }
-
+  
     const slug = editingMovieId ? movie.slug : slugify(title);
     const uploaded_by = userData?.email || "unknown";
-
+  
     const validBlocks = downloadBlocks.filter(
-      (b) => b.quality && b.size && b.format && (b.file || b.manualUrl || b.gpLink)
+      (b) => b.quality && b.size && b.format && (b.file || b.manualUrl || b.directUrl || b.gpLink)
     );
-
+  
     if (!validBlocks.length) {
       toast.error("At least one valid download block is required.");
       setLoading(false);
       return;
     }
-
-    const updatedDownloads = await Promise.all(
-      validBlocks.map(async (block) => {
-        if (block.file) {
-          const fileName = block.file.name;
+  
+    const processedDownloads = await Promise.all(
+      validBlocks.map(async (b) => {
+        const id = b.id || uuidv4();
+  
+        // If file is uploaded, store to Supabase
+        if (b.file) {
+          const fileName = b.file.name;
           if (!fileName.endsWith(".torrent")) {
             toast.error("Only .torrent files are allowed.");
             return null;
           }
-
+  
           const timestamp = Date.now();
           const safeSlug = slug.replace(/[^a-z0-9\-]/gi, "_");
-          const newFileName = `${block.quality}_${block.size}.torrent`;
+          const newFileName = `${b.quality}_${b.size}.torrent`;
           const filePath = `files/${timestamp}_${safeSlug}/${newFileName}`;
-
+  
           const { error: uploadError } = await supabase.storage
             .from("torrents")
-            .upload(filePath, block.file, { upsert: true });
-
+            .upload(filePath, b.file, { upsert: true });
+  
           if (uploadError) {
             toast.error(`Failed to upload ${fileName}`);
             return null;
           }
-
+  
           return {
-            quality: block.quality,
-            size: block.size,
-            format: block.format,
+            id,
+            quality: b.quality,
+            size: b.size,
+            format: b.format,
             url: `${supabase.storageUrl}/object/public/torrents/${filePath}`,
             filename: newFileName,
-            gpLink: block.gpLink || "",
-            showGifAfter: block.showGifAfter || false,
+            directUrl: b.directUrl || "",
+            gpLink: b.gpLink || "",
+            showGifAfter: b.showGifAfter || false,
             count: 0,
           };
-        } else {
-          const url = block.manualUrl || block.gpLink;
-          return {
-            quality: block.quality,
-            size: block.size,
-            format: block.format,
-            url,
-            directUrl: block.directUrl || "", // ✅ Save direct link
-            filename: url.split("/").pop(),
-            gpLink: block.gpLink || "",
-            showGifAfter: block.showGifAfter || false
-          };
         }
+  
+        // For manual / gp / direct only links
+        const fallbackUrl = b.manualUrl || b.directUrl || b.gpLink;
+  
+        return {
+          id,
+          quality: b.quality,
+          size: b.size,
+          format: b.format,
+          url: fallbackUrl,
+          filename: fallbackUrl.split("/").pop(),
+          directUrl: b.directUrl || "",
+          gpLink: b.gpLink || "",
+          showGifAfter: b.showGifAfter || false,
+          count: editingMovieId ? b.count || 0 : 0,
+        };
       })
     );
-
-    const downloads = updatedDownloads.filter(Boolean);
-
+  
+    const downloads = processedDownloads.filter(Boolean);
+  
     const movieData = {
       ...movie,
       slug,
-      downloads,
       uploaded_by,
-      directLinksOnly: movie.directLinksOnly || false, // ✅
-      ...(editingMovieId ? {} : { created_at: new Date().toISOString() })
+      downloads,
+      directLinksOnly: movie.directLinksOnly || false,
+      ...(editingMovieId ? {} : { created_at: new Date().toISOString() }),
     };
-
+  
+    // Insert or update in Supabase
     const { error } = editingMovieId
       ? await supabase.from("movies").update(movieData).eq("id", editingMovieId)
       : await supabase.from("movies").insert([movieData]);
-
+  
     if (error) {
       toast.error("Failed to save movie");
       console.error("Supabase error:", error.message);
     } else {
       toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
       resetForm();
-
+  
+      // Optional cleanup logic
       const { data: allMovies, error: fetchError } = await supabase
         .from("movies")
         .select("id, created_at")
         .order("created_at", { ascending: false });
-
+  
       if (!fetchError && allMovies.length > 70) {
         const idsToDelete = allMovies.slice(70).map((m) => m.id);
         const { error: deleteError } = await supabase.from("movies").delete().in("id", idsToDelete);
         if (deleteError) toast.warn("Cleanup failed");
       }
-
+  
       fetchMovies();
     }
+  
     setLoading(false);
   };
-
 
 
   
@@ -488,6 +500,22 @@ const removeDownloadBlock = (i) => {
                     handleDownloadChange(i, "gpLink", e.target.value)
                   }
                 />
+
+<label className="flex items-center mt-4 gap-2">
+        <input
+          type="checkbox"
+          checked={movie.directLinksOnly}
+          onChange={(e) =>
+            setMovie((m) => ({ ...m, directLinksOnly: e.target.checked }))
+          }
+        />
+        Direct Links Only
+      </label>
+
+
+
+
+
                           <input
   type="text"
   placeholder="Direct Download URL"

@@ -21,6 +21,8 @@ import BlogList from './components/BlogList';
 import BlogViewer from './components/BlogViewer';
 import AdminDashboard from './paged/AdminDashboard';
 import AdminStories from "./paged/AdminStories";
+import AdSlot from './components/AdSlot';
+
 
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
@@ -63,10 +65,13 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
 )}
 
 {!hideNavbarAndCategoryBar && !hideOnlyCategoryBar && (
+  <>
   <CategoryBar
     onCategoryClick={handleCategoryClick}
     onLanguageClick={handleLanguageClick}
   />
+   <AdSlot />
+  </>
 )}
 
       <Routes>
