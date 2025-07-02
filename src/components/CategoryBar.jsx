@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Dropdown from './Dropdown.jsx';
+import AdSlot from '../components/AdSlot';
 
 const categories = [
   'Tamil Language',

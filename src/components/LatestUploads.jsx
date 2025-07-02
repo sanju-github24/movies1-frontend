@@ -3,6 +3,7 @@ import { formatDistanceToNow, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 
+
 const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
   const [tick, setTick] = useState(0);
