@@ -22,6 +22,7 @@ import BlogViewer from './components/BlogViewer';
 import AdminDashboard from './paged/AdminDashboard';
 import AdminStories from "./paged/AdminStories";
 import AdSlot from './components/AdSlot';
+import AdPopup from './components/AdPopup';
 
 
 const App = () => {
@@ -71,6 +72,7 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
     onLanguageClick={handleLanguageClick}
   />
    <AdSlot />
+   <AdPopup/>
   </>
 )}
 

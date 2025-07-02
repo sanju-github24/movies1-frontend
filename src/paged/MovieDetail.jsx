@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
 import AdSlot from '../components/AdSlot'; // ✅ import h
+import AdPopup from '../components/AdPopup';
 const MovieDetail = () => {
   const { code } = useParams();
   const [movie, setMovie] = useState(null);
@@ -115,6 +116,7 @@ const MovieDetail = () => {
            Share
           </button>
         </div>
+        <AdPopup/>
   
         {/* ...continue your movie content */}
   
@@ -144,6 +146,8 @@ const MovieDetail = () => {
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
     </div>
+    <AdSlot/>
+
 
   {/* Download Button */}
   <button
