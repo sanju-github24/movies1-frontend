@@ -160,7 +160,7 @@ const Header = () => {
           </div>
         </div>
       )}
-      <AdSlot /> 
+      
 
       {/* Active Story Viewer */}
       {activeStory && (
@@ -255,7 +255,7 @@ const Header = () => {
           </a>
         </div>
       </div>
-      <AdSlot /> 
+      
 {/* Recently Uploaded + Share */}
 {latestMovies.length > 0 && (
   <div className="w-full max-w-7xl px-2 sm:px-4 pt-2 pb-4 -mt-2">
@@ -301,7 +301,7 @@ const Header = () => {
         </div>
       </div>
     </div>
-    <AdPopup/>
+  
 
           {isAdmin && (
             <div className="mb-2">
@@ -319,7 +319,7 @@ const Header = () => {
         style={{ color: movie.linkColor || "#60a5fa" }}
         title={movie.title}
       >
-        <AdSlot /> 
+     
         {movie.title}
         {movie.directLinksOnly && (
           <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">

@@ -96,7 +96,7 @@ const MovieDetail = () => {
         </h1>
 
         {/* ✅ Ad below title */}
-        <AdSlot />
+      
   
         {/* Break line after title */}
         <hr className="border-t-2 border-gray-300 mb-6 w-1/2 mx-auto" />
@@ -116,7 +116,7 @@ const MovieDetail = () => {
            Share
           </button>
         </div>
-        <AdPopup/>
+      
   
         {/* ...continue your movie content */}
   
@@ -146,7 +146,7 @@ const MovieDetail = () => {
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
     </div>
-    <AdSlot/>
+    
 
 
   {/* Download Button */}
@@ -264,8 +264,8 @@ const MovieDetail = () => {
     </div>
   )}
 </div>
- {/* ✅ Optional Ad at bottom */}
- <AdSlot />
+
+ 
 
         </div>
       </div>
