@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-
+import AdSlot from '../components/AdSlot'; // ✅ import h
 const MovieDetail = () => {
   const { code } = useParams();
   const [movie, setMovie] = useState(null);
@@ -93,6 +93,9 @@ const MovieDetail = () => {
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
           {topTitle}
         </h1>
+
+        {/* ✅ Ad below title */}
+        <AdSlot />
   
         {/* Break line after title */}
         <hr className="border-t-2 border-gray-300 mb-6 w-1/2 mx-auto" />
@@ -124,6 +127,9 @@ const MovieDetail = () => {
             className="rounded-lg shadow-lg w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl"
           />
         </div>
+
+         {/* ✅ Optional Ad before downloads */}
+         <AdSlot />
 
         <div className="space-y-10">
   {movie.downloads?.map((download, index) => {
@@ -254,6 +260,8 @@ const MovieDetail = () => {
     </div>
   )}
 </div>
+ {/* ✅ Optional Ad at bottom */}
+ <AdSlot />
 
         </div>
       </div>
