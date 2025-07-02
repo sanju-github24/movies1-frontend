@@ -94,7 +94,8 @@ const MovieDetail = () => {
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
           {topTitle}
         </h1>
-
+<AdPopup/>
+<AdSlot/>
         {/* ✅ Ad below title */}
       
   
@@ -146,6 +147,7 @@ const MovieDetail = () => {
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
     </div>
+    <AdSlot/>
     
 
 
