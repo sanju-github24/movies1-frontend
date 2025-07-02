@@ -254,9 +254,10 @@ const Header = () => {
             className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2.5 rounded-full shadow transition-all"
             
           >
-             <AdSlot/>
+            
             Join on Telegram
           </a>
+          <AdSlot/>
         </div>
       </div>
       
