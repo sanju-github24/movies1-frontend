@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const AdPopup = () => {
+  const [visible, setVisible] = useState(false);
+
   useEffect(() => {
+    // Inject atOptions config
     const inlineScript = document.createElement('script');
     inlineScript.type = 'text/javascript';
     inlineScript.innerHTML = `
@@ -15,12 +18,26 @@ const AdPopup = () => {
     `;
     document.getElementById('popup-ad')?.appendChild(inlineScript);
 
+    // Inject invoke.js
     const invokeScript = document.createElement('script');
     invokeScript.type = 'text/javascript';
     invokeScript.src = 'https://www.highperformanceformat.com/0499e19f79be5f961a2b1a7d599740dc/invoke.js';
     invokeScript.async = true;
     document.getElementById('popup-ad')?.appendChild(invokeScript);
+
+    // Watch for iframe load
+    const checkIframeLoaded = setInterval(() => {
+      const iframe = document.getElementById('popup-ad')?.querySelector('iframe');
+      if (iframe) {
+        setVisible(true);
+        clearInterval(checkIframeLoaded);
+      }
+    }, 300);
+
+    return () => clearInterval(checkIframeLoaded);
   }, []);
+
+  if (!visible) return null;
 
   return (
     <div
