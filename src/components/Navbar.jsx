@@ -107,9 +107,11 @@ const Navbar = () => {
         {/* center: nav links + desktop search */}
         <div className="hidden sm:flex items-center gap-6 flex-grow justify-center">
           <ul className="flex gap-6 text-sm font-medium">
-            <li><Link to="/latest" className="hover:underline">Latest Uploads</Link> <AdSlot/></li>
-            <li><Link to="/blogs" className="hover:underline">Blogs</Link><AdSlot/></li>
+            <li><Link to="/latest" className="hover:underline">Latest Uploads</Link> </li>
+            <li><Link to="/blogs" className="hover:underline">Blogs</Link></li>
+            
           </ul>
+          <AdSlot/>
 
           {/* desktop search – unchanged pill style */}
           <form
@@ -126,12 +128,14 @@ const Navbar = () => {
               
             />
             <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
-            <AdSlot/>
+           
               <img src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
                    alt="search" className="w-4 h-4 opacity-80" />
             </button>
+            
           </form>
         </div>
+        <AdSlot/>
 
         {/* right: user avatar or login */}
         <div className="ml-auto relative" ref={profileRef}>

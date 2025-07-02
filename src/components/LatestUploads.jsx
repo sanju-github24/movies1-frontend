@@ -2,6 +2,7 @@ import React, { useEffect, useContext, useState } from 'react';
 import { formatDistanceToNow, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import AdPopup from './AdPopup';
 
 
 const LatestUploads = () => {
@@ -57,6 +58,7 @@ const LatestUploads = () => {
                   }}
                   className="w-full h-40 sm:h-56 object-cover"
                 />
+                <AdPopup/>
                 <div className="p-2 text-center font-medium text-white">
                   <div
                     className="text-sm line-clamp-1 sm:line-clamp-2"
@@ -73,6 +75,7 @@ const LatestUploads = () => {
           })}
         </div>
       )}
+      <AdPopup/>
     </div>
   );
 };

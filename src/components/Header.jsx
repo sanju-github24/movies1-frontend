@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
 import AdSlot from '../components/AdSlot';
+import AdPopup from "./AdPopup";
 
 
 const Header = () => {
@@ -361,6 +362,7 @@ const Header = () => {
     </a>
   </p>
 </div>
+<AdPopup/>
 
     </div>
   );
