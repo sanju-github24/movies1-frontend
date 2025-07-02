@@ -150,7 +150,9 @@ const Header = () => {
                         src={story.poster_url}
                         alt={story.title}
                         className="w-full h-full object-cover rounded-full"
+                        
                       />
+                      <AdSlot/>
                     </div>
                   </div>
                   <p className="text-xs text-gray-800 mt-1 truncate w-23 font-medium">{story.title}</p>
@@ -250,7 +252,9 @@ const Header = () => {
             target="_blank"
             rel="noopener noreferrer"
             className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2.5 rounded-full shadow transition-all"
+            
           >
+             <AdSlot/>
             Join on Telegram
           </a>
         </div>

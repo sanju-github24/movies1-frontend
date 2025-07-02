@@ -156,6 +156,7 @@ const MovieDetail = () => {
     onClick={() => handleDownload(download.url, filename, index)}
     className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
   >
+    <AdSlot/>
     📥 {download.quality}
   </button>
   <button

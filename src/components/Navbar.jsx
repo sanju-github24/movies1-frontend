@@ -5,6 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { backendUrl } from '../utils/api';
 import { assets } from '../assets/assets';
+import AdSlot from './AdSlot';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -106,8 +107,8 @@ const Navbar = () => {
         {/* center: nav links + desktop search */}
         <div className="hidden sm:flex items-center gap-6 flex-grow justify-center">
           <ul className="flex gap-6 text-sm font-medium">
-            <li><Link to="/latest" className="hover:underline">Latest Uploads</Link></li>
-            <li><Link to="/blogs" className="hover:underline">Blogs</Link></li>
+            <li><Link to="/latest" className="hover:underline">Latest Uploads</Link> <AdSlot/></li>
+            <li><Link to="/blogs" className="hover:underline">Blogs</Link><AdSlot/></li>
           </ul>
 
           {/* desktop search – unchanged pill style */}
@@ -122,8 +123,10 @@ const Navbar = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-transparent w-full text-sm focus:outline-none pr-6"
+              
             />
             <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
+            <AdSlot/>
               <img src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
                    alt="search" className="w-4 h-4 opacity-80" />
             </button>
@@ -138,6 +141,7 @@ const Navbar = () => {
                 onClick={() => setProfileOpen((v) => !v)}
                 className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
               >
+                 <AdSlot/>
                 {userInitial}
               </div>
               {profileOpen && (
@@ -205,9 +209,11 @@ const Navbar = () => {
 
           <Link to="/latest" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
             Latest Uploads
+            <AdSlot/>
           </Link>
           <Link to="/blogs"  onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
             Blogs
+            <AdSlot/>
           </Link>
 
           {!userData && (
@@ -216,6 +222,7 @@ const Navbar = () => {
               className="w-full bg-blue-600 text-white py-2 rounded font-semibold"
             >
               Login
+              <AdSlot/>
             </button>
           )}
         </div>

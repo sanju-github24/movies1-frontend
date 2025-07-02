@@ -53,6 +53,7 @@ const CategoryBar = ({ onCategoryClick, onLanguageClick }) => {
 
       {/* ⬇️ Dropdowns */}
       <div className="max-w-7xl mx-auto w-full flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8 px-4 mt-6">
+      <AdSlot/>
         <Dropdown label="Select Languages" items={languages} onSelect={onLanguageClick} />
         <Dropdown label="🎬 Browse Categories" items={categories} onSelect={onCategoryClick} />
       </div>
