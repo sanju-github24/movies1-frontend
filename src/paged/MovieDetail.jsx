@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-import PopAdsScript from '../components/PopAdsScript';
+
 
 
 const MovieDetail = () => {
@@ -149,7 +149,7 @@ const MovieDetail = () => {
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
           {topTitle}
         </h1>
-        <PopAdsScript />
+        <AdScriptLoader />
 
 
         {/* ✅ Ad below title */}
@@ -215,7 +215,7 @@ const MovieDetail = () => {
     
     📥 {download.quality}
   </button>
-  <PopAdsScript />
+  <AdScriptLoader />
 
   <button
   onClick={() => {
