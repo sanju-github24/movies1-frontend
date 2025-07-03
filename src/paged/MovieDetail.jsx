@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-import PopAdsScript from './components/PopAdsScript';
+import PopAdsScript from '../components/PopAdsScript';
+
 
 const MovieDetail = () => {
   const { code } = useParams();
