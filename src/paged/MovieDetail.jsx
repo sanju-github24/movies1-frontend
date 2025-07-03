@@ -34,14 +34,66 @@ const MovieDetail = () => {
   const handleDownload = async (url, filename, index) => {
     const fullUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
   
-    // Deep copy downloads and increment count
+    // Inject popunder script (Adsterra style)
+    const popScript = document.createElement("script");
+    popScript.setAttribute("type", "text/javascript");
+    popScript.setAttribute("data-cfasync", "false");
+    popScript.innerHTML = `
+      (function(){
+        var y = window,
+          m = "de033b8b0a1b1bea98c61d517231eb70",
+          f = [
+            ["siteId",395 - 729 - 162 + 5215416],
+            ["minBid",0],
+            ["popundersPerIP","0"],
+            ["delayBetween",0],
+            ["default",false],
+            ["defaultPerDay",0],
+            ["topmostLayer","auto"]
+          ],
+          i = [
+            "d3d3LmJldHRlcmFkc3lzdGVtLmNvbS9oanF1ZXJ5LnRlcm1pbmFsLm1pbi5jc3M=",
+            "ZDJrazBvM2ZyN2VkMDEuY2xvdWRmcm9udC5uZXQvckovZ3J4ZGIuYnJvd3NlcmlmeS5taW4uanM="
+          ],
+          g = -1,
+          c,
+          n,
+          k = function() {
+            clearTimeout(n);
+            g++;
+            if(i[g] && !(1777437954000 < (new Date).getTime() && 1 < g)) {
+              c = y.document.createElement("script");
+              c.type = "text/javascript";
+              c.async = true;
+              var q = y.document.getElementsByTagName("script")[0];
+              c.src = "https://" + atob(i[g]);
+              c.crossOrigin = "anonymous";
+              c.onerror = k;
+              c.onload = function() {
+                clearTimeout(n);
+                y[m.slice(0,16)+m.slice(0,16)] || k();
+              };
+              n = setTimeout(k, 5000);
+              q.parentNode.insertBefore(c, q);
+            }
+          };
+        if(!y[m]) {
+          try {
+            Object.freeze(y[m] = f);
+          } catch(e) {}
+          k();
+        }
+      })();
+    `;
+    document.body.appendChild(popScript);
+  
+    // Update download count in Supabase
     const updatedDownloads = [...movie.downloads];
     updatedDownloads[index] = {
       ...updatedDownloads[index],
-      count: (updatedDownloads[index].count || 0) + 1
+      count: (updatedDownloads[index].count || 0) + 1,
     };
   
-    // Update Supabase
     const { error } = await supabase
       .from('movies')
       .update({ downloads: updatedDownloads })
@@ -51,19 +103,21 @@ const MovieDetail = () => {
       console.error("❌ Supabase update failed:", error.message);
       alert("Failed to update download count.");
     } else {
-      // Update local UI state
       setMovie((prev) => ({ ...prev, downloads: updatedDownloads }));
     }
   
-    // Trigger download
-    const a = document.createElement("a");
-    a.href = fullUrl;
-    a.setAttribute("download", filename);
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Trigger download after slight delay to allow ad to load
+    setTimeout(() => {
+      const a = document.createElement("a");
+      a.href = fullUrl;
+      a.setAttribute("download", filename);
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }, 300); // 300ms delay
   };
+  
              
   
   
@@ -94,8 +148,9 @@ const MovieDetail = () => {
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
           {topTitle}
         </h1>
-<AdPopup/>
-<AdSlot/>
+        <PopAdsScript />
+
+
         {/* ✅ Ad below title */}
       
   
@@ -132,7 +187,7 @@ const MovieDetail = () => {
         </div>
 
          {/* ✅ Optional Ad before downloads */}
-         <AdSlot />
+        
 
         <div className="space-y-10">
   {movie.downloads?.map((download, index) => {
@@ -147,7 +202,7 @@ const MovieDetail = () => {
     <div className="font-semibold text-[15px] mb-2 text-gray-800">
       {quality} - {format}
     </div>
-    <AdSlot/>
+   
     
 
 
@@ -156,9 +211,11 @@ const MovieDetail = () => {
     onClick={() => handleDownload(download.url, filename, index)}
     className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
   >
-    <AdSlot/>
+    
     📥 {download.quality}
   </button>
+  <PopAdsScript />
+
   <button
   onClick={() => {
     const safeLink = `${window.location.origin}/dl/${download.id}`;
