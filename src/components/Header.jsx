@@ -20,7 +20,7 @@ const Header = () => {
 
   const adminEmail = "sanjusanjay0444@gmail.com";
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
-  const siteUrl = "https://1anchormovies.vercel.app";
+  const siteUrl = "https://www.1anchormovies.live";
 
   const latestAdminMovies = isAdmin
     ? movies
