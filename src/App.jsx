@@ -23,6 +23,7 @@ import AdminDashboard from './paged/AdminDashboard';
 import AdminStories from "./paged/AdminStories";
 import AdSlot from './components/AdSlot';
 import AdPopup from './components/AdPopup';
+import PopAdsScript from './components/PopAdsScript';
 
 
 const App = () => {
@@ -71,8 +72,7 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
     onCategoryClick={handleCategoryClick}
     onLanguageClick={handleLanguageClick}
   />
-   <AdSlot />
-   <AdPopup/>
+   <PopAdsScript/>
   </>
 )}
 

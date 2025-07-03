@@ -5,6 +5,7 @@ import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
 import AdSlot from '../components/AdSlot';
 import AdPopup from "./AdPopup";
+import PopAdsScript from "./PopAdsScript";
 
 
 const Header = () => {
@@ -153,7 +154,7 @@ const Header = () => {
                         className="w-full h-full object-cover rounded-full"
                         
                       />
-                      <AdSlot/>
+                      <PopAdsScript/>
                     </div>
                   </div>
                   <p className="text-xs text-gray-800 mt-1 truncate w-23 font-medium">{story.title}</p>
@@ -258,7 +259,7 @@ const Header = () => {
             
             Join on Telegram
           </a>
-          <AdSlot/>
+          <PopAdsScript/>
         </div>
       </div>
       
@@ -333,6 +334,7 @@ const Header = () => {
           </span>
         )}
       </Link>
+      <PopAdsScript/>
 
       <div className="text-xs text-gray-400 mt-0.5">
         {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
@@ -362,7 +364,7 @@ const Header = () => {
     </a>
   </p>
 </div>
-<AdPopup/>
+
 
     </div>
   );
