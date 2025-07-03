@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
   <url>
     <loc>https://1anchormovies.live/</loc>
+    <lastmod>2025-06-28</lastmod>
+    <priority>1.00</priority>
   </url>
+
   <url>
     <loc>https://www.1anchormovies.live/category/Kannada%20Language</loc>
+    <lastmod>2025-06-28</lastmod>
+    <priority>0.80</priority>
   </url>
+
   <url>
     <loc>https://www.1anchormovies.live/category/Telugu%20Language</loc>
+    <lastmod>2025-06-28</lastmod>
+    <priority>0.80</priority>
   </url>
+
   <url>
     <loc>https://www.1anchormovies.live/category/Tamil%20Language</loc>
+    <lastmod>2025-06-28</lastmod>
+    <priority>0.80</priority>
   </url>
+
+  <url>
+    <loc>https://www.1anchormovies.live/blogs/maadeva-kannada-movie-2024-full-movie-download-cast-plot-more</loc>
+    <lastmod>2025-06-28</lastmod>
+    <priority>0.90</priority>
+  </url>
+
 </urlset>
 
