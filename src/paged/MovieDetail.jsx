@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-import AdSlot from '../components/AdSlot'; // ✅ import h
-import AdPopup from '../components/AdPopup';
+import PopAdsScript from './components/PopAdsScript';
+
 const MovieDetail = () => {
   const { code } = useParams();
   const [movie, setMovie] = useState(null);
