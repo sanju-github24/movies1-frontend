@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-import AdScriptLoader from "./AdScriptLoader";
+import AdScriptLoader from "../AdScriptLoader";
 
 
 const MovieDetail = () => {
