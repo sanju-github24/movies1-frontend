@@ -5,7 +5,8 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { backendUrl } from '../utils/api';
 import { assets } from '../assets/assets';
-import AdSlot from './AdSlot';
+import AdScriptLoader from "../components/AdScriptLoader"; // ✅ adjust path if needed
+
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -111,7 +112,8 @@ const Navbar = () => {
             <li><Link to="/blogs" className="hover:underline">Blogs</Link></li>
             
           </ul>
-          <AdSlot/>
+          <AdScriptLoader/>
+          
 
           {/* desktop search – unchanged pill style */}
           <form
@@ -134,8 +136,9 @@ const Navbar = () => {
             </button>
             
           </form>
+          <AdScriptLoader/>
         </div>
-        <AdSlot/>
+        
 
         {/* right: user avatar or login */}
         <div className="ml-auto relative" ref={profileRef}>
@@ -145,7 +148,7 @@ const Navbar = () => {
                 onClick={() => setProfileOpen((v) => !v)}
                 className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
               >
-                 <AdSlot/>
+               
                 {userInitial}
               </div>
               {profileOpen && (
@@ -213,11 +216,11 @@ const Navbar = () => {
 
           <Link to="/latest" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
             Latest Uploads
-            <AdSlot/>
+          
           </Link>
           <Link to="/blogs"  onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
             Blogs
-            <AdSlot/>
+            
           </Link>
 
           {!userData && (
@@ -226,7 +229,7 @@ const Navbar = () => {
               className="w-full bg-blue-600 text-white py-2 rounded font-semibold"
             >
               Login
-              <AdSlot/>
+              
             </button>
           )}
         </div>

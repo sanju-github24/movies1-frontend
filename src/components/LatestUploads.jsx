@@ -30,6 +30,9 @@ const LatestUploads = () => {
       <h2 className="text-2xl font-bold mb-4 text-white bg-blue-600 inline-block px-7 py-3 rounded-md shadow hover:bg-blue-700 transition">
         Week Releases
       </h2>
+      <AdScriptLoader />
+      
+
 
       {recentMovies.length === 0 ? (
         <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
