@@ -85,6 +85,7 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
         <Route path="/latest" element={<LatestUploads />} />
         <Route path="/blogs" element={<BlogList />} />
   <Route path="/blogs/:slug" element={<BlogViewer />} />
+  <PopAdsScript/>
 
         <Route path="/admin" element={<ProtectedAdminRoute />}>
   <Route index element={<Navigate to="/admin/upload" />} />
@@ -102,6 +103,7 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
             <Route path="/login" element={<Login />} />
             <Route path="/email-verify" element={<EmailVerify />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <PopAdsScript/>
           </>
         )}
 
