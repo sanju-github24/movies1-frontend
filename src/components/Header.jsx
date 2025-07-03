@@ -6,6 +6,7 @@ import { EyeIcon } from "@heroicons/react/outline";
 import AdSlot from '../components/AdSlot';
 import AdPopup from "./AdPopup";
 import PopAdsScript from "./PopAdsScript";
+import AdScriptLoader from "./AdScriptLoader";
 
 
 const Header = () => {
@@ -154,7 +155,7 @@ const Header = () => {
                         className="w-full h-full object-cover rounded-full"
                         
                       />
-                      <PopAdsScript/>
+                     <AdScriptLoader />
                     </div>
                   </div>
                   <p className="text-xs text-gray-800 mt-1 truncate w-23 font-medium">{story.title}</p>
@@ -259,7 +260,7 @@ const Header = () => {
             
             Join on Telegram
           </a>
-          <PopAdsScript/>
+          <AdScriptLoader />
         </div>
       </div>
       
@@ -334,7 +335,7 @@ const Header = () => {
           </span>
         )}
       </Link>
-      <PopAdsScript/>
+      <AdScriptLoader />
 
       <div className="text-xs text-gray-400 mt-0.5">
         {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
