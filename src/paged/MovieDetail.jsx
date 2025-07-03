@@ -177,6 +177,7 @@ const MovieDetail = () => {
   Copy Link
 </button>
 
+<AdScriptLoader />
 
 
 
