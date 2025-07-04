@@ -17,6 +17,8 @@ const Header = () => {
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [progress, setProgress] = useState(0);
   const storyTimeoutRef = useRef(null);
+  const [showSharePopup, setShowSharePopup] = useState(false);
+
 
   const adminEmail = "sanjusanjay0444@gmail.com";
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
@@ -45,6 +47,14 @@ const Header = () => {
     };
     fetchStories();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSharePopup(true);
+    }, 10000); // 10 seconds
+    return () => clearTimeout(timer);
+  }, []);
+  
 
   useEffect(() => {
     if (!activeStory) return;
@@ -365,6 +375,44 @@ const Header = () => {
     </a>
   </p>
 </div>
+{showSharePopup && (
+  <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center px-4">
+    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center relative animate-fadeIn">
+      <button
+        onClick={() => setShowSharePopup(false)}
+        className="absolute top-2 right-3 text-gray-500 hover:text-black text-2xl"
+      >
+        &times;
+      </button>
+      <h2 className="text-lg font-bold mb-2">Enjoying AnchorMovies?</h2>
+      <p className="text-sm text-gray-700 mb-4">
+        Share it with your friends and support the community!
+      </p>
+      <div className="flex justify-center gap-3">
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent("Check out AnchorMovies: " + siteUrl)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+        >
+          WhatsApp
+        </a>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(siteUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            setShowSharePopup(false);
+          }}
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
+        >
+          {copied ? "✅ Copied!" : "Copy Link"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
 
     </div>

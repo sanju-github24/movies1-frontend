@@ -149,13 +149,19 @@ const MovieDetail = () => {
   
         <hr className="border-t-2 border-gray-300 mb-6 w-1/2 mx-auto" />
 
-        <div className="flex justify-center mb-8">
-          <img
-            src={movie.poster || 'https://via.placeholder.com/400x600?text=No+Image'}
-            alt={movie.title || 'Movie Poster'}
-            className="rounded-lg shadow-lg w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl"
-          />
-        </div>
+<div className="flex justify-center mb-8">
+  <img
+    src={movie.poster || 'https://via.placeholder.com/400x600?text=No+Image'}
+    alt={movie.title || 'Movie Poster'}
+    className="rounded-lg shadow-lg w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl"
+  />
+</div>
+
+<div className="bg-gray-100 border border-gray-300 p-4 rounded-md shadow text-center text-gray-800 mb-8">
+  <h2 className="text-lg font-semibold tracking-wide">We’re Hiring Trusted Uploaders</h2>
+  <p className="text-sm mt-1">Interested? Email us at <span className="underline">AnchorMovies@proton.me</span></p>
+</div>
+
 
          {/* ✅ Optional Ad before downloads */}
         
@@ -177,17 +183,16 @@ const MovieDetail = () => {
     
 
 
-  {/* Download Button */}
-  <button
-    onClick={() => handleDownload(download.url, filename, index)}
-    className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
-  >
-    
-    📥 {download.quality}
-  </button>
-  <AdScriptLoader />
+{/* Download Button */}
+<button
+  onClick={() => handleDownload(download.url, filename, index)}
+  className="text-blue-800 underline hover:text-blue-900 text-[18px] font-bold"
+>
+  📥 {download.quality}
+</button>
+<AdScriptLoader />
 
-  <button
+<button
   onClick={() => {
     const originalUrl = download.url; // assuming this is the full public Wasabi URL
     navigator.clipboard.writeText(originalUrl);
@@ -197,6 +202,19 @@ const MovieDetail = () => {
 >
   Copy Link
 </button>
+
+{/* Telegram Channel Message */}
+<div className="mt-3 text-center text-sm text-gray-800">
+  Stay updated with our latest uploads — <a
+    href="https://t.me/AnchorMovies"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="text-blue-700 underline hover:text-blue-900"
+  >
+    join our Telegram channel
+  </a>
+</div>
+
 
 <AdScriptLoader />
 
@@ -230,9 +248,9 @@ const MovieDetail = () => {
     className="w-8 h-8 object-contain"
   />
   <p className="text-red-600 font-semibold text-[14px] text-center">
-    🔺 Seed Back Here After Downloading {' '}
+    🔺 Upload Back Here After Downloading Torrent File{' '}
     <a
-      href="https://www.seedr.cc/"
+      href="https://www.seedr.cc/?r=4619221"
       target="_blank"
       rel="noopener noreferrer"
       className="underline hover:text-red-800"
@@ -246,6 +264,7 @@ const MovieDetail = () => {
     className="w-8 h-8 object-contain"
   />
 </div>
+
     {/* Magnet Link */}
     {download.magnet && (
       <a
@@ -296,6 +315,26 @@ const MovieDetail = () => {
     </div>
   )}
 </div>
+
+{/* Footer - Community Join CTA */}
+<div className="w-full max-w-7xl px-6 py-8 mt-12 bg-gradient-to-r from-black via-gray-900 to-black rounded-xl shadow-lg text-center border border-white/10">
+  <h3 className="text-white text-xl sm:text-2xl font-bold flex justify-center items-center gap-2 mb-2">
+    📢 Let's Build the <span className="text-blue-400">AnchorMovies</span> Community
+  </h3>
+  <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
+    Got suggestions, cool ideas, or want to collaborate? <br className="hidden sm:block" />
+    We’d love to hear from you — drop us a message at:
+  </p>
+  <p className="mt-3">
+    <a
+      href="mailto:AnchorMovies@proton.me"
+      className="inline-block text-blue-400 font-medium hover:text-blue-300 underline text-sm sm:text-base transition"
+    >
+      AnchorMovies@proton.me
+    </a>
+  </p>
+</div>
+
 
  
 
