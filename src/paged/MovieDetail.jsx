@@ -34,38 +34,59 @@ const MovieDetail = () => {
     fetchMovie();
   }, [code]);
   const handleDownload = async (url, filename, index) => {
-    const fullUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-
+    const proxyUrl = `${backendUrl}/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
   
-    // Update download count in Supabase
-    const updatedDownloads = [...movie.downloads];
-    updatedDownloads[index] = {
-      ...updatedDownloads[index],
-      count: (updatedDownloads[index].count || 0) + 1,
-    };
+    // Step 1: Update Supabase download count
+    try {
+      const updatedDownloads = [...movie.downloads];
+      updatedDownloads[index] = {
+        ...updatedDownloads[index],
+        count: (updatedDownloads[index].count || 0) + 1,
+      };
   
-    const { error } = await supabase
-      .from('movies')
-      .update({ downloads: updatedDownloads })
-      .eq('id', movie.id);
+      const { error } = await supabase
+        .from("movies")
+        .update({ downloads: updatedDownloads })
+        .eq("id", movie.id);
   
-    if (error) {
-      console.error("❌ Supabase update failed:", error.message);
-      alert("Failed to update download count.");
-    } else {
-      setMovie((prev) => ({ ...prev, downloads: updatedDownloads }));
+      if (error) {
+        console.error("❌ Supabase update failed:", error.message);
+        alert("Failed to update download count.");
+      } else {
+        setMovie((prev) => ({ ...prev, downloads: updatedDownloads }));
+      }
+    } catch (err) {
+      console.warn("⚠️ Download count update failed silently:", err.message);
     }
   
-    // Trigger download after slight delay to allow ad to load
-    setTimeout(() => {
-      const a = document.createElement("a");
-      a.href = fullUrl;
-      a.setAttribute("download", filename);
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }, 300); // 300ms delay
+    // Step 2: Attempt download via proxy with fallback
+    setTimeout(async () => {
+      try {
+        const response = await fetch(proxyUrl, { method: "GET" });
+  
+        if (!response.ok) {
+          console.warn("⚠️ Proxy failed, falling back to direct URL...");
+          window.location.href = url; // fallback to original
+          return;
+        }
+  
+        // Blob download (for full browser compatibility)
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+  
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error("❌ Proxy fetch error:", err.message);
+        // Fallback to direct link if fetch fails entirely
+        window.location.href = url;
+      }
+    }, 300); // Delay for potential ads or loaders
   };
   
              
