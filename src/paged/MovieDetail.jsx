@@ -189,9 +189,9 @@ const MovieDetail = () => {
 
   <button
   onClick={() => {
-    const safeLink = `${window.location.origin}/dl/${download.id}`;
-    navigator.clipboard.writeText(safeLink);
-    toast.success("✅ Safe download link copied!");
+    const originalUrl = download.url; // assuming this is the full public Wasabi URL
+    navigator.clipboard.writeText(originalUrl);
+    toast.success("✅ Original download link copied!");
   }}
   className="bg-gray-200 hover:bg-gray-300 text-black px-2 py-1 rounded text-sm"
 >
