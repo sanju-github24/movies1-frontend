@@ -49,19 +49,7 @@ const CategoryBar = ({ onCategoryClick, onLanguageClick }) => {
         </div>
       </div>
 
-      {/* 🔗 Quick Language Links */}
-<div className="flex justify-center flex-wrap gap-3 mt-4 text-sm font-medium text-white">
-  <a href="/search?query=Tamil" className="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-full transition">
-    Tamil Movies
-  </a>
-  <a href="/search?query=Telugu" className="bg-purple-600 hover:bg-purple-700 px-4 py-1.5 rounded-full transition">
-    Telugu Movies
-  </a>
-  <a href="/search?query=Kannada" className="bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded-full transition">
-    Kannada Movies
-  </a>
-</div>
-
+   
 
 
 
