@@ -5,14 +5,17 @@ import App from './App.jsx';
 import { BrowserRouter } from 'react-router-dom';
 import { AppContextProvider } from './context/AppContext.jsx';
 import { Analytics } from '@vercel/analytics/react';
+import { HelmetProvider } from "react-helmet-async";
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
-      <AppContextProvider>
-        <App />
-        <Analytics/>
-      </AppContextProvider>
-    </BrowserRouter>
+    <HelmetProvider>
+      <BrowserRouter>
+        <AppContextProvider>
+          <App />
+          <Analytics />
+        </AppContextProvider>
+      </BrowserRouter>
+    </HelmetProvider>
   </StrictMode>
 );

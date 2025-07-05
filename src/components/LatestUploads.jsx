@@ -1,6 +1,7 @@
 import React, { useEffect, useContext, useState } from 'react';
 import { formatDistanceToNow, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { AppContext } from '../context/AppContext';
 import AdScriptLoader from "../components/AdScriptLoader";
 
@@ -25,6 +26,20 @@ const LatestUploads = () => {
 
   return (
     <section className="px-4 sm:px-10 py-8" aria-labelledby="weekly-releases">
+      <Helmet>
+        <title>Weekly Tamil Telugu Kannada Movie Uploads | AnchorMovies</title>
+        <meta
+          name="description"
+          content="Browse weekly uploaded South Indian movies including Tamil, Telugu, and Kannada films. Updated every day on AnchorMovies."
+        />
+        <meta name="robots" content="index, follow" />
+        <meta property="og:title" content="AnchorMovies Weekly Uploads" />
+        <meta property="og:description" content="New Tamil, Telugu, Kannada movie uploads from this week. Stay updated daily!" />
+        <meta property="og:url" content="https://www.1anchormovies.live/latest" />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href="https://www.1anchormovies.live/latest" />
+      </Helmet>
+
       <h2
         id="weekly-releases"
         className="text-2xl font-bold mb-4 text-white bg-blue-600 inline-block px-7 py-3 rounded-md shadow hover:bg-blue-700 transition"
