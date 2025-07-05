@@ -180,19 +180,6 @@ const AdminUpload = () => {
     } else {
       toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
       resetForm();
-  
-      // Optional cleanup logic
-      const { data: allMovies, error: fetchError } = await supabase
-        .from("movies")
-        .select("id, created_at")
-        .order("created_at", { ascending: false });
-  
-      if (!fetchError && allMovies.length > 70) {
-        const idsToDelete = allMovies.slice(70).map((m) => m.id);
-        const { error: deleteError } = await supabase.from("movies").delete().in("id", idsToDelete);
-        if (deleteError) toast.warn("Cleanup failed");
-      }
-  
       fetchMovies();
     }
   
