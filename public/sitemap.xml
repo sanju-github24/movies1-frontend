@@ -43,5 +43,29 @@
     <priority>0.90</priority>
   </url>
 
-</urlset>
+  <!-- Newly added -->
+  <url>
+    <loc>https://www.1anchormovies.live/search?query=Tamil</loc>
+    <lastmod>2025-07-05</lastmod>
+    <priority>0.70</priority>
+  </url>
 
+  <url>
+    <loc>https://www.1anchormovies.live/search?query=Telugu</loc>
+    <lastmod>2025-07-05</lastmod>
+    <priority>0.70</priority>
+  </url>
+
+  <url>
+    <loc>https://www.1anchormovies.live/search?query=Kannada</loc>
+    <lastmod>2025-07-05</lastmod>
+    <priority>0.70</priority>
+  </url>
+
+  <url>
+    <loc>https://www.1anchormovies.live/latest</loc>
+    <lastmod>2025-07-05</lastmod>
+    <priority>0.85</priority>
+  </url>
+
+</urlset>
