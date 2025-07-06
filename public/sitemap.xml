@@ -68,4 +68,11 @@
     <priority>0.85</priority>
   </url>
 
+
+<url>
+    <loc>https://www.1anchormovies.live/search?query=maadeva</loc>
+    <lastmod>2025-07-06</lastmod>
+    <priority>0.70</priority>
+  </url>
+
 </urlset>
