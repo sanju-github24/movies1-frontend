@@ -85,7 +85,7 @@ const Navbar = () => {
       <div className="flex items-center justify-between px-4 sm:px-10 h-16">
 
         {/* left: hamburger + logo */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 mr-1">
           {/* hamburger – mobile only */}
           <button
             className="sm:hidden p-2 focus:outline-none"
@@ -100,9 +100,10 @@ const Navbar = () => {
           </button>
 
           {/* logo */}
-          <Link to="/" className="shrink-0">
-            <img src="/logo_3.png" alt="logo" className="w-24 sm:w-28 md:w-32 object-contain" />
-          </Link>
+          <Link to="/" className="shrink-0 mr-2">
+  <img src="/logo_3.png" alt="logo" className="w-27 sm:w-28 md:w-32 object-contain" />
+</Link>
+
         </div>
 
         {/* center: nav links + desktop search */}
@@ -181,12 +182,13 @@ const Navbar = () => {
             </>
           ) : (
             <button
-              onClick={() => navigate('/login')}
-              className="hidden sm:flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
-            >
-              Login
-              <img src={assets.arrow_icon} alt="arrow" className="w-4" />
-            </button>
+  onClick={() => navigate('/login')}
+  className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
+>
+  Login
+  <img src={assets.arrow_icon} alt="arrow" className="w-4" />
+</button>
+
           )}
         </div>
       </div>
@@ -194,12 +196,23 @@ const Navbar = () => {
       {/* mobile slide‑down menu */}
       {mobileOpen && (
   <div className="sm:hidden bg-white border-t border-gray-200 px-4 pb-4 space-y-4 text-black shadow-md">
+
     {/* Home link */}
     <Link to="/" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
       Home
     </Link>
 
-    {/* Mobile search – gray input + blue button */}
+    {/* Login Button FIRST
+    {!userData && (
+      <button
+        onClick={() => { setMobileOpen(false); navigate('/login'); }}
+        className="w-full bg-blue-600 text-white py-2 rounded font-semibold"
+      >
+        Login
+      </button>
+    )} */}
+
+    {/* Mobile Search */}
     <form onSubmit={handleSearchSubmit} className="flex rounded overflow-hidden">
       <input
         type="text"
@@ -213,27 +226,17 @@ const Navbar = () => {
       </button>
     </form>
 
+    <Link to="/latest" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
+      Latest Uploads
+    </Link>
 
-          <Link to="/latest" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
-            Latest Uploads
-          
-          </Link>
-          <Link to="/blogs"  onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
-            Blogs
-            
-          </Link>
+    <Link to="/blogs" onClick={() => setMobileOpen(false)} className="block py-2 hover:underline">
+      Blogs
+    </Link>
+    
+  </div>
+)}
 
-          {!userData && (
-            <button
-              onClick={() => { setMobileOpen(false); navigate('/login'); }}
-              className="w-full bg-blue-600 text-white py-2 rounded font-semibold"
-            >
-              Login
-              
-            </button>
-          )}
-        </div>
-      )}
     </nav>
   );
 };
