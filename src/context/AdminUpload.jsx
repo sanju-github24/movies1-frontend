@@ -37,7 +37,19 @@ const AdminUpload = () => {
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
-    { quality: "", size: "", format: "", file: null, manualUrl: "", directUrl: "", gpLink: "", showGifAfter: false }
+    {
+      id: uuidv4(),
+      quality: "",
+      size: "",
+      format: "",
+      file: null,
+      manualUrl: "",
+      directUrl: "",
+      gpLink: "",
+      showGifAfter: false,
+      count: 0,
+      url: "",
+    },
   ]);
 
   useEffect(() => {
@@ -87,7 +99,8 @@ const AdminUpload = () => {
       return;
     }
   
-    const slug = editingMovieId ? movie.slug : slugify(title);
+    const slug = editingMovieId ? movie.slug : slugify(title.trim());
+
     const uploaded_by = userData?.email || "unknown";
   
     const validBlocks = downloadBlocks.filter(
@@ -103,29 +116,30 @@ const AdminUpload = () => {
     const processedDownloads = await Promise.all(
       validBlocks.map(async (b) => {
         const id = b.id || uuidv4();
-  
-        // If file is uploaded, store to Supabase
+        const fallbackUrl = b.manualUrl || b.directUrl || b.gpLink || b.url;
+    
+        // Uploading new .torrent file
         if (b.file) {
           const fileName = b.file.name;
           if (!fileName.endsWith(".torrent")) {
             toast.error("Only .torrent files are allowed.");
             return null;
           }
-  
+    
           const timestamp = Date.now();
           const safeSlug = slug.replace(/[^a-z0-9\-]/gi, "_");
           const newFileName = `${b.quality}_${b.size}.torrent`;
           const filePath = `files/${timestamp}_${safeSlug}/${newFileName}`;
-  
+    
           const { error: uploadError } = await supabase.storage
             .from("torrents")
             .upload(filePath, b.file, { upsert: true });
-  
+    
           if (uploadError) {
             toast.error(`Failed to upload ${fileName}`);
             return null;
           }
-  
+    
           return {
             id,
             quality: b.quality,
@@ -136,20 +150,18 @@ const AdminUpload = () => {
             directUrl: b.directUrl || "",
             gpLink: b.gpLink || "",
             showGifAfter: b.showGifAfter || false,
-            count: 0,
+            count: editingMovieId ? b.count || 0 : 0,
           };
         }
-  
-        // For manual / gp / direct only links
-        const fallbackUrl = b.manualUrl || b.directUrl || b.gpLink;
-  
+    
+        // If no file is reuploaded
         return {
           id,
           quality: b.quality,
           size: b.size,
           format: b.format,
           url: fallbackUrl,
-          filename: fallbackUrl.split("/").pop(),
+          filename: fallbackUrl?.split("/").pop() || "",
           directUrl: b.directUrl || "",
           gpLink: b.gpLink || "",
           showGifAfter: b.showGifAfter || false,
@@ -157,6 +169,7 @@ const AdminUpload = () => {
         };
       })
     );
+    
   
     const downloads = processedDownloads.filter(Boolean);
   
@@ -218,6 +231,7 @@ const fixOldMoviesShowFlag = async () => {
     fetchMovies(); // Refresh movie list
   }
 };
+// All code remains same until handleEdit function
 
 const handleEdit = (m) => {
   setEditingMovieId(m.id);
@@ -237,33 +251,40 @@ const handleEdit = (m) => {
     directLinksOnly: m.directLinksOnly || false,
   });
 
-  // Populate each download block, including new fields
+  // Populate each download block with all needed fields
   setDownloadBlocks(
     (m.downloads || []).length
       ? m.downloads.map((d) => ({
+          id: d.id || uuidv4(),
           quality: d.quality || "",
           size: d.size || "",
           format: d.format || "",
-          file: null, // user will need to re-upload if editing
+          file: null,
           manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
-          directUrl: d.directUrl || "", // ✅ Include direct download URL
+          directUrl: d.directUrl || "",
           gpLink: d.gpLink || "",
           showGifAfter: d.showGifAfter || false,
+          count: d.count || 0,
+          url: d.url || "", // required fallback if no reupload
         }))
       : [
           {
+            id: uuidv4(),
             quality: "",
             size: "",
             format: "",
             file: null,
             manualUrl: "",
-            directUrl: "", // initialize for empty form too
+            directUrl: "",
             gpLink: "",
             showGifAfter: false,
+            count: 0,
+            url: "",
           },
         ]
   );
 };
+
 
 // ✅ Delete movie by slug
 const handleDelete = async (slug) => {
@@ -289,9 +310,22 @@ const handleDownloadChange = (i, field, value) => {
 const addDownloadBlock = () => {
   setDownloadBlocks((prev) => [
     ...prev,
-    { quality: "", size: "", format: "", file: null, manualUrl: "", gpLink: "", showGifAfter: false },
+    {
+      id: uuidv4(),
+      quality: "",
+      size: "",
+      format: "",
+      file: null,
+      manualUrl: "",
+      directUrl: "",
+      gpLink: "",
+      showGifAfter: false,
+      count: 0,
+      url: "",
+    },
   ]);
 };
+
 
 // ✅ Remove download block by index
 const removeDownloadBlock = (i) => {
@@ -357,7 +391,7 @@ const removeDownloadBlock = (i) => {
                 setMovie((m) => ({
                   ...m,
                   title: e.target.value,
-                  slug: slugify(e.target.value),
+                  slug: editingMovieId ? m.slug : slugify(e.target.value),
                 }))
               }
             />

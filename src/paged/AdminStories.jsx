@@ -24,34 +24,25 @@ const AdminStories = () => {
   const fetchStories = async () => {
     const { data, error } = await supabase
       .from("stories")
-      .select("*")
-      .order("created_at", { ascending: false });
-
+      .select('id, title, poster_url, quality, language, size, genre, imdb, created_at');
+  
     if (error) {
       toast.error("Failed to load stories");
+      console.error("Supabase Error:", error);
       return;
     }
-
+  
     const now = new Date();
-
-    const expired = data.filter((story) => {
-      const storyTime = new Date(story.created_at);
-      return (now - storyTime) / (1000 * 60 * 60) >= 24;
-    });
-
+    const expired = data.filter((story) => (now - new Date(story.created_at)) / (1000 * 60 * 60) >= 24);
     if (expired.length) {
       const idsToDelete = expired.map((s) => s.id);
       await supabase.from("stories").delete().in("id", idsToDelete);
     }
-
-    const validStories = data.filter((story) => {
-      const storyTime = new Date(story.created_at);
-      return (now - storyTime) / (1000 * 60 * 60) < 24;
-    });
-
+  
+    const validStories = data.filter((story) => (now - new Date(story.created_at)) / (1000 * 60 * 60) < 24);
     setStories(validStories);
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !posterUrl.trim()) {

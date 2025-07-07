@@ -234,24 +234,40 @@ const Header = () => {
           )}
 
           {/* Content */}
-          <div className="max-w-xs w-full p-4 relative animate-fadeIn">
-            <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
-              <div className="bg-blue-500 h-full origin-left transition-all duration-100" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="text-gray-400 text-center text-xs mt-1">{formatTimeAgo(activeStory.created_at)}</p>
-            <img
-              loading="lazy"
-              src={activeStory.poster_url}
-              alt={activeStory.title}
-              className="rounded-lg w-full object-contain shadow-lg mt-3"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <p className="text-white text-center mt-3 font-semibold">{activeStory.title}</p>
-            <p className="text-gray-400 text-center text-xs mt-1 flex items-center justify-center gap-1">
-              <EyeIcon className="w-4 h-4 text-gray-400" />
-              {activeStory.views || 0} views
-            </p>
-          </div>
+<div className="max-w-xs w-full p-4 relative animate-fadeIn">
+  <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
+    <div
+      className="bg-blue-500 h-full origin-left transition-all duration-100"
+      style={{ width: `${progress}%` }}
+    />
+  </div>
+
+  <p className="text-gray-400 text-center text-xs mt-1">{formatTimeAgo(activeStory.created_at)}</p>
+
+  <img
+    loading="lazy"
+    src={activeStory.poster_url}
+    alt={activeStory.title}
+    className="rounded-lg w-full object-contain shadow-lg mt-3"
+    onClick={(e) => e.stopPropagation()}
+  />
+
+  <p className="text-white text-center mt-3 font-semibold">{activeStory.title}</p>
+
+  <div className="text-gray-300 text-xxs text-center space-y-1 mt-2">
+    {activeStory.quality && <p>{activeStory.quality}</p>}
+    {activeStory.language && <p>{activeStory.language}</p>}
+    {activeStory.size && <p>{activeStory.size}</p>}
+    {activeStory.genre && <p>{activeStory.genre}</p>}
+    {activeStory.imdb && <p>{activeStory.imdb}</p>}
+  </div>
+
+  <p className="text-gray-400 text-center text-xs mt-2 flex items-center justify-center gap-1">
+    <EyeIcon className="w-4 h-4 text-gray-400" />
+    {activeStory.views || 0} views
+  </p>
+</div>
+
         </div>
       )}
 
