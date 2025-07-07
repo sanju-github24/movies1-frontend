@@ -4,6 +4,8 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { assets } from '../assets/assets';
 import { AppContext } from '../context/AppContext';
+import { Helmet } from 'react-helmet';
+
 
 const Login = () => {
   const navigate = useNavigate();
@@ -58,6 +60,19 @@ const Login = () => {
   
 
   return (
+
+    <>
+    <Helmet>
+  <title>Login | 1AnchorMovies</title>
+  <meta
+    name="description"
+    content="Login to 1AnchorMovies to browse, upload, or download the latest HD Kannada, Tamil, Telugu, and Malayalam movies."
+  />
+  <link rel="canonical" href="https://www.1anchormovies.live/login" />
+</Helmet>
+
+  
+    
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-200 to-purple-400 px-4">
       <img
         onClick={() => navigate('/')}
@@ -140,6 +155,7 @@ const Login = () => {
         </p>
       </div>
     </div>
+    </>
   );
 };
 
