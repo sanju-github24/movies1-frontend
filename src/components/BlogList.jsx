@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
+import { Helmet } from "react-helmet";
+
 
 // Helper function to strip HTML and generate a clean text preview
 const getTextPreview = (html, maxLength = 150) => {
@@ -27,6 +29,19 @@ const BlogList = () => {
   };
 
   return (
+    <>
+    <Helmet>
+  <title>Movie Blogs & Reviews | 1AnchorMovies</title>
+  <meta
+    name="description"
+    content="Read the latest blogs, reviews, and updates on Tamil, Telugu, Kannada, and Malayalam movies at 1AnchorMovies."
+  />
+  <link rel="canonical" href="https://www.1anchormovies.live/blogs" />
+</Helmet>
+
+
+
+
     <div className="max-w-5xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-white mb-8 text-center">📚 Latest Blog Articles</h1>
 
@@ -58,6 +73,7 @@ const BlogList = () => {
         ))}
       </div>
     </div>
+    </>
   );
 };
 
