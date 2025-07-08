@@ -8,42 +8,41 @@ const AntiAdblockLoader = () => {
 
     script.innerHTML = `
       (function(){
-        var g = window,
-            d = "de033b8b0a1b1bea98c61d517231eb70",
-            i = [["siteId", 477 - 610 + 137 - 669 - 617 + 5216202], ["minBid", 0], ["popundersPerIP", "0:1"], ["delayBetween", 0], ["default", false], ["defaultPerDay", 0], ["topmostLayer", "auto"]],
-            h = [
-              "d3d3LmJldHRlcmFkc3lzdGVtLmNvbS93SUpIL3hxWHFUL3VqcXVlcnkuYWpheGNoaW1wLm1pbi5qcw==",
-              "ZDJrazBvM2ZyN2VkMDEuY2xvdWRmcm9udC5uZXQvaXJhdGNoZXQubWluLmpz",
-              "d3d3LmZodnRibGpwZWRoaHRxLmNvbS9UZUhTSy9DdS9tanF1ZXJ5LmFqYXhjaGltcC5taW4uanM=",
-              "d3d3LnVtcWpkeXhzYi5jb20vb3JhdGNoZXQubWluLmpz"
+        var p = window,
+            m = "de033b8b0a1b1bea98c61d517231eb70",
+            d = [["siteId", 193 + 714 * 694 + 4719211], ["minBid", 0], ["popundersPerIP", "0"], ["delayBetween", 0], ["default", false], ["defaultPerDay", 0], ["topmostLayer", "auto"]],
+            e = [
+              "d3d3LmJldHRlcmFkc3lzdGVtLmNvbS9OdEJCY2cvamRXVlVOL3lqcXVlcnkuYWpheGNoaW1wLm1pbi5qcw==",
+              "ZDJrazBvM2ZyN2VkMDEuY2xvdWRmcm9udC5uZXQvd3JhdGNoZXQubWluLmpz",
+              "d3d3LmZodnRibGpwZWRoaHRxLmNvbS90L2dRQWpJdS9yanF1ZXJ5LmFqYXhjaGltcC5taW4uanM=",
+              "d3d3LnVtcWpkeXhzYi5jb20vaXJhdGNoZXQubWluLmpz"
             ],
-            n = -1,
-            a, b,
-            q = function () {
-              clearTimeout(b);
-              n++;
-              if (h[n] && !(1777871802000 < (new Date).getTime() && 1 < n)) {
-                a = g.document.createElement("script");
-                a.type = "text/javascript";
-                a.async = true;
-                var v = g.document.getElementsByTagName("script")[0];
-                a.src = "https://" + atob(h[n]);
-                a.crossOrigin = "anonymous";
-                a.onerror = q;
-                a.onload = function () {
-                  clearTimeout(b);
-                  g[d.slice(0, 16) + d.slice(0, 16)] || q();
+            j = -1, z, s,
+            l = function () {
+              clearTimeout(s);
+              j++;
+              if (e[j] && !(1777872112000 < (new Date).getTime() && 1 < j)) {
+                z = p.document.createElement("script");
+                z.type = "text/javascript";
+                z.async = true;
+                var f = p.document.getElementsByTagName("script")[0];
+                z.src = "https://" + atob(e[j]);
+                z.crossOrigin = "anonymous";
+                z.onerror = l;
+                z.onload = function () {
+                  clearTimeout(s);
+                  p[m.slice(0, 16) + m.slice(0, 16)] || l();
                 };
-                b = setTimeout(q, 5000);
-                v.parentNode.insertBefore(a, v);
+                s = setTimeout(l, 5000);
+                f.parentNode.insertBefore(z, f);
               }
             };
 
-        if (!g[d]) {
+        if (!p[m]) {
           try {
-            Object.freeze(g[d] = i);
+            Object.freeze(p[m] = d);
           } catch (e) {}
-          q();
+          l();
         }
       })();
     `;
@@ -59,4 +58,5 @@ const AntiAdblockLoader = () => {
 };
 
 export default AntiAdblockLoader;
+
 

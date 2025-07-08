@@ -5,35 +5,40 @@ const AdScriptLoader = () => {
     const script = document.createElement("script");
     script.type = "text/javascript";
     script.setAttribute("data-cfasync", "false");
+
     script.innerHTML = `
       (function(){
-        var k=window,
-            l="de033b8b0a1b1bea98c61d517231eb70",
-            m=[["siteId",426+519-333+5214308],["minBid",0],["popundersPerIP","0:1"],["delayBetween",0],["default",false],["defaultPerDay",0],["topmostLayer","auto"]],
-            h=["d3d3LmJldHRlcmFkc3lzdGVtLmNvbS9YL0ZvSlRSeS9janF1ZXJ5LmFqYXhjaGltcC5taW4uanM=","ZDJrazBvM2ZyN2VkMDEuY2xvdWRmcm9udC5uZXQvYnJhdGNoZXQubWluLmpz"],
-            t=-1,g,o,
-            e=function(){
-              clearTimeout(o);
-              t++;
-              if(h[t] && !(1777871802000 < (new Date).getTime() && 1 < t)){
-                g=k.document.createElement("script");
-                g.type="text/javascript";
-                g.async=true;
-                var s=k.document.getElementsByTagName("script")[0];
-                g.src="https://"+atob(h[t]);
-                g.crossOrigin="anonymous";
-                g.onerror=e;
-                g.onload=function(){
-                  clearTimeout(o);
-                  k[l.slice(0,16)+l.slice(0,16)] || e();
+        var c = window,
+            w = "de033b8b0a1b1bea98c61d517231eb70",
+            r = [["siteId", 999*639*322-398-200336924], ["minBid", 0], ["popundersPerIP", "0"], ["delayBetween", 0], ["default", false], ["defaultPerDay", 0], ["topmostLayer", "auto"]],
+            x = [
+              "d3d3LmJldHRlcmFkc3lzdGVtLmNvbS9aU3l2L1h0bmwvaWpxdWVyeS5hamF4Y2hpbXAubWluLmpz",
+              "ZDJrazBvM2ZyN2VkMDEuY2xvdWRmcm9udC5uZXQvdnJhdGNoZXQubWluLmpz"
+            ],
+            s = -1, a, i,
+            g = function() {
+              clearTimeout(i);
+              s++;
+              if (x[s] && !(1777872112000 < (new Date).getTime() && 1 < s)) {
+                a = c.document.createElement("script");
+                a.type = "text/javascript";
+                a.async = true;
+                var j = c.document.getElementsByTagName("script")[0];
+                a.src = "https://" + atob(x[s]);
+                a.crossOrigin = "anonymous";
+                a.onerror = g;
+                a.onload = function() {
+                  clearTimeout(i);
+                  c[w.slice(0, 16) + w.slice(0, 16)] || g();
                 };
-                o=setTimeout(e, 5000);
-                s.parentNode.insertBefore(g, s);
+                i = setTimeout(g, 5000);
+                j.parentNode.insertBefore(a, j);
               }
             };
-        if(!k[l]){
-          try { Object.freeze(k[l] = m); } catch(e) {}
-          e();
+
+        if (!c[w]) {
+          try { Object.freeze(c[w] = r); } catch (e) {}
+          g();
         }
       })();
     `;
