@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
 import AdScriptLoader from "../components/AdScriptLoader"; // ✅ adjust path if needed
+import { Helmet } from "react-helmet"; // ✅ Add this
 
 
 
@@ -113,6 +114,17 @@ const MovieDetail = () => {
 
   return (
     <div className="flex justify-center mt-4 px-2 sm:px-6 md:px-10 w-full bg-black">
+      <Helmet>
+        <title>{movie.title} - Movie Download | 1AnchorMovies</title>
+        <meta
+          name="description"
+          content={`Download ${movie.title} in HD quality. Available in 480p, 720p, and 1080p. Fast and secure downloads on 1AnchorMovies.`}
+        />
+        <link
+          rel="canonical"
+          href={`https://www.1anchormovies.live/movie/${code}`}
+        />
+      </Helmet>
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
   
         {/* Title */}
