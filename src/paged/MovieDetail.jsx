@@ -128,7 +128,7 @@ const MovieDetail = () => {
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
   
         {/* Title */}
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-2 break-words leading-snug px-2">
+        <h1 className="text-center text-2xl sm:text-3xl md:text-4xl font-extrabold leading-snug text-black mb-3 break-words px-2">
           {topTitle}
         </h1>
         <AdScriptLoader />
