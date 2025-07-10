@@ -34,7 +34,7 @@ const Header = () => {
   const latestMovies = [...movies]
     .filter((m) => m.showOnHomepage || m.showOnHomepage === undefined)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, 40);
+    .slice(0, 60);
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -363,9 +363,7 @@ const Header = () => {
       </Link>
       <AdScriptLoader />
 
-      <div className="text-xs text-gray-400 mt-0.5">
-        {movie.created_at && new Date(movie.created_at).toLocaleDateString()}
-      </div>
+      
     </div>
   ))}
 </div>
