@@ -174,6 +174,14 @@ const MovieDetail = () => {
   <p className="text-sm mt-1">Interested? Email us at <span className="underline">AnchorMovies@proton.me</span></p>
 </div>
 
+<div className="flex justify-center my-6">
+  <img
+    src="/torrent1.gif"
+    alt="Torrent Animation"
+    className="w-full max-w-[600px] h-auto object-contain rounded-lg shadow-md"
+  />
+</div>
+
 
          {/* ✅ Optional Ad before downloads */}
         
@@ -292,14 +300,15 @@ const MovieDetail = () => {
 
   {/* Optional GIF */}
   {download.showGifAfter && (
-    <div className="flex justify-center my-6">
-      <img
-        src="/torrent1.gif"
-        alt="Torrent GIF"
-        className="w-28 h-28 object-contain"
-      />
-    </div>
-  )}
+  <div className="flex justify-center my-6">
+    <img
+      src="/torrent1.gif"
+      alt="Torrent GIF"
+      className="w-full max-w-[600px] h-auto object-contain rounded-lg shadow-md"
+    />
+  </div>
+)}
+
 </React.Fragment>
 
     );
