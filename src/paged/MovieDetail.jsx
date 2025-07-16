@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { backendUrl } from '../utils/api';
-import AdScriptLoader from "../components/AdScriptLoader"; // ✅ adjust path if needed
+
 import { Helmet } from "react-helmet"; // ✅ Add this
 
 
@@ -131,7 +131,7 @@ const MovieDetail = () => {
         <h1 className="text-center text-2xl sm:text-3xl md:text-4xl font-extrabold leading-snug text-black mb-3 break-words px-2">
           {topTitle}
         </h1>
-        <AdScriptLoader />
+        
 
 
         {/* ✅ Ad below title */}
@@ -210,7 +210,7 @@ const MovieDetail = () => {
 >
   📥 {download.quality}
 </button>
-<AdScriptLoader />
+
 
 <button
   onClick={() => {
@@ -236,7 +236,7 @@ const MovieDetail = () => {
 </div>
 
 
-<AdScriptLoader />
+
 
 
 

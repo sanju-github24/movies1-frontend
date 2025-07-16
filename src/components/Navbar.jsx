@@ -5,7 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { backendUrl } from '../utils/api';
 import { assets } from '../assets/assets';
-import AdScriptLoader from "../components/AdScriptLoader"; // ✅ adjust path if needed
+
 
 
 const Navbar = () => {
@@ -113,7 +113,7 @@ const Navbar = () => {
             <li><Link to="/blogs" className="hover:underline">Blogs</Link></li>
             
           </ul>
-          <AdScriptLoader/>
+          
           
 
           {/* desktop search – unchanged pill style */}
@@ -137,7 +137,7 @@ const Navbar = () => {
             </button>
             
           </form>
-          <AdScriptLoader/>
+           
         </div>
         
 

@@ -3,10 +3,6 @@ import { AppContext } from "../context/AppContext";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
-import AdSlot from '../components/AdSlot';
-import AdPopup from "./AdPopup";
-import PopAdsScript from "./PopAdsScript";
-import AdScriptLoader from "./AdScriptLoader";
 
 
 const Header = () => {
@@ -165,7 +161,7 @@ const Header = () => {
                         className="w-full h-full object-cover rounded-full"
                         
                       />
-                     <AdScriptLoader />
+            
                     </div>
                   </div>
                   <p className="text-xs text-gray-800 mt-1 truncate w-23 font-medium">{story.title}</p>
@@ -286,7 +282,7 @@ const Header = () => {
             
             Join on Telegram
           </a>
-          <AdScriptLoader />
+          
         </div>
       </div>
       
@@ -361,7 +357,7 @@ const Header = () => {
           </span>
         )}
       </Link>
-      <AdScriptLoader />
+      
 
       
     </div>

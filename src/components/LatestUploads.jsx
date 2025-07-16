@@ -3,7 +3,7 @@ import { formatDistanceToNow, subDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { AppContext } from '../context/AppContext';
-import AdScriptLoader from "../components/AdScriptLoader";
+
 
 const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
@@ -47,7 +47,7 @@ const LatestUploads = () => {
         Week Releases
       </h2>
 
-      <AdScriptLoader />
+   
 
       {recentMovies.length === 0 ? (
         <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
