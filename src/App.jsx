@@ -25,7 +25,8 @@ import AdminStories from "./paged/AdminStories";
 import AdSlot from './components/AdSlot';
 import AdPopup from './components/AdPopup';
 import PopAdsScript from './components/PopAdsScript';
-import AntiAdblockLoader from './components/AntiAdblockLoader';
+import AdScriptLoader from './components/AdScriptLoader';
+
 
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
@@ -74,8 +75,8 @@ const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
     )}
 
     {/* Ad scripts - load once */}
-    <PopAdsScript /> {/* ✅ Now this loads only once, outside Routes */}
-    <AntiAdblockLoader/>
+    <AdScriptLoader/>{/* ✅ Now this loads only once, outside Routes */}
+   
 
     {/* Routes */}
     <Routes>
