@@ -266,30 +266,12 @@ const Header = () => {
 
         </div>
       )}
-
-      {/* Telegram Join Box */}
-      <div className="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-xl p-4 sm:p-6 w-full max-w-md text-center my-4">
-        <div className="flex flex-col items-center gap-4">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" className="w-14 h-14" />
-          <h2 className="text-xl font-semibold text-white">Join Our Telegram Channel</h2>
-          <a
-            href="https://t.me/AnchorMovies"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2.5 rounded-full shadow transition-all"
-            
-          >
-            
-            Join on Telegram
-          </a>
-          
-        </div>
-      </div>
-      
-{/* Recently Uploaded + Share */}
+{/* Unified Block: Recently Uploaded + Telegram + Admin + Movie List */}
 {latestMovies.length > 0 && (
-  <div className="w-full max-w-7xl px-2 sm:px-4 pt-2 pb-4 -mt-2">
-    <div className="flex justify-between items-start bg-white rounded-md px-3 py-2 text-sm text-black shadow-sm border border-gray-200 mb-2">
+  <div className="w-full max-w-7xl px-4 py-4 bg-white rounded-xl shadow-md border border-gray-200 my-6 space-y-4">
+
+    {/* Recently Uploaded Header + Share */}
+    <div className="flex justify-between items-start text-sm text-black">
       <div>
         <strong className="block text-sm font-semibold mb-1">🆕 Recently Uploaded</strong>
         <p className="text-gray-700 text-xs">
@@ -298,7 +280,7 @@ const Header = () => {
         </p>
       </div>
 
-      {/* Share Dropdown inside */}
+      {/* Share Button */}
       <div className="relative group ml-2 mt-1">
         <img
           src="/share.png"
@@ -331,42 +313,56 @@ const Header = () => {
         </div>
       </div>
     </div>
-  
 
-          {isAdmin && (
-            <div className="mb-2">
-              <Link to="/admin" className="text-yellow-400 hover:text-yellow-300 font-semibold underline">
-                🔧 Go to Admin Panel
-              </Link>
-            </div>
-          )}
-<div className="flex flex-col gap-2 mt-1">
-  {latestMovies.map((movie) => (
-    <div key={movie.id} className="text-white text-sm">
-      <Link
-        to={`/movie/${movie.slug}`}
-        className="font-medium break-words whitespace-normal"
-        style={{ color: movie.linkColor || "#60a5fa" }}
-        title={movie.title}
-      >
-     
-        {movie.title}
-        {movie.directLinksOnly && (
-          <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
-            [Direct Links]
-          </span>
-        )}
-      </Link>
-      
-
-      
+    {/* Telegram Box Inside */}
+    <div className="bg-gray-900/90 backdrop-blur-md border border-gray-700 rounded-xl shadow p-4 sm:p-6 text-center">
+      <div className="flex flex-col items-center gap-4">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" className="w-14 h-14" />
+        <h2 className="text-xl font-semibold text-white">Join Our Telegram Channel</h2>
+        <a
+          href="https://t.me/AnchorMovies"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2.5 rounded-full shadow transition-all"
+        >
+          Join on Telegram
+        </a>
+      </div>
     </div>
-  ))}
-</div>
 
+    {/* Admin Link */}
+    {isAdmin && (
+      <div className="mb-2 text-center">
+        <Link to="/admin" className="text-yellow-500 hover:text-yellow-400 font-semibold underline">
+          🔧 Go to Admin Panel
+        </Link>
+      </div>
+    )}
 
+    {/* Movie List */}
+    <div className="flex flex-col gap-2 mt-1">
+      {latestMovies.map((movie) => (
+        <div key={movie.id} className="text-black text-sm">
+          <Link
+            to={`/movie/${movie.slug}`}
+            className="font-medium break-words whitespace-normal"
+            style={{ color: movie.linkColor || "#1d4ed8" }}
+            title={movie.title}
+          >
+            {movie.title}
+            {movie.directLinksOnly && (
+              <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
+                [Direct Links]
+              </span>
+            )}
+          </Link>
         </div>
-      )}
+      ))}
+    </div>
+
+  </div>
+)}
+
       {/* Footer - Community Join CTA */}
 <div className="w-full max-w-7xl px-6 py-8 mt-12 bg-gradient-to-r from-black via-gray-900 to-black rounded-xl shadow-lg text-center border border-white/10">
   <h3 className="text-white text-xl sm:text-2xl font-bold flex justify-center items-center gap-2 mb-2">
