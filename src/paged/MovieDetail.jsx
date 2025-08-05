@@ -249,99 +249,114 @@ const MovieDetail = () => {
           })}
         </div>
 
-        {/* Comments */}
-        <hr className="border-t-2 border-gray-300 my-8" />
-        <h2 className="text-xl font-bold text-black mb-4">💬 Comments</h2>
-        {comments.length > 0 ? (
-          <div className="space-y-4 mb-6">
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className="bg-gray-100 p-3 rounded shadow-sm flex justify-between items-start"
-              >
-                <div>
-                  <p className="text-sm text-gray-700">
-                    <span className="font-semibold">{c.username}</span> —{" "}
-                    <span className="text-gray-500 text-xs">
-                      {new Date(c.created_at).toLocaleString()}
-                    </span>
-                  </p>
-                  {/\.(gif)$/i.test(c.content) ? (
-                    <img
-                      src={c.content}
-                      alt="GIF"
-                      className="max-w-xs rounded mt-2"
-                    />
-                  ) : (
-                    <p className="mt-1 whitespace-pre-wrap break-words">
-                      {c.content}
-                    </p>
-                  )}
-                </div>
-                {userData?.email === "sanjusanjay0444@gmail.com" && (
-                  <button
-                    onClick={() => deleteComment(c.id)}
-                    className="ml-4 text-red-600 hover:text-red-800 text-sm"
-                  >
-                    🗑 Delete
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500 mb-6">No comments yet.</p>
-        )}
+  {/* Comments */}
+<hr className="border-t-2 border-gray-300 my-8" />
+<h2 className="text-xl font-bold text-black mb-4">💬 Comments</h2>
 
-        {/* Post comment */}
-        {isLoggedIn ? (
-          <div className="flex flex-col gap-2 relative">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Write your comment... (You can paste GIF URL too)"
-              className="border border-gray-300 rounded p-2 w-full"
-              rows={3}
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={postComment}
-                disabled={commentLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                {commentLoading ? "Posting..." : "Post Comment"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="bg-gray-200 px-3 py-2 rounded hover:bg-gray-300"
-              >
-                😀 Emoji
-              </button>
+{comments.length > 0 ? (
+  <div className="space-y-6 mb-6">
+    {comments.map((c) => (
+      <div key={c.id} className="border border-gray-300 rounded-lg overflow-hidden shadow-sm">
+
+        {/* Header bar */}
+        <div className="bg-gradient-to-r from-blue-900 to-blue-800 text-white flex justify-between items-center px-4 py-2">
+          <span className="font-semibold">{c.username}</span>
+          <span className="text-sm">{new Date(c.created_at).toLocaleString()}</span>
+        </div>
+
+        <div className="flex p-4 bg-white">
+          {/* Left: Avatar + info */}
+          <div className="w-24 flex flex-col items-center text-center border-r border-gray-200 pr-4">
+            <div className="w-16 h-16 rounded bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+              {c.username?.charAt(0).toUpperCase()}
             </div>
-            {showEmojiPicker && (
-              <div
-                ref={emojiPickerRef}
-                className="absolute bottom-[110%] left-0 z-50 bg-white shadow-lg border rounded-lg overflow-hidden max-w-[280px]"
-              >
-                <EmojiPicker
-                  onEmojiClick={(emojiObject) =>
-                    setNewComment((prev) => prev + emojiObject.emoji)
-                  }
-                  width="100%"
-                />
-              </div>
+            
+           
+          </div>
+
+          {/* Right: Comment */}
+          <div className="flex-1 pl-4">
+            {/\.(gif|jpg|jpeg|png)$/i.test(c.content.trim()) ? (
+              <img
+                src={c.content.trim()}
+                alt="User GIF"
+                className="max-w-xs rounded mt-1"
+              />
+            ) : (
+              <p className="whitespace-pre-wrap break-words mt-1">{c.content}</p>
             )}
           </div>
-        ) : (
-          <p className="text-sm text-gray-500">
-            Please{" "}
-            <a href="/login" className="text-blue-600 underline">
-              log in
-            </a>{" "}
-            to comment.
-          </p>
+        </div>
+
+        {/* Admin delete */}
+        {userData?.email === "sanjusanjay0444@gmail.com" && (
+          <div className="px-4 pb-3 bg-white">
+            <button
+              onClick={() => deleteComment(c.id)}
+              className="text-red-600 hover:text-red-800 text-sm"
+            >
+              🗑 Delete
+            </button>
+          </div>
         )}
+      </div>
+    ))}
+  </div>
+) : (
+  <p className="text-sm text-gray-500 mb-6">No comments yet.</p>
+)}
+
+{/* Post comment */}
+{isLoggedIn ? (
+  <div className="flex flex-col gap-2 relative">
+    <textarea
+      value={newComment}
+      onChange={(e) => setNewComment(e.target.value)}
+      placeholder="Write your comment... (You can paste GIF URL too)"
+      className="border border-gray-300 rounded p-2 w-full"
+      rows={3}
+    />
+    <div className="flex gap-2">
+      <button
+        onClick={postComment}
+        disabled={commentLoading}
+        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+      >
+        {commentLoading ? "Posting..." : "Post Comment"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+        className="bg-gray-200 px-3 py-2 rounded hover:bg-gray-300"
+      >
+        😀 Emoji
+      </button>
+    </div>
+    {showEmojiPicker && (
+      <div
+        ref={emojiPickerRef}
+        className="absolute bottom-[110%] left-0 z-50 bg-white shadow-lg border rounded-lg overflow-hidden max-w-[280px]"
+      >
+        <EmojiPicker
+          onEmojiClick={(emojiObject) =>
+            setNewComment((prev) => prev + emojiObject.emoji)
+          }
+          width="100%"
+        />
+      </div>
+    )}
+  </div>
+) : (
+  <div className="text-center mt-6">
+    <a
+      href="/login"
+      className="inline-block bg-blue-600 text-white px-6 py-2 rounded-md shadow hover:bg-blue-700 transition duration-200"
+    >
+      Log in to comment
+    </a>
+  </div>
+)}
+
       </div>
     </div>
   );
