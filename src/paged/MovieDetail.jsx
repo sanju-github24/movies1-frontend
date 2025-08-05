@@ -312,7 +312,7 @@ const MovieDetail = () => {
     <textarea
       value={newComment}
       onChange={(e) => setNewComment(e.target.value)}
-      placeholder="Write your comment... (You can paste GIF URL too)"
+      placeholder="Write your comment..."
       className="border border-gray-300 rounded p-2 w-full"
       rows={3}
     />
