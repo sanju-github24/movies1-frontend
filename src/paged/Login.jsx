@@ -60,103 +60,110 @@ const Login = () => {
   
 
   return (
-
     <>
-    <Helmet>
-  <title>Login | 1AnchorMovies</title>
-  <meta
-    name="description"
-    content="Login to 1AnchorMovies to browse, upload, or download the latest HD Kannada, Tamil, Telugu, and Malayalam movies."
-  />
-  <link rel="canonical" href="https://www.1anchormovies.live/login" />
-</Helmet>
-
+      <Helmet>
+        <title>Login | 1AnchorMovies</title>
+        <meta
+          name="description"
+          content="Login to 1AnchorMovies to browse, upload, or download the latest HD Kannada, Tamil, Telugu, and Malayalam movies."
+        />
+        <link rel="canonical" href="https://www.1anchormovies.live/login" />
+      </Helmet>
   
-    
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-200 to-purple-400 px-4">
-      <img
-        onClick={() => navigate('/')}
-        src={assets.logo}
-        alt="Logo"
-        className="absolute left-5 sm:left-20 top-5 sm:w-32 cursor-pointer"
-      />
-
-      <div className="bg-slate-900 p-10 rounded-2xl shadow-xl w-full sm:w-96 text-indigo-300 text-sm">
-        <h2 className="text-3xl font-semibold text-white text-center mb-3">
-          {mode === 'Sign Up' ? 'Create Account' : 'Login'}
-        </h2>
-        <p className="text-center mb-6">
-          {mode === 'Sign Up' ? 'Create your account' : 'Login to your account'}
-        </p>
-
-        <form onSubmit={onSubmitHandler}>
-          {mode === 'Sign Up' && (
-            <div className="flex items-center gap-3 w-full rounded-full px-5 py-2.5 mb-4 bg-[#333A5C]">
-              <img src={assets.person_icon} alt="Name icon" />
-              <input
-                onChange={(e) => setName(e.target.value)}
-                value={name}
-                className="bg-transparent outline-none w-full"
-                type="text"
-                placeholder="Full Name"
-                required
-              />
-            </div>
-          )}
-
-          <div className="flex items-center gap-3 w-full rounded-full px-5 py-2.5 mb-4 bg-[#333A5C]">
-            <img src={assets.mail_icon} alt="Mail icon" />
-            <input
-              onChange={(e) => setEmail(e.target.value)}
-              value={email}
-              className="bg-transparent outline-none w-full"
-              type="email"
-              placeholder="Email"
-              required
-            />
-          </div>
-
-          <div className="flex items-center gap-3 w-full rounded-full px-5 py-2.5 mb-4 bg-[#333A5C]">
-            <img src={assets.lock_icon} alt="Lock icon" />
-            <input
-              onChange={(e) => setPassword(e.target.value)}
-              value={password}
-              className="bg-transparent outline-none w-full"
-              type="password"
-              placeholder="Password"
-              required
-            />
-          </div>
-
-          <p
-            onClick={() => navigate('/reset-password')}
-            className="mb-4 text-indigo-400 hover:underline cursor-pointer"
-          >
-            Forgot Password?
+      {/* Background stays same */}
+      <div
+        className="relative w-full min-h-screen flex items-center justify-center bg-cover bg-center"
+        style={{
+          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url('/bg.png')`,
+        }}
+      >
+        <div className="absolute inset-0 backdrop-blur-[2px]" />
+  
+        {/* Blue Transparent Glassy Card */}
+        <div className="relative z-10 bg-blue-900/40 backdrop-blur-md p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-white/10 text-white">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">
+            {mode === "Sign Up" ? "Create Account" : "Login"}
+          </h2>
+          <p className="text-center mb-6 text-blue-100">
+            {mode === "Sign Up" ? "Create your account" : "Login to your account"}
           </p>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white font-medium hover:opacity-90 transition-opacity"
-          >
-            {loading ? 'Processing...' : mode}
-          </button>
-        </form>
-
-        <p className="text-gray-400 text-center text-xs mt-4">
-          {mode === 'Sign Up' ? 'Already have an account? ' : "Don't have an account? "}
-          <span
-            onClick={() => setMode(mode === 'Sign Up' ? 'Login' : 'Sign Up')}
-            className="text-blue-400 cursor-pointer underline"
-          >
-            {mode === 'Sign Up' ? 'Login here' : 'Sign up'}
-          </span>
-        </p>
+  
+          <form onSubmit={onSubmitHandler}>
+            {mode === "Sign Up" && (
+              <div className="mb-4">
+                <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+                  <img src={assets.person_icon} alt="Name icon" className="mr-3 w-5" />
+                  <input
+                    onChange={(e) => setName(e.target.value)}
+                    value={name}
+                    type="text"
+                    placeholder="Full Name"
+                    required
+                    className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
+                  />
+                </div>
+              </div>
+            )}
+  
+            <div className="mb-4">
+              <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+                <img src={assets.mail_icon} alt="Mail icon" className="mr-3 w-5" />
+                <input
+                  onChange={(e) => setEmail(e.target.value)}
+                  value={email}
+                  type="email"
+                  placeholder="Email"
+                  required
+                  className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
+                />
+              </div>
+            </div>
+  
+            <div className="mb-4">
+              <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+                <img src={assets.lock_icon} alt="Lock icon" className="mr-3 w-5" />
+                <input
+                  onChange={(e) => setPassword(e.target.value)}
+                  value={password}
+                  type="password"
+                  placeholder="Password"
+                  required
+                  className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
+                />
+              </div>
+            </div>
+  
+            <p
+              onClick={() => navigate("/reset-password")}
+              className="mb-4 text-indigo-200 hover:underline cursor-pointer text-sm text-right"
+            >
+              Forgot Password?
+            </p>
+  
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-full bg-black text-white font-semibold hover:bg-white hover:text-black transition duration-200"
+            >
+              {loading ? "Processing..." : mode}
+            </button>
+          </form>
+  
+          <p className="text-blue-100 text-center text-sm mt-6">
+            {mode === "Sign Up" ? "Already have an account? " : "Don't have an account? "}
+            <span
+              onClick={() => setMode(mode === "Sign Up" ? "Login" : "Sign Up")}
+              className="text-blue-300 cursor-pointer underline"
+            >
+              {mode === "Sign Up" ? "Login here" : "Sign up"}
+            </span>
+          </p>
+        </div>
       </div>
-    </div>
     </>
   );
-};
-
-export default Login;
+  
+  };
+  
+  export default Login;
+  

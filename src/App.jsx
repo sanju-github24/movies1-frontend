@@ -25,6 +25,7 @@ import AdminStories from "./paged/AdminStories";
 import AdScriptLoader from './components/AdScriptLoader';
 import AdPopup from './components/AdPopup';          // ✅ Optional
 import PopAdsScript from './components/PopAdsScript'; // ✅ Optional
+import Profile from "./paged/Profile"; // Adjust path if needed
 
 
 const App = () => {
@@ -33,11 +34,10 @@ const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const hideOnPaths = ['/login', '/email-verify', '/reset-password'];
-  const hideEverythingOnPaths = /^\/blogs\/[^/]+$/;
-
-  const hideNavbarAndCategoryBar = hideEverythingOnPaths.test(location.pathname);
-  const hideOnlyCategoryBar = hideOnPaths.includes(location.pathname);
+  // ✅ Hide both Navbar & CategoryBar on these paths
+  const hidePaths = ['/login', '/verify-account', '/reset-password'];
+  const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
+  const hideNavbarAndCategoryBar = hidePaths.includes(location.pathname) || isBlogViewerPath;
 
   const handleCategoryClick = (category) => {
     navigate(`/category/${encodeURIComponent(category)}`);
@@ -61,20 +61,22 @@ const App = () => {
       />
 
       {/* Global Ad Scripts (load everywhere) */}
-      <AdScriptLoader />       {/* ✅ core ads */}
-            {/* ✅ optional pop-under/pop-ads */}
+      <AdScriptLoader />
 
       {/* Navbar + Category Bar */}
-      {!hideNavbarAndCategoryBar && <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
-      {!hideNavbarAndCategoryBar && !hideOnlyCategoryBar && (
-        <CategoryBar
-          onCategoryClick={handleCategoryClick}
-          onLanguageClick={handleLanguageClick}
-        />
+      {!hideNavbarAndCategoryBar && (
+        <>
+          <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+          <CategoryBar
+            onCategoryClick={handleCategoryClick}
+            onLanguageClick={handleLanguageClick}
+          />
+        </>
       )}
 
       {/* Routes */}
       <Routes>
+        {/* ✅ Public Routes */}
         <Route path="/" element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code" element={<MovieDetail />} />
         <Route path="/search" element={<SearchResults />} />
@@ -83,6 +85,21 @@ const App = () => {
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
 
+        {/* ✅ Profile Route */}
+        <Route path="/profile" element={<Profile />} />
+
+        {/* ✅ Always Accessible */}
+        <Route path="/verify-account" element={<EmailVerify />} />
+
+        {/* ✅ Auth Pages (only if not logged in) */}
+        {!isLoggedIn && (
+          <>
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+          </>
+        )}
+
+        {/* ✅ Admin Routes */}
         <Route path="/admin" element={<ProtectedAdminRoute />}>
           <Route index element={<Navigate to="/admin/upload" />} />
           <Route path="upload" element={<AdminUpload />} />
@@ -91,14 +108,7 @@ const App = () => {
           <Route path="stories" element={<AdminStories />} />
         </Route>
 
-        {!isLoggedIn && (
-          <>
-            <Route path="/login" element={<Login />} />
-            <Route path="/email-verify" element={<EmailVerify />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-          </>
-        )}
-
+        {/* ✅ Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

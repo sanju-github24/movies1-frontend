@@ -218,36 +218,19 @@ const Navbar = () => {
                     </div>
                   ) : (
                     <ul className="text-sm py-1">
-                      <li className="px-4 py-2 border-b text-gray-700">
-                        {userData.name}
-                      </li>
-                      <li
-                        onClick={() => setEditingName(true)}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      >
-                        ✏️ Edit Name
-                      </li>
-                      {!userData?.email_confirmed_at && (
-                        <li
-                          onClick={() => {
-                            setProfileOpen(false);
-                            resendEmailVerification();
-                          }}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        >
-                          Verify Email
-                        </li>
-                      )}
-                      <li
-                        onClick={() => {
-                          setProfileOpen(false);
-                          logout();
-                        }}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      >
-                        Logout
-                      </li>
-                    </ul>
+  <li className="px-4 py-2 border-b text-gray-700">{userData.name}</li>
+
+  <li>
+    <Link
+      to="/profile"
+      onClick={() => setProfileOpen(false)}
+      className="block px-4 py-2 hover:bg-gray-100"
+    >
+      👤 View Profile
+    </Link>
+  </li>
+</ul>
+
                   )}
                 </div>
               )}
