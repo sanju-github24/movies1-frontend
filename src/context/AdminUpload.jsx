@@ -34,6 +34,7 @@ const AdminUpload = () => {
     linkColor: "#60a5fa",
     showOnHomepage: true,
     directLinksOnly: false,
+    watchUrl: "", // ✅ Watch URL stored in movie object
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
@@ -57,12 +58,14 @@ const AdminUpload = () => {
   }, []);
 
   const fetchMovies = async () => {
-    const { data, error } = await supabase.from("movies").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("movies")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (error) toast.error("Failed to load movies");
     else setMovies(data || []);
   };
 
-  
   const resetForm = () => {
     setMovie({
       slug: "",
@@ -75,9 +78,23 @@ const AdminUpload = () => {
       downloads: [],
       linkColor: "#60a5fa",
       showOnHomepage: true,
+      directLinksOnly: false,
+      watchUrl: "",
     });
     setDownloadBlocks([
-      { quality: "", size: "", format: "", file: null, manualUrl: "",count: 0 , gpLink: "", showGifAfter: false }
+      {
+        id: uuidv4(),
+        quality: "",
+        size: "",
+        format: "",
+        file: null,
+        manualUrl: "",
+        directUrl: "",
+        gpLink: "",
+        showGifAfter: false,
+        count: 0,
+        url: "",
+      },
     ]);
     setEditingMovieId(null);
   };
@@ -85,61 +102,71 @@ const AdminUpload = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-  
-    const { title, poster, description, categories, subCategory, language } = movie;
+
+    const { title, poster, description, categories, subCategory, language, watchUrl } = movie;
+
     if (!title.trim() || !poster.trim() || !description.trim()) {
       toast.error("Please fill in Title, Poster, and Description.");
       setLoading(false);
       return;
     }
-  
+
     if (!categories.length || !subCategory.length || !language.length) {
       toast.error("Please fill in category, subcategory, and language.");
       setLoading(false);
       return;
     }
-  
-    const slug = editingMovieId ? movie.slug : slugify(title.trim());
 
+    if (!watchUrl.trim()) {
+      toast.error("Please enter a valid Watch URL.");
+      setLoading(false);
+      return;
+    }
+
+    const slug = editingMovieId ? movie.slug : slugify(title.trim());
     const uploaded_by = userData?.email || "unknown";
-  
+
     const validBlocks = downloadBlocks.filter(
-      (b) => b.quality && b.size && b.format && (b.file || b.manualUrl || b.directUrl || b.gpLink)
+      (b) =>
+        b.quality &&
+        b.size &&
+        b.format &&
+        (b.file || b.manualUrl || b.directUrl || b.gpLink)
     );
-  
+
     if (!validBlocks.length) {
       toast.error("At least one valid download block is required.");
       setLoading(false);
       return;
     }
-  
+
     const processedDownloads = await Promise.all(
       validBlocks.map(async (b) => {
         const id = b.id || uuidv4();
-        const fallbackUrl = b.manualUrl || b.directUrl || b.gpLink || b.url;
-    
-        // Uploading new .torrent file
+        const fallbackUrl =
+          b.manualUrl || b.directUrl || b.gpLink || b.url;
+
         if (b.file) {
           const fileName = b.file.name;
           if (!fileName.endsWith(".torrent")) {
             toast.error("Only .torrent files are allowed.");
             return null;
           }
-    
+
           const timestamp = Date.now();
           const safeSlug = slug.replace(/[^a-z0-9\-]/gi, "_");
           const newFileName = `${b.quality}_${b.size}.torrent`;
           const filePath = `files/${timestamp}_${safeSlug}/${newFileName}`;
-    
+
           const { error: uploadError } = await supabase.storage
             .from("torrents")
             .upload(filePath, b.file, { upsert: true });
-    
+
           if (uploadError) {
             toast.error(`Failed to upload ${fileName}`);
             return null;
           }
-    
+
           return {
             id,
             quality: b.quality,
@@ -153,8 +180,7 @@ const AdminUpload = () => {
             count: editingMovieId ? b.count || 0 : 0,
           };
         }
-    
-        // If no file is reuploaded
+
         return {
           id,
           quality: b.quality,
@@ -169,10 +195,9 @@ const AdminUpload = () => {
         };
       })
     );
-    
-  
+
     const downloads = processedDownloads.filter(Boolean);
-  
+
     const movieData = {
       ...movie,
       slug,
@@ -181,12 +206,11 @@ const AdminUpload = () => {
       directLinksOnly: movie.directLinksOnly || false,
       ...(editingMovieId ? {} : { created_at: new Date().toISOString() }),
     };
-  
-    // Insert or update in Supabase
+
     const { error } = editingMovieId
       ? await supabase.from("movies").update(movieData).eq("id", editingMovieId)
       : await supabase.from("movies").insert([movieData]);
-  
+
     if (error) {
       toast.error("Failed to save movie");
       console.error("Supabase error:", error.message);
@@ -195,13 +219,100 @@ const AdminUpload = () => {
       resetForm();
       fetchMovies();
     }
-  
+
     setLoading(false);
   };
 
-
   
-  // ✅ Fix and update showOnHomepage flag for old movies
+
+  const handleEdit = (m) => {
+    setEditingMovieId(m.id);
+    setMovie({
+      slug: m.slug || "",
+      title: m.title || "",
+      poster: m.poster || "",
+      description: m.description || "",
+      categories: m.categories || [],
+      subCategory: m.subCategory || [],
+      language: m.language || [],
+      downloads: m.downloads || [],
+      linkColor: m.linkColor || "#60a5fa",
+      showOnHomepage: m.showOnHomepage ?? true,
+      directLinksOnly: m.directLinksOnly || false,
+      watchUrl: m.watchUrl || "",
+    });
+
+    setDownloadBlocks(
+      (m.downloads || []).length
+        ? m.downloads.map((d) => ({
+            id: d.id || uuidv4(),
+            quality: d.quality || "",
+            size: d.size || "",
+            format: d.format || "",
+            file: null,
+            manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
+            directUrl: d.directUrl || "",
+            gpLink: d.gpLink || "",
+            showGifAfter: d.showGifAfter || false,
+            count: d.count || 0,
+            url: d.url || "",
+          }))
+        : [
+            {
+              id: uuidv4(),
+              quality: "",
+              size: "",
+              format: "",
+              file: null,
+              manualUrl: "",
+              directUrl: "",
+              gpLink: "",
+              showGifAfter: false,
+              count: 0,
+              url: "",
+            },
+          ]
+    );
+  };
+
+  const handleDelete = async (slug) => {
+    const { error } = await supabase.from("movies").delete().eq("slug", slug);
+    if (error) {
+      toast.error("❌ Failed to delete movie");
+    } else {
+      toast.success("🗑️ Movie deleted");
+      fetchMovies();
+    }
+  };
+
+  const handleDownloadChange = (i, field, value) => {
+    setDownloadBlocks((prev) => {
+      const updated = [...prev];
+      updated[i][field] = value;
+      return updated;
+    });
+  };
+
+  const addDownloadBlock = () => {
+    setDownloadBlocks((prev) => [
+      ...prev,
+      {
+        id: uuidv4(),
+        quality: "",
+        size: "",
+        format: "",
+        file: null,
+        manualUrl: "",
+        directUrl: "",
+        gpLink: "",
+        showGifAfter: false,
+        count: 0,
+        url: "",
+      },
+    ]);
+  };
+
+   // ✅ Fix and update showOnHomepage flag for old movies
 const fixOldMoviesShowFlag = async () => {
   const { data, error } = await supabase
     .from("movies")
@@ -231,112 +342,12 @@ const fixOldMoviesShowFlag = async () => {
     fetchMovies(); // Refresh movie list
   }
 };
-// All code remains same until handleEdit function
 
-const handleEdit = (m) => {
-  setEditingMovieId(m.id);
-
-  // Populate movie form fields
-  setMovie({
-    slug: m.slug || "",
-    title: m.title || "",
-    poster: m.poster || "",
-    description: m.description || "",
-    categories: m.categories || [],
-    subCategory: m.subCategory || [],
-    language: m.language || [],
-    downloads: m.downloads || [],
-    linkColor: m.linkColor || "#60a5fa",
-    showOnHomepage: m.showOnHomepage ?? true,
-    directLinksOnly: m.directLinksOnly || false,
-  });
-
-  // Populate each download block with all needed fields
-  setDownloadBlocks(
-    (m.downloads || []).length
-      ? m.downloads.map((d) => ({
-          id: d.id || uuidv4(),
-          quality: d.quality || "",
-          size: d.size || "",
-          format: d.format || "",
-          file: null,
-          manualUrl: d.url && !d.url.includes("supabase") ? d.url : "",
-          directUrl: d.directUrl || "",
-          gpLink: d.gpLink || "",
-          showGifAfter: d.showGifAfter || false,
-          count: d.count || 0,
-          url: d.url || "", // required fallback if no reupload
-        }))
-      : [
-          {
-            id: uuidv4(),
-            quality: "",
-            size: "",
-            format: "",
-            file: null,
-            manualUrl: "",
-            directUrl: "",
-            gpLink: "",
-            showGifAfter: false,
-            count: 0,
-            url: "",
-          },
-        ]
-  );
-};
-
-
-// ✅ Delete movie by slug
-const handleDelete = async (slug) => {
-  const { error } = await supabase.from("movies").delete().eq("slug", slug);
-  if (error) {
-    toast.error("❌ Failed to delete movie");
-  } else {
-    toast.success("🗑️ Movie deleted");
-    fetchMovies(); // Refresh list
-  }
-};
-
-// ✅ Update values inside a download block
-const handleDownloadChange = (i, field, value) => {
-  setDownloadBlocks((prev) => {
-    const updated = [...prev];
-    updated[i][field] = value;
-    return updated;
-  });
-};
-
-// ✅ Add a new empty download block
-const addDownloadBlock = () => {
-  setDownloadBlocks((prev) => [
-    ...prev,
-    {
-      id: uuidv4(),
-      quality: "",
-      size: "",
-      format: "",
-      file: null,
-      manualUrl: "",
-      directUrl: "",
-      gpLink: "",
-      showGifAfter: false,
-      count: 0,
-      url: "",
-    },
-  ]);
-};
-
-
-// ✅ Remove download block by index
-const removeDownloadBlock = (i) => {
-  if (downloadBlocks.length > 1) {
-    setDownloadBlocks((prev) => prev.filter((_, index) => index !== i));
-  }
-};
-
-
-
-
+  const removeDownloadBlock = (i) => {
+    if (downloadBlocks.length > 1) {
+      setDownloadBlocks((prev) => prev.filter((_, index) => index !== i));
+    }
+  };
 
   const filteredMovies = movies.filter((m) =>
     m.title.toLowerCase().includes(search.toLowerCase())
@@ -405,6 +416,17 @@ const removeDownloadBlock = (i) => {
               }
             />
           </div>
+
+          <input
+  type="url"
+  placeholder="▶️ Watch URL"
+  className="p-3 bg-gray-800 rounded placeholder-gray-400"
+  value={movie.watchUrl || ""}
+  onChange={(e) =>
+    setMovie((m) => ({ ...m, watchUrl: e.target.value }))
+  }
+/>
+
 
 
 

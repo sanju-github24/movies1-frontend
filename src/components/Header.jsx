@@ -339,26 +339,38 @@ const Header = () => {
       </div>
     )}
 
-    {/* Movie List */}
-    <div className="flex flex-col gap-2 mt-1">
-      {latestMovies.map((movie) => (
-        <div key={movie.id} className="text-black text-sm">
-          <Link
-            to={`/movie/${movie.slug}`}
-            className="font-medium break-words whitespace-normal"
-            style={{ color: movie.linkColor || "#1d4ed8" }}
-            title={movie.title}
-          >
-            {movie.title}
-            {movie.directLinksOnly && (
-              <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
-                [Direct Links]
-              </span>
-            )}
-          </Link>
-        </div>
-      ))}
+<div className="flex flex-col gap-2 mt-1">
+  {latestMovies.map((movie) => (
+    <div key={movie.id} className="text-black text-sm">
+      <Link
+        to={`/movie/${movie.slug}`}
+        className="font-medium break-words whitespace-normal"
+        style={{ color: movie.linkColor || "#1d4ed8" }}
+        title={movie.title}
+      >
+        {movie.title}
+        {movie.directLinksOnly && (
+          <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
+            [Direct Links]
+          </span>
+        )}
+      </Link>
+
+      {movie.watchUrl && (
+        <a
+          href={movie.watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-2 text-red-500 font-bold text-xs whitespace-nowrap"
+        >
+          [Watch]
+        </a>
+      )}
     </div>
+  ))}
+</div>
+
+
 
   </div>
 )}
