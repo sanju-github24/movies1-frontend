@@ -361,9 +361,9 @@ const Header = () => {
           href={movie.watchUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-2 text-red-500 font-bold text-xs whitespace-nowrap"
+          className="ml-2 text-black-200 font-bold text-xs whitespace-nowrap"
         >
-          [Watch]
+          -  [Watch]
         </a>
       )}
     </div>

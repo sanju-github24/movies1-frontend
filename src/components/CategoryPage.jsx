@@ -12,7 +12,6 @@ const CategoryPage = () => {
   const [subCategories, setSubCategories] = useState(['All']);
   const [search, setSearch] = useState('');
 
-  // ✅ SEO-friendly descriptions per category
   const categoryDescriptions = {
     Kannada: 'Watch the latest Kannada movies online. Full HD downloads and trending stories from the heart of Karnataka.',
     Tamil: 'Download and stream the latest Tamil blockbusters. High-quality movies featuring top Kollywood actors.',
@@ -20,7 +19,6 @@ const CategoryPage = () => {
     Malayalam: 'Discover critically acclaimed Malayalam cinema with powerful storytelling and rich visuals.',
     Hindi: 'Bollywood hits and top-rated Hindi films available to download in HD.',
     English: 'Latest Hollywood releases and English films available in 720p and 1080p quality.',
-    // You can add more categories here
   };
 
   const fetchMovies = async () => {
@@ -51,8 +49,8 @@ const CategoryPage = () => {
         const subList = Array.isArray(movie.subCategory)
           ? movie.subCategory
           : movie.subCategory
-          ? [movie.subCategory]
-          : [];
+            ? [movie.subCategory]
+            : [];
 
         subList.forEach((s) => subs.add(s));
       });
@@ -73,8 +71,8 @@ const CategoryPage = () => {
     const subCategoryArray = Array.isArray(movie.subCategory)
       ? movie.subCategory
       : movie.subCategory
-      ? [movie.subCategory]
-      : [];
+        ? [movie.subCategory]
+        : [];
 
     const matchesSubCategory =
       activeSub === 'All' || subCategoryArray.includes(activeSub);
@@ -122,11 +120,10 @@ const CategoryPage = () => {
               <button
                 key={sub}
                 onClick={() => setActiveSub(sub)}
-                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition shadow ${
-                  activeSub === sub
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
-                }`}
+                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition shadow ${activeSub === sub
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
+                  }`}
               >
                 {sub}
               </button>
@@ -160,12 +157,26 @@ const CategoryPage = () => {
                 <p className="text-sm text-gray-400 line-clamp-2 mt-1">
                   {movie.description || 'No description available.'}
                 </p>
+
+                {/* View Details link */}
                 <Link
                   to={`/movie/${movie.slug}`}
-                  className="inline-block mt-2 text-blue-400 hover:underline text-sm"
+                  className="inline-block mt-2 text-blue-400 hover:underline text-sm mr-3"
                 >
                   View Details →
                 </Link>
+
+                {/* Watch Now button if URL exists */}
+                {movie.watchUrl && (
+                  <a
+                    href={movie.watchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded"
+                  >
+                     Watch Now
+                  </a>
+                )}
               </div>
             </div>
           ))

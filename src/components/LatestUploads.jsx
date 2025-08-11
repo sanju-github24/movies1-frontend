@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { AppContext } from '../context/AppContext';
 
-
 const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
   const [tick, setTick] = useState(0);
@@ -34,7 +33,10 @@ const LatestUploads = () => {
         />
         <meta name="robots" content="index, follow" />
         <meta property="og:title" content="AnchorMovies Weekly Uploads" />
-        <meta property="og:description" content="New Tamil, Telugu, Kannada movie uploads from this week. Stay updated daily!" />
+        <meta
+          property="og:description"
+          content="New Tamil, Telugu, Kannada movie uploads from this week. Stay updated daily!"
+        />
         <meta property="og:url" content="https://www.1anchormovies.live/latest" />
         <meta property="og:type" content="website" />
         <link rel="canonical" href="https://www.1anchormovies.live/latest" />
@@ -46,8 +48,6 @@ const LatestUploads = () => {
       >
         Week Releases
       </h2>
-
-   
 
       {recentMovies.length === 0 ? (
         <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
@@ -91,6 +91,17 @@ const LatestUploads = () => {
                     <div className="text-xs text-gray-400 mt-1">
                       {languages} • {timeAgo}
                     </div>
+
+                    {movie.watchUrl && (
+                      <a
+                        href={movie.watchUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block mt-2 px-3 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition"
+                      >
+                         Watch
+                      </a>
+                    )}
                   </div>
                 </Link>
               </article>
