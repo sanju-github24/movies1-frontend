@@ -32,6 +32,25 @@ const Header = () => {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 60);
 
+
+    useEffect(() => {
+      if (isAdmin) return; // skip for admin
+      const alreadyShared = localStorage.getItem("hasShared");
+      if (alreadyShared) return; // skip if shared before
+    
+      const timer = setTimeout(() => {
+        setShowSharePopup(true);
+      }, 10000); // show after 10s
+    
+      return () => clearTimeout(timer);
+    }, [isAdmin]);
+    
+     // Handle share click
+  const handleShareClick = () => {
+    localStorage.setItem("sharedOnce", "true");
+    setShowSharePopup(false);
+  };
+
   useEffect(() => {
     const fetchStories = async () => {
       const { data, error } = await supabase
@@ -393,8 +412,7 @@ const Header = () => {
     </a>
   </p>
 </div>
-
-{/* Mandatory Share Popup (hide for admin) */}
+{/* Mandatory Share Popup (hide for admin and if already shared) */}
 {showSharePopup && !isAdmin && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn">
@@ -411,7 +429,10 @@ const Header = () => {
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
-          onClick={() => setShowSharePopup(false)}
+          onClick={() => {
+            localStorage.setItem("hasShared", "true");
+            setShowSharePopup(false);
+          }}
         >
           <FaWhatsapp className="text-lg" /> WhatsApp
         </a>
@@ -422,7 +443,10 @@ const Header = () => {
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 text-sm"
-          onClick={() => setShowSharePopup(false)}
+          onClick={() => {
+            localStorage.setItem("hasShared", "true");
+            setShowSharePopup(false);
+          }}
         >
           <FaInstagram className="text-lg" /> Instagram
         </a>
@@ -430,6 +454,7 @@ const Header = () => {
     </div>
   </div>
 )}
+
 
 
 
