@@ -26,6 +26,8 @@ import AdScriptLoader from './components/AdScriptLoader';
 import AdPopup from './components/AdPopup';          // ✅ Optional
 import PopAdsScript from './components/PopAdsScript'; // ✅ Optional
 import Profile from "./paged/Profile"; // Adjust path if needed
+import UploadWatchHtml from './paged/UploadWatchHtml';
+import WatchPage from './paged/WatchPage';
 
 
 const App = () => {
@@ -84,6 +86,7 @@ const App = () => {
         <Route path="/latest" element={<LatestUploads />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
+        <Route path="/watch/:slug" element={<WatchPage />} />
 
         {/* ✅ Profile Route */}
         <Route path="/profile" element={<Profile />} />
@@ -106,6 +109,8 @@ const App = () => {
           <Route path="blog-editor" element={<BlogEditor />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="stories" element={<AdminStories />} />
+          <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+          
         </Route>
 
         {/* ✅ Fallback */}

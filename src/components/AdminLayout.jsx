@@ -2,14 +2,15 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-   BsGrid1X2Fill, BsFillArchiveFill, BsFillGrid3X3GapFill,
-  BsPeopleFill, BsListCheck, BsMenuButtonWideFill, BsFillGearFill
+  BsGrid1X2Fill,
+  BsFillArchiveFill,
+  BsPeopleFill,
+  BsListCheck,
+  BsFillGearFill,
+  BsCameraVideoFill
 } from "react-icons/bs";
 
 import { FaUserShield } from "react-icons/fa";
-
-
-
 
 const AdminLayout = ({ children }) => {
   const path = useLocation().pathname;
@@ -20,10 +21,10 @@ const AdminLayout = ({ children }) => {
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 p-6 border-r border-gray-800 hidden md:block">
         <div className="sidebar-title mb-6">
-        <div className="flex items-center gap-2 text-2xl font-bold mb-6 text-white">
-  <FaUserShield className="text-3xl text-blue-400" />
-  <span>ADMIN</span>
-</div>
+          <div className="flex items-center gap-2 text-2xl font-bold mb-6 text-white">
+            <FaUserShield className="text-3xl text-blue-400" />
+            <span>ADMIN</span>
+          </div>
         </div>
 
         <ul className="space-y-3">
@@ -31,7 +32,9 @@ const AdminLayout = ({ children }) => {
             <Link
               to="/admin/dashboard"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/dashboard") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+                isActive("/admin/dashboard")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
               }`}
             >
               <BsGrid1X2Fill className="text-lg" /> Dashboard
@@ -41,18 +44,36 @@ const AdminLayout = ({ children }) => {
             <Link
               to="/admin/upload"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/upload") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+                isActive("/admin/upload")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
               }`}
             >
               <BsFillArchiveFill className="text-lg" /> Uploads
             </Link>
           </li>
-         
+
+          {/* NEW: MV Upload */}
+          <li>
+            <Link
+              to="/admin/upload-watch-html"
+              className={`flex items-center gap-2 px-3 py-2 rounded ${
+                isActive("/admin/mv-upload")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
+              }`}
+            >
+              <BsCameraVideoFill className="text-lg" /> MV Upload
+            </Link>
+          </li>
+
           <li>
             <Link
               to="/admin/blog-editor"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/blog-editor") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+                isActive("/admin/blog-editor")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
               }`}
             >
               <BsPeopleFill className="text-lg" /> Blog
@@ -63,23 +84,22 @@ const AdminLayout = ({ children }) => {
             <Link
               to="/admin/stories"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/stories") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+                isActive("/admin/stories")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
               }`}
             >
               <BsListCheck className="text-lg" /> Stories
             </Link>
           </li>
 
-
-
-
-         
-          
           <li>
             <Link
               to="/admin/settings"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/settings") ? "bg-white text-black font-bold" : "hover:bg-gray-800"
+                isActive("/admin/settings")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
               }`}
             >
               <BsFillGearFill className="text-lg" /> Settings

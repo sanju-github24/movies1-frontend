@@ -417,15 +417,16 @@ const fixOldMoviesShowFlag = async () => {
             />
           </div>
 
-          <input
-  type="url"
-  placeholder="▶️ Watch URL"
-  className="p-3 bg-gray-800 rounded placeholder-gray-400"
+          <textarea
+  placeholder="▶️ Watch URL or iframe embed code"
+  className="p-3 bg-gray-800 rounded placeholder-gray-400 font-mono text-sm w-full"
+  rows={3}
   value={movie.watchUrl || ""}
   onChange={(e) =>
     setMovie((m) => ({ ...m, watchUrl: e.target.value }))
   }
 />
+
 
 
 

@@ -1,8 +1,8 @@
-import React, { useEffect, useContext, useState } from 'react';
-import { formatDistanceToNow, subDays } from 'date-fns';
-import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
-import { AppContext } from '../context/AppContext';
+import React, { useEffect, useContext, useState } from "react";
+import { formatDistanceToNow, subDays } from "date-fns";
+import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import { AppContext } from "../context/AppContext";
 
 const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
@@ -17,10 +17,20 @@ const LatestUploads = () => {
     fetchMovies();
   }, []);
 
+  // Filter movies uploaded within last 7 days
   const recentMovies = movies.filter((movie) => {
     const created = new Date(movie.createdAt || movie.created_at);
     const oneWeekAgo = subDays(new Date(), 7);
     return created > oneWeekAgo;
+  });
+
+  // Map posters by title (re-use first found)
+  const posterCache = {};
+  recentMovies.forEach((m) => {
+    const t = (m.title || "").toLowerCase().trim();
+    if (t && !posterCache[t]) {
+      posterCache[t] = m.poster || "/default-poster.jpg";
+    }
   });
 
   return (
@@ -37,7 +47,10 @@ const LatestUploads = () => {
           property="og:description"
           content="New Tamil, Telugu, Kannada movie uploads from this week. Stay updated daily!"
         />
-        <meta property="og:url" content="https://www.1anchormovies.live/latest" />
+        <meta
+          property="og:url"
+          content="https://www.1anchormovies.live/latest"
+        />
         <meta property="og:type" content="website" />
         <link rel="canonical" href="https://www.1anchormovies.live/latest" />
       </Helmet>
@@ -50,21 +63,25 @@ const LatestUploads = () => {
       </h2>
 
       {recentMovies.length === 0 ? (
-        <p className="text-gray-400">No movies uploaded in the last 7 days.</p>
+        <p className="text-gray-400">
+          No movies uploaded in the last 7 days.
+        </p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" role="list">
           {recentMovies.map((movie) => {
             const created = new Date(movie.createdAt || movie.created_at);
             const timeAgo = isNaN(created)
-              ? 'Unknown date'
+              ? "Unknown date"
               : formatDistanceToNow(created, { addSuffix: true });
 
             const languages = Array.isArray(movie.language)
-              ? movie.language.join(', ')
-              : movie.language || 'Unknown Language';
+              ? movie.language.join(", ")
+              : movie.language || "Unknown Language";
 
-            const title = movie.title || 'Untitled Movie';
-            const poster = movie.poster || '/default-poster.jpg';
+            const title = movie.title || "Untitled Movie";
+            const poster =
+              posterCache[(title || "").toLowerCase().trim()] ||
+              "/default-poster.jpg";
 
             return (
               <article
@@ -77,7 +94,7 @@ const LatestUploads = () => {
                     src={poster}
                     alt={`${title} Poster`}
                     onError={(e) => {
-                      e.currentTarget.src = '/default-poster.jpg';
+                      e.currentTarget.src = "/default-poster.jpg";
                     }}
                     className="w-full h-40 sm:h-56 object-cover"
                   />
@@ -99,7 +116,7 @@ const LatestUploads = () => {
                         rel="noopener noreferrer"
                         className="inline-block mt-2 px-3 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition"
                       >
-                         Watch
+                        Watch
                       </a>
                     )}
                   </div>

@@ -15,58 +15,113 @@ const SearchResults = () => {
     new URLSearchParams(location.search).get("query")?.toLowerCase() || "";
   const prettyQuery = capitalizeWords(query);
 
-  const [filteredMovies, setFilteredMovies] = useState([]);
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchFilteredMovies = async () => {
+  const fetchResults = async () => {
     setLoading(true);
-    const { data: movies, error } = await supabase.from("movies").select("*");
 
-    if (error) {
-      console.error("Error fetching movies:", error.message);
-      setFilteredMovies([]);
-      setLoading(false);
-      return;
+    // fetch movies
+    const { data: movies, error: moviesError } = await supabase
+      .from("movies")
+      .select("*");
+
+    if (moviesError) {
+      console.error("Error fetching movies:", moviesError.message);
     }
 
-    const results = movies.filter((movie) => {
-      const titleMatch = movie.title?.toLowerCase().includes(query);
-      const languageMatch = movie.language?.some((lang) =>
-        lang.toLowerCase().includes(query)
-      );
-      const categoryMatch = movie.categories?.some((cat) =>
-        cat.toLowerCase().includes(query)
-      );
+    // fetch watch html
+    const { data: watchHtml, error: watchError } = await supabase
+      .from("watch_html")
+      .select("*");
 
-      const subCategoryArray = Array.isArray(movie.subCategory)
-        ? movie.subCategory
-        : [movie.subCategory];
+    if (watchError) {
+      console.error("Error fetching watch_html:", watchError.message);
+    }
 
-      const subCategoryMatch = subCategoryArray?.some((sub) =>
-        sub?.toLowerCase().includes(query)
-      );
+    // filter movies
+    const filteredMovies =
+      movies?.filter((movie) => {
+        const titleMatch = movie.title?.toLowerCase().includes(query);
+        const languageMatch = movie.language?.some((lang) =>
+          lang.toLowerCase().includes(query)
+        );
+        const categoryMatch = movie.categories?.some((cat) =>
+          cat.toLowerCase().includes(query)
+        );
 
-      const combinedMatch = movie.categories?.some((cat) =>
-        subCategoryArray?.some(
-          (sub) => `${cat.toLowerCase()} ${sub?.toLowerCase()}` === query
-        )
-      );
+        const subCategoryArray = Array.isArray(movie.subCategory)
+          ? movie.subCategory
+          : [movie.subCategory];
 
-      return (
-        titleMatch ||
-        languageMatch ||
-        categoryMatch ||
-        subCategoryMatch ||
-        combinedMatch
-      );
+        const subCategoryMatch = subCategoryArray?.some((sub) =>
+          sub?.toLowerCase().includes(query)
+        );
+
+        const combinedMatch = movie.categories?.some((cat) =>
+          subCategoryArray?.some(
+            (sub) => `${cat.toLowerCase()} ${sub?.toLowerCase()}` === query
+          )
+        );
+
+        return (
+          titleMatch ||
+          languageMatch ||
+          categoryMatch ||
+          subCategoryMatch ||
+          combinedMatch
+        );
+      }) || [];
+
+    // filter watch html entries
+    const filteredWatch =
+      watchHtml?.filter((item) =>
+        item.title?.toLowerCase().includes(query)
+      ) || [];
+
+    // attach posters to watch pages
+    const mergedWatch = filteredWatch.map((watch) => {
+      let matchingMovie =
+        movies?.find(
+          (m) => m.title?.toLowerCase() === watch.title?.toLowerCase()
+        ) ||
+        movies?.find((m) =>
+          m.title?.toLowerCase().includes(watch.title?.toLowerCase())
+        ) ||
+        movies?.find((m) =>
+          watch.title?.toLowerCase().includes(m.title?.toLowerCase())
+        );
+
+      return {
+        id: watch.id,
+        title: watch.title,
+        slug: watch.slug,
+        type: "watch",
+        poster: matchingMovie?.poster || "/default-poster.jpg",
+        watchUrl: `/watch/${watch.slug}`,
+      };
     });
 
-    setFilteredMovies(results);
+    // normalize movies
+    const normalizedMovies = filteredMovies.map((m) => ({
+      id: m.id,
+      title: m.title,
+      slug: m.slug || m._id,
+      type: "movie",
+      poster: m.poster || "/default-poster.jpg",
+      watchUrl: m.watchUrl || null,
+      language: m.language,
+      categories: m.categories,
+      subCategory: m.subCategory,
+    }));
+
+    // merge both
+    setResults([...normalizedMovies, ...mergedWatch]);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchFilteredMovies();
+    fetchResults();
   }, [query]);
 
   return (
@@ -91,51 +146,55 @@ const SearchResults = () => {
 
       {loading ? (
         <p className="text-gray-400 text-lg">Searching...</p>
-      ) : filteredMovies.length > 0 ? (
+      ) : results.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {filteredMovies.map((movie) => (
+          {results.map((item) => (
             <div
-              key={movie.id}
+              key={item.id}
               className="border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800"
             >
-              <Link to={`/movie/${movie.slug || movie._id}`}>
+              <Link
+                to={item.type === "movie" ? `/movie/${item.slug}` : item.watchUrl}
+              >
                 <img
-                  src={movie.poster || "/default-poster.jpg"}
-                  alt={movie.title}
+                  src={item.poster}
+                  alt={item.title}
                   className="w-full h-48 object-cover"
                   onError={(e) => {
                     e.currentTarget.src = "/default-poster.jpg";
                   }}
                 />
               </Link>
-              <div className="p-3 text-center font-medium">
-                <div className="text-white truncate">{movie.title}</div>
-                <div className="text-xs text-gray-400">
-                  {movie.language?.join(", ") || "Unknown"}
-                </div>
-                <div className="text-xs text-gray-500 italic mt-1">
-                  {movie.categories?.join(", ")}
-                  {movie.subCategory && (
-                    <>
-                      {" • "}
-                      {(Array.isArray(movie.subCategory)
-                        ? movie.subCategory
-                        : [movie.subCategory]
-                      ).join(", ")}
-                    </>
-                  )}
-                </div>
 
-                {/* Watch URL Button */}
-                {movie.watchUrl && (
-                  <a
-                    href={movie.watchUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+              <div className="p-3 text-center font-medium">
+                <div className="text-white truncate">{item.title}</div>
+                {item.type === "movie" && (
+                  <>
+                    <div className="text-xs text-gray-400">
+                      {item.language?.join(", ") || "Unknown"}
+                    </div>
+                    <div className="text-xs text-gray-500 italic mt-1">
+                      {item.categories?.join(", ")}
+                      {item.subCategory && (
+                        <>
+                          {" • "}
+                          {(Array.isArray(item.subCategory)
+                            ? item.subCategory
+                            : [item.subCategory]
+                          ).join(", ")}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {item.watchUrl && (
+                  <Link
+                    to={item.watchUrl}
                     className="inline-block mt-2 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
                   >
                     Watch
-                  </a>
+                  </Link>
                 )}
               </div>
             </div>
