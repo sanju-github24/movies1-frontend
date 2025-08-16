@@ -3,7 +3,7 @@ import { AppContext } from "../context/AppContext";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
-
+import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
@@ -393,43 +393,44 @@ const Header = () => {
     </a>
   </p>
 </div>
-{showSharePopup && (
-  <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center px-4">
-    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center relative animate-fadeIn">
-      <button
-        onClick={() => setShowSharePopup(false)}
-        className="absolute top-2 right-3 text-gray-500 hover:text-black text-2xl"
-      >
-        &times;
-      </button>
+
+{/* Mandatory Share Popup (hide for admin) */}
+{showSharePopup && !isAdmin && (
+  <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
+    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn">
       <h2 className="text-lg font-bold mb-2">Enjoying AnchorMovies?</h2>
       <p className="text-sm text-gray-700 mb-4">
-        Share it with your friends and support the community!
+        To continue using the website, please share our link. 💙
       </p>
       <div className="flex justify-center gap-3">
+        {/* WhatsApp Share */}
         <a
-          href={`https://wa.me/?text=${encodeURIComponent("Check out AnchorMovies: " + siteUrl)}`}
+          href={`https://wa.me/?text=${encodeURIComponent(
+            "Check out AnchorMovies: " + siteUrl
+          )}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+          className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+          onClick={() => setShowSharePopup(false)}
         >
-          WhatsApp
+          <FaWhatsapp className="text-lg" /> WhatsApp
         </a>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(siteUrl);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-            setShowSharePopup(false);
-          }}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
+
+        {/* Instagram Share */}
+        <a
+          href={`https://www.instagram.com/?url=${encodeURIComponent(siteUrl)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 text-sm"
+          onClick={() => setShowSharePopup(false)}
         >
-          {copied ? "✅ Copied!" : "Copy Link"}
-        </button>
+          <FaInstagram className="text-lg" /> Instagram
+        </a>
       </div>
     </div>
   </div>
 )}
+
 
 
 
