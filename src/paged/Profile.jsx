@@ -203,7 +203,7 @@ const Profile = () => {
           <label className="text-sm font-medium">Want to become a member?</label>
           <div className="mt-1">
             <a
-              href="mailto:1anchormovies@gmail.com"
+              href="mailto:Anchormovies.proton.me"
               className="text-blue-400 underline text-sm"
             >
               Send us an email
