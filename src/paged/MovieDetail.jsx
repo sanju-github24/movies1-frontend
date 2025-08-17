@@ -186,7 +186,7 @@ const MovieDetail = () => {
   {/* Canonical URL */}
   <link
     rel="canonical"
-    href={`https://www.1anchormovies.live/movie/${slug}`}
+    href={`https://www.1anchormovies.live/movie/${code}`}
   />
 
   {/* Open Graph for Facebook / WhatsApp */}
