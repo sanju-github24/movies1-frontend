@@ -173,17 +173,50 @@ const MovieDetail = () => {
 
   return (
     <div className="flex justify-center mt-4 px-2 sm:px-6 md:px-10 w-full bg-black">
-      <Helmet>
-        <title>{movie.title} - Movie Download | 1AnchorMovies</title>
-        <meta
-          name="description"
-          content={`Download ${movie.title} in HD quality. Available in 480p, 720p, and 1080p. Fast and secure downloads on 1AnchorMovies.`}
-        />
-        <link
-          rel="canonical"
-          href={`https://www.1anchormovies.live/movie/${code}`}
-        />
-      </Helmet>
+     <Helmet>
+  {/* Page Title */}
+  <title>{movie.title} - Download & Watch Online | AnchorMovies</title>
+
+  {/* Meta Description */}
+  <meta
+    name="description"
+    content={`Download and watch ${movie.title} in HD (480p, 720p, 1080p). Fast and secure downloads on AnchorMovies.`}
+  />
+
+  {/* Canonical URL */}
+  <link
+    rel="canonical"
+    href={`https://www.1anchormovies.live/movie/${slug}`}
+  />
+
+  {/* Open Graph for Facebook / WhatsApp */}
+  <meta property="og:title" content={`${movie.title} - Download & Watch Online`} />
+  <meta
+    property="og:description"
+    content={`Stream or download ${movie.title} in multiple qualities. Available now on AnchorMovies.`}
+  />
+  <meta property="og:type" content="website" />
+  <meta
+    property="og:url"
+    content={`https://www.1anchormovies.live/movie/${slug}`}
+  />
+  <meta property="og:site_name" content="AnchorMovies" />
+  {movie.poster && (
+    <meta property="og:image" content={movie.poster} />
+  )}
+
+  {/* Twitter Cards */}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={`${movie.title} - Download & Watch`} />
+  <meta
+    name="twitter:description"
+    content={`HD Downloads: ${movie.title} available in 480p, 720p, and 1080p on AnchorMovies.`}
+  />
+  {movie.poster && (
+    <meta name="twitter:image" content={movie.poster} />
+  )}
+</Helmet>
+
   
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
         {/* Title */}
