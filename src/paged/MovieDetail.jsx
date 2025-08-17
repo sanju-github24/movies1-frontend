@@ -198,7 +198,7 @@ const MovieDetail = () => {
   <meta property="og:type" content="website" />
   <meta
     property="og:url"
-    content={`https://www.1anchormovies.live/movie/${slug}`}
+    content={`https://www.1anchormovies.live/movie/${code}`}
   />
   <meta property="og:site_name" content="AnchorMovies" />
   {movie.poster && (
