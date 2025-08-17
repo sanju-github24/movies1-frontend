@@ -394,24 +394,14 @@ const Header = () => {
   </div>
 )}
 
-      {/* Footer - Community Join CTA */}
-<div className="w-full max-w-7xl px-6 py-8 mt-12 bg-gradient-to-r from-black via-gray-900 to-black rounded-xl shadow-lg text-center border border-white/10">
-  <h3 className="text-white text-xl sm:text-2xl font-bold flex justify-center items-center gap-2 mb-2">
-    📢 Let's Build the <span className="text-blue-400">AnchorMovies</span> Community
-  </h3>
-  <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
-    Got suggestions, cool ideas, or want to collaborate? <br className="hidden sm:block" />
-    We’d love to hear from you — drop us a message at:
-  </p>
-  <p className="mt-3">
-    <a
-      href="mailto:AnchorMovies@proton.me"
-      className="inline-block text-blue-400 font-medium hover:text-blue-300 underline text-sm sm:text-base transition"
-    >
-      AnchorMovies@proton.me
-    </a>
+      {/* Footer */}
+<div className="w-full py-6 mt-12 text-center border-t border-gray-200 text-sm">
+  <p className="flex justify-center items-center gap-2">
+    <span className="text-black text-base font-bold">©</span>
+    <span className="text-black font-medium">AnchorMovies 2025</span>
   </p>
 </div>
+
 {/* Mandatory Share Popup (hide for admin and if already shared) */}
 {showSharePopup && !isAdmin && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
