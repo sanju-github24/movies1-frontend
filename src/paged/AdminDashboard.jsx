@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import AdminLayout from "../components/AdminLayout";
 import { Bar } from "react-chartjs-2";
+import { Link } from "react-router-dom"; // ✅ Import for navigation
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -59,6 +60,14 @@ const AdminDashboard = () => {
       <div className="max-w-7xl mx-auto text-white p-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">📊 Admin Dashboard</h1>
+
+          {/* ✅ Back to Home Button */}
+          <Link
+            to="/"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow transition"
+          >
+            ⬅ Back to Home
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -82,3 +91,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

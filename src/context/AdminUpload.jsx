@@ -611,6 +611,16 @@ const fixOldMoviesShowFlag = async () => {
               ? "Update Movie"
               : "Upload Movie"}
           </button>
+      {/* ✅ Back Button with Reload */}
+<div className="flex items-center justify-between mb-6">
+  <button
+    onClick={() => (window.location.href = "/")}
+    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow transition"
+  >
+    ⬅ Back to Home
+  </button>
+</div>
+
         </form>
   
         <div className="flex justify-end mt-6">

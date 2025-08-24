@@ -1,5 +1,5 @@
 // src/components/AdminLayout.jsx
-import React from "react";
+import React, { useContext } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   BsGrid1X2Fill,
@@ -7,17 +7,24 @@ import {
   BsPeopleFill,
   BsListCheck,
   BsFillGearFill,
-  BsCameraVideoFill
+  BsCameraVideoFill,
 } from "react-icons/bs";
-
 import { FaUserShield } from "react-icons/fa";
+import { AppContext } from "../context/AppContext";
 
 const AdminLayout = ({ children }) => {
   const path = useLocation().pathname;
   const isActive = (target) => path === target;
 
+  // ✅ Get logged-in user from context
+  const { userData } = useContext(AppContext);
+
+  // ✅ First letter for profile circle
+  const userInitial =
+    userData?.name?.[0]?.toUpperCase() || userData?.email?.[0]?.toUpperCase() || "U";
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex">
+    <div className="h-screen overflow-hidden bg-gray-950 text-white flex">
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 p-6 border-r border-gray-800 hidden md:block">
         <div className="sidebar-title mb-6">
@@ -58,7 +65,7 @@ const AdminLayout = ({ children }) => {
             <Link
               to="/admin/upload-watch-html"
               className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isActive("/admin/mv-upload")
+                isActive("/admin/upload-watch-html")
                   ? "bg-white text-black font-bold"
                   : "hover:bg-gray-800"
               }`}
@@ -112,7 +119,16 @@ const AdminLayout = ({ children }) => {
       <main className="flex-1 overflow-y-auto max-h-screen">
         <header className="bg-gray-900 px-6 py-4 border-b border-gray-800 flex items-center justify-between sticky top-0 z-50">
           <h2 className="text-xl font-semibold">Admin Panel</h2>
-          <span className="text-sm text-gray-400">Logged in</span>
+
+          {/* ✅ Profile Circle */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400">
+              Logged in as {userData?.name || userData?.email || "User"}
+            </span>
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+              {userInitial}
+            </div>
+          </div>
         </header>
 
         <div className="p-6">{children}</div>

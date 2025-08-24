@@ -36,10 +36,13 @@ const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Hide both Navbar & CategoryBar on these paths
+  // ✅ Hide Navbar & CategoryBar on these paths
   const hidePaths = ['/login', '/verify-account', '/reset-password'];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
-  const hideNavbarAndCategoryBar = hidePaths.includes(location.pathname) || isBlogViewerPath;
+  const isAdminPath = location.pathname.startsWith('/admin'); // ✅ Hide in Admin too
+
+  const hideNavbarAndCategoryBar =
+    hidePaths.includes(location.pathname) || isBlogViewerPath || isAdminPath;
 
   const handleCategoryClick = (category) => {
     navigate(`/category/${encodeURIComponent(category)}`);
@@ -62,7 +65,7 @@ const App = () => {
         pauseOnHover
       />
 
-      {/* Global Ad Scripts (load everywhere) */}
+      {/* Global Ad Scripts */}
       <AdScriptLoader />
 
       {/* Navbar + Category Bar */}
@@ -88,13 +91,13 @@ const App = () => {
         <Route path="/blogs/:slug" element={<BlogViewer />} />
         <Route path="/watch/:slug" element={<WatchPage />} />
 
-        {/* ✅ Profile Route */}
+        {/* ✅ Profile */}
         <Route path="/profile" element={<Profile />} />
 
-        {/* ✅ Always Accessible */}
+        {/* ✅ Email Verify */}
         <Route path="/verify-account" element={<EmailVerify />} />
 
-        {/* ✅ Auth Pages (only if not logged in) */}
+        {/* ✅ Auth Pages (if not logged in) */}
         {!isLoggedIn && (
           <>
             <Route path="/login" element={<Login />} />
@@ -110,7 +113,6 @@ const App = () => {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="stories" element={<AdminStories />} />
           <Route path="upload-watch-html" element={<UploadWatchHtml />} />
-          
         </Route>
 
         {/* ✅ Fallback */}

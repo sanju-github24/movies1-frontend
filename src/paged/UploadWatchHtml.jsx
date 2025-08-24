@@ -3,6 +3,7 @@ import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate } from "react-router-dom";
 
 const UploadWatchHtml = () => {
   const { userData } = useContext(AppContext);
@@ -10,6 +11,7 @@ const UploadWatchHtml = () => {
   const [slug, setSlug] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const [watchList, setWatchList] = useState([]);
   const [search, setSearch] = useState("");
@@ -109,105 +111,119 @@ const UploadWatchHtml = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto bg-gray-900 text-white shadow-xl rounded-xl p-8">
+    <div className="max-w-7xl mx-auto p-6">
+        {/* Back to Dashboard Button */}
+        <button
+        onClick={() => navigate("/admin/dashboard")}
+        className="mb-6 flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg shadow-md transition"
+      >
+        ⬅️ Back to Dashboard
+      </button>
       <h1 className="text-3xl font-bold mb-6 text-center text-blue-400">
         🎬 Upload Watch HTML
       </h1>
-
-      {/* Title */}
-      <div className="mb-5">
-        <label className="block font-semibold mb-2">Movie Title</label>
-        <input
-          type="text"
-          className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Enter movie title"
-        />
-      </div>
-
-      {/* Slug */}
-      <div className="mb-5">
-        <label className="block font-semibold mb-2">Slug (unique)</label>
-        <input
-          type="text"
-          className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="unique-slug"
-        />
-      </div>
-
-      {/* HTML Code */}
-      <div className="mb-5">
-        <label className="block font-semibold mb-2">Watch HTML Code</label>
-        <textarea
-          className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-          rows={10}
-          value={htmlCode}
-          onChange={(e) => setHtmlCode(e.target.value)}
-          placeholder="<iframe src='...'></iframe>"
-        />
-      </div>
-
-      {/* Upload Button */}
-      <button
-        onClick={handleUpload}
-        disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full shadow-md"
-      >
-        {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
-      </button>
-
-      {/* Search + List */}
-      <div className="mt-10">
-        <h2 className="text-2xl font-semibold mb-4 text-green-400">
-          📌 Recently Uploaded
-        </h2>
-
-        {/* Search Bar */}
-        <input
-          type="text"
-          placeholder="🔍 Search by title..."
-          className="border border-gray-700 bg-gray-800 p-3 rounded w-full mb-4 outline-none focus:ring-2 focus:ring-green-500"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-
-        {filteredList.length === 0 ? (
-          <p className="text-gray-400">No results found.</p>
-        ) : (
-          <ul className="space-y-3">
-            {filteredList.map((item) => (
-              <li
-                key={item.id}
-                className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-semibold">{item.title}</p>
-                  <p className="text-sm text-gray-400">/{item.slug}</p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleEdit(item.id)}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+  
+      {/* Dashboard Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Panel - Upload Form */}
+        <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
+          <h2 className="text-xl font-semibold mb-4 text-blue-300">➕ Add New Movie</h2>
+  
+          {/* Title */}
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">Movie Title</label>
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter movie title"
+            />
+          </div>
+  
+          {/* Slug */}
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">Slug (unique)</label>
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="unique-slug"
+            />
+          </div>
+  
+          {/* HTML Code */}
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">Watch HTML Code</label>
+            <textarea
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+              rows={8}
+              value={htmlCode}
+              onChange={(e) => setHtmlCode(e.target.value)}
+              placeholder="<iframe src='...'></iframe>"
+            />
+          </div>
+  
+          {/* Upload Button */}
+          <button
+            onClick={handleUpload}
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full shadow-md"
+          >
+            {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
+          </button>
+        </div>
+  
+        {/* Right Panel - Recently Uploaded */}
+        <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
+          <h2 className="text-xl font-semibold mb-4 text-green-400">📌 Recently Uploaded</h2>
+  
+          {/* Search Bar */}
+          <input
+            type="text"
+            placeholder="🔍 Search by title..."
+            className="border border-gray-700 bg-gray-800 p-3 rounded w-full mb-4 outline-none focus:ring-2 focus:ring-green-500"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+  
+          {filteredList.length === 0 ? (
+            <p className="text-gray-400">No results found.</p>
+          ) : (
+            <ul className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+              {filteredList.map((item) => (
+                <li
+                  key={item.id}
+                  className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-semibold">{item.title}</p>
+                    <p className="text-sm text-gray-400">/{item.slug}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleEdit(item.id)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
+  
 };
 
 export default UploadWatchHtml;
