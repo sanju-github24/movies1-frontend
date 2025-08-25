@@ -100,6 +100,20 @@ const AdminLayout = ({ children }) => {
             </Link>
           </li>
 
+          {/* ✅ NEW: Members Page */}
+          <li>
+            <Link
+              to="/admin/members"
+              className={`flex items-center gap-2 px-3 py-2 rounded ${
+                isActive("/admin/members")
+                  ? "bg-white text-black font-bold"
+                  : "hover:bg-gray-800"
+              }`}
+            >
+              <BsPeopleFill className="text-lg" /> Members
+            </Link>
+          </li>
+
           <li>
             <Link
               to="/admin/settings"

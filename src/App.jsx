@@ -28,6 +28,8 @@ import PopAdsScript from './components/PopAdsScript'; // ✅ Optional
 import Profile from "./paged/Profile"; // Adjust path if needed
 import UploadWatchHtml from './paged/UploadWatchHtml';
 import WatchPage from './paged/WatchPage';
+import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
+
 
 
 const App = () => {
@@ -113,6 +115,9 @@ const App = () => {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="stories" element={<AdminStories />} />
           <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+
+          {/* ✅ NEW: Admin Members */}
+          <Route path="members" element={<AdminMembers />} />
         </Route>
 
         {/* ✅ Fallback */}

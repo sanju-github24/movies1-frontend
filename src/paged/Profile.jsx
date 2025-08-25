@@ -1,20 +1,22 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
-import { backendUrl } from "../utils/api";
+import { supabase } from "../utils/supabaseClient";
 import axios from "axios";
-
+import { backendUrl } from "../utils/api";
 
 const Profile = () => {
-    const { userData, setUserData, setIsLoggedIn, } = useContext(AppContext);
+  const { userData, setUserData, setIsLoggedIn } = useContext(AppContext);
   const [newName, setNewName] = useState(userData?.name || "");
   const [editing, setEditing] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [membershipStatus, setMembershipStatus] = useState(userData?.membershipStatus || "none");
   const navigate = useNavigate();
 
+  /* ✅ Save Name */
   const saveName = async () => {
     if (!newName.trim()) return toast.error("Name cannot be empty");
-
     try {
       axios.defaults.withCredentials = true;
       const { data } = await axios.put(`${backendUrl}/api/user/update-name`, {
@@ -33,8 +35,8 @@ const Profile = () => {
     }
   };
 
-  /* Logout */
-  const handlelogout = async () => {
+  /* ✅ Logout */
+  const handleLogout = async () => {
     try {
       axios.defaults.withCredentials = true;
       const { data } = await axios.post(`${backendUrl}/api/auth/logout`);
@@ -50,6 +52,7 @@ const Profile = () => {
     }
   };
 
+  /* ✅ Resend Verification Email */
   const resendEmailVerification = async () => {
     try {
       axios.defaults.withCredentials = true;
@@ -59,7 +62,7 @@ const Profile = () => {
       );
       if (data.success) {
         toast.success("Verification email sent");
-        navigate("/verify-account");  // 🔥 Navigate to your EmailVerify page
+        navigate("/verify-account");
       } else {
         toast.error(data.message || "Failed to send verification email");
       }
@@ -67,69 +70,121 @@ const Profile = () => {
       toast.error(error.response?.data?.message || error.message);
     }
   };
+
+  /* ✅ Apply for Membership */
+  const applyForMembership = async () => {
+    if (membershipStatus !== "none") return;
+
+    // 🚫 Restriction for a specific email
+    if (userData?.email === "sanjusanjay0444@gmail.com") {
+      return toast.error("❌ You are not allowed to apply for membership.");
+    }
+
+    setIsApplying(true);
+    try {
+      const { error } = await supabase.from("membership_applications").insert([
+        {
+          email: userData?.email,
+          name: userData?.name,
+          status: "pending",
+        },
+      ]);
+
+      if (error) throw error;
+
+      toast.success("🎉 Your membership request has been sent!");
+      setMembershipStatus("pending");
+      setUserData((prev) => ({ ...prev, membershipStatus: "pending" }));
+    } catch (error) {
+      toast.error(error.message || "Failed to apply");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  /* ✅ Fetch latest membership status on mount */
+  useEffect(() => {
+    const fetchMembershipStatus = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("membership_applications")
+          .select("status")
+          .eq("email", userData?.email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
   
+        if (error) throw error;
   
+        if (data?.status) {
+          setMembershipStatus(data.status);
+          setUserData((prev) => ({ ...prev, membershipStatus: data.status }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch membership status:", err.message);
+      }
+    };
+  
+    if (userData?.email) fetchMembershipStatus();
+  }, [userData?.email]);
   
   return (
     <div className="min-h-screen bg-white text-white py-12">
       <div className="max-w-md mx-auto bg-black shadow-lg p-6 rounded">
         <h1 className="text-2xl font-semibold mb-6">Your Profile</h1>
-  
-{/* Email Field */}
-<div className="mb-4">
-  <label className="text-sm font-medium flex items-center gap-2">
-    <img
-      src="/email.png"
-      alt="Email"
-      className="w-4 h-4 bg-white p-1 rounded"
-      style={{ objectFit: 'contain' }}
-    />
-    Email:
-  </label>
-  <div className="text-gray-200 border px-3 py-2 rounded bg-gray-800 flex items-center justify-between">
-    <span>{userData?.email}</span>
-    {userData?.isAccountVerified && (
-      <div className="flex items-center gap-1">
-        <span className="text-green-400 text-xs">Verified</span>
-        <img
-          src="/check.png"
-          alt="Verified"
-          className="w-5 h-5"
-          title="Email verified"
-        />
-      </div>
-    )}
-  </div>
-</div>
 
-{/* Email Verification Reminder */}
-{!userData?.isAccountVerified && (
-  <div className="mb-4">
-    <label className="text-sm font-medium flex items-center gap-2">
-      <img src="/warning.png" alt="Verify" className="w-4 h-4" />
-      Email not verified:
-    </label>
-    <div className="mt-1 border bg-gray-800 px-3 py-2 rounded text-yellow-300 flex items-center justify-between">
-      <span>Click to resend verification email</span>
-      <button
-        onClick={resendEmailVerification}
-        className="text-yellow-400 underline text-sm"
-      >
-        Resend
-      </button>
-    </div>
-  </div>
-)}
+        {/* Email */}
+        <div className="mb-4">
+          <label className="text-sm font-medium flex items-center gap-2">
+            <img
+              src="/email.png"
+              alt="Email"
+              className="w-4 h-4 bg-white p-1 rounded"
+            />
+            Email:
+          </label>
+          <div className="text-gray-200 border px-3 py-2 rounded bg-gray-800 flex items-center justify-between">
+            <span>{userData?.email}</span>
+            {userData?.isAccountVerified && (
+              <div className="flex items-center gap-1">
+                <span className="text-green-400 text-xs">Verified</span>
+                <img
+                  src="/check.png"
+                  alt="Verified"
+                  className="w-5 h-5"
+                  title="Email verified"
+                />
+              </div>
+            )}
+          </div>
+        </div>
 
-  
-        {/* Username Field */}
+        {/* Email Verification */}
+        {!userData?.isAccountVerified && (
+          <div className="mb-4">
+            <label className="text-sm font-medium flex items-center gap-2">
+              <img src="/warning.png" alt="Verify" className="w-4 h-4" />
+              Email not verified:
+            </label>
+            <div className="mt-1 border bg-gray-800 px-3 py-2 rounded text-yellow-300 flex items-center justify-between">
+              <span>Click to resend verification email</span>
+              <button
+                onClick={resendEmailVerification}
+                className="text-yellow-400 underline text-sm"
+              >
+                Resend
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Username */}
         <div className="mb-4">
           <label className="text-sm font-medium flex items-center gap-2">
             <img
               src="/id-card.png"
               alt="Username"
               className="w-4 h-4 bg-white p-1 rounded"
-              style={{ objectFit: 'contain' }}
             />
             Username:
           </label>
@@ -143,10 +198,7 @@ const Profile = () => {
               />
               <div className="flex gap-2 mt-2">
                 <button
-                  onClick={() => {
-                    saveName(newName);
-                    setEditing(false);
-                  }}
+                  onClick={saveName}
                   className="bg-blue-600 text-white px-4 py-1 rounded"
                 >
                   Save
@@ -174,46 +226,43 @@ const Profile = () => {
             </div>
           )}
         </div>
-  
-        {/* Members Section */}
-        <div className="mb-4">
+
+        {/* Membership */}
+        <div className="mb-6">
           <label className="text-sm font-medium flex items-center gap-2">
             <img
               src="/skill.png"
-              alt="Members"
+              alt="Membership"
               className="w-4 h-4 bg-white p-1 rounded"
-              style={{ objectFit: 'contain' }}
             />
-            Members Area:
+            Membership:
           </label>
-          <div className="mt-1 border bg-gray-800 px-3 py-2 rounded text-gray-400">
+          <div className="mt-2">
             <button
-              onClick={() =>
-                toast.info("Only verified members can access this. Email us to join.")
-              }
-              className="text-red-400 underline text-sm"
+              onClick={applyForMembership}
+              disabled={membershipStatus !== "none" || isApplying}
+              className={`px-4 py-2 rounded w-full ${
+                membershipStatus === "approved"
+                  ? "bg-blue-600 cursor-not-allowed"
+                  : membershipStatus === "pending"
+                  ? "bg-gray-600 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700"
+              } text-white`}
             >
-              🚫 Access Blocked – Become a member to view
+              {membershipStatus === "approved"
+                ? "✅ Approved – Enjoy your membership"
+                : membershipStatus === "pending"
+                ? "⏳ Pending – Await admin approval"
+                : isApplying
+                ? "Applying..."
+                : "Apply for Membership"}
             </button>
           </div>
         </div>
-  
-        {/* Want to become a member */}
-        <div className="mb-6">
-          <label className="text-sm font-medium">Want to become a member?</label>
-          <div className="mt-1">
-            <a
-              href="mailto:Anchormovies.proton.me"
-              className="text-blue-400 underline text-sm"
-            >
-              Send us an email
-            </a>
-          </div>
-        </div>
-  
-        {/* Logout Button */}
+
+        {/* Logout */}
         <button
-          onClick={handlelogout}
+          onClick={handleLogout}
           className="bg-red-600 text-white px-4 py-2 rounded w-full"
         >
           Logout
@@ -221,7 +270,6 @@ const Profile = () => {
       </div>
     </div>
   );
-  
 };
 
 export default Profile;

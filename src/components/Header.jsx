@@ -405,12 +405,13 @@ const Header = () => {
 {/* Mandatory Share Popup (hide for admin and if already shared) */}
 {showSharePopup && !isAdmin && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
-    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn">
+    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn relative">
       <h2 className="text-lg font-bold mb-2">Enjoying AnchorMovies?</h2>
       <p className="text-sm text-gray-700 mb-4">
         To continue using the website, please share our link. 💙
       </p>
-      <div className="flex justify-center gap-3">
+
+      <div className="flex justify-center gap-3 mb-3">
         {/* WhatsApp Share */}
         <a
           href={`https://wa.me/?text=${encodeURIComponent(
@@ -441,9 +442,19 @@ const Header = () => {
           <FaInstagram className="text-lg" /> Instagram
         </a>
       </div>
+
+      {/* Cancel button */}
+      <button
+        onClick={() => setShowSharePopup(false)}
+        className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 font-bold text-xl"
+        title="Close"
+      >
+        &times;
+      </button>
     </div>
   </div>
 )}
+
 
 
 
