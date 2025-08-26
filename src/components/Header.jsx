@@ -416,10 +416,10 @@ const Header = () => {
 
 {/* Share Popup */}
 {showSharePopup && !isAdmin && (
-  <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
-    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn relative">
-      <h2 className="text-lg font-bold mb-2">Enjoying AnchorMovies?</h2>
-      <p className="text-sm text-gray-700 mb-4">
+  <div className="fixed inset-0 bg-black/50 z-[999] flex items-center justify-center px-4">
+    <div className="text-white text-center animate-fadeIn relative w-full max-w-sm">
+      <h2 className="text-xl font-bold mb-2">Enjoying AnchorMovies?</h2>
+      <p className="text-sm text-gray-200 mb-6">
         To continue using the website, please share our link. 💙
       </p>
 
@@ -431,11 +431,11 @@ const Header = () => {
           )}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+          className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 text-sm"
           onClick={() => {
             localStorage.setItem("hasShared", "true");
             setShowSharePopup(false);
-            setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
+            setTimeout(() => setShowMemberPopup(true), 2000);
           }}
         >
           <FaWhatsapp className="text-lg" /> WhatsApp
@@ -446,24 +446,23 @@ const Header = () => {
           href={`https://www.instagram.com/?url=${encodeURIComponent(siteUrl)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 text-sm"
+          className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 text-sm"
           onClick={() => {
             localStorage.setItem("hasShared", "true");
             setShowSharePopup(false);
-            setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
+            setTimeout(() => setShowMemberPopup(true), 2000);
           }}
         >
           <FaInstagram className="text-lg" /> Instagram
         </a>
       </div>
 
-      {/* I Know Button (acts as cancel but still shows member popup after 2s) */}
       <button
         onClick={() => {
           setShowSharePopup(false);
-          setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
+          setTimeout(() => setShowMemberPopup(true), 2000);
         }}
-        className="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm font-medium"
+        className="w-full bg-gray-200/80 text-black py-2 rounded-lg hover:bg-gray-300 text-sm font-medium"
       >
         I Know
       </button>
@@ -473,10 +472,10 @@ const Header = () => {
 
 {/* Membership Popup */}
 {showMemberPopup && (
-  <div className="fixed inset-0 bg-black/70 z-[998] flex items-center justify-center px-4">
-    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn relative">
-      <h2 className="text-lg font-bold mb-2">🎉 Become a Member for Free!</h2>
-      <p className="text-sm text-gray-700 mb-6">
+  <div className="fixed inset-0 bg-black/50 z-[998] flex items-center justify-center px-4">
+    <div className="text-white text-center animate-fadeIn relative w-full max-w-sm">
+      <h2 className="text-xl font-bold mb-2">🎉 Become a Member for Free!</h2>
+      <p className="text-sm text-gray-200 mb-6">
         Apply now and enjoy exclusive perks. Login is mandatory.
       </p>
 
@@ -489,21 +488,21 @@ const Header = () => {
             navigate("/login");
           }
         }}
-        className="w-full bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 text-sm font-semibold mb-3"
+        className="w-full bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold mb-3"
       >
         Apply Now
       </button>
 
-      {/* I Know Button (acts as cancel) */}
       <button
         onClick={() => setShowMemberPopup(false)}
-        className="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm font-medium"
+        className="w-full bg-gray-200/80 text-black py-2 rounded-lg hover:bg-gray-300 text-sm font-medium"
       >
         I Know
       </button>
     </div>
   </div>
 )}
+
 
     </div>
   );
