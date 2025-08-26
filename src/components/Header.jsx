@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { EyeIcon } from "@heroicons/react/outline";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
@@ -14,7 +15,9 @@ const Header = () => {
   const [progress, setProgress] = useState(0);
   const storyTimeoutRef = useRef(null);
   const [showSharePopup, setShowSharePopup] = useState(false);
+  const [showMemberPopup, setShowMemberPopup] = useState(false);
 
+  const navigate = useNavigate();
 
   const adminEmail = "sanjusanjay0444@gmail.com";
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
@@ -35,15 +38,24 @@ const Header = () => {
 
     useEffect(() => {
       if (isAdmin) return; // skip for admin
+    
       const alreadyShared = localStorage.getItem("hasShared");
-      if (alreadyShared) return; // skip if shared before
+      const alreadyMemberPopup = localStorage.getItem("hasSeenMemberPopup");
     
       const timer = setTimeout(() => {
-        setShowSharePopup(true);
+        if (!alreadyShared) {
+          // show share popup first
+          setShowSharePopup(true);
+        } else if (!alreadyMemberPopup) {
+          // if already shared, show membership popup instead
+          setShowMemberPopup(true);
+          localStorage.setItem("hasSeenMemberPopup", "true"); // ✅ mark as shown
+        }
       }, 10000); // show after 10s
     
       return () => clearTimeout(timer);
     }, [isAdmin]);
+    
     
      // Handle share click
   const handleShareClick = () => {
@@ -402,7 +414,7 @@ const Header = () => {
   </p>
 </div>
 
-{/* Mandatory Share Popup (hide for admin and if already shared) */}
+{/* Share Popup */}
 {showSharePopup && !isAdmin && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn relative">
@@ -411,8 +423,8 @@ const Header = () => {
         To continue using the website, please share our link. 💙
       </p>
 
-      <div className="flex justify-center gap-3 mb-3">
-        {/* WhatsApp Share */}
+      <div className="flex justify-center gap-3 mb-6">
+        {/* WhatsApp */}
         <a
           href={`https://wa.me/?text=${encodeURIComponent(
             "Check out AnchorMovies: " + siteUrl
@@ -423,12 +435,13 @@ const Header = () => {
           onClick={() => {
             localStorage.setItem("hasShared", "true");
             setShowSharePopup(false);
+            setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
           }}
         >
           <FaWhatsapp className="text-lg" /> WhatsApp
         </a>
 
-        {/* Instagram Share */}
+        {/* Instagram */}
         <a
           href={`https://www.instagram.com/?url=${encodeURIComponent(siteUrl)}`}
           target="_blank"
@@ -437,28 +450,60 @@ const Header = () => {
           onClick={() => {
             localStorage.setItem("hasShared", "true");
             setShowSharePopup(false);
+            setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
           }}
         >
           <FaInstagram className="text-lg" /> Instagram
         </a>
       </div>
 
-      {/* Cancel button */}
+      {/* I Know Button (acts as cancel but still shows member popup after 2s) */}
       <button
-        onClick={() => setShowSharePopup(false)}
-        className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 font-bold text-xl"
-        title="Close"
+        onClick={() => {
+          setShowSharePopup(false);
+          setTimeout(() => setShowMemberPopup(true), 2000); // ⏳ 2 sec delay
+        }}
+        className="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm font-medium"
       >
-        &times;
+        I Know
       </button>
     </div>
   </div>
 )}
 
+{/* Membership Popup */}
+{showMemberPopup && (
+  <div className="fixed inset-0 bg-black/70 z-[998] flex items-center justify-center px-4">
+    <div className="bg-white text-black rounded-xl shadow-xl p-6 max-w-sm w-full text-center animate-fadeIn relative">
+      <h2 className="text-lg font-bold mb-2">🎉 Become a Member for Free!</h2>
+      <p className="text-sm text-gray-700 mb-6">
+        Apply now and enjoy exclusive perks. Login is mandatory.
+      </p>
 
+      <button
+        onClick={() => {
+          setShowMemberPopup(false);
+          if (userData) {
+            navigate("/profile");
+          } else {
+            navigate("/login");
+          }
+        }}
+        className="w-full bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 text-sm font-semibold mb-3"
+      >
+        Apply Now
+      </button>
 
-
-
+      {/* I Know Button (acts as cancel) */}
+      <button
+        onClick={() => setShowMemberPopup(false)}
+        className="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm font-medium"
+      >
+        I Know
+      </button>
+    </div>
+  </div>
+)}
 
     </div>
   );

@@ -158,10 +158,21 @@ const Login = () => {
               {mode === "Sign Up" ? "Login here" : "Sign up"}
             </span>
           </p>
+  
+          {/* Continue without login */}
+          <div className="text-center mt-6">
+            <button
+              onClick={() => navigate("/")}
+              className="text-sm text-gray-200 hover:underline"
+            >
+              Continue without login →
+            </button>
+          </div>
         </div>
       </div>
     </>
   );
+  
   
   };
   
