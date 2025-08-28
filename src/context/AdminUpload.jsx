@@ -102,26 +102,21 @@ const AdminUpload = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+  
     const { title, poster, description, categories, subCategory, language, watchUrl } = movie;
-
+  
     if (!title.trim() || !poster.trim() || !description.trim()) {
       toast.error("Please fill in Title, Poster, and Description.");
       setLoading(false);
       return;
     }
-
+  
     if (!categories.length || !subCategory.length || !language.length) {
       toast.error("Please fill in category, subcategory, and language.");
       setLoading(false);
       return;
     }
-
-    if (!watchUrl.trim()) {
-      toast.error("Please enter a valid Watch URL.");
-      setLoading(false);
-      return;
-    }
+  
 
     const slug = editingMovieId ? movie.slug : slugify(title.trim());
     const uploaded_by = userData?.email || "unknown";
