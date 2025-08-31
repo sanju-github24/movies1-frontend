@@ -30,11 +30,14 @@ const Header = () => {
         .slice(0, 10)
     : [];
 
-  const latestMovies = [...movies]
-    .filter((m) => m.showOnHomepage || m.showOnHomepage === undefined)
+    const latestMovies = [...movies]
+    .filter((m) => m.showOnHomepage) // 👈 only homepage movies
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 60);
+  
 
+  
+  
 
     useEffect(() => {
       if (isAdmin) return; // skip for admin

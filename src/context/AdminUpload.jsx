@@ -32,7 +32,7 @@ const AdminUpload = () => {
     language: [],
     downloads: [],
     linkColor: "#60a5fa",
-    showOnHomepage: true,
+    showOnHomepage: false,
     directLinksOnly: false,
     watchUrl: "", // ✅ Watch URL stored in movie object
   });
@@ -99,6 +99,32 @@ const AdminUpload = () => {
     setEditingMovieId(null);
   };
 
+  const toggleHomepage = async (movie) => {
+    const newStatus = !movie.showOnHomepage;
+  
+    const { error } = await supabase
+      .from("movies")
+      .update({ showOnHomepage: newStatus })
+      .eq("slug", movie.slug); // 👈 safer if slug is unique
+  
+    if (error) {
+      toast.error("❌ Failed to update homepage flag");
+    } else {
+      toast.success(
+        `✅ ${movie.title} ${newStatus ? "added to" : "removed from"} homepage`
+      );
+  
+      setMovies((prev) =>
+        prev.map((m) =>
+          m.slug === movie.slug ? { ...m, showOnHomepage: !!newStatus } : m
+        )
+      );
+    }
+  };
+  
+  
+      
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -134,6 +160,9 @@ const AdminUpload = () => {
       setLoading(false);
       return;
     }
+
+
+
 
     const processedDownloads = await Promise.all(
       validBlocks.map(async (b) => {
@@ -193,31 +222,48 @@ const AdminUpload = () => {
 
     const downloads = processedDownloads.filter(Boolean);
 
-    const movieData = {
-      ...movie,
-      slug,
-      uploaded_by,
-      downloads,
-      directLinksOnly: movie.directLinksOnly || false,
-      ...(editingMovieId ? {} : { created_at: new Date().toISOString() }),
-    };
 
-    const { error } = editingMovieId
-      ? await supabase.from("movies").update(movieData).eq("id", editingMovieId)
-      : await supabase.from("movies").insert([movieData]);
-
-    if (error) {
-      toast.error("Failed to save movie");
-      console.error("Supabase error:", error.message);
-    } else {
-      toast.success(editingMovieId ? "Movie updated!" : "Movie uploaded!");
-      resetForm();
-      fetchMovies();
-    }
-
-    setLoading(false);
+  // ✅ Only include fields that are actually editable
+  const movieData = {
+    slug,
+    title: movie.title?.trim() || "",
+    poster: movie.poster?.trim() || "",
+    description: movie.description?.trim() || "",
+    categories: movie.categories || [],
+    subCategory: movie.subCategory || [],
+    language: movie.language || [],
+    watchUrl: movie.watchUrl || "",
+    showOnHomepage: movie.showOnHomepage ?? true,
+    directLinksOnly: movie.directLinksOnly || false,
+    downloads, // mapped from your downloadBlocks
+    linkColor: movie.linkColor || "#60a5fa",
+    uploaded_by, // current user
+    ...(editingMovieId ? {} : { created_at: new Date().toISOString() }), // only on insert
   };
 
+  let error;
+  if (editingMovieId) {
+    // ✅ Update only editable fields
+    ({ error } = await supabase
+      .from("movies")
+      .update(movieData)
+      .eq("id", editingMovieId));
+  } else {
+    // ✅ Insert new movie
+    ({ error } = await supabase.from("movies").insert([movieData]));
+  }
+
+  if (error) {
+    console.error("Supabase error:", error);
+    toast.error("❌ Failed to save movie");
+  } else {
+    toast.success(editingMovieId ? "✅ Movie updated!" : "🎉 Movie uploaded!");
+    resetForm();
+    fetchMovies();
+  }
+
+  setLoading(false);
+};
   
 
   const handleEdit = (m) => {
@@ -350,19 +396,6 @@ const fixOldMoviesShowFlag = async () => {
 
   return (
     <AdminLayout>
-
-<div className="mb-6">
-          <input
-            type="text"
-            placeholder="🔍 Search movies…"
-            className="p-3 bg-gray-800 rounded w-full placeholder-gray-400"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-
-
 
       <div className="max-w-7xl mx-auto text-white">
         <h1 className="text-2xl font-bold mb-6">🎞 Upload New Movie</h1>
@@ -626,6 +659,16 @@ const fixOldMoviesShowFlag = async () => {
             🛠 Fix Old Movies (Show on Homepage)
           </button>
         </div>
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="🔍 Search movies…"
+            className="p-3 bg-gray-800 rounded w-full placeholder-gray-400"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
   
         <div className="mt-10">
           <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
@@ -652,20 +695,39 @@ const fixOldMoviesShowFlag = async () => {
                   <p className="text-sm text-gray-400 mt-1">
                     {(m.description || "").slice(0, 80)}…
                   </p>
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => handleEdit(m)}
-                      className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm"
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.slug)}
-                      className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
-                    >
-                      🗑 Delete
-                    </button>
-                  </div>
+                  <div className="flex flex-wrap gap-3 mt-4">
+  <button
+    onClick={() => handleEdit(m)}
+    className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm"
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    onClick={() => handleDelete(m.slug)}
+    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
+  >
+    🗑 Delete
+  </button>
+
+  {m.showOnHomepage ? (
+    <button
+      onClick={() => toggleHomepage(m)}
+      className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+    >
+      ❌ Remove from Homepage
+    </button>
+  ) : (
+    <button
+      onClick={() => toggleHomepage(m)}
+      className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded text-sm"
+    >
+      ➕ Add to Homepage
+    </button>
+  )}
+</div>
+
+
                 </div>
               ))
             ) : (
