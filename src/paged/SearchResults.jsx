@@ -127,18 +127,22 @@ const SearchResults = () => {
   return (
     <div className="px-4 sm:px-10 py-8 min-h-screen bg-gray-950 text-white">
       <Helmet>
-        <title>{prettyQuery} Movies - Search Results | 1AnchorMovies</title>
-        <meta
-          name="description"
-          content={`Browse and download the latest ${prettyQuery} movies in HD. Fast downloads available in 480p, 720p, and 1080p on 1AnchorMovies.`}
-        />
-        <link
-          rel="canonical"
-          href={`https://www.1anchormovies.live/search?query=${encodeURIComponent(
-            query
-          )}`}
-        />
-      </Helmet>
+  {/* Page Title */}
+  <title>Download {prettyQuery} Movies - Search Results | 1AnchorMovies</title>
+
+  {/* Meta Description */}
+  <meta
+    name="description"
+    content={`Download and watch the latest ${prettyQuery} movies in HD (480p, 720p, 1080p) on 1AnchorMovies. Fast and secure downloads.`}
+  />
+
+  {/* Canonical URL */}
+  <link
+    rel="canonical"
+    href={`https://www.1anchormovies.live/search?query=${encodeURIComponent(query)}`}
+  />
+</Helmet>
+
 
       <h2 className="text-2xl font-bold mb-6 text-blue-400">
         🔍 Results for: <span className="italic">{prettyQuery}</span>
