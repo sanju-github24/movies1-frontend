@@ -1,3 +1,4 @@
+// AppContext.jsx
 import { createContext, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { supabase } from "../utils/supabaseClient";
@@ -7,86 +8,51 @@ import { backendUrl } from "../utils/api";
 export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userData, setUserData] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    localStorage.getItem("isLoggedIn") === "true"
+  );
+  const [userData, setUserData] = useState(
+    localStorage.getItem("userData")
+      ? JSON.parse(localStorage.getItem("userData"))
+      : null
+  );
+  const [isAdmin, setIsAdmin] = useState(
+    userData?.email === "sanjusanjay0444@gmail.com"
+  );
   const [movies, setMovies] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [allUsersCount, setAllUsersCount] = useState(0);
 
-  // ✅ Load login state from localStorage
-  useEffect(() => {
+  // ✅ Simple login function
+  const login = (user) => {
+    setIsLoggedIn(true);
+    setUserData(user);
+    setIsAdmin(user.email === "sanjusanjay0444@gmail.com");
+
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("userData", JSON.stringify(user));
+
+    toast.success("Logged in successfully");
+  };
+
+  // ✅ Simple logout function
+  const logout = async () => {
     try {
-      const storedLogin = localStorage.getItem("isLoggedIn") === "true";
-      const rawUser = localStorage.getItem("userData");
+      await axios.post(`${backendUrl}/api/auth/logout`, {}, { withCredentials: true });
 
-      const storedUser =
-        rawUser && rawUser !== "undefined" ? JSON.parse(rawUser) : null;
-
-      if (storedLogin && storedUser) {
-        setIsLoggedIn(true);
-        setUserData(storedUser);
-        setIsAdmin(storedUser.email === "sanjusanjay0444@gmail.com");
-      } else {
-        setIsLoggedIn(false);
-        setUserData(null);
-        setIsAdmin(false);
-      }
-    } catch (error) {
-      console.error("Error loading localStorage:", error.message);
       setIsLoggedIn(false);
       setUserData(null);
       setIsAdmin(false);
-    }
-  }, []);
+      localStorage.removeItem("isLoggedIn");
+      localStorage.removeItem("userData");
 
-  // 🔐 Check if user is authenticated
-  const getAuthState = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      const { data } = await axios.get(`${backendUrl}/api/auth/is-auth`, {
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (data.success) {
-        setIsLoggedIn(true);
-        await getUserData();
-      } else {
-        setIsLoggedIn(false);
-      }
-    } catch (error) {
-      console.error("getAuthState error:", error.message);
-      setIsLoggedIn(false);
-      toast.error(error.response?.data?.message || error.message);
+      toast.success("Logged out successfully");
+    } catch (err) {
+      console.error("Logout error:", err);
+      toast.error(err.response?.data?.message || "Failed to logout");
     }
   };
 
-  // ✅ Fetch user details
-  const getUserData = async () => {
-    try {
-      const token = localStorage.getItem("token");
-
-      const { data } = await axios.get(`${backendUrl}/api/user/data`, {
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (data.success) {
-        setUserData(data.userData);
-        localStorage.setItem("userData", JSON.stringify(data.userData));
-        localStorage.setItem("isLoggedIn", "true");
-        setIsAdmin(data.userData.email === "sanjusanjay0444@gmail.com");
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || error.message);
-      console.error("getUserData error:", error);
-    }
-  };
-
-  // 🎬 Get all movies
+  // ✅ Fetch all movies
   const fetchMovies = async () => {
     try {
       const { data, error } = await supabase
@@ -96,7 +62,6 @@ export const AppContextProvider = ({ children }) => {
 
       if (error) throw error;
 
-      // 🔥 Ensure showOnHomepage is boolean
       const normalized = (data || []).map((m) => ({
         ...m,
         showOnHomepage: m.showOnHomepage === true || m.showOnHomepage === "true",
@@ -109,110 +74,47 @@ export const AppContextProvider = ({ children }) => {
     }
   };
 
-  // ➕ Add movie
-  const addMovie = async (movie) => {
+  // ✅ Fetch users count (admin only)
+  const fetchAllUsersCount = async () => {
     try {
-      if (!userData?.email) {
-        toast.error("You must be logged in to upload");
-        return;
+      const res = await axios.get(`${backendUrl}/api/user/count`, {
+        headers: { Authorization: `Bearer ${userData?.token || ""}` },
+        withCredentials: true,
+      });
+
+      if (res.data.success) {
+        setAllUsersCount(res.data.count || 0);
+      } else {
+        toast.error(res.data.message || "Failed to fetch users count");
       }
-  
-      const movieWithUploader = {
-        ...movie,
-        uploaded_by: userData.email, // 👈 save uploader’s email
-      };
-  
-      const { data: newMovie, error } = await supabase
-        .from("movies")
-        .insert([movieWithUploader])
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      setMovies((prev) => [newMovie, ...prev].slice(0, 160));
     } catch (err) {
-      console.error("Supabase insert error:", err.message || err);
-      toast.error("Failed to upload movie");
-    }
-  };
-  
-
-  // ❌ Delete movie
-  const deleteMovie = async (slug) => {
-    try {
-      const { error } = await supabase.from("movies").delete().eq("slug", slug);
-      if (error) throw error;
-
-      toast.success("Movie deleted");
-      await fetchMovies();
-    } catch (err) {
-      console.error("Supabase delete error:", err.message || err);
-      toast.error("Failed to delete movie");
+      console.error("fetchAllUsersCount error:", err);
+      toast.error("Error fetching users count");
     }
   };
 
-  /// 🏠 Toggle homepage flag
-const toggleHomepage = async (movie) => {
-  try {
-    const newValue = !movie.showOnHomepage;
-
-    console.log("Updating movie:", movie.id, "→", newValue); // 🐛 Debug log
-
-    const { data, error } = await supabase
-      .from("movies")
-      .update({ showOnHomepage: newValue })
-      .eq("id", movie.id) // ✅ keep as string (uuid)
-      .select("*")
-      .single();
-
-    if (error) throw error;
-
-    if (!data) {
-      toast.error("⚠️ No row was updated. Double-check Supabase RLS policies.");
-      return;
-    }
-
-    toast.success(
-      `✅ ${movie.title} ${newValue ? "added to" : "removed from"} homepage`
-    );
-
-    // ✅ Update local state instantly
-    setMovies((prev) =>
-      prev.map((m) =>
-        m.id === movie.id ? { ...m, showOnHomepage: newValue } : m
-      )
-    );
-  } catch (err) {
-    console.error("toggleHomepage error:", err.message || err);
-    toast.error("❌ Failed to update homepage flag");
-  }
-};
-
-
-  // 📦 Initial load
+  // ✅ Initial load
   useEffect(() => {
     fetchMovies();
-    getAuthState();
   }, []);
 
   return (
     <AppContext.Provider
       value={{
-        backendUrl,
         isLoggedIn,
         setIsLoggedIn,
         userData,
         setUserData,
+        isAdmin,
+        setIsAdmin,
         movies,
         setMovies,
         fetchMovies,
-        addMovie,
-        deleteMovie,
-        toggleHomepage,
-        getUserData,
-        isAdmin,
-        setIsAdmin,
+        allUsersCount,
+        fetchAllUsersCount,
+        login, // expose login
+        logout, // expose logout
+        backendUrl,
       }}
     >
       {children}

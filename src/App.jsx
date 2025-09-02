@@ -109,16 +109,15 @@ const App = () => {
 
         {/* ✅ Admin Routes */}
         <Route path="/admin" element={<ProtectedAdminRoute />}>
-          <Route index element={<Navigate to="/admin/upload" />} />
-          <Route path="upload" element={<AdminUpload />} />
-          <Route path="blog-editor" element={<BlogEditor />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="stories" element={<AdminStories />} />
-          <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+  <Route index element={<Navigate to="/admin/upload" />} />
+  <Route path="upload" element={<AdminUpload />} />
+  <Route path="dashboard" element={<AdminDashboard />} />
+  <Route path="blog-editor" element={<BlogEditor />} />
+  <Route path="stories" element={<AdminStories />} />
+  <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+  <Route path="members" element={<AdminMembers />} />
+</Route>
 
-          {/* ✅ NEW: Admin Members */}
-          <Route path="members" element={<AdminMembers />} />
-        </Route>
 
         {/* ✅ Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

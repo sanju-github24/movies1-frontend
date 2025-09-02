@@ -21,6 +21,8 @@ const AdminUpload = () => {
   const [editingMovieId, setEditingMovieId] = useState(null);
   const [movies, setMovies] = useState([]);
   const [viewMode, setViewMode] = useState("upload");
+  const [formOpen, setFormOpen] = useState(true);
+
 
   const [movie, setMovie] = useState({
     slug: "",
@@ -268,6 +270,7 @@ const AdminUpload = () => {
 
   const handleEdit = (m) => {
     setEditingMovieId(m.id);
+    setFormOpen(true); // ✅ auto open form on edit
     setMovie({
       slug: m.slug || "",
       title: m.title || "",
@@ -394,25 +397,37 @@ const fixOldMoviesShowFlag = async () => {
     m.title.toLowerCase().includes(search.toLowerCase())
   );
 
+  
   return (
     <AdminLayout>
-
       <div className="max-w-7xl mx-auto text-white">
-        <h1 className="text-2xl font-bold mb-6">🎞 Upload New Movie</h1>
-  
-        {editingMovieId && (
-          <div className="bg-yellow-900 border border-yellow-500 p-4 rounded-md mb-6">
-            <span className="text-yellow-300 font-medium">
-              ✏️ Editing: <strong>{movie.title}</strong>
-            </span>
-            <button
-              onClick={resetForm}
-              className="ml-4 bg-red-500 px-3 py-1 rounded text-sm hover:bg-red-600"
-            >
-              Cancel Edit
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">🎞 Upload New Movie</h1>
+          <button
+            onClick={() => setFormOpen((prev) => !prev)}
+            className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded"
+          >
+            {formOpen ? "➖ Collapse" : "➕ Expand"}
+          </button>
+        </div>
+
+        {/* ✅ Expand/Collapse Upload Form */}
+        {formOpen && (
+          <div className="transition-all duration-500 ease-in-out overflow-hidden">
+            {editingMovieId && (
+              <div className="bg-yellow-900 border border-yellow-500 p-4 rounded-md mb-6">
+                <span className="text-yellow-300 font-medium">
+                  ✏️ Editing: <strong>{movie.title}</strong>
+                </span>
+                <button
+                  onClick={resetForm}
+                  className="ml-4 bg-red-500 px-3 py-1 rounded text-sm hover:bg-red-600"
+                >
+                  Cancel Edit
+                </button>
+              </div>
+            )}
+
   
         
   
@@ -648,9 +663,11 @@ const fixOldMoviesShowFlag = async () => {
     ⬅ Back to Home
   </button>
 </div>
-
         </form>
+          </div>
+        )}
   
+        {/* Fix Old Movies */}
         <div className="flex justify-end mt-6">
           <button
             className="bg-green-700 hover:bg-green-800 px-4 py-2 rounded text-sm"
@@ -659,6 +676,8 @@ const fixOldMoviesShowFlag = async () => {
             🛠 Fix Old Movies (Show on Homepage)
           </button>
         </div>
+
+        {/* Search */}
         <div className="mb-6">
           <input
             type="text"
@@ -669,7 +688,7 @@ const fixOldMoviesShowFlag = async () => {
           />
         </div>
 
-  
+        {/* Movie List */}
         <div className="mt-10">
           <h2 className="text-xl font-bold mb-4">Recently Uploaded Movies</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -696,38 +715,34 @@ const fixOldMoviesShowFlag = async () => {
                     {(m.description || "").slice(0, 80)}…
                   </p>
                   <div className="flex flex-wrap gap-3 mt-4">
-  <button
-    onClick={() => handleEdit(m)}
-    className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm"
-  >
-    ✏️ Edit
-  </button>
-
-  <button
-    onClick={() => handleDelete(m.slug)}
-    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
-  >
-    🗑 Delete
-  </button>
-
-  {m.showOnHomepage ? (
-    <button
-      onClick={() => toggleHomepage(m)}
-      className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
-    >
-      ❌ Remove from Homepage
-    </button>
-  ) : (
-    <button
-      onClick={() => toggleHomepage(m)}
-      className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded text-sm"
-    >
-      ➕ Add to Homepage
-    </button>
-  )}
-</div>
-
-
+                    <button
+                      onClick={() => handleEdit(m)}
+                      className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(m.slug)}
+                      className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm"
+                    >
+                      🗑 Delete
+                    </button>
+                    {m.showOnHomepage ? (
+                      <button
+                        onClick={() => toggleHomepage(m)}
+                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+                      >
+                        ❌ Remove from Homepage
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => toggleHomepage(m)}
+                        className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded text-sm"
+                      >
+                        ➕ Add to Homepage
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             ) : (
@@ -738,5 +753,6 @@ const fixOldMoviesShowFlag = async () => {
       </div>
     </AdminLayout>
   );
-}  
-export default AdminUpload;  
+};
+
+export default AdminUpload;

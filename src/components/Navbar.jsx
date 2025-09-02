@@ -69,22 +69,31 @@ const Navbar = () => {
     return () => channel.unsubscribe();
   }, [userData?.email, membershipStatus, setUserData]);
 
-  // Logout
   const logout = async () => {
     try {
+      // ✅ Clear backend session (cookie)
       axios.defaults.withCredentials = true;
-      const { data } = await axios.post(`${backendUrl}/api/auth/logout`);
-      if (data.success) {
-        localStorage.removeItem("isLoggedIn");
-        localStorage.removeItem("userData");
-        setIsLoggedIn(false);
-        setUserData(null);
-        navigate("/login");
-      }
+      await axios.post(`${backendUrl}/api/auth/logout`);
+  
+      // ✅ Clear Supabase session
+      await supabase.auth.signOut();
+  
+      // ✅ Clear local state & storage
+      localStorage.removeItem("isLoggedIn");
+      localStorage.removeItem("userData");
+      setIsLoggedIn(false);
+      setUserData(null);
+      setIsAdmin(false); // reset admin flag
+  
+      // ✅ Navigate to login page
+      navigate("/login");
+      toast.success("Logged out successfully");
     } catch (error) {
+      console.error("Logout error:", error);
       toast.error(error.response?.data?.message || error.message);
     }
   };
+  
 
   const userInitial = userData?.name?.[0]?.toUpperCase() ?? userData?.email?.[0]?.toUpperCase() ?? "U";
 

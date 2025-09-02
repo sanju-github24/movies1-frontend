@@ -39,25 +39,26 @@ const Header = () => {
   
   
 
-    useEffect(() => {
-      if (isAdmin) return; // skip for admin
-    
-      const alreadyShared = localStorage.getItem("hasShared");
-      const alreadyMemberPopup = localStorage.getItem("hasSeenMemberPopup");
-    
-      const timer = setTimeout(() => {
-        if (!alreadyShared) {
-          // show share popup first
-          setShowSharePopup(true);
-        } else if (!alreadyMemberPopup) {
-          // if already shared, show membership popup instead
-          setShowMemberPopup(true);
-          localStorage.setItem("hasSeenMemberPopup", "true"); // ✅ mark as shown
-        }
-      }, 10000); // show after 10s
-    
-      return () => clearTimeout(timer);
-    }, [isAdmin]);
+useEffect(() => {
+  if (isAdmin) return; // skip for admin
+
+  const hasShared = localStorage.getItem("hasShared");
+  const hasSeenMemberPopup = localStorage.getItem("hasSeenMemberPopup");
+
+  const timer = setTimeout(() => {
+    if (!hasShared) {
+      // Show share popup first
+      setShowSharePopup(true);
+    } else if (!hasSeenMemberPopup) {
+      // If already shared, show membership popup
+      setShowMemberPopup(true);
+      localStorage.setItem("hasSeenMemberPopup", "true");
+    }
+  }, 10000); // Delay in milliseconds (10s)
+
+  return () => clearTimeout(timer); // Cleanup on unmount
+}, [isAdmin]);
+
     
     
      // Handle share click
@@ -417,94 +418,92 @@ const Header = () => {
   </p>
 </div>
 
-{/* Share Popup */}
-{showSharePopup && !isAdmin && (
-  <div className="fixed inset-0 bg-black/50 z-[999] flex items-center justify-center px-4">
-    <div className="text-white text-center animate-fadeIn relative w-full max-w-sm">
-      <h2 className="text-xl font-bold mb-2">Enjoying AnchorMovies?</h2>
-      <p className="text-sm text-gray-200 mb-6">
-        To continue using the website, please share our link. 💙
-      </p>
+      {/* Share Popup */}
+      {showSharePopup && (
+        <div className="flex items-center justify-center px-4 mt-20">
+          <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-lg shadow-lg">
+            <h2 className="text-xl font-bold mb-2">Enjoying AnchorMovies?</h2>
+            <p className="text-sm text-gray-200 mb-6">
+              To continue using the website, please share our link. 💙
+            </p>
 
-      <div className="flex justify-center gap-3 mb-6">
-        {/* WhatsApp */}
-        <a
-          href={`https://wa.me/?text=${encodeURIComponent(
-            "Check out AnchorMovies: " + siteUrl
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 text-sm"
-          onClick={() => {
-            localStorage.setItem("hasShared", "true");
-            setShowSharePopup(false);
-            setTimeout(() => setShowMemberPopup(true), 2000);
-          }}
-        >
-          <FaWhatsapp className="text-lg" /> WhatsApp
-        </a>
+            <div className="flex justify-center gap-3 mb-6">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  "Check out AnchorMovies: " + siteUrl
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 text-sm"
+                onClick={() => {
+                  localStorage.setItem("hasShared", "true");
+                  setShowSharePopup(false);
+                  setTimeout(() => setShowMemberPopup(true), 2000);
+                }}
+              >
+                <FaWhatsapp className="text-lg" /> WhatsApp
+              </a>
 
-        {/* Instagram */}
-        <a
-          href={`https://www.instagram.com/?url=${encodeURIComponent(siteUrl)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 text-sm"
-          onClick={() => {
-            localStorage.setItem("hasShared", "true");
-            setShowSharePopup(false);
-            setTimeout(() => setShowMemberPopup(true), 2000);
-          }}
-        >
-          <FaInstagram className="text-lg" /> Instagram
-        </a>
-      </div>
+              <a
+                href={`https://www.instagram.com/?url=${encodeURIComponent(siteUrl)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 text-sm"
+                onClick={() => {
+                  localStorage.setItem("hasShared", "true");
+                  setShowSharePopup(false);
+                  setTimeout(() => setShowMemberPopup(true), 2000);
+                }}
+              >
+                <FaInstagram className="text-lg" /> Instagram
+              </a>
+            </div>
 
-      <button
-        onClick={() => {
-          setShowSharePopup(false);
-          setTimeout(() => setShowMemberPopup(true), 2000);
-        }}
-        className="w-full bg-gray-200/80 text-black py-2 rounded-lg hover:bg-gray-300 text-sm font-medium"
-      >
-        I Know
-      </button>
-    </div>
-  </div>
-)}
+            <button
+              onClick={() => {
+                setShowSharePopup(false);
+                setTimeout(() => setShowMemberPopup(true), 2000);
+              }}
+              className="w-full bg-gray-300 text-black py-2 rounded-lg hover:bg-gray-400 text-sm font-medium"
+            >
+              I Know
+            </button>
+          </div>
+        </div>
+      )}
 
-{/* Membership Popup */}
-{showMemberPopup && (
-  <div className="fixed inset-0 bg-black/50 z-[998] flex items-center justify-center px-4">
-    <div className="text-white text-center animate-fadeIn relative w-full max-w-sm">
-      <h2 className="text-xl font-bold mb-2">🎉 Become a Member for Free!</h2>
-      <p className="text-sm text-gray-200 mb-6">
-        Apply now and enjoy exclusive perks. Login is mandatory.
-      </p>
+      {/* Membership Popup */}
+      {showMemberPopup && (
+        <div className="flex items-center justify-center px-4 mt-20">
+          <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-lg shadow-lg">
+            <h2 className="text-xl font-bold mb-2">🎉 Become a Member for Free!</h2>
+            <p className="text-sm text-gray-200 mb-6">
+              Apply now and enjoy exclusive perks. Login is mandatory.
+            </p>
 
-      <button
-        onClick={() => {
-          setShowMemberPopup(false);
-          if (userData) {
-            navigate("/profile");
-          } else {
-            navigate("/login");
-          }
-        }}
-        className="w-full bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold mb-3"
-      >
-        Apply Now
-      </button>
+            <button
+              onClick={() => {
+                setShowMemberPopup(false);
+                if (userData) {
+                  navigate("/profile");
+                } else {
+                  navigate("/login");
+                }
+              }}
+              className="w-full bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold mb-3"
+            >
+              Apply Now
+            </button>
 
-      <button
-        onClick={() => setShowMemberPopup(false)}
-        className="w-full bg-gray-200/80 text-black py-2 rounded-lg hover:bg-gray-300 text-sm font-medium"
-      >
-        I Know
-      </button>
-    </div>
-  </div>
-)}
+            <button
+              onClick={() => setShowMemberPopup(false)}
+              className="w-full bg-gray-300 text-black py-2 rounded-lg hover:bg-gray-400 text-sm font-medium"
+            >
+              I Know
+            </button>
+          </div>
+        </div>
+      )}
 
 
     </div>

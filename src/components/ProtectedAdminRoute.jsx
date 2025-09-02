@@ -1,23 +1,23 @@
-// components/ProtectedAdminRoute.jsx
-import React, { useContext, useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom'; // ✅ add Outlet
-import { AppContext } from '../context/AppContext';
+// src/components/ProtectedAdminRoute.jsx
+import React, { useContext } from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import { AppContext } from "../context/AppContext";
 
 const ProtectedAdminRoute = () => {
-  const { isLoggedIn, isAdmin } = useContext(AppContext);
-  const [loading, setLoading] = useState(true);
+  const { userData, isLoggedIn, isAdmin } = useContext(AppContext);
 
-  useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 100);
-    return () => clearTimeout(timeout);
-  }, []);
+  // ✅ If not logged in, redirect to login
+  if (!isLoggedIn || !userData) {
+    return <Navigate to="/login" replace />;
+  }
 
-  if (loading) return null; // or show loader
+  // ✅ If user is logged in but not admin, redirect to home
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
-  if (!isLoggedIn) return <Navigate to="/login" replace />;
-  if (!isAdmin) return <Navigate to="/" replace />;
-
-  return <Outlet />; // ✅ this renders the nested route (upload or blog-editor)
+  // ✅ If user is admin, render the nested routes
+  return <Outlet />;
 };
 
 export default ProtectedAdminRoute;
