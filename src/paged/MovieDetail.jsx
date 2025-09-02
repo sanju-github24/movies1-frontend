@@ -173,14 +173,14 @@ const MovieDetail = () => {
 
   return (
     <div className="flex justify-center mt-4 px-2 sm:px-6 md:px-10 w-full bg-black">
-     <Helmet>
+    <Helmet>
   {/* Page Title */}
-  <title>{movie.title} - Download & Watch Online | AnchorMovies</title>
+  <title>Download {movie.title} - Watch Online | AnchorMovies</title>
 
   {/* Meta Description */}
   <meta
     name="description"
-    content={`Download and watch ${movie.title} in HD (480p, 720p, 1080p). Fast and secure downloads on AnchorMovies.`}
+    content={`Download ${movie.title} in HD (${movie.qualities?.join(', ')}). Fast and secure downloads on AnchorMovies.`}
   />
 
   {/* Canonical URL */}
@@ -190,10 +190,10 @@ const MovieDetail = () => {
   />
 
   {/* Open Graph for Facebook / WhatsApp */}
-  <meta property="og:title" content={`${movie.title} - Download & Watch Online`} />
+  <meta property="og:title" content={`Download ${movie.title} - Watch Online`} />
   <meta
     property="og:description"
-    content={`Stream or download ${movie.title} in multiple qualities. Available now on AnchorMovies.`}
+    content={`Download ${movie.title} in multiple qualities: ${movie.qualities?.join(', ')}. Available now on AnchorMovies.`}
   />
   <meta property="og:type" content="website" />
   <meta
@@ -201,20 +201,16 @@ const MovieDetail = () => {
     content={`https://www.1anchormovies.live/movie/${code}`}
   />
   <meta property="og:site_name" content="AnchorMovies" />
-  {movie.poster && (
-    <meta property="og:image" content={movie.poster} />
-  )}
+  {movie.poster && <meta property="og:image" content={movie.poster} />}
 
   {/* Twitter Cards */}
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content={`${movie.title} - Download & Watch`} />
+  <meta name="twitter:title" content={`Download ${movie.title} - Watch Online`} />
   <meta
     name="twitter:description"
-    content={`HD Downloads: ${movie.title} available in 480p, 720p, and 1080p on AnchorMovies.`}
+    content={`Download ${movie.title} in HD (${movie.qualities?.join(', ')}). Available on AnchorMovies.`}
   />
-  {movie.poster && (
-    <meta name="twitter:image" content={movie.poster} />
-  )}
+  {movie.poster && <meta name="twitter:image" content={movie.poster} />}
 </Helmet>
 
   
