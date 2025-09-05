@@ -10,9 +10,6 @@ import { supabase } from "../utils/supabaseClient";
 import CategoryBar from "./CategoryBar";
 
 import {
-  HomeIcon,
-  ClockIcon,
-  MagnifyingGlassIcon,
   Bars3Icon,
 } from "@heroicons/react/24/outline";
 
@@ -34,6 +31,7 @@ const Navbar = () => {
 
   const profileRef = useRef(null);
   const mobileSearchRef = useRef(null);
+  const membershipChannelRef = useRef(null); // prevent multiple subscriptions
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -49,38 +47,7 @@ const Navbar = () => {
   }, []);
 
   // Real-time membership status
-  useEffect(() => {
-    if (!userData?.email) return;
-    const channel = supabase
-      .channel("membership-status")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "membership_applications",
-          filter: `email=eq.${userData.email}`,
-        },
-        (payload) => {
-          const newStatus = payload.new.status;
-          if (newStatus !== membershipStatus) {
-            setMembershipStatus(newStatus);
-            setUserData((prev) => ({ ...prev, membershipStatus: newStatus }));
-
-            if (newStatus === "approved")
-              setNotification("✅ Your membership request has been approved!");
-            else if (newStatus === "rejected")
-              setNotification("❌ Your membership request was rejected.");
-            else if (newStatus === "pending")
-              setNotification("⏳ Your membership request is pending review.");
-            else setNotification(null);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => channel.unsubscribe();
-  }, [userData?.email, membershipStatus, setUserData]);
+  
 
   // Logout
   const logout = async () => {
@@ -125,13 +92,11 @@ const Navbar = () => {
     );
   };
 
-  // Helper to navigate category/language
   const handleNavigateCategory = (name) => {
     navigate(`/categories?name=${encodeURIComponent(name)}`);
     setMobileOpen(false);
   };
 
-  // Mobile search button click
   const handleMobileSearchClick = () => {
     setMobileOpen(true);
     setTimeout(() => {
@@ -144,12 +109,10 @@ const Navbar = () => {
       {/* Desktop Navbar */}
       <div className="hidden sm:flex flex-col">
         <div className="flex items-center justify-between px-10 h-16">
-          {/* Logo */}
           <Link to="/" className="shrink-0">
             <img src="/logo_3.png" alt="logo" className="w-28 md:w-32 object-contain" />
           </Link>
 
-          {/* Links + Search */}
           <div className="flex items-center gap-6 flex-grow justify-center">
             <ul className="flex gap-6 text-sm font-medium">
               <li>
@@ -301,7 +264,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* CategoryBar for desktop */}
         <CategoryBar onNavigate={handleNavigateCategory} />
       </div>
 
@@ -337,7 +299,6 @@ const Navbar = () => {
               </button>
             </div>
 
-            {/* Mobile Search */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -436,7 +397,7 @@ const Navbar = () => {
         </Link>
 
         <button
-          onClick={handleMobileSearchClick} // updated handler
+          onClick={handleMobileSearchClick}
           className="flex flex-col items-center text-white"
         >
           <img src="/search.png" alt="Search" className="w-5 h-5" />
