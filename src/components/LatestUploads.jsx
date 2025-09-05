@@ -56,11 +56,11 @@ const LatestUploads = () => {
       </Helmet>
 
       <h2
-        id="weekly-releases"
-        className="text-2xl font-bold mb-4 text-white bg-blue-600 inline-block px-7 py-3 rounded-md shadow hover:bg-blue-700 transition"
-      >
-        Week Releases
-      </h2>
+  id="weekly-releases"
+  className="text-lg font-semibold mb-3 text-white bg-blue-600 inline-block px-4 py-2 rounded-md shadow hover:bg-blue-700 transition"
+>
+  Week Releases
+</h2>
 
       {recentMovies.length === 0 ? (
         <p className="text-gray-400">

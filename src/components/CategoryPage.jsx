@@ -1,107 +1,90 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../utils/supabaseClient';
+import React, { useEffect, useState } from "react";
+import { useSearchParams, useParams, useNavigate } from "react-router-dom";
+import { supabase } from "../utils/supabaseClient";
 
 const CategoryPage = () => {
-  const { name } = useParams();
+  const { name: paramName } = useParams(); // /category/:name
+  const [searchParams] = useSearchParams(); // ?name=...
   const navigate = useNavigate();
-  const categoryName = decodeURIComponent(name || '');
-  const [activeSub, setActiveSub] = useState('All');
+
+  const pageName = decodeURIComponent(paramName || searchParams.get("name") || "");
+
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [subCategories, setSubCategories] = useState(['All']);
-  const [search, setSearch] = useState('');
-
-  const categoryDescriptions = {
-    Kannada: 'Watch the latest Kannada movies online. Full HD downloads and trending stories from the heart of Karnataka.',
-    Tamil: 'Download and stream the latest Tamil blockbusters. High-quality movies featuring top Kollywood actors.',
-    Telugu: 'Explore new Telugu action, romance, and thriller movies. Updated regularly with HD downloads.',
-    Malayalam: 'Discover critically acclaimed Malayalam cinema with powerful storytelling and rich visuals.',
-    Hindi: 'Bollywood hits and top-rated Hindi films available to download in HD.',
-    English: 'Latest Hollywood releases and English films available in 720p and 1080p quality.',
-  };
+  const [subCategories, setSubCategories] = useState(["All"]);
+  const [activeSub, setActiveSub] = useState("All");
+  const [search, setSearch] = useState("");
 
   const fetchMovies = async () => {
     setLoading(true);
-
     const { data, error } = await supabase
-      .from('movies')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from("movies")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('Error fetching movies:', error.message);
+      console.error(error);
       setMovies([]);
-    } else {
-      const categoryFiltered = (data || []).filter((movie) => {
-        const inCategory = Array.isArray(movie.categories)
-          ? movie.categories.map(c => c.toLowerCase()).includes(categoryName.toLowerCase())
-          : typeof movie.categories === 'string' &&
-            movie.categories.toLowerCase() === categoryName.toLowerCase();
-
-        return inCategory;
-      });
-
-      setMovies(categoryFiltered);
-
-      const subs = new Set();
-      categoryFiltered.forEach((movie) => {
-        const subList = Array.isArray(movie.subCategory)
-          ? movie.subCategory
-          : movie.subCategory
-            ? [movie.subCategory]
-            : [];
-
-        subList.forEach((s) => subs.add(s));
-      });
-
-      setSubCategories(['All', ...Array.from(subs)]);
+      setLoading(false);
+      return;
     }
+
+    const filtered = (data || []).filter((movie) => {
+      // Check categories
+      const inCategory = Array.isArray(movie.categories)
+        ? movie.categories.map(c => c.toLowerCase()).includes(pageName.toLowerCase())
+        : movie.categories?.toLowerCase() === pageName.toLowerCase();
+
+      // Check languages
+      const inLanguage = Array.isArray(movie.language)
+        ? movie.language.map(l => l.toLowerCase()).includes(pageName.toLowerCase())
+        : movie.language?.toLowerCase() === pageName.toLowerCase();
+
+      return inCategory || inLanguage;
+    });
+
+    setMovies(filtered);
+
+    const subs = new Set();
+    filtered.forEach(movie => {
+      const subList = Array.isArray(movie.subCategory)
+        ? movie.subCategory
+        : movie.subCategory
+        ? [movie.subCategory]
+        : [];
+      subList.forEach(s => subs.add(s));
+    });
+    setSubCategories(["All", ...Array.from(subs)]);
+    setActiveSub("All");
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchMovies();
-    setActiveSub('All');
-    setSearch('');
-  }, [categoryName]);
+    if (pageName) fetchMovies();
+  }, [pageName]);
 
-  const filteredMovies = movies.filter((movie) => {
-    const subCategoryArray = Array.isArray(movie.subCategory)
+  const filteredMovies = movies.filter(movie => {
+    const subList = Array.isArray(movie.subCategory)
       ? movie.subCategory
       : movie.subCategory
-        ? [movie.subCategory]
-        : [];
-
-    const matchesSubCategory =
-      activeSub === 'All' || subCategoryArray.includes(activeSub);
-
+      ? [movie.subCategory]
+      : [];
+    const matchesSub = activeSub === "All" || subList.includes(activeSub);
     const matchesSearch =
       movie.title.toLowerCase().includes(search.toLowerCase()) ||
-      (movie.description || '').toLowerCase().includes(search.toLowerCase());
-
-    return matchesSubCategory && matchesSearch;
+      (movie.description || "").toLowerCase().includes(search.toLowerCase());
+    return matchesSub && matchesSearch;
   });
-
-  const categoryIntro =
-    categoryDescriptions[categoryName] ||
-    `Browse top-rated ${categoryName} movies available for streaming and download.`;
 
   return (
     <div className="min-h-screen bg-gray-950 px-4 sm:px-8 py-10 text-white">
-      {/* Category Title */}
       <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold text-blue-400">{categoryName} Movies</h1>
-        <p className="text-sm text-gray-400 mt-2">{categoryIntro}</p>
-        <p className="text-xs text-gray-500 mt-1">
-          {subCategories.length > 1
-            ? 'Select a subcategory to explore movies'
-            : 'No subcategories found for this genre.'}
-        </p>
+        <h1 className="text-3xl font-bold text-blue-400">{pageName} Movies</h1>
+        <p className="text-sm text-gray-400 mt-2">Browse top-rated {pageName} movies available for streaming and download.</p>
       </div>
 
-      {/* 🔍 Search bar */}
+      {/* Search */}
       <div className="max-w-md mx-auto mb-6">
         <input
           type="text"
@@ -112,18 +95,17 @@ const CategoryPage = () => {
         />
       </div>
 
-      {/* Subcategory Buttons */}
+      {/* Subcategories */}
       {subCategories.length > 1 && (
         <div className="overflow-x-auto pb-4">
           <div className="flex gap-4 w-max">
-            {subCategories.map((sub) => (
+            {subCategories.map(sub => (
               <button
                 key={sub}
                 onClick={() => setActiveSub(sub)}
-                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition shadow ${activeSub === sub
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 hover:bg-blue-600 text-gray-200'
-                  }`}
+                className={`min-w-[100px] px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition shadow ${
+                  activeSub === sub ? "bg-blue-600 text-white" : "bg-gray-800 hover:bg-blue-600 text-gray-200"
+                }`}
               >
                 {sub}
               </button>
@@ -138,59 +120,23 @@ const CategoryPage = () => {
           <p className="text-gray-400 text-center">Loading movies...</p>
         ) : filteredMovies.length === 0 ? (
           <p className="text-gray-500 text-center">
-            No movies found for this category
-            {activeSub !== 'All' && ` and subcategory "${activeSub}"`}.
+            No movies found for {pageName}{activeSub !== "All" && ` and subcategory "${activeSub}"`}.
           </p>
         ) : (
-          filteredMovies.map((movie) => (
-            <div
-              key={movie.slug}
-              className="bg-white/5 hover:bg-white/10 p-4 rounded shadow flex flex-col sm:flex-row items-center gap-4"
-            >
-              <img
-                src={movie.poster || '/default-poster.jpg'}
-                alt={movie.title}
-                className="w-24 h-36 object-cover rounded"
-              />
+          filteredMovies.map(movie => (
+            <div key={movie.slug} className="bg-white/5 hover:bg-white/10 p-4 rounded shadow flex flex-col sm:flex-row items-center gap-4">
+              <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} className="w-24 h-36 object-cover rounded" />
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-blue-300">{movie.title}</h2>
-                <p className="text-sm text-gray-400 line-clamp-2 mt-1">
-                  {movie.description || 'No description available.'}
-                </p>
-
-                {/* View Details link */}
-                <Link
-                  to={`/movie/${movie.slug}`}
-                  className="inline-block mt-2 text-blue-400 hover:underline text-sm mr-3"
-                >
-                  View Details →
-                </Link>
-
-                {/* Watch Now button if URL exists */}
+                <p className="text-sm text-gray-400 line-clamp-2 mt-1">{movie.description || "No description available."}</p>
+                <a href={`/movie/${movie.slug}`} className="inline-block mt-2 text-blue-400 hover:underline text-sm mr-3">View Details →</a>
                 {movie.watchUrl && (
-                  <a
-                    href={movie.watchUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block mt-2 bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded"
-                  >
-                     Watch Now
-                  </a>
+                  <a href={movie.watchUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded">Watch Now</a>
                 )}
               </div>
             </div>
           ))
         )}
-      </div>
-
-      {/* Back Button */}
-      <div className="mt-16 text-center">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-gray-400 hover:text-white text-sm underline transition"
-        >
-          ← Back to Categories
-        </button>
       </div>
     </div>
   );

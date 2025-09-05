@@ -35,4 +35,3 @@ export const fetchMovies = async (opts = {}) => {
 
   return data ?? [];
 };
-

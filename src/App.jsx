@@ -34,24 +34,26 @@ import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
 
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [mobileOpen, setMobileOpen] = useState(false); // track mobile drawer
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Hide Navbar & CategoryBar on these paths
-  const hidePaths = ['/login', '/verify-account', '/reset-password'];
+  const hidePaths = ["/login", "/verify-account", "/reset-password"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
-  const isAdminPath = location.pathname.startsWith('/admin'); // ✅ Hide in Admin too
+  const isAdminPath = location.pathname.startsWith("/admin");
 
   const hideNavbarAndCategoryBar =
     hidePaths.includes(location.pathname) || isBlogViewerPath || isAdminPath;
 
   const handleCategoryClick = (category) => {
-    navigate(`/category/${encodeURIComponent(category)}`);
+    navigate(`/categories?name=${encodeURIComponent(category)}`);
+    setMobileOpen(false); // close drawer on click
   };
 
   const handleLanguageClick = (language) => {
-    navigate(`/search?query=${encodeURIComponent(language)}`);
+    navigate(`/categories?name=${encodeURIComponent(language)}`);
+    setMobileOpen(false);
   };
 
   return (
@@ -67,39 +69,69 @@ const App = () => {
         pauseOnHover
       />
 
-      {/* Global Ad Scripts */}
       <AdScriptLoader />
 
-      {/* Navbar + Category Bar */}
       {!hideNavbarAndCategoryBar && (
         <>
-          <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-          <CategoryBar
-            onCategoryClick={handleCategoryClick}
-            onLanguageClick={handleLanguageClick}
-          />
+          {/* Desktop Navbar */}
+          <div className="hidden sm:block">
+            <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+           
+          </div>
+
+          {/* Mobile Navbar */}
+          <div className="sm:hidden">
+            <Navbar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              isMobile={true}
+              mobileOpen={mobileOpen}
+              setMobileOpen={setMobileOpen}
+            />
+            {/* Mobile Drawer */}
+            {mobileOpen && (
+              <div className="fixed inset-0 z-50">
+                <div
+                  className="absolute inset-0 bg-black/60"
+                  onClick={() => setMobileOpen(false)}
+                ></div>
+                <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl">
+                  <CategoryBar
+                    isMobile={true}
+                    onCategoryClick={handleCategoryClick}
+                    onLanguageClick={handleLanguageClick}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
       {/* Routes */}
       <Routes>
-        {/* ✅ Public Routes */}
+        {/* Public Routes */}
         <Route path="/" element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code" element={<MovieDetail />} />
-        <Route path="/search" element={<SearchResults />} />
-        <Route path="/category/:name" element={<CategoryPage />} />
+        <Route path="/search" element={<SearchResults searchTerm={searchTerm} />} />
+
+        {/* Category & Language Pages */}
+        <Route path="/categories" element={<CategoryPage type="category" />} />
+        <Route path="/languages" element={<CategoryPage type="language" />} />
+        <Route path="/category/:name" element={<CategoryPage />} /> {/* optional legacy */}
+
         <Route path="/latest" element={<LatestUploads />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
         <Route path="/watch/:slug" element={<WatchPage />} />
 
-        {/* ✅ Profile */}
+        {/* Profile */}
         <Route path="/profile" element={<Profile />} />
 
-        {/* ✅ Email Verify */}
+        {/* Email Verification */}
         <Route path="/verify-account" element={<EmailVerify />} />
 
-        {/* ✅ Auth Pages (if not logged in) */}
+        {/* Auth Pages (only if not logged in) */}
         {!isLoggedIn && (
           <>
             <Route path="/login" element={<Login />} />
@@ -107,19 +139,18 @@ const App = () => {
           </>
         )}
 
-        {/* ✅ Admin Routes */}
+        {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedAdminRoute />}>
-  <Route index element={<Navigate to="/admin/upload" />} />
-  <Route path="upload" element={<AdminUpload />} />
-  <Route path="dashboard" element={<AdminDashboard />} />
-  <Route path="blog-editor" element={<BlogEditor />} />
-  <Route path="stories" element={<AdminStories />} />
-  <Route path="upload-watch-html" element={<UploadWatchHtml />} />
-  <Route path="members" element={<AdminMembers />} />
-</Route>
+          <Route index element={<Navigate to="/admin/upload" />} />
+          <Route path="upload" element={<AdminUpload />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="blog-editor" element={<BlogEditor />} />
+          <Route path="stories" element={<AdminStories />} />
+          <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+          <Route path="members" element={<AdminMembers />} />
+        </Route>
 
-
-        {/* ✅ Fallback */}
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

@@ -2,12 +2,13 @@ import React, { useContext, useState, useEffect, useRef } from "react";
 import { AppContext } from "../context/AppContext";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
-import { EyeIcon } from "@heroicons/react/outline";
+import { EyeIcon } from "@heroicons/react/24/outline";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
+
 const Header = () => {
-  const { userData, movies = [] } = useContext(AppContext);
+  const { userData, movies = [], setMovies } = useContext(AppContext);
   const [copied, setCopied] = useState(false);
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
@@ -23,6 +24,7 @@ const Header = () => {
   const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
   const siteUrl = "https://www.1anchormovies.live";
 
+  // Admin’s own uploads
   const latestAdminMovies = isAdmin
     ? movies
         .filter((m) => (m.uploaded_by || "").toLowerCase() === adminEmail.toLowerCase())
@@ -30,35 +32,47 @@ const Header = () => {
         .slice(0, 10)
     : [];
 
-    const latestMovies = [...movies]
-    .filter((m) => m.showOnHomepage) // 👈 only homepage movies
+  // Homepage movies
+  const latestMovies = [...movies]
+    .filter((m) => m.showOnHomepage)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 60);
-  
 
-  
-  
+  // ✅ Reorder helper (admin only)
+  const moveMovie = (index, direction) => {
+    const newMovies = [...latestMovies];
+    const targetIndex = index + direction;
 
-useEffect(() => {
-  if (isAdmin) return; // skip for admin
+    // prevent out-of-bounds
+    if (targetIndex < 0 || targetIndex >= newMovies.length) return;
 
-  const hasShared = localStorage.getItem("hasShared");
-  const hasSeenMemberPopup = localStorage.getItem("hasSeenMemberPopup");
+    // swap movies
+    [newMovies[index], newMovies[targetIndex]] = [
+      newMovies[targetIndex],
+      newMovies[index],
+    ];
 
-  const timer = setTimeout(() => {
-    if (!hasShared) {
-      // Show share popup first
-      setShowSharePopup(true);
-    } else if (!hasSeenMemberPopup) {
-      // If already shared, show membership popup
-      setShowMemberPopup(true);
-      localStorage.setItem("hasSeenMemberPopup", "true");
-    }
-  }, 10000); // Delay in milliseconds (10s)
+    setMovies(newMovies); // update global context
+  };
 
-  return () => clearTimeout(timer); // Cleanup on unmount
-}, [isAdmin]);
+  // Popup logic (skip for admin)
+  useEffect(() => {
+    if (isAdmin) return;
 
+    const hasShared = localStorage.getItem("hasShared");
+    const hasSeenMemberPopup = localStorage.getItem("hasSeenMemberPopup");
+
+    const timer = setTimeout(() => {
+      if (!hasShared) {
+        setShowSharePopup(true);
+      } else if (!hasSeenMemberPopup) {
+        setShowMemberPopup(true);
+        localStorage.setItem("hasSeenMemberPopup", "true");
+      }
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [isAdmin]);
     
     
      // Handle share click
@@ -374,36 +388,44 @@ useEffect(() => {
       </div>
     )}
 
+;
+
 <div className="flex flex-col gap-2 mt-1">
   {latestMovies.map((movie) => (
-    <div key={movie.id} className="text-black text-sm">
-      <Link
-        to={`/movie/${movie.slug}`}
-        className="font-medium break-words whitespace-normal"
-        style={{ color: movie.linkColor || "#1d4ed8" }}
-        title={movie.title}
-      >
-        {movie.title}
-        {movie.directLinksOnly && (
-          <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
-            [Direct Links]
-          </span>
-        )}
-      </Link>
-
-      {movie.watchUrl && (
-        <a
-          href={movie.watchUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-2 text-black-200 font-bold text-xs whitespace-nowrap"
+    <div
+      key={movie.id}
+      className="flex items-center justify-between text-black text-sm bg-gray-50 p-1 rounded"
+    >
+      <div>
+        <Link
+          to={`/movie/${movie.slug}`}
+          className="font-medium break-words whitespace-normal"
+          style={{ color: movie.linkColor || "#1d4ed8" }}
+          title={movie.title}
         >
-          -  [Watch]
-        </a>
-      )}
+          {movie.title}
+          {movie.directLinksOnly && (
+            <span className="ml-2 text-pink-500 font-bold text-xs whitespace-nowrap">
+              [Direct Links]
+            </span>
+          )}
+        </Link>
+
+        {movie.watchUrl && (
+          <a
+            href={movie.watchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 text-gray-600 font-bold text-xs whitespace-nowrap"
+          >
+            - [Watch]
+          </a>
+        )}
+      </div>
     </div>
   ))}
 </div>
+
 
 
 
@@ -510,4 +532,4 @@ useEffect(() => {
   );
 };
 
-export default Header;
+export default Header; 
