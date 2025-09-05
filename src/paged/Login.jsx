@@ -6,10 +6,9 @@ import { assets } from '../assets/assets';
 import { AppContext } from '../context/AppContext';
 import { Helmet } from 'react-helmet';
 
-
 const Login = () => {
   const navigate = useNavigate();
-  const { backendUrl, setIsLoggedIn,setUserData,setIsAdmin} = useContext(AppContext);
+  const { backendUrl, setIsLoggedIn, setUserData, setIsAdmin } = useContext(AppContext);
 
   const [mode, setMode] = useState('Sign Up');
   const [name, setName] = useState('');
@@ -21,43 +20,38 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     axios.defaults.withCredentials = true;
-  
+
     try {
       const endpoint = mode === 'Sign Up' ? 'register' : 'login';
       const url = `${backendUrl}/api/auth/${endpoint}`;
       const payload = mode === 'Sign Up' ? { name, email, password } : { email, password };
-  
-      console.log(`➡️ Submitting to ${url}`, payload);
-  
+
       const { data } = await axios.post(url, payload);
-      console.log('✅ Response:', data);
-  
+
       if (data.success) {
-        // 🔐 Clean up any old corrupted localStorage values
-        if (localStorage.getItem('userData') === 'undefined') {
-          localStorage.removeItem('userData');
-        }
-  
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('userData', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token); // ✅ save token
-  
+        localStorage.setItem('token', data.token);
+      
         setIsLoggedIn(true);
-        setUserData(data.user); // ✅ set context
-        setIsAdmin(data.user.email === "sanjusanjay0444@gmail.com"); // ✅ admin check
-  
+        setUserData(data.user);
+        setIsAdmin(data.user.email === 'sanjusanjay0444@gmail.com');
+      
+        // ✅ Toast notification for successful login
+        toast.success(`Login successful! Welcome, ${data.user.name}`);
+      
         navigate('/');
       } else {
         toast.error(data.message || 'Unknown error occurred.');
       }
+      
     } catch (error) {
-      console.error('❌ Login/Register Error:', error.response?.data || error.message);
+      console.error('Login/Register Error:', error.response?.data || error.message);
       toast.error(error.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
-  
 
   return (
     <>
@@ -69,101 +63,94 @@ const Login = () => {
         />
         <link rel="canonical" href="https://www.1anchormovies.live/login" />
       </Helmet>
-  
-      {/* Background stays same */}
+
+      {/* Background */}
       <div
-        className="relative w-full min-h-screen flex items-center justify-center bg-cover bg-center"
+        className="relative w-full min-h-screen flex items-center justify-center bg-cover bg-center px-4 sm:px-0"
         style={{
           backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url('/bg.png')`,
         }}
       >
         <div className="absolute inset-0 backdrop-blur-[2px]" />
-  
-        {/* Blue Transparent Glassy Card */}
-        <div className="relative z-10 bg-blue-900/40 backdrop-blur-md p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-white/10 text-white">
-          <h2 className="text-3xl font-bold text-white text-center mb-4">
-            {mode === "Sign Up" ? "Create Account" : "Login"}
+
+        {/* Glassy Card */}
+        <div className="relative z-10 bg-blue-900/40 backdrop-blur-md p-6 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-white/10 text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-3">
+            {mode === 'Sign Up' ? 'Create Account' : 'Login'}
           </h2>
-          <p className="text-center mb-6 text-blue-100">
-            {mode === "Sign Up" ? "Create your account" : "Login to your account"}
+          <p className="text-center mb-6 text-blue-100 text-sm sm:text-base">
+            {mode === 'Sign Up' ? 'Create your account' : 'Login to your account'}
           </p>
-  
-          <form onSubmit={onSubmitHandler}>
-            {mode === "Sign Up" && (
-              <div className="mb-4">
-                <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
-                  <img src={assets.person_icon} alt="Name icon" className="mr-3 w-5" />
-                  <input
-                    onChange={(e) => setName(e.target.value)}
-                    value={name}
-                    type="text"
-                    placeholder="Full Name"
-                    required
-                    className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
-                  />
-                </div>
+
+          <form onSubmit={onSubmitHandler} className="flex flex-col gap-4">
+            {mode === 'Sign Up' && (
+              <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+                <img src={assets.person_icon} alt="Name icon" className="mr-3 w-5" />
+                <input
+                  onChange={(e) => setName(e.target.value)}
+                  value={name}
+                  type="text"
+                  placeholder="Full Name"
+                  required
+                  className="w-full bg-transparent text-white placeholder-blue-200 outline-none text-sm sm:text-base"
+                />
               </div>
             )}
-  
-            <div className="mb-4">
-              <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
-                <img src={assets.mail_icon} alt="Mail icon" className="mr-3 w-5" />
-                <input
-                  onChange={(e) => setEmail(e.target.value)}
-                  value={email}
-                  type="email"
-                  placeholder="Email"
-                  required
-                  className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
-                />
-              </div>
+
+            <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+              <img src={assets.mail_icon} alt="Mail icon" className="mr-3 w-5" />
+              <input
+                onChange={(e) => setEmail(e.target.value)}
+                value={email}
+                type="email"
+                placeholder="Email"
+                required
+                className="w-full bg-transparent text-white placeholder-blue-200 outline-none text-sm sm:text-base"
+              />
             </div>
-  
-            <div className="mb-4">
-              <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
-                <img src={assets.lock_icon} alt="Lock icon" className="mr-3 w-5" />
-                <input
-                  onChange={(e) => setPassword(e.target.value)}
-                  value={password}
-                  type="password"
-                  placeholder="Password"
-                  required
-                  className="w-full bg-transparent text-white placeholder-blue-200 outline-none"
-                />
-              </div>
+
+            <div className="flex items-center bg-white/10 px-4 py-2.5 rounded-full w-full">
+              <img src={assets.lock_icon} alt="Lock icon" className="mr-3 w-5" />
+              <input
+                onChange={(e) => setPassword(e.target.value)}
+                value={password}
+                type="password"
+                placeholder="Password"
+                required
+                className="w-full bg-transparent text-white placeholder-blue-200 outline-none text-sm sm:text-base"
+              />
             </div>
-  
+
             <p
-              onClick={() => navigate("/reset-password")}
-              className="mb-4 text-indigo-200 hover:underline cursor-pointer text-sm text-right"
+              onClick={() => navigate('/reset-password')}
+              className="text-indigo-200 hover:underline cursor-pointer text-xs sm:text-sm text-right"
             >
               Forgot Password?
             </p>
-  
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-full bg-black text-white font-semibold hover:bg-white hover:text-black transition duration-200"
+              className="w-full py-2.5 rounded-full bg-black text-white font-semibold hover:bg-white hover:text-black transition duration-200 text-sm sm:text-base"
             >
-              {loading ? "Processing..." : mode}
+              {loading ? 'Processing...' : mode}
             </button>
           </form>
-  
-          <p className="text-blue-100 text-center text-sm mt-6">
-            {mode === "Sign Up" ? "Already have an account? " : "Don't have an account? "}
+
+          <p className="text-blue-100 text-center text-xs sm:text-sm mt-5">
+            {mode === 'Sign Up' ? 'Already have an account? ' : "Don't have an account? "}
             <span
-              onClick={() => setMode(mode === "Sign Up" ? "Login" : "Sign Up")}
+              onClick={() => setMode(mode === 'Sign Up' ? 'Login' : 'Sign Up')}
               className="text-blue-300 cursor-pointer underline"
             >
-              {mode === "Sign Up" ? "Login here" : "Sign up"}
+              {mode === 'Sign Up' ? 'Login here' : 'Sign up'}
             </span>
           </p>
-  
-          {/* Continue without login */}
-          <div className="text-center mt-6">
+
+          <div className="text-center mt-4">
             <button
-              onClick={() => navigate("/")}
-              className="text-sm text-gray-200 hover:underline"
+              onClick={() => navigate('/')}
+              className="text-xs sm:text-sm text-gray-200 hover:underline"
             >
               Continue without login →
             </button>
@@ -172,9 +159,6 @@ const Login = () => {
       </div>
     </>
   );
-  
-  
-  };
-  
-  export default Login;
-  
+};
+
+export default Login;

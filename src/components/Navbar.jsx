@@ -103,7 +103,6 @@ const Navbar = () => {
       mobileSearchRef.current?.focus();
     }, 100);
   };
-
   return (
     <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow">
       {/* Desktop Navbar */}
@@ -157,6 +156,7 @@ const Navbar = () => {
           <div className="flex items-center gap-4 relative" ref={profileRef}>
             {userData ? (
               <>
+                {/* Notifications */}
                 <div className="relative">
                   <button onClick={() => setShowNotifications((v) => !v)}>
                     <img src="/bell.png" alt="Notifications" className="w-6 h-6" />
@@ -171,6 +171,7 @@ const Navbar = () => {
                   />
                 </div>
 
+                {/* Profile */}
                 <div
                   onClick={() => setProfileOpen((v) => !v)}
                   className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
@@ -191,8 +192,7 @@ const Navbar = () => {
                         <div className="flex gap-2">
                           <button
                             onClick={async () => {
-                              if (!newName.trim())
-                                return toast.error("Name cannot be empty");
+                              if (!newName.trim()) return toast.error("Name cannot be empty");
                               try {
                                 const { data } = await axios.put(
                                   `${backendUrl}/api/user/update-name`,
@@ -258,36 +258,118 @@ const Navbar = () => {
                 className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
               >
                 Login
-                <img src={assets.arrow_icon} alt="arrow" className="w-4" />
               </button>
             )}
           </div>
         </div>
 
+        {/* Optional Category Bar */}
         <CategoryBar onNavigate={handleNavigateCategory} />
       </div>
 
-      {/* Mobile Navbar */}
-      <div className="sm:hidden flex items-center justify-between px-4 py-3">
-        <button onClick={() => setMobileOpen(true)} className="text-white">
-          <Bars3Icon className="w-6 h-6" />
-        </button>
+{/* Mobile Navbar */}
+<div className="sm:hidden flex items-center justify-between px-4 py-3 bg-blue-700 relative">
+  <button onClick={() => setMobileOpen(true)} className="text-white">
+    <Bars3Icon className="w-6 h-6" />
+  </button>
 
-        <Link to="/" className="flex items-center justify-center">
-          <img src="/logo_39.png" alt="Anchor" className="h-9 w-auto object-contain" />
-        </Link>
+  <Link to="/" className="flex items-center justify-center">
+    <img src="/logo_39.png" alt="Anchor" className="h-9 w-auto object-contain" />
+  </Link>
 
-        <div className="w-6" />
+  {userData ? (
+    <div className="relative" ref={profileRef}>
+      <div
+        onClick={() => setProfileOpen((v) => !v)}
+        className="w-8 h-8 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
+      >
+        {userInitial}
       </div>
+
+      {profileOpen && (
+        <div className="absolute top-12 right-0 bg-white text-black rounded shadow-md z-50 w-48 p-2">
+          {editingName ? (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="border p-1 rounded text-sm"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    if (!newName.trim()) return toast.error("Name cannot be empty");
+                    try {
+                      const { data } = await axios.put(
+                        `${backendUrl}/api/user/update-name`,
+                        { newName: newName.trim() }
+                      );
+                      if (data.success) {
+                        toast.success("Name updated successfully!");
+                        setUserData((prev) => ({ ...prev, name: newName.trim() }));
+                        setEditingName(false);
+                      }
+                    } catch {
+                      toast.error("Error updating name");
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingName(false)}
+                  className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ul className="text-sm py-1">
+              <li className="px-4 py-2 border-b text-gray-700">{userData.name}</li>
+              <li>
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  ✏️ Edit Name
+                </button>
+              </li>
+              <li>
+                <Link
+                  to="/profile"
+                  onClick={() => setProfileOpen(false)}
+                  className="block px-4 py-2 hover:bg-gray-100"
+                >
+                  👤 View Profile
+                </Link>
+              </li>
+              <li>
+                <button
+                  onClick={logout}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  🚪 Logout
+                </button>
+              </li>
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  ) : (
+    <button onClick={() => navigate("/login")} className="text-white font-medium">
+      Login
+    </button>
+  )}
+</div>
 
       {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="sm:hidden fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setMobileOpen(false)}
-          ></div>
-
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Menu</h3>
@@ -314,7 +396,6 @@ const Navbar = () => {
                 placeholder="Search movies…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                ref={mobileSearchRef}
                 className="bg-transparent w-full text-sm focus:outline-none pr-6"
               />
               <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -396,10 +477,7 @@ const Navbar = () => {
           <span className="text-xs">Latest</span>
         </Link>
 
-        <button
-          onClick={handleMobileSearchClick}
-          className="flex flex-col items-center text-white"
-        >
+        <button onClick={handleMobileSearchClick} className="flex flex-col items-center text-white">
           <img src="/search.png" alt="Search" className="w-5 h-5" />
           <span className="text-xs">Search</span>
         </button>

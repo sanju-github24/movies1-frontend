@@ -129,36 +129,27 @@ const Profile = () => {
   }, [userData?.email]);
   
   return (
-    <div className="min-h-screen bg-white text-white py-12">
-      <div className="max-w-md mx-auto bg-black shadow-lg p-6 rounded">
-        <h1 className="text-2xl font-semibold mb-6">Your Profile</h1>
-
+    <div className="min-h-screen bg-gray-900 text-white py-8 px-4 sm:px-6">
+      <div className="max-w-md mx-auto bg-black shadow-lg p-6 sm:p-8 rounded-lg">
+        <h1 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Your Profile</h1>
+  
         {/* Email */}
         <div className="mb-4">
           <label className="text-sm font-medium flex items-center gap-2">
-            <img
-              src="/email.png"
-              alt="Email"
-              className="w-4 h-4 bg-white p-1 rounded"
-            />
+            <img src="/email.png" alt="Email" className="w-4 h-4 bg-white p-1 rounded" />
             Email:
           </label>
           <div className="text-gray-200 border px-3 py-2 rounded bg-gray-800 flex items-center justify-between">
-            <span>{userData?.email}</span>
+            <span className="truncate">{userData?.email}</span>
             {userData?.isAccountVerified && (
               <div className="flex items-center gap-1">
                 <span className="text-green-400 text-xs">Verified</span>
-                <img
-                  src="/check.png"
-                  alt="Verified"
-                  className="w-5 h-5"
-                  title="Email verified"
-                />
+                <img src="/check.png" alt="Verified" className="w-4 h-4" title="Email verified" />
               </div>
             )}
           </div>
         </div>
-
+  
         {/* Email Verification */}
         {!userData?.isAccountVerified && (
           <div className="mb-4">
@@ -166,26 +157,22 @@ const Profile = () => {
               <img src="/warning.png" alt="Verify" className="w-4 h-4" />
               Email not verified:
             </label>
-            <div className="mt-1 border bg-gray-800 px-3 py-2 rounded text-yellow-300 flex items-center justify-between">
-              <span>Click to resend verification email</span>
+            <div className="mt-1 border bg-gray-800 px-3 py-2 rounded text-yellow-300 flex items-center justify-between text-sm">
+              <span className="truncate">Click to resend verification email</span>
               <button
                 onClick={resendEmailVerification}
-                className="text-yellow-400 underline text-sm"
+                className="text-yellow-400 underline text-xs sm:text-sm"
               >
                 Resend
               </button>
             </div>
           </div>
         )}
-
+  
         {/* Username */}
         <div className="mb-4">
           <label className="text-sm font-medium flex items-center gap-2">
-            <img
-              src="/id-card.png"
-              alt="Username"
-              className="w-4 h-4 bg-white p-1 rounded"
-            />
+            <img src="/id-card.png" alt="Username" className="w-4 h-4 bg-white p-1 rounded" />
             Username:
           </label>
           {editing ? (
@@ -194,12 +181,12 @@ const Profile = () => {
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="border px-3 py-2 rounded w-full mt-1 bg-white text-black"
+                className="border px-3 py-2 rounded w-full mt-1 bg-white text-black text-sm sm:text-base"
               />
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 flex-wrap">
                 <button
                   onClick={saveName}
-                  className="bg-blue-600 text-white px-4 py-1 rounded"
+                  className="bg-blue-600 text-white px-4 py-1 rounded w-full sm:w-auto text-sm sm:text-base"
                 >
                   Save
                 </button>
@@ -208,40 +195,33 @@ const Profile = () => {
                     setEditing(false);
                     setNewName(userData?.name || "");
                   }}
-                  className="bg-gray-300 text-black px-4 py-1 rounded"
+                  className="bg-gray-300 text-black px-4 py-1 rounded w-full sm:w-auto text-sm sm:text-base"
                 >
                   Cancel
                 </button>
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-between border px-3 py-2 rounded mt-1 bg-gray-800">
-              <span>{userData?.name}</span>
-              <button
-                onClick={() => setEditing(true)}
-                className="text-sm text-blue-400"
-              >
+            <div className="flex items-center justify-between border px-3 py-2 rounded mt-1 bg-gray-800 text-sm sm:text-base">
+              <span className="truncate">{userData?.name}</span>
+              <button onClick={() => setEditing(true)} className="text-sm sm:text-base text-blue-400">
                 ✏️ Edit
               </button>
             </div>
           )}
         </div>
-
+  
         {/* Membership */}
         <div className="mb-6">
           <label className="text-sm font-medium flex items-center gap-2">
-            <img
-              src="/skill.png"
-              alt="Membership"
-              className="w-4 h-4 bg-white p-1 rounded"
-            />
+            <img src="/skill.png" alt="Membership" className="w-4 h-4 bg-white p-1 rounded" />
             Membership:
           </label>
           <div className="mt-2">
             <button
               onClick={applyForMembership}
               disabled={membershipStatus !== "none" || isApplying}
-              className={`px-4 py-2 rounded w-full ${
+              className={`px-4 py-2 rounded w-full text-sm sm:text-base ${
                 membershipStatus === "approved"
                   ? "bg-blue-600 cursor-not-allowed"
                   : membershipStatus === "pending"
@@ -259,17 +239,18 @@ const Profile = () => {
             </button>
           </div>
         </div>
-
+  
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="bg-red-600 text-white px-4 py-2 rounded w-full"
+          className="bg-red-600 text-white px-4 py-2 rounded w-full text-sm sm:text-base"
         >
           Logout
         </button>
       </div>
     </div>
   );
+  
 };
 
 export default Profile;
