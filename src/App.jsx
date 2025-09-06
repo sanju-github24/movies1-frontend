@@ -29,6 +29,7 @@ import Profile from "./paged/Profile"; // Adjust path if needed
 import UploadWatchHtml from './paged/UploadWatchHtml';
 import WatchPage from './paged/WatchPage';
 import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
+import WatchListPage from "./paged/WatchListPage";
 
 
 
@@ -39,12 +40,13 @@ const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const hidePaths = ["/login", "/verify-account", "/reset-password"];
+  const hidePaths = ["/login", "/verify-account", "/reset-password","/watch",];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
+  const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
   const isAdminPath = location.pathname.startsWith("/admin");
 
   const hideNavbarAndCategoryBar =
-    hidePaths.includes(location.pathname) || isBlogViewerPath || isAdminPath;
+    hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isAdminPath;
 
   const handleCategoryClick = (category) => {
     navigate(`/categories?name=${encodeURIComponent(category)}`);
@@ -121,6 +123,7 @@ const App = () => {
         <Route path="/category/:name" element={<CategoryPage />} /> {/* optional legacy */}
 
         <Route path="/latest" element={<LatestUploads />} />
+        <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
         <Route path="/watch/:slug" element={<WatchPage />} />

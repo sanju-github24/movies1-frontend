@@ -8,6 +8,7 @@ import { backendUrl } from "../utils/api";
 import { assets } from "../assets/assets";
 import { supabase } from "../utils/supabaseClient";
 import CategoryBar from "./CategoryBar";
+import { NavLink } from "react-router-dom";
 
 import {
   Bars3Icon,
@@ -124,6 +125,11 @@ const Navbar = () => {
                   Blogs
                 </Link>
               </li>
+              <li>
+    <Link to="/watch" className="hover:underline">
+      Watch
+    </Link>
+  </li>
             </ul>
 
             <form
@@ -465,23 +471,73 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* Mobile Bottom Navbar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-600 border-t shadow-md flex justify-around py-2 z-50 text-sm">
-        <Link to="/" className="flex flex-col items-center text-white">
-          <img src="/home.png" alt="Home" className="w-5 h-5" />
-          <span className="text-xs">Home</span>
-        </Link>
+{/* Mobile Bottom Navbar */}
+<div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-600 border-t shadow-md flex justify-around py-2 z-50 text-sm">
+  <NavLink
+    to="/"
+    end
+    className={({ isActive }) =>
+      `flex flex-col items-center ${
+        isActive ? "text-white" : "text-gray-300"
+      }`
+    }
+  >
+    <div
+      className={`p-2 rounded-full ${
+        location.pathname === "/" ? "bg-white/30" : ""
+      }`}
+    >
+      <img src="/home.png" alt="Home" className="w-5 h-5" />
+    </div>
+    <span className="text-xs mt-1">Home</span>
+  </NavLink>
 
-        <Link to="/latest" className="flex flex-col items-center text-white">
-          <img src="/routine.png" alt="Latest" className="w-5 h-5" />
-          <span className="text-xs">Latest</span>
-        </Link>
+  <NavLink
+    to="/latest"
+    className={({ isActive }) =>
+      `flex flex-col items-center ${
+        isActive ? "text-white" : "text-gray-300"
+      }`
+    }
+  >
+    <div
+      className={`p-2 rounded-full ${
+        location.pathname === "/latest" ? "bg-white/30" : ""
+      }`}
+    >
+      <img src="/routine.png" alt="Latest" className="w-5 h-5" />
+    </div>
+    <span className="text-xs mt-1">Latest</span>
+  </NavLink>
 
-        <button onClick={handleMobileSearchClick} className="flex flex-col items-center text-white">
-          <img src="/search.png" alt="Search" className="w-5 h-5" />
-          <span className="text-xs">Search</span>
-        </button>
-      </div>
+  <NavLink
+    to="/watch"
+    className={({ isActive }) =>
+      `flex flex-col items-center ${
+        isActive ? "text-white" : "text-gray-300"
+      }`
+    }
+  >
+    <div
+      className={`p-2 rounded-full ${
+        location.pathname.startsWith("/watch") ? "bg-white/30" : ""
+      }`}
+    >
+      <img src="/play-button.png" alt="Watch" className="w-5 h-5" />
+    </div>
+    <span className="text-xs mt-1">Watch</span>
+  </NavLink>
+
+  <button
+    onClick={handleMobileSearchClick}
+    className="flex flex-col items-center text-gray-300"
+  >
+    <div className="p-2 rounded-full">
+      <img src="/search.png" alt="Search" className="w-5 h-5" />
+    </div>
+    <span className="text-xs mt-1">Search</span>
+  </button>
+</div>
     </nav>
   );
 };
