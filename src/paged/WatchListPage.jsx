@@ -17,48 +17,59 @@ const WatchListPage = () => {
     const fetchMovies = async () => {
       setLoading(true);
   
-      // 1. Fetch watch_html data
-      const { data: watchData, error: watchError } = await supabase
-        .from("watch_html")
-        .select("id, title, slug, poster, created_at")
-        .order("created_at", { ascending: false });
+      try {
+        // 1. Fetch watch_html data (✅ include slug + cover_poster)
+        const { data: watchData, error: watchError } = await supabase
+          .from("watch_html")
+          .select("id, title, slug, poster, cover_poster, created_at")
+          .order("created_at", { ascending: false });
   
-      if (watchError) {
-        console.error("Watch HTML fetch error:", watchError.message);
+        if (watchError) {
+          console.error("Watch HTML fetch error:", watchError.message);
+          setLoading(false);
+          return;
+        }
+  
+        // 2. Fetch movies table (enrich with meta info)
+        const { data: moviesData, error: moviesError } = await supabase
+          .from("movies")
+          .select("title, language, categories, subCategory");
+  
+        if (moviesError) {
+          console.error("Movies fetch error:", moviesError.message);
+        }
+  
+        // 3. Merge data by title
+        const moviesWithMeta = watchData.map((item) => {
+          const match = moviesData?.find(
+            (m) =>
+              m.title.trim().toLowerCase() === item.title.trim().toLowerCase()
+          );
+  
+          return {
+            id: item.id,
+            slug: item.slug, // ✅ keep slug from watch_html
+            title: item.title,
+            poster: item.poster || "/default-poster.jpg",
+            cover_poster: item.cover_poster || null, // ✅ hero section will use this
+            created_at: item.created_at,
+            language: match?.language || "Unknown",
+            categories: match?.categories || [],
+            subCategory: match?.subCategory || [],
+          };
+        });
+  
+        setMovies(moviesWithMeta);
+      } catch (err) {
+        console.error("Unexpected fetch error:", err);
+      } finally {
         setLoading(false);
-        return;
       }
-  
-      // 2. Fetch movies table (to enrich with language, categories, subCategory)
-      const { data: moviesData, error: moviesError } = await supabase
-        .from("movies")
-        .select("title, language, categories, subCategory");
-  
-      if (moviesError) {
-        console.error("Movies fetch error:", moviesError.message);
-      }
-  
-      // 3. Merge data by title
-      const moviesWithMeta = watchData.map((item) => {
-        const match = moviesData?.find(
-          (m) => m.title.trim().toLowerCase() === item.title.trim().toLowerCase()
-        );
-  
-        return {
-          ...item,
-          poster: item.poster || "/default-poster.jpg",
-          language: match?.language || "Unknown",
-          categories: match?.categories || [],
-          subCategory: match?.subCategory || [],
-        };
-      });
-  
-      setMovies(moviesWithMeta);
-      setLoading(false);
     };
   
     fetchMovies();
   }, []);
+  
   
   const filtered = movies.filter((m) =>
     m.title.toLowerCase().includes(search.toLowerCase())
@@ -140,49 +151,71 @@ const WatchListPage = () => {
         <Navbar />
       </div>
   
-      {/* Hero Section (uses cover_poster) */}
-      {!loading && latestMovies.length > 0 && (
-        <div className="relative w-full overflow-hidden">
+{/* Hero Section (uses only cover_poster) */}
+{!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
+  <div className="relative w-full overflow-hidden">
+    <div
+      ref={slideRef}
+      className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
+      style={{ scrollBehavior: "smooth" }}
+    >
+      {latestMovies
+        .filter((movie) => movie.cover_poster) // ✅ Only movies with cover_poster
+        .map((movie) => (
           <div
-            ref={slideRef}
-            className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
-            style={{ scrollBehavior: "smooth" }}
+            key={movie.id}
+            className="relative flex-none w-full h-[65vh] sm:h-[75vh] snap-center"
           >
-            {latestMovies.map((movie) => (
-              <div
-                key={movie.id}
-                className="relative flex-none w-full h-[65vh] sm:h-[75vh] snap-center"
+            <img
+              src={movie.cover_poster}
+              srcSet={`
+                ${movie.cover_poster}?w=768 768w,
+                ${movie.cover_poster}?w=1280 1280w,
+                ${movie.cover_poster}?w=1920 1920w
+              `}
+              sizes="(max-width: 768px) 768px,
+                     (max-width: 1280px) 1280px,
+                     1920px"
+              alt={movie.title || "Movie Cover"}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover brightness-75"
+              onError={(e) => {
+                e.currentTarget.src = "/default-cover.jpg";
+              }}
+            />
+
+            {/* Overlay Gradient & Content */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-6 sm:p-12">
+              <Link
+                to={`/watch/${movie.slug}`}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit mb-2"
               >
-                <img
-                  src={movie.cover_poster || movie.poster}
-                  alt={movie.title}
-                  className="w-full h-full object-cover brightness-75"
-                  onError={(e) => {
-                    e.currentTarget.src = "/default-cover.jpg";
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-6 sm:p-12">
-                  <Link
-                    to={`/watch/${movie.slug}`}
-                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit"
-                  >
-                    ▶ Watch Now
-                  </Link>
-                </div>
-              </div>
-            ))}
+                ▶ Watch Now
+              </Link>
+
+              {/* ✅ Show slug */}
+              <p className="text-gray-300 text-xs sm:text-sm font-mono">
+                {movie.slug}
+              </p>
+            </div>
           </div>
-          {/* Slide Dots */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-            {latestMovies.map((_, idx) => (
-              <span
-                key={idx}
-                className={`w-3 h-3 rounded-full ${
-                  idx === currentSlide ? "bg-white" : "bg-gray-500"
-                }`}
-              />
-            ))}
-          </div>
+        ))}
+    </div>
+
+    {/* Slide Dots */}
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+      {latestMovies
+        .filter((m) => m.cover_poster)
+        .map((_, idx) => (
+          <span
+            key={idx}
+            className={`w-3 h-3 rounded-full ${
+              idx === currentSlide ? "bg-white" : "bg-gray-500"
+            }`}
+          />
+        ))}
+    </div>
 
           {/* Search Toggle */}
           <button
