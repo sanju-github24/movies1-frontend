@@ -68,7 +68,7 @@ const Login = () => {
       <div
         className="relative w-full min-h-screen flex items-center justify-center bg-cover bg-center px-4 sm:px-0"
         style={{
-          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url('/bg.png')`,
+          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8)), url('/background_banner.jpg')`,
         }}
       >
         <div className="absolute inset-0 backdrop-blur-[2px]" />

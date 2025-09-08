@@ -30,6 +30,7 @@ import UploadWatchHtml from './paged/UploadWatchHtml';
 import WatchPage from './paged/WatchPage';
 import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
 import WatchListPage from "./paged/WatchListPage";
+import AdminUp4streamFiles from './components/AdminUp4streamFiles';
 
 
 
@@ -151,6 +152,7 @@ const App = () => {
           <Route path="stories" element={<AdminStories />} />
           <Route path="upload-watch-html" element={<UploadWatchHtml />} />
           <Route path="members" element={<AdminMembers />} />
+          <Route path="/admin/up4stream" element={<AdminUp4streamFiles />} />
         </Route>
 
         {/* Fallback */}

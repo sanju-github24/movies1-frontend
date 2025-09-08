@@ -109,49 +109,50 @@ const WatchListPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Desktop Navbar */}
-      <div className="hidden sm:flex w-full bg-blue-700 text-white px-4 py-1.5 items-center justify-between sticky top-0 z-50 shadow">
-        <Link to="/" className="shrink-0">
-          <img
-            src="/logo_3.png"
-            alt="Logo"
-            className="w-16 md:w-20 object-contain"
-          />
-        </Link>
-        <ul className="flex gap-3 text-xs font-medium">
-          <li>
-            <Link
-              to="/"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Home
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/latest"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Latest Uploads
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/blogs"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Blogs
-            </Link>
-          </li>
-        </ul>
-      </div>
+   {/* Desktop Navbar (Thin) */}
+<div className="hidden sm:flex w-full bg-blue-700 text-white px-4 py-1 items-center justify-between sticky top-0 z-50 shadow">
+  <Link to="/" className="shrink-0">
+    <img
+      src="/logo_39.png"
+      alt="Logo"
+      className="w-12 md:w-16 object-contain" // smaller logo
+    />
+  </Link>
+  <ul className="flex gap-3 text-xs font-medium">
+    <li>
+      <Link
+        to="/"
+        className="hover:underline hover:text-blue-300 transition-colors"
+      >
+        Home
+      </Link>
+    </li>
+    <li>
+      <Link
+        to="/latest"
+        className="hover:underline hover:text-blue-300 transition-colors"
+      >
+        Latest Uploads
+      </Link>
+    </li>
+    <li>
+      <Link
+        to="/blogs"
+        className="hover:underline hover:text-blue-300 transition-colors"
+      >
+        Blogs
+      </Link>
+    </li>
+  </ul>
+</div>
+
   
       {/* Mobile Navbar */}
       <div className="sm:hidden sticky top-0 z-50">
         <Navbar />
       </div>
   
-{/* Hero Section (uses only cover_poster) */}
+{/* Hero Section (uses only cover_poster, max 5 movies) */}
 {!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
   <div className="relative w-full overflow-hidden">
     <div
@@ -161,6 +162,7 @@ const WatchListPage = () => {
     >
       {latestMovies
         .filter((movie) => movie.cover_poster) // ✅ Only movies with cover_poster
+        .slice(0, 5) // ✅ Limit to latest 5
         .map((movie) => (
           <div
             key={movie.id}
@@ -207,6 +209,7 @@ const WatchListPage = () => {
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
       {latestMovies
         .filter((m) => m.cover_poster)
+        .slice(0, 5) // ✅ Match with 5 slides
         .map((_, idx) => (
           <span
             key={idx}

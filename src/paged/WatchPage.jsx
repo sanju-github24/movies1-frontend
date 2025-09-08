@@ -1,18 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
-import { Link } from "react-router-dom";
+
+// ✅ Parse BBCode for URL, IMG, video, and title
+const parseBBCode = (code) => {
+  if (!code) return { title: "", img: "", url: "" };
+
+  const urlMatch = code.match(/\[URL=(.*?)\]/i);
+  const url = urlMatch ? urlMatch[1] : "";
+
+  const imgMatch = code.match(/\[IMG\](.*?)\[\/IMG\]/i);
+  const img = imgMatch ? imgMatch[1] : "";
+
+  // Remove BBCode to extract remaining text as title
+  const title = code.replace(/\[URL=.*?\]|\[\/URL\]|\[IMG\].*?\[\/IMG\]/gi, "").trim() || "Untitled";
+
+  return { title, img, url };
+};
 
 const WatchHtmlPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [htmlCode, setHtmlCode] = useState("");
   const [loading, setLoading] = useState(true);
+  const [embedSrc, setEmbedSrc] = useState(null);
+  const [title, setTitle] = useState("");
+  const [coverImg, setCoverImg] = useState("");
 
   useEffect(() => {
-    const fetchHtml = async () => {
+    const fetchData = async () => {
       setLoading(true);
+
       const { data, error } = await supabase
         .from("watch_html")
         .select("html_code, title")
@@ -22,14 +41,36 @@ const WatchHtmlPage = () => {
       if (error) {
         console.error(error.message);
         setHtmlCode("<h2 class='text-red-500'>Not Found 🚫</h2>");
-      } else {
-        setHtmlCode(data.html_code || "");
-        document.title = data.title + " | Watch";
+        setLoading(false);
+        return;
       }
+
+      const rawCode = data.html_code || "";
+
+      // Detect BBCode
+      if (rawCode.includes("[URL") || rawCode.includes("[IMG")) {
+        const { title, img, url } = parseBBCode(rawCode);
+        setTitle(title);
+        setCoverImg(img);
+        setHtmlCode(url ? `<iframe src="${url}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>` : "");
+        setEmbedSrc(url || null);
+      }
+      // Detect raw iframe HTML
+      else if (rawCode.includes("<iframe")) {
+        setHtmlCode(rawCode);
+        setEmbedSrc(rawCode.match(/src="([^"]+)"/i)?.[1] || null);
+        setTitle(data.title || "Untitled");
+      } else {
+        // fallback plain text or HTML
+        setHtmlCode(rawCode);
+        setTitle(data.title || "Untitled");
+      }
+
+      document.title = title + " | Watch";
       setLoading(false);
     };
 
-    fetchHtml();
+    fetchData();
   }, [slug]);
 
   if (loading) return <p className="text-center mt-20">⏳ Loading...</p>;
@@ -37,48 +78,29 @@ const WatchHtmlPage = () => {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Desktop Navbar */}
-      <div className="hidden sm:flex w-full bg-blue-700 text-white px-4 py-1.5 items-center justify-between sticky top-0 z-50 shadow">
+      <div className="hidden sm:flex w-full bg-blue-700 text-white px-4 py-1 items-center justify-between sticky top-0 z-50 shadow">
         <Link to="/" className="shrink-0">
-          <img
-            src="/logo_3.png"
-            alt="Logo"
-            className="w-16 md:w-20 object-contain"
-          />
+          <img src="/logo_3.png" alt="Logo" className="w-14 md:w-16 object-contain" />
         </Link>
         <ul className="flex gap-3 text-xs font-medium">
           <li>
-            <Link
-              to="/"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Home
-            </Link>
+            <Link to="/" className="hover:underline hover:text-blue-300">Home</Link>
           </li>
           <li>
-            <Link
-              to="/latest"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Latest Uploads
-            </Link>
+            <Link to="/latest" className="hover:underline hover:text-blue-300">Latest Uploads</Link>
           </li>
           <li>
-            <Link
-              to="/blogs"
-              className="hover:underline hover:text-blue-300 transition-colors"
-            >
-              Blogs
-            </Link>
+            <Link to="/blogs" className="hover:underline hover:text-blue-300">Blogs</Link>
           </li>
         </ul>
       </div>
-  
+
       {/* Mobile Navbar */}
       <div className="sm:hidden sticky top-0 z-50">
         <Navbar />
       </div>
-  
-      <div className="max-w-6xl mx-auto px-4 py-6">
+
+      <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
@@ -87,28 +109,32 @@ const WatchHtmlPage = () => {
           ⬅ Previous Page
         </button>
 
-        {/* Player 1 */}
-<h2 className="text-2xl font-bold text-center text-blue-400 mb-4">
-  🎬 Player 1
-</h2>
-<div className="w-full aspect-video bg-black rounded-lg overflow-hidden mb-10">
-  <div
-    className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>video]:w-full [&>video]:h-full"
-    dangerouslySetInnerHTML={{ __html: htmlCode }}
-  />
-</div>
+        {/* Movie Title */}
+        <h1 className="text-3xl font-bold text-center text-yellow-400 mb-4">{title}</h1>
 
-{/* Player 2 */}
-<h2 className="text-2xl font-bold text-center text-green-400 mb-4">
-  🎥 Player 2
-</h2>
-<div className="w-full aspect-video bg-black rounded-lg overflow-hidden">
-  <div
-    className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>video]:w-full [&>video]:h-full"
-    dangerouslySetInnerHTML={{ __html: htmlCode }}
-  />
-</div>
+        {/* Cover Image */}
+        {coverImg && (
+          <div className="w-full flex justify-center mb-6">
+            <img src={coverImg} alt={title} className="rounded-lg shadow-md max-h-80 object-contain" />
+          </div>
+        )}
 
+        {/* 🎬 Video Player */}
+        <div className="w-full aspect-video bg-black rounded-lg overflow-hidden mb-10 flex items-center justify-center">
+          {embedSrc ? (
+            <iframe
+              src={embedSrc}
+              frameBorder="0"
+              allowFullScreen
+              className="w-full h-full rounded-lg"
+            />
+          ) : (
+            <div
+              className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full"
+              dangerouslySetInnerHTML={{ __html: htmlCode }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
