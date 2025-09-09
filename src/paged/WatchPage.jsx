@@ -110,7 +110,9 @@ const WatchHtmlPage = () => {
         </button>
 
         {/* Movie Title */}
-        <h1 className="text-3xl font-bold text-center text-yellow-400 mb-4">{title}</h1>
+<h1 className="text-2xl sm:text-3xl font-bold text-center text-yellow-400 mb-4 leading-snug">
+  {title}
+</h1>
 
         {/* Cover Image */}
         {coverImg && (
@@ -119,22 +121,24 @@ const WatchHtmlPage = () => {
           </div>
         )}
 
-        {/* 🎬 Video Player */}
-        <div className="w-full aspect-video bg-black rounded-lg overflow-hidden mb-10 flex items-center justify-center">
-          {embedSrc ? (
-            <iframe
-              src={embedSrc}
-              frameBorder="0"
-              allowFullScreen
-              className="w-full h-full rounded-lg"
-            />
-          ) : (
-            <div
-              className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full"
-              dangerouslySetInnerHTML={{ __html: htmlCode }}
-            />
-          )}
-        </div>
+{/* 🎬 Video Player */}
+<div className="w-full bg-black rounded-lg overflow-hidden mb-10 flex items-center justify-center 
+  h-[60vh] sm:aspect-video sm:h-auto">
+  {embedSrc ? (
+    <iframe
+      src={embedSrc}
+      frameBorder="0"
+      allowFullScreen
+      className="w-full h-full rounded-lg"
+    />
+  ) : (
+    <div
+      className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full"
+      dangerouslySetInnerHTML={{ __html: htmlCode }}
+    />
+  )}
+</div>
+
       </div>
     </div>
   );
