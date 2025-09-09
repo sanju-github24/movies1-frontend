@@ -189,37 +189,35 @@ const WatchListPage = () => {
 
             {/* Overlay Gradient & Content */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-6 sm:p-12">
+            {/* ✅ Slug / Title – moved up & styled */}
+            <p className="text-white text-base sm:text-xl font-bold mb-4">
+                {movie.slug}
+              </p>
               <Link
                 to={`/watch/${movie.slug}`}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit mb-2"
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit mb-3"
               >
                 ▶ Watch Now
               </Link>
-
-              {/* ✅ Show slug */}
-              <p className="text-gray-300 text-xs sm:text-sm font-mono">
-                {movie.slug}
-              </p>
             </div>
           </div>
         ))}
     </div>
 
     {/* Slide Dots */}
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1.5">
       {latestMovies
         .filter((m) => m.cover_poster)
         .slice(0, 5) // ✅ Match with 5 slides
         .map((_, idx) => (
           <span
             key={idx}
-            className={`w-3 h-3 rounded-full ${
+            className={`w-2 h-2 rounded-full ${
               idx === currentSlide ? "bg-white" : "bg-gray-500"
             }`}
           />
         ))}
     </div>
-
           {/* Search Toggle */}
           <button
             onClick={() => setShowSearch(!showSearch)}
