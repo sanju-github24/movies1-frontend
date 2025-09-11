@@ -412,15 +412,26 @@ const Header = () => {
         </Link>
 
         {movie.watchUrl && (
-          <a
-            href={movie.watchUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-2 text-gray-600 font-bold text-xs whitespace-nowrap"
-          >
-            - [Watch]
-          </a>
-        )}
+  movie.watchUrl.includes("<iframe")
+    ? (
+      // ✅ Directly render iframe HTML
+      <div
+        className="w-full aspect-video mt-2 rounded overflow-hidden"
+        dangerouslySetInnerHTML={{ __html: movie.watchUrl }}
+      />
+    ) : (
+      // ✅ Fallback: treat it as a regular link
+      <a
+        href={movie.watchUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ml-2 text-gray-600 font-bold text-xs whitespace-nowrap"
+      >
+        - [Watch]
+      </a>
+    )
+)}
+
       </div>
     </div>
   ))}
