@@ -1,5 +1,6 @@
 // AppContext.jsx
 import { createContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { supabase } from "../utils/supabaseClient";
 import axios from "axios";
@@ -8,19 +9,29 @@ import { backendUrl } from "../utils/api";
 export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
+  const navigate = useNavigate(); // ✅ useNavigate inside context
   const [isLoggedIn, setIsLoggedIn] = useState(
     localStorage.getItem("isLoggedIn") === "true"
   );
+
   const [userData, setUserData] = useState(
     localStorage.getItem("userData")
       ? JSON.parse(localStorage.getItem("userData"))
       : null
   );
+
   const [isAdmin, setIsAdmin] = useState(
     userData?.email === "sanjusanjay0444@gmail.com"
   );
+
   const [movies, setMovies] = useState([]);
   const [allUsersCount, setAllUsersCount] = useState(0);
+
+  // ✅ Navigation handler exposed to components
+  const handleNavigate = (name) => {
+    if (!name) return;
+    navigate(`/category/${encodeURIComponent(name)}`);
+  };
 
   // ✅ Simple login function
   const login = (user) => {
@@ -37,7 +48,11 @@ export const AppContextProvider = ({ children }) => {
   // ✅ Simple logout function
   const logout = async () => {
     try {
-      await axios.post(`${backendUrl}/api/auth/logout`, {}, { withCredentials: true });
+      await axios.post(
+        `${backendUrl}/api/auth/logout`,
+        {},
+        { withCredentials: true }
+      );
 
       setIsLoggedIn(false);
       setUserData(null);
@@ -64,7 +79,8 @@ export const AppContextProvider = ({ children }) => {
 
       const normalized = (data || []).map((m) => ({
         ...m,
-        showOnHomepage: m.showOnHomepage === true || m.showOnHomepage === "true",
+        showOnHomepage:
+          m.showOnHomepage === true || m.showOnHomepage === "true",
       }));
 
       setMovies(normalized);
@@ -115,6 +131,7 @@ export const AppContextProvider = ({ children }) => {
         login, // expose login
         logout, // expose logout
         backendUrl,
+        onNavigate: handleNavigate, // ✅ expose navigation
       }}
     >
       {children}

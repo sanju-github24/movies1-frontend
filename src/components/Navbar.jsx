@@ -16,7 +16,7 @@ import {
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const { userData, setUserData, setIsLoggedIn } = useContext(AppContext);
+  const { userData, setUserData, setIsLoggedIn,  onNavigate,onClose } = useContext(AppContext);
 
   // State
   const [searchTerm, setSearchTerm] = useState("");
@@ -94,9 +94,10 @@ const Navbar = () => {
   };
 
   const handleNavigateCategory = (name) => {
-    navigate(`/categories?name=${encodeURIComponent(name)}`);
-    setMobileOpen(false);
+    navigate(`/category/${encodeURIComponent(name)}`);
+    setMobileOpen(false); // close mobile drawer if open
   };
+  
 
   const handleMobileSearchClick = () => {
     setMobileOpen(true);
@@ -422,51 +423,31 @@ const Navbar = () => {
                 Login
               </Link>
             )}
+{/* Languages (Mobile) */}
+<details open className="w-full">
+  <summary className="cursor-pointer font-medium text-gray-800 py-2 px-3 rounded-lg bg-gray-100 hover:bg-gray-200">
+    🌐 Languages
+  </summary>
+  <div className="mt-2 pl-4 flex flex-col gap-2">
+    {["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"].map(
+      (lang) => (
+        <button
+          key={lang}
+          onClick={() => {
+            if (onNavigate) onNavigate(lang); // ✅ call the handler from props
+            if (onClose) onClose();           // ✅ close mobile drawer if provided
+          }}
+          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-left text-sm hover:bg-blue-700 transition"
+        >
+          {lang}
+        </button>
+      )
+    )}
+  </div>
+</details>
 
-            {/* Categories */}
-            <details className="mb-3">
-              <summary className="cursor-pointer font-medium text-gray-800 py-2 px-3 rounded-lg bg-gray-100 hover:bg-gray-200">
-                🎬 Categories
-              </summary>
-              <div className="mt-2 pl-4 flex flex-col gap-2">
-                {[
-                  "Tamil Language",
-                  "Telugu Language",
-                  "Kannada Language",
-                  "Malayalam Language",
-                  "Hindi Language",
-                  "Hollywood Movies",
-                ].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => handleNavigateCategory(cat)}
-                    className="text-left text-gray-700 hover:text-blue-600 transition"
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </details>
 
-            {/* Languages */}
-            <details>
-              <summary className="cursor-pointer font-medium text-gray-800 py-2 px-3 rounded-lg bg-gray-100 hover:bg-gray-200">
-                🌐 Languages
-              </summary>
-              <div className="mt-2 pl-4 flex flex-col gap-2">
-                {["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"].map(
-                  (lang) => (
-                    <button
-                      key={lang}
-                      onClick={() => handleNavigateCategory(lang)}
-                      className="text-left text-gray-700 hover:text-blue-600 transition"
-                    >
-                      {lang}
-                    </button>
-                  )
-                )}
-              </div>
-            </details>
+
           </div>
         </div>
       )}

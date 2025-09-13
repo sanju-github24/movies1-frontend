@@ -320,15 +320,21 @@ const MovieDetail = () => {
           </div>
 
           {/* Direct Download */}
-          {download.directUrl && (
-            <a
-              href={download.directUrl}
-              download={download.filename}
-              className="block mt-2 text-xs text-blue-600 underline hover:text-blue-800"
-            >
-              ⬇️ Direct Download
-            </a>
-          )}
+{download.directUrl && (
+  <a
+    href={download.directUrl}
+    download={download.filename}
+    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow transition"
+  >
+    ⬇️ Direct Download
+    {download.size && (
+      <span className="text-gray-200 text-[10px] font-normal">
+        ({download.size})
+      </span>
+    )}
+  </a>
+)}
+
 
           {/* Seedr Notice */}
           <div className="flex items-center justify-center gap-2 my-2">
@@ -375,17 +381,18 @@ const MovieDetail = () => {
   })}
 
   {/* GP Links */}
-  {movie.downloads?.some((d) => d.gpLink) && (
-    <div className="bg-gray-50 border border-gray-300 p-3 rounded text-black text-xs space-y-1 mt-4">
-      <h3 className="font-semibold text-sm mb-1">GP Links:</h3>
+{movie.downloads?.some((d) => d.gpLink) && (
+  <div className="bg-gray-50 border border-gray-300 p-4 rounded text-black text-xs mt-4 text-center">
+    <h3 className="font-semibold text-sm mb-3">GP Links:</h3>
+    <div className="space-y-2">
       {movie.downloads
         .filter((d) => d.gpLink)
         .map((d, idx) => (
-          <p key={idx}>
-            <strong>{d.quality || d.size}:</strong>{" "}
+          <p key={idx} className="flex flex-col items-center">
+            <span className="font-semibold">{d.size}</span>
             <a
               href={d.gpLink}
-              className="text-blue-600 underline hover:text-blue-800"
+              className="text-blue-600 underline hover:text-blue-800 break-all"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -394,6 +401,7 @@ const MovieDetail = () => {
           </p>
         ))}
     </div>
+  </div>
   )}
 </div>
 

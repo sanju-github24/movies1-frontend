@@ -485,24 +485,77 @@ const fixOldMoviesShowFlag = async () => {
             }
           />
   
-          <div className="grid md:grid-cols-3 gap-4">
-            {["categories", "subCategory", "language"].map((key) => (
-              <input
-                key={key}
-                type="text"
-                placeholder={key}
-                className="p-3 bg-gray-800 rounded placeholder-gray-400"
-                value={movie[key].join(",")}
-                onChange={(e) =>
-                  setMovie((m) => ({
-                    ...m,
-                    [key]: e.target.value.split(",").map((x) => x.trim()),
-                  }))
-                }
-              />
-            ))}
-          </div>
-  
+  <div className="grid md:grid-cols-3 gap-4">
+  {/* Categories */}
+  <div className="p-3 bg-gray-800 rounded">
+    <label className="block mb-2 text-sm text-gray-300 font-semibold">Categories</label>
+    {["Hollywood", "Kollywood", "Bollywood"].map((cat) => (
+      <label key={cat} className="flex items-center space-x-2 text-gray-200 text-sm mb-1">
+        <input
+          type="checkbox"
+          checked={movie.categories.includes(cat)}
+          onChange={(e) => {
+            setMovie((m) => ({
+              ...m,
+              categories: e.target.checked
+                ? [...m.categories, cat]
+                : m.categories.filter((c) => c !== cat),
+            }));
+          }}
+          className="accent-blue-500"
+        />
+        <span>{cat}</span>
+      </label>
+    ))}
+  </div>
+
+  {/* SubCategory */}
+  <div className="p-3 bg-gray-800 rounded">
+    <label className="block mb-2 text-sm text-gray-300 font-semibold">SubCategory</label>
+    {["WEB-DL", "HDTS", "PRE-HD", "PreDVD"].map((sub) => (
+      <label key={sub} className="flex items-center space-x-2 text-gray-200 text-sm mb-1">
+        <input
+          type="checkbox"
+          checked={movie.subCategory.includes(sub)}
+          onChange={(e) => {
+            setMovie((m) => ({
+              ...m,
+              subCategory: e.target.checked
+                ? [...m.subCategory, sub]
+                : m.subCategory.filter((s) => s !== sub),
+            }));
+          }}
+          className="accent-green-500"
+        />
+        <span>{sub}</span>
+      </label>
+    ))}
+  </div>
+
+  {/* Languages */}
+  <div className="p-3 bg-gray-800 rounded">
+    <label className="block mb-2 text-sm text-gray-300 font-semibold">Languages</label>
+    {["Tamil", "Malayalam", "Kannada", "Telugu", "Hindi", "English"].map((lang) => (
+      <label key={lang} className="flex items-center space-x-2 text-gray-200 text-sm mb-1">
+        <input
+          type="checkbox"
+          checked={movie.language.includes(lang)}
+          onChange={(e) => {
+            setMovie((m) => ({
+              ...m,
+              language: e.target.checked
+                ? [...m.language, lang]
+                : m.language.filter((l) => l !== lang),
+            }));
+          }}
+          className="accent-yellow-500"
+        />
+        <span>{lang}</span>
+      </label>
+    ))}
+  </div>
+</div>
+
           <div className="flex items-center gap-6 flex-wrap">
             <div className="flex items-center gap-2">
               <input

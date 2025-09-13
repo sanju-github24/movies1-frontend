@@ -14,7 +14,9 @@ const parseBBCode = (code) => {
   const img = imgMatch ? imgMatch[1] : "";
 
   // Remove BBCode to extract remaining text as title
-  const title = code.replace(/\[URL=.*?\]|\[\/URL\]|\[IMG\].*?\[\/IMG\]/gi, "").trim() || "Untitled";
+  const title = code
+    .replace(/\[URL=.*?\]|\[\/URL\]|\[IMG\].*?\[\/IMG\]/gi, "")
+    .trim() || "Untitled";
 
   return { title, img, url };
 };
@@ -27,6 +29,7 @@ const WatchHtmlPage = () => {
   const [embedSrc, setEmbedSrc] = useState(null);
   const [title, setTitle] = useState("");
   const [coverImg, setCoverImg] = useState("");
+  const [watchUrl, setWatchUrl] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,7 +37,7 @@ const WatchHtmlPage = () => {
 
       const { data, error } = await supabase
         .from("watch_html")
-        .select("html_code, title")
+        .select("html_code, title, watchUrl")
         .eq("slug", slug)
         .single();
 
@@ -46,13 +49,18 @@ const WatchHtmlPage = () => {
       }
 
       const rawCode = data.html_code || "";
+      setWatchUrl(data.watchUrl || ""); // ✅ store direct watch link if present
 
       // Detect BBCode
       if (rawCode.includes("[URL") || rawCode.includes("[IMG")) {
         const { title, img, url } = parseBBCode(rawCode);
         setTitle(title);
         setCoverImg(img);
-        setHtmlCode(url ? `<iframe src="${url}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>` : "");
+        setHtmlCode(
+          url
+            ? `<iframe src="${url}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>`
+            : ""
+        );
         setEmbedSrc(url || null);
       }
       // Detect raw iframe HTML
@@ -66,7 +74,7 @@ const WatchHtmlPage = () => {
         setTitle(data.title || "Untitled");
       }
 
-      document.title = title + " | Watch";
+      document.title = (data.title || "Watch") + " | AnchorMovies";
       setLoading(false);
     };
 
@@ -110,28 +118,41 @@ const WatchHtmlPage = () => {
         </button>
 
         {/* Movie Title */}
-<h1 className="text-2xl sm:text-3xl font-bold text-center text-yellow-400 mb-4 leading-snug">
-  {title}
-</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-center text-yellow-400 mb-4 leading-snug">
+          {title}
+        </h1>
 
         {/* Cover Image */}
         {coverImg && (
           <div className="w-full flex justify-center mb-6">
-            <img src={coverImg} alt={title} className="rounded-lg shadow-md max-h-80 object-contain" />
+            <img
+              src={coverImg}
+              alt={title}
+              className="rounded-lg shadow-md max-h-80 object-contain"
+            />
           </div>
         )}
 
-{/* 🎬 Video Player */}
-<div className="w-full bg-black rounded-lg overflow-hidden mb-10 flex items-center justify-center 
-  h-[60vh] sm:aspect-video sm:h-auto">
+{/* 🎬 Video Player OR Watch Link */}
+<div className="w-full bg-black rounded-lg overflow-hidden mb-10 flex items-center justify-center h-[60vh] sm:aspect-video sm:h-auto">
   {embedSrc ? (
+    // ✅ If we already detected an iframe/embed
     <iframe
       src={embedSrc}
       frameBorder="0"
       allowFullScreen
       className="w-full h-full rounded-lg"
     />
+  ) : watchUrl ? (
+    // ✅ Instead of showing link, embed it directly
+    <iframe
+      src={watchUrl}
+      frameBorder="0"
+      allowFullScreen
+      className="w-full h-full rounded-lg"
+    />
   ) : (
+    // ✅ fallback for raw HTML or text
     <div
       className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full"
       dangerouslySetInnerHTML={{ __html: htmlCode }}

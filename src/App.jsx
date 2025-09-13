@@ -37,11 +37,12 @@ import AdminUp4streamFiles from './components/AdminUp4streamFiles';
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState("");
-  const [mobileOpen, setMobileOpen] = useState(false); // track mobile drawer
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const hidePaths = ["/login", "/verify-account", "/reset-password","/watch",];
+  // Hide navbar & category bar on specific paths
+  const hidePaths = ["/login", "/verify-account", "/reset-password"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
   const isAdminPath = location.pathname.startsWith("/admin");
@@ -49,14 +50,10 @@ const App = () => {
   const hideNavbarAndCategoryBar =
     hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isAdminPath;
 
-  const handleCategoryClick = (category) => {
-    navigate(`/categories?name=${encodeURIComponent(category)}`);
-    setMobileOpen(false); // close drawer on click
-  };
-
-  const handleLanguageClick = (language) => {
-    navigate(`/categories?name=${encodeURIComponent(language)}`);
-    setMobileOpen(false);
+  // ✅ Unified handler for language navigation
+  const handleNavigate = (name) => {
+    navigate(`/category/${encodeURIComponent(name)}`);
+    setMobileOpen(false); // close mobile drawer
   };
 
   return (
@@ -72,37 +69,47 @@ const App = () => {
         pauseOnHover
       />
 
-      <AdScriptLoader />
-
       {!hideNavbarAndCategoryBar && (
         <>
           {/* Desktop Navbar */}
-          <div className="hidden sm:block">
-            <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-           
-          </div>
+          
+<div className="hidden sm:block">
+  <Navbar 
+    searchTerm={searchTerm} 
+    setSearchTerm={setSearchTerm} 
+    onNavigate={handleNavigate} // ✅ pass it
+  />
+</div>
+
+
 
           {/* Mobile Navbar */}
           <div className="sm:hidden">
-            <Navbar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              isMobile={true}
-              mobileOpen={mobileOpen}
-              setMobileOpen={setMobileOpen}
-            />
+          <Navbar
+  searchTerm={searchTerm}
+  setSearchTerm={setSearchTerm}
+  isMobile={true}
+  mobileOpen={mobileOpen}
+  setMobileOpen={setMobileOpen}
+  onNavigate={handleNavigate} // ✅ pass the handler
+/>
+
+
             {/* Mobile Drawer */}
             {mobileOpen && (
               <div className="fixed inset-0 z-50">
+                {/* Overlay */}
                 <div
                   className="absolute inset-0 bg-black/60"
                   onClick={() => setMobileOpen(false)}
                 ></div>
+
+                {/* Drawer */}
                 <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl">
                   <CategoryBar
                     isMobile={true}
-                    onCategoryClick={handleCategoryClick}
-                    onLanguageClick={handleLanguageClick}
+                    onNavigate={handleNavigate}
+                    onClose={() => setMobileOpen(false)}
                   />
                 </div>
               </div>
@@ -110,7 +117,6 @@ const App = () => {
           </div>
         </>
       )}
-
       {/* Routes */}
       <Routes>
         {/* Public Routes */}
@@ -118,16 +124,14 @@ const App = () => {
         <Route path="/movie/:code" element={<MovieDetail />} />
         <Route path="/search" element={<SearchResults searchTerm={searchTerm} />} />
 
-        {/* Category & Language Pages */}
-        <Route path="/categories" element={<CategoryPage type="category" />} />
-        <Route path="/languages" element={<CategoryPage type="language" />} />
-        <Route path="/category/:name" element={<CategoryPage />} /> {/* optional legacy */}
+        {/* Language Pages */}
+        <Route path="/category/:name" element={<CategoryPage />} />
 
         <Route path="/latest" element={<LatestUploads />} />
         <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
-        <Route path="/watch/:slug" element={<WatchPage />} />
+        <Route path="/watch/:slug" element={<WatchListPage />} />
 
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
@@ -135,7 +139,7 @@ const App = () => {
         {/* Email Verification */}
         <Route path="/verify-account" element={<EmailVerify />} />
 
-        {/* Auth Pages (only if not logged in) */}
+        {/* Auth Pages */}
         {!isLoggedIn && (
           <>
             <Route path="/login" element={<Login />} />
@@ -152,7 +156,7 @@ const App = () => {
           <Route path="stories" element={<AdminStories />} />
           <Route path="upload-watch-html" element={<UploadWatchHtml />} />
           <Route path="members" element={<AdminMembers />} />
-          <Route path="/admin/up4stream" element={<AdminUp4streamFiles />} />
+          <Route path="up4stream" element={<AdminUp4streamFiles />} />
         </Route>
 
         {/* Fallback */}
