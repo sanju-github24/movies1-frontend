@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
@@ -10,6 +10,7 @@ const LanguageRow = ({ language, movies }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
+  const navigate = useNavigate();
 
   const checkScroll = () => {
     if (rowRef.current) {
@@ -65,26 +66,28 @@ const LanguageRow = ({ language, movies }) => {
           {movies.map((movie) => (
             <div
               key={movie.id}
-              className="flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800"
+              className="flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800 cursor-pointer"
+              onClick={() => navigate(`/watch/${movie.slug}`)}
             >
-              <Link to={`/watch/${movie.slug}`}>
-                <img
-                  src={movie.poster}
-                  alt={movie.title}
-                  className="w-full h-56 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "/default-poster.jpg";
-                  }}
-                />
-              </Link>
+              <img
+                src={movie.poster}
+                alt={movie.title}
+                className="w-full h-56 object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/default-poster.jpg";
+                }}
+              />
               <div className="p-2 text-center font-medium">
                 <div className="text-sm text-white truncate">{movie.title}</div>
-                <Link
-                  to={`/watch/${movie.slug}`}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // prevent card click
+                    navigate(`/watch/${movie.slug}`);
+                  }}
                   className="inline-block mt-2 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
                 >
                   ▶ Watch
-                </Link>
+                </button>
               </div>
             </div>
           ))}
@@ -123,19 +126,13 @@ const WatchListPage = () => {
           .select("id, title, slug, poster, cover_poster, created_at")
           .order("created_at", { ascending: false });
 
-        if (watchError) {
-          console.error("Watch HTML fetch error:", watchError.message);
-          setLoading(false);
-          return;
-        }
+        if (watchError) throw new Error(watchError.message);
 
         const { data: moviesData, error: moviesError } = await supabase
           .from("movies")
           .select("title, language, categories, subCategory");
 
-        if (moviesError) {
-          console.error("Movies fetch error:", moviesError.message);
-        }
+        if (moviesError) throw new Error(moviesError.message);
 
         const moviesWithMeta = watchData.map((item) => {
           const match = moviesData?.find(
@@ -150,7 +147,7 @@ const WatchListPage = () => {
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || null,
             created_at: item.created_at,
-            language: match?.language || "Unknown",
+            language: match?.language || ["Unknown"],
             categories: match?.categories || [],
             subCategory: match?.subCategory || [],
           };
@@ -158,7 +155,7 @@ const WatchListPage = () => {
 
         setMovies(moviesWithMeta);
       } catch (err) {
-        console.error("Unexpected fetch error:", err);
+        console.error("Fetch error:", err.message);
       } finally {
         setLoading(false);
       }
@@ -173,11 +170,9 @@ const WatchListPage = () => {
   );
 
   const groupedByLanguage = filtered.reduce((acc, movie) => {
-    const langs = movie.language
-      ? Array.isArray(movie.language)
-        ? movie.language
-        : [movie.language]
-      : ["Unknown"];
+    const langs = Array.isArray(movie.language)
+      ? movie.language
+      : [movie.language || "Unknown"];
     langs.forEach((lang) => {
       if (!acc[lang]) acc[lang] = [];
       acc[lang].push(movie);
@@ -194,7 +189,9 @@ const WatchListPage = () => {
       setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
       if (slideRef.current) {
         slideRef.current.scrollTo({
-          left: slideRef.current.clientWidth * ((currentSlide + 1) % latestMovies.length),
+          left:
+            slideRef.current.clientWidth *
+            ((currentSlide + 1) % latestMovies.length),
           behavior: "smooth",
         });
       }
@@ -239,65 +236,52 @@ const WatchListPage = () => {
 
         {/* ✅ Hero Section */}
         {!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
-          <div className="relative w-full overflow-hidden">
-            <div
-              ref={slideRef}
-              className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
-            >
-              {latestMovies
-                .filter((movie) => movie.cover_poster)
-                .map((movie) => (
-                  <div
-                    key={movie.id}
-                    className="relative flex-none w-full h-[65vh] sm:h-[75vh] snap-center"
-                  >
-                    <img
-                      src={movie.cover_poster}
-                      alt={movie.title || "Movie Cover"}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover brightness-75"
-                      onError={(e) => {
-                        e.currentTarget.src = "/default-cover.jpg";
-                      }}
-                    />
+          <div className="relative w-full overflow-hidden bg-black">
+            <div className="relative w-full h-[65vh] sm:h-[75vh] flex justify-center items-center">
+{latestMovies
+  .filter((movie) => movie.cover_poster)
+  .map((movie, idx) => (
+    <div
+      key={movie.id}
+      className={`absolute inset-0 transition-opacity duration-1000 ${
+        idx === currentSlide
+          ? "opacity-100 z-20 pointer-events-auto"
+          : "opacity-0 z-10 pointer-events-none"
+      }`}
+    >
+      <img
+        src={movie.cover_poster}
+        alt={movie.title || "Movie Cover"}
+        loading="lazy"
+        decoding="async"
+        className="w-full h-full object-cover brightness-75 transform scale-95 transition-transform duration-500"
+        onError={(e) => {
+          e.currentTarget.src = "/default-cover.jpg";
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-6 sm:p-12">
+        <p className="text-white text-base sm:text-xl font-bold mb-2">
+          {movie.slug}
+        </p>
+        {movie.language?.length > 0 && (
+          <p className="text-gray-400 text-xs sm:text-sm mb-4">
+            {movie.language.join(" • ")}
+          </p>
+        )}
+        <Link
+          to={`/watch/${movie.slug}`}
+          className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit mb-3"
+        >
+          ▶ Watch Now
+        </Link>
+      </div>
+    </div>
+  ))}
 
-                    {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-6 sm:p-12">
-                      <p className="text-white text-base sm:text-xl font-bold mb-2">
-                        {movie.slug}
-                      </p>
-
-                      {(movie.categories?.length > 0 || movie.subCategory?.length > 0) && (
-                        <p className="text-gray-300 text-sm sm:text-base mb-2">
-                          {[...(movie.categories || []), ...(movie.subCategory || [])].join(" | ")}
-                        </p>
-                      )}
-
-                      {movie.language?.length > 0 && (
-                        <p className="text-gray-400 text-xs sm:text-sm mb-4">
-                          {movie.language.map((lang, idx) => (
-                            <span key={idx}>
-                              {idx > 0 && <span className="mx-1">•</span>}
-                              {lang}
-                            </span>
-                          ))}
-                        </p>
-                      )}
-
-                      <Link
-                        to={`/watch/${movie.slug}`}
-                        className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-semibold rounded w-fit mb-3"
-                      >
-                        ▶ Watch Now
-                      </Link>
-                    </div>
-                  </div>
-                ))}
             </div>
 
             {/* Dots */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
               {latestMovies.map((_, idx) => (
                 <span
                   key={idx}
@@ -311,7 +295,7 @@ const WatchListPage = () => {
             {/* Search */}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-black/60 hover:bg-black/80"
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/60 hover:bg-black/80 z-30"
             >
               {showSearch ? (
                 <XMarkIcon className="w-6 h-6 text-white" />
@@ -321,7 +305,7 @@ const WatchListPage = () => {
             </button>
 
             {showSearch && (
-              <div className="absolute top-16 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-30">
                 <input
                   type="text"
                   placeholder="🔍 Search movies..."

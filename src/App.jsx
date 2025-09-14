@@ -131,7 +131,7 @@ const App = () => {
         <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
-        <Route path="/watch/:slug" element={<WatchListPage />} />
+        <Route path="/watch/:slug" element={<WatchPage />} />
 
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
