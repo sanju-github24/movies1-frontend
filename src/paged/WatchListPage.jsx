@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
+// src/pages/WatchListPage.jsx
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import Navbar from "../components/Navbar"; // if you still want mobile hamburger
+import { backendUrl } from "../utils/api";
 
 /* ====== Language Row (swipe + arrows) ====== */
 const LanguageRow = ({ language, movies }) => {
@@ -11,7 +12,6 @@ const LanguageRow = ({ language, movies }) => {
   const [showRight, setShowRight] = useState(false);
   const navigate = useNavigate();
 
-  // Swipe handling
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
 
@@ -31,20 +31,11 @@ const LanguageRow = ({ language, movies }) => {
     }
   };
 
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-
+  const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
+  const handleTouchMove = (e) => (touchEndX.current = e.touches[0].clientX);
   const handleTouchEnd = () => {
     const distance = touchStartX.current - touchEndX.current;
-    if (Math.abs(distance) > 50) {
-      if (distance > 0) scroll("right");
-      else scroll("left");
-    }
+    if (Math.abs(distance) > 50) scroll(distance > 0 ? "right" : "left");
   };
 
   useEffect(() => {
@@ -65,7 +56,6 @@ const LanguageRow = ({ language, movies }) => {
       </h2>
 
       <div className="relative group">
-        {/* Left Arrow */}
         {showLeft && (
           <button
             onClick={() => scroll("left")}
@@ -75,7 +65,6 @@ const LanguageRow = ({ language, movies }) => {
           </button>
         )}
 
-        {/* Movies Row */}
         <div
           ref={rowRef}
           className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-3"
@@ -93,10 +82,9 @@ const LanguageRow = ({ language, movies }) => {
               <img
                 src={movie.poster}
                 alt={movie.title}
+                loading="lazy"
                 className="w-full h-56 object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "/default-poster.jpg";
-                }}
+                onError={(e) => (e.currentTarget.src = "/default-poster.jpg")}
               />
               <div className="p-2 text-center font-medium">
                 <div className="text-sm text-white truncate">{movie.title}</div>
@@ -114,7 +102,6 @@ const LanguageRow = ({ language, movies }) => {
           ))}
         </div>
 
-        {/* Right Arrow */}
         {showRight && (
           <button
             onClick={() => scroll("right")}
@@ -134,48 +121,75 @@ const WatchListPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-
   const [currentSlide, setCurrentSlide] = useState(0);
   const slideRef = useRef(null);
 
-  /* Fetch Movies */
   useEffect(() => {
     const fetchMovies = async () => {
       setLoading(true);
       try {
-        const { data: watchData, error: watchError } = await supabase
-          .from("watch_html")
-          .select("id, title, slug, poster, cover_poster, created_at")
-          .order("created_at", { ascending: false });
+        const [watchRes, moviesRes] = await Promise.all([
+          supabase
+            .from("watch_html")
+            .select("id, title, slug, bms_slug, poster, cover_poster, created_at")
+            .order("created_at", { ascending: false })
+            .limit(100),
+          supabase
+            .from("movies")
+            .select("slug, title, language, categories, subCategory, description"),
+        ]);
 
-        if (watchError) throw new Error(watchError.message);
+        if (watchRes.error) throw new Error(watchRes.error.message);
+        if (moviesRes.error) throw new Error(moviesRes.error.message);
 
-        const { data: moviesData, error: moviesError } = await supabase
-          .from("movies")
-          .select("title, language, categories, subCategory");
+        const moviesData = moviesRes.data || [];
 
-        if (moviesError) throw new Error(moviesError.message);
-
-        const moviesWithMeta = watchData.map((item) => {
-          const match = moviesData?.find(
-            (m) =>
-              m.title.trim().toLowerCase() === item.title.trim().toLowerCase()
-          );
+        // Merge data
+        const merged = watchRes.data.map((item) => {
+          const match =
+            moviesData.find((m) => m.slug === item.slug) ||
+            moviesData.find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
 
           return {
             id: item.id,
             slug: item.slug,
             title: item.title,
             poster: item.poster || "/default-poster.jpg",
-            cover_poster: item.cover_poster || null,
+            cover_poster: item.cover_poster || "/default-cover.jpg",
             created_at: item.created_at,
-            language: match?.language || ["Unknown"],
+            language: match?.language?.length ? match.language : ["Unknown"],
             categories: match?.categories || [],
             subCategory: match?.subCategory || [],
+            description: match?.description || "",
+            bms_slug: item.bms_slug,
           };
         });
 
-        setMovies(moviesWithMeta);
+        setMovies(merged);
+
+        // Non-blocking BMS poster updates
+        merged.forEach((item) => {
+          if (item.bms_slug) {
+            fetch(`${backendUrl}/api/bms?slug=${encodeURIComponent(item.bms_slug)}`)
+              .then((res) => res.json())
+              .then((json) => {
+                if (json.success && json.movie) {
+                  setMovies((prev) =>
+                    prev.map((m) =>
+                      m.slug === item.slug
+                        ? {
+                            ...m,
+                            poster: json.movie.poster || m.poster,
+                            cover_poster: json.movie.background || m.cover_poster,
+                          }
+                        : m
+                    )
+                  );
+                }
+              })
+              .catch(() => {});
+          }
+        });
       } catch (err) {
         console.error("Fetch error:", err.message);
       } finally {
@@ -186,34 +200,39 @@ const WatchListPage = () => {
     fetchMovies();
   }, []);
 
-  /* Filter + Group */
-  const filtered = movies.filter((m) =>
-    m.title.toLowerCase().includes(search.toLowerCase())
+  // Filter movies by search
+  const filtered = useMemo(
+    () => movies.filter((m) => m.title.toLowerCase().includes(search.toLowerCase())),
+    [movies, search]
   );
 
-  const groupedByLanguage = filtered.reduce((acc, movie) => {
-    const langs = Array.isArray(movie.language)
-      ? movie.language
-      : [movie.language || "Unknown"];
-    langs.forEach((lang) => {
-      if (!acc[lang]) acc[lang] = [];
-      acc[lang].push(movie);
-    });
-    return acc;
-  }, {});
+  // Group movies by language
+  const groupedByLanguage = useMemo(() => {
+    return filtered.reduce((acc, movie) => {
+      const langs = Array.isArray(movie.language)
+        ? movie.language
+        : typeof movie.language === "string"
+        ? movie.language.split(/[,|]/).map((l) => l.trim())
+        : ["Unknown"];
+      langs.forEach((lang) => {
+        const cleanLang = lang || "Unknown";
+        if (!acc[cleanLang]) acc[cleanLang] = [];
+        acc[cleanLang].push(movie);
+      });
+      return acc;
+    }, {});
+  }, [filtered]);
 
   const latestMovies = filtered.slice(0, 5);
 
-  /* Auto Slide Hero */
+  // Auto slider
   useEffect(() => {
     if (latestMovies.length === 0) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
       if (slideRef.current) {
         slideRef.current.scrollTo({
-          left:
-            slideRef.current.clientWidth *
-            ((currentSlide + 1) % latestMovies.length),
+          left: slideRef.current.clientWidth * ((currentSlide + 1) % latestMovies.length),
           behavior: "smooth",
         });
       }
@@ -223,23 +242,18 @@ const WatchListPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* ✅ Top Navbar (instead of sidebar) */}
+      {/* Navbar */}
       <header className="sticky top-0 z-50 bg-black/90 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          {/* Left: Logo */}
           <Link to="/" className="flex items-center">
             <img src="/logo_39.png" alt="Logo" className="h-10" />
           </Link>
-
-          {/* Center: Nav Links */}
           <nav className="hidden sm:flex gap-6 text-sm font-medium">
             <Link to="/" className="hover:text-blue-400 transition">Home</Link>
             <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
             <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
             <Link to="/watchlist" className="hover:text-blue-400 transition">My Watchlist</Link>
           </nav>
-
-          {/* Right: Search toggle */}
           <button
             onClick={() => setShowSearch(!showSearch)}
             className="p-2 rounded-full bg-black/60 hover:bg-black/80"
@@ -251,8 +265,6 @@ const WatchListPage = () => {
             )}
           </button>
         </div>
-
-        {/* Expanded search */}
         {showSearch && (
           <div className="px-4 pb-3 max-w-3xl mx-auto">
             <input
@@ -266,67 +278,65 @@ const WatchListPage = () => {
         )}
       </header>
 
-      {/* Hero Section */}
-{!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
-  <div className="relative w-full overflow-hidden bg-black">
-    <div className="relative w-full h-[45vh] sm:h-[75vh] flex justify-center items-center">
-      {latestMovies
-        .filter((movie) => movie.cover_poster)
-        .map((movie, idx) => (
-          <div
-            key={movie.id}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
-              idx === currentSlide
-                ? "opacity-100 z-20 pointer-events-auto"
-                : "opacity-0 z-10 pointer-events-none"
-            }`}
-          >
-            <img
-              src={movie.cover_poster}
-              alt={movie.title || "Movie Cover"}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover brightness-75 transition-transform duration-500"
-              onError={(e) => {
-                e.currentTarget.src = "/default-cover.jpg";
-              }}
-            />
-
-            {/* Overlay Content */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end sm:justify-end md:justify-center p-4 sm:p-12">
-              <p className="text-white text-lg sm:text-xl font-bold mb-2 line-clamp-1">
-                {movie.slug}
-              </p>
-              {movie.language?.length > 0 && (
-                <p className="text-gray-400 text-xs sm:text-sm mb-3">
-                  {movie.language.join(" • ")}
-                </p>
-              )}
-              <Link
-                to={`/watch/${movie.slug}`}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm md:text-base font-semibold rounded w-fit"
+      {/* Hero Slider */}
+      {!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
+        <div className="relative w-full overflow-hidden bg-black">
+          <div className="relative w-full h-[45vh] sm:h-[75vh] flex justify-center items-center">
+            {latestMovies.filter((movie) => movie.cover_poster).map((movie, idx) => (
+              <div
+                key={movie.id}
+                className={`absolute inset-0 transition-opacity duration-1000 ${
+                  idx === currentSlide
+                    ? "opacity-100 z-20 pointer-events-auto"
+                    : "opacity-0 z-10 pointer-events-none"
+                }`}
               >
-                ▶ Watch Now
-              </Link>
-            </div>
+                <img
+                  src={movie.cover_poster}
+                  alt={movie.title || "Movie Cover"}
+                  loading="lazy"
+                  className="w-full h-full object-cover brightness-75"
+                  onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
+                />
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-6 sm:p-10">
+                  <h2 className="text-white text-2xl sm:text-4xl font-extrabold drop-shadow-lg">
+                    {movie.slug}
+                  </h2>
+                  {movie.language?.length > 0 && (
+                    <p className="text-gray-300 text-sm sm:text-base">
+                      {movie.language.join(" • ")}
+                    </p>
+                  )}
+                  {movie.description && (
+                    <p className="hidden sm:block text-gray-200 text-sm md:text-base max-w-2xl line-clamp-3">
+                      {movie.description}
+                    </p>
+                  )}
+                  <Link
+                    to={`/watch/${movie.slug}`}
+                    className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+                  >
+                    ▶ Watch
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-    </div>
 
-    {/* Dots */}
-    <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
-      {latestMovies.map((_, idx) => (
-        <span
-          key={idx}
-          className={`w-2 h-2 rounded-full ${
-            idx === currentSlide ? "bg-white" : "bg-gray-500"
-          }`}
-        />
-      ))}
-    </div>
-  </div>
-)}
-
+          {/* Dots */}
+          <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
+            {latestMovies.map((_, idx) => (
+              <span
+                key={idx}
+                className={`w-2 h-2 rounded-full ${
+                  idx === currentSlide ? "bg-white" : "bg-gray-500"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Movies grouped by Language */}
       <div className="p-6 flex flex-col items-center">

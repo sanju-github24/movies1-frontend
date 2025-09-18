@@ -9,6 +9,7 @@ const UploadWatchHtml = () => {
   const { userData } = useContext(AppContext);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [bmsSlug, setBmsSlug] = useState(""); // New BMS Slug field
   const [htmlCode, setHtmlCode] = useState("");
   const [poster, setPoster] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,7 @@ const UploadWatchHtml = () => {
       id: uuidv4(),
       title: title.trim(),
       slug: slug.trim(),
+      bms_slug: bmsSlug.trim(), // Save BMS slug
       html_code: htmlCode.trim(),
       poster: poster.trim(),
       cover_poster: coverPoster.trim(),
@@ -65,6 +67,7 @@ const UploadWatchHtml = () => {
       toast.success("✅ HTML Code Uploaded!");
       setTitle("");
       setSlug("");
+      setBmsSlug("");
       setHtmlCode("");
       setPoster("");
       fetchWatchPages();
@@ -128,6 +131,18 @@ const UploadWatchHtml = () => {
               placeholder="unique-slug"
             />
           </div>
+
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">BMS Slug</label>
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-green-500 outline-none"
+              value={bmsSlug}
+              onChange={(e) => setBmsSlug(e.target.value)}
+              placeholder="madharaasi/ET00434543"
+            />
+          </div>
+
 
           <div className="mb-5">
   <label className="block font-semibold mb-2">Cover Poster URL</label>
@@ -211,6 +226,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(item.title);
   const [editSlug, setEditSlug] = useState(item.slug);
+  const [editBmsSlug, setEditBmsSlug] = useState(item.bms_slug || "");
   const [editPoster, setEditPoster] = useState(item.poster || "");
   const [editHtml, setEditHtml] = useState(item.html_code || "");
   const [editCoverPoster, setEditCoverPoster] = useState(item.cover_poster || "");
@@ -222,6 +238,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
       .update({
         title: editTitle.trim(),
         slug: editSlug.trim(),
+        bms_slug: editBmsSlug.trim(),
         poster: editPoster.trim(),
         cover_poster: editCoverPoster.trim(),
         html_code: editHtml.trim(),
@@ -249,6 +266,12 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           <input
             value={editSlug}
             onChange={(e) => setEditSlug(e.target.value)}
+            className="p-2 rounded bg-gray-700 text-white"
+          />
+           <input
+            value={editBmsSlug}
+            onChange={(e) => setEditBmsSlug(e.target.value)}
+            placeholder="BMS Slug"
             className="p-2 rounded bg-gray-700 text-white"
           />
           <input
