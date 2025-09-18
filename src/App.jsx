@@ -133,9 +133,7 @@ const App = () => {
         <Route path="/blogs/:slug" element={<BlogViewer />} />
         <Route path="/watch/:slug/*" element={<WatchPage />} />
 
-         <AdScriptLoader/>
-         <PopAdsScript/>  {/* ✅ Optional */}
-         <AdPopup/>      {/* ✅ Optional */}
+        
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
 
@@ -165,6 +163,9 @@ const App = () => {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+       <AdScriptLoader/>
+         <PopAdsScript/>  {/* ✅ Optional */}
+         <AdPopup/>      {/* ✅ Optional */}
     </div>
   );
 };
