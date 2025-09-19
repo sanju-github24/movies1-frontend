@@ -8,8 +8,8 @@ const WatchHtmlPage = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [embedSrc, setEmbedSrc] = useState(null);
   const [movieMeta, setMovieMeta] = useState(null);
+  const [servers, setServers] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -20,7 +20,7 @@ const WatchHtmlPage = () => {
         // Fetch from Supabase
         const { data: watchData, error: watchError } = await supabase
           .from("watch_html")
-          .select("slug, html_code, title, poster, cover_poster")
+          .select("slug, html_code, html_code2, title, poster, cover_poster")
           .eq("slug", slug)
           .single();
 
@@ -29,20 +29,26 @@ const WatchHtmlPage = () => {
           return;
         }
 
-        // Extract iframe src from html_code
-        const iframeSrc =
+        // Extract iframe srcs
+        const iframeSrc1 =
           watchData.html_code?.match(/src="([^"]+)"/i)?.[1] || null;
-        if (isMounted) setEmbedSrc(iframeSrc);
+        const iframeSrc2 =
+          watchData.html_code2?.match(/src="([^"]+)"/i)?.[1] || null;
 
-        // Store Supabase data
-        const meta = {
-          slug: watchData.slug, // ✅ Keep slug
-          title: watchData.title || "Untitled",
-          poster: watchData.poster || "/poster.png",
-          background: watchData.cover_poster || watchData.poster || "/poster.png",
-        };
+        if (isMounted) {
+          setServers([
+            { name: "Server 1", src: iframeSrc1 },
+            { name: "Server 2", src: iframeSrc2 },
+          ]);
 
-        if (isMounted) setMovieMeta(meta);
+          setMovieMeta({
+            slug: watchData.slug,
+            title: watchData.title || "Untitled",
+            poster: watchData.poster || "/poster.png",
+            background:
+              watchData.cover_poster || watchData.poster || "/poster.png",
+          });
+        }
       } catch {
         if (isMounted) setMovieMeta({ slug: "Error 🚫" });
       } finally {
@@ -108,7 +114,7 @@ const WatchHtmlPage = () => {
 
             <div className="text-center sm:text-left z-10">
               <h1 className="text-3xl sm:text-5xl font-bold text-white mb-4 drop-shadow-lg">
-                {movieMeta.slug} {/* ✅ Show slug column */}
+                {movieMeta.slug}
               </h1>
             </div>
           </div>
@@ -123,21 +129,30 @@ const WatchHtmlPage = () => {
           ⬅ Previous Page
         </button>
 
-        {/* Video Player */}
-        <div className="w-full aspect-video bg-black rounded-lg overflow-hidden mb-8 flex items-center justify-center">
-          {embedSrc ? (
+{/* Video Players */}
+<div className="space-y-10">
+  {servers.map(
+    (server, index) =>
+      server.src && (
+        <div key={index} className="flex flex-col items-center">
+          <h2 className="text-lg font-semibold mb-3 text-gray-200">
+            {server.name}
+          </h2>
+          <div className="w-full max-w-3xl aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-lg">
             <iframe
-              src={embedSrc}
+              src={server.src}
               frameBorder="0"
               allowFullScreen
               loading="lazy"
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
               className="w-full h-full rounded-lg"
             />
-          ) : (
-            <p className="text-gray-400 text-sm sm:text-base">⚠ No video available.</p>
-          )}
+          </div>
         </div>
+      )
+  )}
+</div>
+
       </div>
     </div>
   );

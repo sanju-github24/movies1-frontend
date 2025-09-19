@@ -9,11 +9,11 @@ const UploadWatchHtml = () => {
   const { userData } = useContext(AppContext);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
-  const [bmsSlug, setBmsSlug] = useState(""); // New BMS Slug field
   const [htmlCode, setHtmlCode] = useState("");
+  const [htmlCode2, setHtmlCode2] = useState(""); // ✅ New field for Server 2
   const [poster, setPoster] = useState("");
-  const [loading, setLoading] = useState(false);
   const [coverPoster, setCoverPoster] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -52,8 +52,8 @@ const UploadWatchHtml = () => {
       id: uuidv4(),
       title: title.trim(),
       slug: slug.trim(),
-      bms_slug: bmsSlug.trim(), // Save BMS slug
       html_code: htmlCode.trim(),
+      html_code2: htmlCode2.trim(), // ✅ Save Server 2
       poster: poster.trim(),
       cover_poster: coverPoster.trim(),
       created_at: new Date().toISOString(),
@@ -67,9 +67,10 @@ const UploadWatchHtml = () => {
       toast.success("✅ HTML Code Uploaded!");
       setTitle("");
       setSlug("");
-      setBmsSlug("");
       setHtmlCode("");
+      setHtmlCode2("");
       setPoster("");
+      setCoverPoster("");
       fetchWatchPages();
     }
     setLoading(false);
@@ -108,7 +109,9 @@ const UploadWatchHtml = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel */}
         <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-blue-300">➕ Add New Movie</h2>
+          <h2 className="text-xl font-semibold mb-4 text-blue-300">
+            ➕ Add New Movie
+          </h2>
 
           <div className="mb-5">
             <label className="block font-semibold mb-2">Movie Title</label>
@@ -133,28 +136,15 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">BMS Slug</label>
+            <label className="block font-semibold mb-2">Cover Poster URL</label>
             <input
               type="text"
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-green-500 outline-none"
-              value={bmsSlug}
-              onChange={(e) => setBmsSlug(e.target.value)}
-              placeholder="madharaasi/ET00434543"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              value={coverPoster}
+              onChange={(e) => setCoverPoster(e.target.value)}
+              placeholder="https://example.com/cover-poster.jpg"
             />
           </div>
-
-
-          <div className="mb-5">
-  <label className="block font-semibold mb-2">Cover Poster URL</label>
-  <input
-    type="text"
-    className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
-    value={coverPoster}
-    onChange={(e) => setCoverPoster(e.target.value)}
-    placeholder="https://example.com/cover-poster.jpg"
-  />
-</div>
-
 
           <div className="mb-5">
             <label className="block font-semibold mb-2">Poster URL</label>
@@ -168,12 +158,23 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">Watch HTML Code</label>
+            <label className="block font-semibold mb-2">Watch HTML Code (Server 1)</label>
             <textarea
               className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-              rows={8}
+              rows={5}
               value={htmlCode}
               onChange={(e) => setHtmlCode(e.target.value)}
+              placeholder="<iframe src='...'></iframe>"
+            />
+          </div>
+
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">Watch HTML Code (Server 2)</label>
+            <textarea
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-green-500 outline-none"
+              rows={5}
+              value={htmlCode2}
+              onChange={(e) => setHtmlCode2(e.target.value)}
               placeholder="<iframe src='...'></iframe>"
             />
           </div>
@@ -189,7 +190,9 @@ const UploadWatchHtml = () => {
 
         {/* Right Panel */}
         <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-green-400">📌 Recently Uploaded</h2>
+          <h2 className="text-xl font-semibold mb-4 text-green-400">
+            📌 Recently Uploaded
+          </h2>
 
           <input
             type="text"
@@ -226,11 +229,10 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(item.title);
   const [editSlug, setEditSlug] = useState(item.slug);
-  const [editBmsSlug, setEditBmsSlug] = useState(item.bms_slug || "");
   const [editPoster, setEditPoster] = useState(item.poster || "");
-  const [editHtml, setEditHtml] = useState(item.html_code || "");
   const [editCoverPoster, setEditCoverPoster] = useState(item.cover_poster || "");
-
+  const [editHtml, setEditHtml] = useState(item.html_code || "");
+  const [editHtml2, setEditHtml2] = useState(item.html_code2 || ""); // ✅ New field
 
   const handleSave = async () => {
     const { error } = await supabase
@@ -238,10 +240,10 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
       .update({
         title: editTitle.trim(),
         slug: editSlug.trim(),
-        bms_slug: editBmsSlug.trim(),
         poster: editPoster.trim(),
         cover_poster: editCoverPoster.trim(),
         html_code: editHtml.trim(),
+        html_code2: editHtml2.trim(), // ✅ Save Server 2
       })
       .eq("id", item.id);
 
@@ -268,19 +270,12 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
             onChange={(e) => setEditSlug(e.target.value)}
             className="p-2 rounded bg-gray-700 text-white"
           />
-           <input
-            value={editBmsSlug}
-            onChange={(e) => setEditBmsSlug(e.target.value)}
-            placeholder="BMS Slug"
+          <input
+            value={editCoverPoster}
+            onChange={(e) => setEditCoverPoster(e.target.value)}
+            placeholder="Cover Poster URL"
             className="p-2 rounded bg-gray-700 text-white"
           />
-          <input
-  value={editCoverPoster}
-  onChange={(e) => setEditCoverPoster(e.target.value)}
-  className="p-2 rounded bg-gray-700 text-white"
-  placeholder="Cover Poster URL"
-/>
-
           <input
             value={editPoster}
             onChange={(e) => setEditPoster(e.target.value)}
@@ -289,8 +284,16 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           <textarea
             value={editHtml}
             onChange={(e) => setEditHtml(e.target.value)}
-            rows={4}
+            rows={3}
             className="p-2 rounded bg-gray-700 text-white"
+            placeholder="Server 1 iframe"
+          />
+          <textarea
+            value={editHtml2}
+            onChange={(e) => setEditHtml2(e.target.value)}
+            rows={3}
+            className="p-2 rounded bg-gray-700 text-white"
+            placeholder="Server 2 iframe"
           />
           <div className="flex gap-2">
             <button
@@ -315,7 +318,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
             {item.poster && (
               <img
                 src={item.poster}
-                alt={item.title+ " cover"}
+                alt={item.title + " cover"}
                 className="w-20 h-28 object-cover mt-1 rounded"
                 onError={(e) => (e.currentTarget.src = "/default-poster.jpg")}
               />
