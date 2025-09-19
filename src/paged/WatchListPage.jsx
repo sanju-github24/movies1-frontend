@@ -125,80 +125,58 @@ const WatchListPage = () => {
   const slideRef = useRef(null);
 
   useEffect(() => {
-    const fetchMovies = async () => {
-      setLoading(true);
-      try {
-        const [watchRes, moviesRes] = await Promise.all([
-          supabase
-            .from("watch_html")
-            .select("id, title, slug, bms_slug, poster, cover_poster, created_at")
-            .order("created_at", { ascending: false })
-            .limit(100),
-          supabase
-            .from("movies")
-            .select("slug, title, language, categories, subCategory, description"),
-        ]);
+  const fetchMovies = async () => {
+    setLoading(true);
+    try {
+      const [watchRes, moviesRes] = await Promise.all([
+        supabase
+          .from("watch_html")
+          .select("id, title, slug, poster, cover_poster, created_at")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("movies")
+          .select("slug, title, language, categories, subCategory, description"),
+      ]);
 
-        if (watchRes.error) throw new Error(watchRes.error.message);
-        if (moviesRes.error) throw new Error(moviesRes.error.message);
+      if (watchRes.error) throw new Error(watchRes.error.message);
+      if (moviesRes.error) throw new Error(moviesRes.error.message);
 
-        const moviesData = moviesRes.data || [];
+      const moviesData = moviesRes.data || [];
 
-        // Merge data
-        const merged = watchRes.data.map((item) => {
-          const match =
-            moviesData.find((m) => m.slug === item.slug) ||
-            moviesData.find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
+      // Merge data
+      const merged = watchRes.data.map((item) => {
+        const match =
+          moviesData.find((m) => m.slug === item.slug) ||
+          moviesData.find(
+            (m) => m.title?.toLowerCase() === item.title?.toLowerCase()
+          );
 
-          return {
-            id: item.id,
-            slug: item.slug,
-            title: item.title,
-            poster: item.poster || "/default-poster.jpg",
-            cover_poster: item.cover_poster || "/default-cover.jpg",
-            created_at: item.created_at,
-            language: match?.language?.length ? match.language : ["Unknown"],
-            categories: match?.categories || [],
-            subCategory: match?.subCategory || [],
-            description: match?.description || "",
-            bms_slug: item.bms_slug,
-          };
-        });
+        return {
+          id: item.id,
+          slug: item.slug,
+          title: item.title,
+          poster: item.poster || "/default-poster.jpg",
+          cover_poster: item.cover_poster || "/default-cover.jpg",
+          created_at: item.created_at,
+          language: match?.language?.length ? match.language : ["Unknown"],
+          categories: match?.categories || [],
+          subCategory: match?.subCategory || [],
+          description: match?.description || "",
+        };
+      });
 
-        setMovies(merged);
+      setMovies(merged);
+    } catch (err) {
+      console.error("Fetch error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Non-blocking BMS poster updates
-        merged.forEach((item) => {
-          if (item.bms_slug) {
-            fetch(`${backendUrl}/api/bms?slug=${encodeURIComponent(item.bms_slug)}`)
-              .then((res) => res.json())
-              .then((json) => {
-                if (json.success && json.movie) {
-                  setMovies((prev) =>
-                    prev.map((m) =>
-                      m.slug === item.slug
-                        ? {
-                            ...m,
-                            poster: json.movie.poster || m.poster,
-                            cover_poster: json.movie.background || m.cover_poster,
-                          }
-                        : m
-                    )
-                  );
-                }
-              })
-              .catch(() => {});
-          }
-        });
-      } catch (err) {
-        console.error("Fetch error:", err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  fetchMovies();
+}, []);
 
-    fetchMovies();
-  }, []);
 
   // Filter movies by search
   const filtered = useMemo(
