@@ -5,12 +5,13 @@ import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 
+// ================== Main Upload Component ==================
 const UploadWatchHtml = () => {
   const { userData } = useContext(AppContext);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
-  const [htmlCode2, setHtmlCode2] = useState(""); // ✅ New field for Server 2
+  const [htmlCode2, setHtmlCode2] = useState(""); // ✅ New Server 2
   const [poster, setPoster] = useState("");
   const [coverPoster, setCoverPoster] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,6 +29,7 @@ const UploadWatchHtml = () => {
     );
   }
 
+  // 📌 Fetch Movies
   const fetchWatchPages = async () => {
     const { data, error } = await supabase
       .from("watch_html")
@@ -42,6 +44,7 @@ const UploadWatchHtml = () => {
     fetchWatchPages();
   }, []);
 
+  // 📌 Upload Movie
   const handleUpload = async () => {
     if (!title.trim() || !slug.trim() || !htmlCode.trim() || !poster.trim()) {
       return toast.error("❌ All fields are required!");
@@ -53,7 +56,7 @@ const UploadWatchHtml = () => {
       title: title.trim(),
       slug: slug.trim(),
       html_code: htmlCode.trim(),
-      html_code2: htmlCode2.trim(), // ✅ Save Server 2
+      html_code2: htmlCode2.trim(),
       poster: poster.trim(),
       cover_poster: coverPoster.trim(),
       created_at: new Date().toISOString(),
@@ -76,6 +79,7 @@ const UploadWatchHtml = () => {
     setLoading(false);
   };
 
+  // 📌 Delete Movie
   const handleDelete = async (id) => {
     if (!window.confirm("⚠️ Are you sure you want to delete this?")) return;
 
@@ -113,11 +117,12 @@ const UploadWatchHtml = () => {
             ➕ Add New Movie
           </h2>
 
+          {/* Movie Form */}
           <div className="mb-5">
             <label className="block font-semibold mb-2">Movie Title</label>
             <input
               type="text"
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter movie title"
@@ -128,7 +133,7 @@ const UploadWatchHtml = () => {
             <label className="block font-semibold mb-2">Slug (unique)</label>
             <input
               type="text"
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="unique-slug"
@@ -139,7 +144,7 @@ const UploadWatchHtml = () => {
             <label className="block font-semibold mb-2">Cover Poster URL</label>
             <input
               type="text"
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
               value={coverPoster}
               onChange={(e) => setCoverPoster(e.target.value)}
               placeholder="https://example.com/cover-poster.jpg"
@@ -150,7 +155,7 @@ const UploadWatchHtml = () => {
             <label className="block font-semibold mb-2">Poster URL</label>
             <input
               type="text"
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:ring-2 focus:ring-blue-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
               value={poster}
               onChange={(e) => setPoster(e.target.value)}
               placeholder="https://example.com/poster.jpg"
@@ -158,9 +163,11 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">Watch HTML Code (Server 1)</label>
+            <label className="block font-semibold mb-2">
+              Watch HTML Code (Server 1)
+            </label>
             <textarea
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono"
               rows={5}
               value={htmlCode}
               onChange={(e) => setHtmlCode(e.target.value)}
@@ -169,9 +176,11 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">Watch HTML Code (Server 2)</label>
+            <label className="block font-semibold mb-2">
+              Watch HTML Code (Server 2)
+            </label>
             <textarea
-              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono focus:ring-2 focus:ring-green-500 outline-none"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono"
               rows={5}
               value={htmlCode2}
               onChange={(e) => setHtmlCode2(e.target.value)}
@@ -182,7 +191,7 @@ const UploadWatchHtml = () => {
           <button
             onClick={handleUpload}
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full shadow-md"
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full"
           >
             {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
           </button>
@@ -197,7 +206,7 @@ const UploadWatchHtml = () => {
           <input
             type="text"
             placeholder="🔍 Search by title..."
-            className="border border-gray-700 bg-gray-800 p-3 rounded w-full mb-4 outline-none focus:ring-2 focus:ring-green-500"
+            className="border border-gray-700 bg-gray-800 p-3 rounded w-full mb-4"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -224,7 +233,7 @@ const UploadWatchHtml = () => {
 
 export default UploadWatchHtml;
 
-// ✅ Inline editable item component
+// ================== Inline Editable Item ==================
 const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(item.title);
@@ -232,8 +241,28 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [editPoster, setEditPoster] = useState(item.poster || "");
   const [editCoverPoster, setEditCoverPoster] = useState(item.cover_poster || "");
   const [editHtml, setEditHtml] = useState(item.html_code || "");
-  const [editHtml2, setEditHtml2] = useState(item.html_code2 || ""); // ✅ New field
+  const [editHtml2, setEditHtml2] = useState(item.html_code2 || "");
 
+  // 📌 Episodes
+  const [episodes, setEpisodes] = useState([]);
+  const [newEpisodes, setNewEpisodes] = useState([{ title: "", html: "" }]);
+
+  // Fetch episodes
+  const fetchEpisodes = async () => {
+    const { data, error } = await supabase
+      .from("watch_episodes")
+      .select("*")
+      .eq("watch_id", item.id)
+      .order("created_at", { ascending: true });
+
+    if (!error) setEpisodes(data);
+  };
+
+  useEffect(() => {
+    fetchEpisodes();
+  }, []);
+
+  // 💾 Save Movie
   const handleSave = async () => {
     const { error } = await supabase
       .from("watch_html")
@@ -243,22 +272,71 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
         poster: editPoster.trim(),
         cover_poster: editCoverPoster.trim(),
         html_code: editHtml.trim(),
-        html_code2: editHtml2.trim(), // ✅ Save Server 2
+        html_code2: editHtml2.trim(),
       })
       .eq("id", item.id);
 
-    if (error) {
-      toast.error("⚠️ Failed to update!");
-    } else {
+    if (error) toast.error("⚠️ Failed to update!");
+    else {
       toast.success("✅ Updated successfully!");
       setIsEditing(false);
       fetchWatchPages();
     }
   };
 
+  // ➕ Add Episode Input Field
+  const handleAddEpisodeField = () => {
+    setNewEpisodes([...newEpisodes, { title: "", html: "" }]);
+  };
+
+  // Change new episode input
+  const handleEpisodeChange = (index, field, value) => {
+    const updated = [...newEpisodes];
+    updated[index][field] = value;
+    setNewEpisodes(updated);
+  };
+
+  // 💾 Save Episodes
+  const handleSaveEpisodes = async () => {
+    const validEpisodes = newEpisodes.filter(
+      (ep) => ep.title.trim() && ep.html.trim()
+    );
+    if (validEpisodes.length === 0) {
+      return toast.error("❌ Please fill at least one episode!");
+    }
+
+    const records = validEpisodes.map((ep) => ({
+      id: uuidv4(),
+      watch_id: item.id,
+      episode_title: ep.title.trim(),
+      episode_html: ep.html.trim(),
+    }));
+
+    const { error } = await supabase.from("watch_episodes").insert(records);
+
+    if (error) toast.error("⚠️ Failed to add episodes!");
+    else {
+      toast.success(`✅ ${records.length} episode(s) added!`);
+      setNewEpisodes([{ title: "", html: "" }]);
+      fetchEpisodes();
+    }
+  };
+
+  // 🗑️ Delete Episode
+  const handleDeleteEpisode = async (id) => {
+    if (!window.confirm("Delete this episode?")) return;
+    const { error } = await supabase.from("watch_episodes").delete().eq("id", id);
+    if (error) toast.error("⚠️ Failed to delete episode!");
+    else {
+      toast.success("🗑️ Episode deleted!");
+      setEpisodes(episodes.filter((ep) => ep.id !== id));
+    }
+  };
+
   return (
-    <li className="bg-gray-800 p-4 rounded-lg flex flex-col gap-2">
+    <li className="bg-gray-800 p-4 rounded-lg flex flex-col gap-3">
       {isEditing ? (
+        // ✏️ Edit Mode
         <div className="flex flex-col gap-2">
           <input
             value={editTitle}
@@ -311,6 +389,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           </div>
         </div>
       ) : (
+        // Normal View
         <div className="flex justify-between items-center">
           <div>
             <p className="font-semibold">{item.title}</p>
@@ -340,6 +419,75 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           </div>
         </div>
       )}
+
+      {/* 🎬 Episodes */}
+      <div className="mt-3 border-t border-gray-700 pt-3">
+        <h3 className="font-semibold text-blue-300 mb-2">📺 Episodes</h3>
+
+        {episodes.length === 0 ? (
+          <p className="text-gray-400 text-sm">No episodes yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {episodes.map((ep) => (
+              <li
+                key={ep.id}
+                className="flex justify-between bg-gray-700 px-3 py-2 rounded"
+              >
+                <span>{ep.episode_title}</span>
+                <button
+                  onClick={() => handleDeleteEpisode(ep.id)}
+                  className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm"
+                >
+                  🗑️
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Add Episodes */}
+        <div className="mt-3 flex flex-col gap-3">
+          {newEpisodes.map((ep, index) => (
+            <div
+              key={index}
+              className="flex flex-col gap-2 bg-gray-700 p-3 rounded"
+            >
+              <input
+                value={ep.title}
+                onChange={(e) =>
+                  handleEpisodeChange(index, "title", e.target.value)
+                }
+                placeholder={`Episode Title ${index + 1}`}
+                className="p-2 rounded bg-gray-800 text-white"
+              />
+              <textarea
+                value={ep.html}
+                onChange={(e) =>
+                  handleEpisodeChange(index, "html", e.target.value)
+                }
+                placeholder="<iframe src='...'></iframe>"
+                rows={2}
+                className="p-2 rounded bg-gray-800 text-white"
+              />
+            </div>
+          ))}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddEpisodeField}
+              className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-2 rounded w-full"
+            >
+              ➕ Add Another Episode Field
+            </button>
+            <button
+              onClick={handleSaveEpisodes}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded w-full"
+            >
+              💾 Save Episodes
+            </button>
+          </div>
+        </div>
+      </div>
     </li>
   );
 };
