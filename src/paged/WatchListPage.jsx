@@ -76,9 +76,18 @@ const LanguageRow = ({ language, movies }) => {
           {movies.map((movie) => (
             <div
               key={movie.id}
-              className="flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800 cursor-pointer"
+              className="relative flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800 cursor-pointer"
               onClick={() => navigate(`/watch/${movie.slug}`)}
             >
+              {/* 🔖 Sub-Category Label */}
+              {movie.subCategory?.length > 0 && (
+                <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                  {Array.isArray(movie.subCategory)
+                    ? movie.subCategory[0] // first label if array
+                    : movie.subCategory}
+                </span>
+              )}
+
               <img
                 src={movie.poster}
                 alt={movie.title}
@@ -125,62 +134,64 @@ const WatchListPage = () => {
   const slideRef = useRef(null);
 
   useEffect(() => {
-  const fetchMovies = async () => {
-    setLoading(true);
-    try {
-      const [watchRes, moviesRes] = await Promise.all([
-        supabase
-          .from("watch_html")
-          .select("id, title, slug, poster, cover_poster, created_at")
-          .order("created_at", { ascending: false })
-          .limit(100),
-        supabase
-          .from("movies")
-          .select("slug, title, language, categories, subCategory, description"),
-      ]);
+    const fetchMovies = async () => {
+      setLoading(true);
+      try {
+        const [watchRes, moviesRes] = await Promise.all([
+          supabase
+            .from("watch_html")
+            .select("id, title, slug, poster, cover_poster, created_at")
+            .order("created_at", { ascending: false })
+            .limit(100),
+          supabase
+            .from("movies")
+            .select("slug, title, language, categories, subCategory, description"),
+        ]);
 
-      if (watchRes.error) throw new Error(watchRes.error.message);
-      if (moviesRes.error) throw new Error(moviesRes.error.message);
+        if (watchRes.error) throw new Error(watchRes.error.message);
+        if (moviesRes.error) throw new Error(moviesRes.error.message);
 
-      const moviesData = moviesRes.data || [];
+        const moviesData = moviesRes.data || [];
 
-      // Merge data
-      const merged = watchRes.data.map((item) => {
-        const match =
-          moviesData.find((m) => m.slug === item.slug) ||
-          moviesData.find(
-            (m) => m.title?.toLowerCase() === item.title?.toLowerCase()
-          );
+        // Merge data
+        const merged = watchRes.data.map((item) => {
+          const match =
+            moviesData.find((m) => m.slug === item.slug) ||
+            moviesData.find(
+              (m) => m.title?.toLowerCase() === item.title?.toLowerCase()
+            );
 
-        return {
-          id: item.id,
-          slug: item.slug,
-          title: item.title,
-          poster: item.poster || "/default-poster.jpg",
-          cover_poster: item.cover_poster || "/default-cover.jpg",
-          created_at: item.created_at,
-          language: match?.language?.length ? match.language : ["Unknown"],
-          categories: match?.categories || [],
-          subCategory: match?.subCategory || [],
-          description: match?.description || "",
-        };
-      });
+          return {
+            id: item.id,
+            slug: item.slug,
+            title: item.title,
+            poster: item.poster || "/default-poster.jpg",
+            cover_poster: item.cover_poster || "/default-cover.jpg",
+            created_at: item.created_at,
+            language: match?.language?.length ? match.language : ["Unknown"],
+            categories: match?.categories || [],
+            subCategory: match?.subCategory || [],
+            description: match?.description || "",
+          };
+        });
 
-      setMovies(merged);
-    } catch (err) {
-      console.error("Fetch error:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        setMovies(merged);
+      } catch (err) {
+        console.error("Fetch error:", err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  fetchMovies();
-}, []);
-
+    fetchMovies();
+  }, []);
 
   // Filter movies by search
   const filtered = useMemo(
-    () => movies.filter((m) => m.title.toLowerCase().includes(search.toLowerCase())),
+    () =>
+      movies.filter((m) =>
+        m.title.toLowerCase().includes(search.toLowerCase())
+      ),
     [movies, search]
   );
 
@@ -210,7 +221,9 @@ const WatchListPage = () => {
       setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
       if (slideRef.current) {
         slideRef.current.scrollTo({
-          left: slideRef.current.clientWidth * ((currentSlide + 1) % latestMovies.length),
+          left:
+            slideRef.current.clientWidth *
+            ((currentSlide + 1) % latestMovies.length),
           behavior: "smooth",
         });
       }
@@ -227,10 +240,18 @@ const WatchListPage = () => {
             <img src="/logo_39.png" alt="Logo" className="h-10" />
           </Link>
           <nav className="hidden sm:flex gap-6 text-sm font-medium">
-            <Link to="/" className="hover:text-blue-400 transition">Home</Link>
-            <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
-            <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
-            <Link to="/watchlist" className="hover:text-blue-400 transition">My Watchlist</Link>
+            <Link to="/" className="hover:text-blue-400 transition">
+              Home
+            </Link>
+            <Link to="/latest" className="hover:text-blue-400 transition">
+              Latest
+            </Link>
+            <Link to="/blogs" className="hover:text-blue-400 transition">
+              Blogs
+            </Link>
+            <Link to="/watchlist" className="hover:text-blue-400 transition">
+              My Watchlist
+            </Link>
           </nav>
           <button
             onClick={() => setShowSearch(!showSearch)}
@@ -257,64 +278,69 @@ const WatchListPage = () => {
       </header>
 
       {/* Hero Slider */}
-      {!loading && latestMovies.filter((m) => m.cover_poster).length > 0 && (
-        <div className="relative w-full overflow-hidden bg-black">
-          <div className="relative w-full h-[45vh] sm:h-[75vh] flex justify-center items-center">
-            {latestMovies.filter((movie) => movie.cover_poster).map((movie, idx) => (
-              <div
-                key={movie.id}
-                className={`absolute inset-0 transition-opacity duration-1000 ${
-                  idx === currentSlide
-                    ? "opacity-100 z-20 pointer-events-auto"
-                    : "opacity-0 z-10 pointer-events-none"
-                }`}
-              >
-                <img
-                  src={movie.cover_poster}
-                  alt={movie.title || "Movie Cover"}
-                  loading="lazy"
-                  className="w-full h-full object-cover brightness-75"
-                  onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-6 sm:p-10">
-                  <h2 className="text-white text-2xl sm:text-4xl font-extrabold drop-shadow-lg">
-                    {movie.slug}
-                  </h2>
-                  {movie.language?.length > 0 && (
-                    <p className="text-gray-300 text-sm sm:text-base">
-                      {movie.language.join(" • ")}
-                    </p>
-                  )}
-                  {movie.description && (
-                    <p className="hidden sm:block text-gray-200 text-sm md:text-base max-w-2xl line-clamp-3">
-                      {movie.description}
-                    </p>
-                  )}
-                  <Link
-                    to={`/watch/${movie.slug}`}
-                    className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+      {!loading &&
+        latestMovies.filter((m) => m.cover_poster).length > 0 && (
+          <div className="relative w-full overflow-hidden bg-black">
+            <div className="relative w-full h-[45vh] sm:h-[75vh] flex justify-center items-center">
+              {latestMovies
+                .filter((movie) => movie.cover_poster)
+                .map((movie, idx) => (
+                  <div
+                    key={movie.id}
+                    className={`absolute inset-0 transition-opacity duration-1000 ${
+                      idx === currentSlide
+                        ? "opacity-100 z-20 pointer-events-auto"
+                        : "opacity-0 z-10 pointer-events-none"
+                    }`}
                   >
-                    ▶ Watch
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+                    <img
+                      src={movie.cover_poster}
+                      alt={movie.title || "Movie Cover"}
+                      loading="lazy"
+                      className="w-full h-full object-cover brightness-75"
+                      onError={(e) =>
+                        (e.currentTarget.src = "/default-cover.jpg")
+                      }
+                    />
 
-          {/* Dots */}
-          <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
-            {latestMovies.map((_, idx) => (
-              <span
-                key={idx}
-                className={`w-2 h-2 rounded-full ${
-                  idx === currentSlide ? "bg-white" : "bg-gray-500"
-                }`}
-              />
-            ))}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-6 sm:p-10">
+                      <h2 className="text-white text-2xl sm:text-4xl font-extrabold drop-shadow-lg">
+                        {movie.slug}
+                      </h2>
+                      {movie.language?.length > 0 && (
+                        <p className="text-gray-300 text-sm sm:text-base">
+                          {movie.language.join(" • ")}
+                        </p>
+                      )}
+                      {movie.description && (
+                        <p className="hidden sm:block text-gray-200 text-sm md:text-base max-w-2xl line-clamp-3">
+                          {movie.description}
+                        </p>
+                      )}
+                      <Link
+                        to={`/watch/${movie.slug}`}
+                        className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+                      >
+                        ▶ Watch
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Dots */}
+            <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
+              {latestMovies.map((_, idx) => (
+                <span
+                  key={idx}
+                  className={`w-2 h-2 rounded-full ${
+                    idx === currentSlide ? "bg-white" : "bg-gray-500"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Movies grouped by Language */}
       <div className="p-6 flex flex-col items-center">
