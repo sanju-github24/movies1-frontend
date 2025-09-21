@@ -149,71 +149,72 @@ const WatchHtmlPage = () => {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-6 w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg shadow text-white font-medium transition text-sm sm:text-base"
-        >
-          ⬅ Previous Page
-        </button>
+<div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-24">
+  <button
+    onClick={() => navigate(-1)}
+    className="mb-6 w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg shadow text-white font-medium transition text-sm sm:text-base"
+  >
+    ⬅ Previous Page
+  </button>
 
-        {/* 🎬 Video Player */}
-        {activeSrc && (
-          <div className="mb-10">
-            <div className="w-full max-w-4xl mx-auto aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-lg">
-              <iframe
-                src={activeSrc}
-                frameBorder="0"
-                allowFullScreen
-                loading="lazy"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-                className="w-full h-full rounded-lg"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 📺 Episodes OR Servers */}
-        {episodes.length > 0 ? (
-          <div>
-            <h2 className="text-xl font-semibold text-yellow-400 mb-4">
-              📺 Episodes
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {episodes.map((ep) => (
-                <button
-                  key={ep.id}
-                  onClick={() =>
-                    setActiveSrc(
-                      ep.episode_html?.match(/src="([^"]+)"/i)?.[1] || null
-                    )
-                  }
-                  className="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
-                >
-                  {ep.episode_title}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <h2 className="text-xl font-semibold text-green-400 mb-4">
-              🎛️ Available Servers
-            </h2>
-            <div className="flex gap-3 flex-wrap">
-              {servers.map((server, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveSrc(server.src)}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
-                >
-                  {server.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+  {/* 🎬 Video Player */}
+  {activeSrc && (
+    <div className="mb-10">
+      <div className="w-full max-w-4xl mx-auto aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-lg">
+        <iframe
+          src={activeSrc}
+          frameBorder="0"
+          allowFullScreen
+          loading="lazy"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+          className="w-full h-full rounded-lg"
+        />
       </div>
+    </div>
+  )}
+
+  {/* 📺 Episodes OR Servers */}
+  {episodes.length > 0 ? (
+    <div>
+      <h2 className="text-xl font-semibold text-yellow-400 mb-4">
+        📺 Episodes
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {episodes.map((ep) => (
+          <button
+            key={ep.id}
+            onClick={() =>
+              setActiveSrc(
+                ep.episode_html?.match(/src="([^"]+)"/i)?.[1] || null
+              )
+            }
+            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
+          >
+            {ep.episode_title}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <div>
+      <h2 className="text-xl font-semibold text-green-400 mb-4">
+        🎛️ Available Servers
+      </h2>
+      <div className="flex gap-3 flex-wrap">
+        {servers.map((server, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveSrc(server.src)}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
+          >
+            {server.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )}
+</div>
+
     </div>
   );
 };
