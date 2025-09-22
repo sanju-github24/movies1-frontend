@@ -274,10 +274,16 @@ const MovieDetail = () => {
   {movie.downloads?.map((download, index) => {
     const quality = download.quality || "Unknown";
     const format = download.format || "Unknown Format";
-    const filename = `${quality}_${format}.torrent`.replace(
-      /[^a-z0-9_\-\.]/gi,
-      "_"
-    );
+    const filename = `${quality}_${format}.torrent`.replace(/[^a-z0-9_\-\.]/gi, "_");
+
+    const isPlayable = /\.(mp4|webm|ogg|mp3|wav)$/i.test(download.url);
+
+    // Detect YouTube normal links and convert to embed
+    let embedUrl = null;
+    const ytMatch = download.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
+    if (ytMatch) {
+      embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
+    }
 
     return (
       <React.Fragment key={index}>
@@ -287,13 +293,35 @@ const MovieDetail = () => {
             {quality} - {format}
           </div>
 
-          {/* Download Button */}
-          <button
-            onClick={() => handleDownload(download.url, filename, index)}
-            className="text-blue-700 underline hover:text-blue-900 text-sm font-semibold"
-          >
-            📥 {download.quality}
-          </button>
+          {/* Conditional: YouTube Embed / Playable / Download */}
+          {embedUrl ? (
+            <div className="mt-2 aspect-video">
+              <iframe
+                src={embedUrl}
+                title="YouTube video player"
+                className="w-full h-full rounded-md shadow"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              ></iframe>
+            </div>
+          ) : isPlayable ? (
+            <div className="mt-2">
+              {/\.(mp4|webm|ogg)$/i.test(download.url) ? (
+                <video src={download.url} controls className="w-full rounded-md shadow" />
+              ) : (
+                <audio src={download.url} controls className="w-full rounded-md shadow" />
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => handleDownload(download.url, filename, index)}
+              className="text-blue-700 underline hover:text-blue-900 text-sm font-semibold"
+            >
+              📥 {download.quality}
+            </button>
+          )}
 
           {/* Copy Link */}
           <button
@@ -320,21 +348,20 @@ const MovieDetail = () => {
           </div>
 
           {/* Direct Download */}
-{download.directUrl && (
-  <a
-    href={download.directUrl}
-    download={download.filename}
-    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow transition"
-  >
-    ⬇️ Direct Download
-    {download.size && (
-      <span className="text-gray-200 text-[10px] font-normal">
-        ({download.size})
-      </span>
-    )}
-  </a>
-)}
-
+          {download.directUrl && (
+            <a
+              href={download.directUrl}
+              download={download.filename}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow transition"
+            >
+              ⬇️ Direct Download
+              {download.size && (
+                <span className="text-gray-200 text-[10px] font-normal">
+                  ({download.size})
+                </span>
+              )}
+            </a>
+          )}
 
           {/* Seedr Notice */}
           <div className="flex items-center justify-center gap-2 my-2">
@@ -379,8 +406,9 @@ const MovieDetail = () => {
       </React.Fragment>
     );
   })}
+</div>
 
-  {/* GP Links */}
+{/* GP Links */}
 {movie.downloads?.some((d) => d.gpLink) && (
   <div className="bg-gray-50 border border-gray-300 p-4 rounded text-black text-xs mt-4 text-center">
     <h3 className="font-semibold text-sm mb-3">GP Links:</h3>
@@ -402,8 +430,8 @@ const MovieDetail = () => {
         ))}
     </div>
   </div>
-  )}
-</div>
+)}
+
 
 
 {/* Comments */}
