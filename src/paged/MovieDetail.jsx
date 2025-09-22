@@ -166,91 +166,79 @@ const MovieDetail = () => {
     );
   }
 
+  // === SEO & Constants ===
+  const qualities = movie.qualities?.join(", ") || "HD";
+  const movieTitle = movie.year ? `${movie.title} ${movie.year}` : movie.title;
   const firstDownload = movie.downloads?.[0];
-  const topTitle = `${movie.title || ""} - ${
-    firstDownload?.format || "Format Unknown"
-  }`;
+  const topTitle = `${movieTitle} - ${firstDownload?.format || "HD"} Download`;
+  const metaDescription = `Download or watch ${movieTitle} in full HD (${qualities}). Fast and secure streaming available on 1TamilMV and AnchorMovies.`;
+  const canonicalUrl = `https://www.1anchormovies.live/movie/${code}`;
 
   return (
     <div className="flex justify-center mt-4 px-2 sm:px-6 md:px-10 w-full bg-black">
-    <Helmet>
-  {/* Page Title */}
-  <title>Download {movie.title} - Watch Online | AnchorMovies</title>
+      {/* SEO */}
+      <Helmet>
+        <title>{movieTitle} Full HD Download | Watch Online | 1TamilMV & AnchorMovies</title>
+        <meta name="description" content={metaDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={`${movieTitle} Full HD Download | 1TamilMV & AnchorMovies`} />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:site_name" content="AnchorMovies" />
+        {movie.poster && <meta property="og:image" content={movie.poster} />}
+        <meta property="og:image:alt" content={`${movieTitle} Poster`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${movieTitle} Full HD Download | 1TamilMV & AnchorMovies`} />
+        <meta name="twitter:description" content={metaDescription} />
+        {movie.poster && <meta name="twitter:image" content={movie.poster} />}
+        <meta name="twitter:image:alt" content={`${movieTitle} Poster`} />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Movie",
+            name: movieTitle,
+            image: movie.poster || "",
+            description: metaDescription,
+            url: canonicalUrl,
+            contentRating: movie.rating || "Not Rated",
+            inLanguage: movie.language || "English",
+            datePublished: movie.year || ""
+          })}
+        </script>
+      </Helmet>
 
-  {/* Meta Description */}
-  <meta
-    name="description"
-    content={`Download ${movie.title} in HD (${movie.qualities?.join(', ')}). Fast and secure downloads on AnchorMovies.`}
-  />
-
-  {/* Canonical URL */}
-  <link
-    rel="canonical"
-    href={`https://www.1anchormovies.live/movie/${code}`}
-  />
-
-  {/* Open Graph for Facebook / WhatsApp */}
-  <meta property="og:title" content={`Download ${movie.title} - Watch Online`} />
-  <meta
-    property="og:description"
-    content={`Download ${movie.title} in multiple qualities: ${movie.qualities?.join(', ')}. Available now on AnchorMovies.`}
-  />
-  <meta property="og:type" content="website" />
-  <meta
-    property="og:url"
-    content={`https://www.1anchormovies.live/movie/${code}`}
-  />
-  <meta property="og:site_name" content="AnchorMovies" />
-  {movie.poster && <meta property="og:image" content={movie.poster} />}
-
-  {/* Twitter Cards */}
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content={`Download ${movie.title} - Watch Online`} />
-  <meta
-    name="twitter:description"
-    content={`Download ${movie.title} in HD (${movie.qualities?.join(', ')}). Available on AnchorMovies.`}
-  />
-  {movie.poster && <meta name="twitter:image" content={movie.poster} />}
-</Helmet>
-
-  
+      {/* Movie Content */}
       <div className="bg-white text-black rounded-xl p-6 w-full max-w-7xl shadow-2xl">
-{/* Title */}
-<h1 className="text-center text-lg sm:text-xl md:text-2xl font-bold mb-2 break-words leading-snug px-1">
-  {topTitle}
-</h1>
+        <h1 className="text-center text-lg sm:text-xl md:text-2xl font-bold mb-2 break-words leading-snug px-1">
+          {topTitle}
+        </h1>
 
-{/* Posted date */}
-<div className="w-full bg-blue-900 text-white text-xs sm:text-sm px-2 py-1 rounded-md shadow flex justify-between items-center mb-3">
-  <span>
-    Posted{" "}
-    {movie.created_at
-      ? new Date(movie.created_at).toLocaleString()
-      : "Unknown"}
-  </span>
-  <button
-    onClick={() => {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("🔗 Link copied!");
-    }}
-    className="text-blue-100 hover:text-white transition text-xs"
-  >
-    Share
-  </button>
-</div>
+        {/* Posted date */}
+        <div className="w-full bg-blue-900 text-white text-xs sm:text-sm px-2 py-1 rounded-md shadow flex justify-between items-center mb-3">
+          <span>
+            Posted{" "}
+            {movie.created_at ? new Date(movie.created_at).toLocaleString() : "Unknown"}
+          </span>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toast.success("🔗 Link copied!");
+            }}
+            className="text-blue-100 hover:text-white transition text-xs"
+          >
+            Share
+          </button>
+        </div>
 
-{/* Poster */}
-<div className="flex justify-center mb-4">
-  <img
-    src={
-      movie.poster ||
-      "https://via.placeholder.com/400x600?text=No+Image"
-    }
-    alt={movie.title || "Movie Poster"}
-    className="rounded-md shadow-md w-full max-w-xs"
-  />
-</div>
-
+        {/* Poster */}
+        <div className="flex justify-center mb-4">
+          <img
+            src={movie.poster || "https://via.placeholder.com/400x600?text=No+Image"}
+            alt={movie.title || "Movie Poster"}
+            className="rounded-md shadow-md w-full max-w-xs"
+          />
+        </div>
 {/* Hiring Banner */}
 <div className="bg-gray-100 border border-gray-300 p-2 rounded text-center text-gray-800 mb-4 text-xs">
   <h2 className="text-sm font-semibold">We’re Hiring Trusted Uploaders</h2>
