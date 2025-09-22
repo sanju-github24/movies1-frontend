@@ -1,9 +1,8 @@
-// src/pages/WatchListPage.jsx
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { backendUrl } from "../utils/api";
+import { Helmet } from "react-helmet"; // <-- Install react-helmet for SEO
 
 /* ====== Language Row (swipe + arrows) ====== */
 const LanguageRow = ({ language, movies }) => {
@@ -79,11 +78,10 @@ const LanguageRow = ({ language, movies }) => {
               className="relative flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800 cursor-pointer"
               onClick={() => navigate(`/watch/${movie.slug}`)}
             >
-              {/* 🔖 Sub-Category Label */}
               {movie.subCategory?.length > 0 && (
                 <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
                   {Array.isArray(movie.subCategory)
-                    ? movie.subCategory[0] // first label if array
+                    ? movie.subCategory[0]
                     : movie.subCategory}
                 </span>
               )}
@@ -153,7 +151,6 @@ const WatchListPage = () => {
 
         const moviesData = moviesRes.data || [];
 
-        // Merge data
         const merged = watchRes.data.map((item) => {
           const match =
             moviesData.find((m) => m.slug === item.slug) ||
@@ -186,7 +183,6 @@ const WatchListPage = () => {
     fetchMovies();
   }, []);
 
-  // Filter movies by search
   const filtered = useMemo(
     () =>
       movies.filter((m) =>
@@ -195,7 +191,6 @@ const WatchListPage = () => {
     [movies, search]
   );
 
-  // Group movies by language
   const groupedByLanguage = useMemo(() => {
     return filtered.reduce((acc, movie) => {
       const langs = Array.isArray(movie.language)
@@ -214,7 +209,6 @@ const WatchListPage = () => {
 
   const latestMovies = filtered.slice(0, 5);
 
-  // Auto slider
   useEffect(() => {
     if (latestMovies.length === 0) return;
     const interval = setInterval(() => {
@@ -233,6 +227,49 @@ const WatchListPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      {/* ===== SEO ===== */}
+      <Helmet>
+        <title>Watch Movies Online | 1TamilMV - Latest & Trending</title>
+        <meta
+          name="description"
+          content="Watch the latest movies online in HD. Explore trending movies in Tamil, Telugu, Kannada, Malayalam, and Hindi on 1TamilMV. Fast streaming and download."
+        />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://www.1anchormovies.live/watchlist" />
+
+        {/* Open Graph */}
+        <meta property="og:title" content="Watch Movies Online | 1TamilMV" />
+        <meta
+          property="og:description"
+          content="Stream and download latest movies in HD on 1TamilMV. Tamil, Telugu, Kannada, Malayalam & Hindi movies available."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.1anchormovies.live/watchlist" />
+        <meta property="og:image" content="/default-cover.jpg" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Watch Movies Online | 1TamilMV" />
+        <meta
+          name="twitter:description"
+          content="Stream and download latest movies in HD on 1TamilMV. Tamil, Telugu, Kannada, Malayalam & Hindi movies available."
+        />
+        <meta name="twitter:image" content="/default-cover.jpg" />
+
+        {/* JSON-LD structured data */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Movie",
+            "name": "1TamilMV Watchlist",
+            "url": "https://www.1anchormovies.live/watchlist",
+            "description": "Latest movies to watch online in Tamil, Telugu, Kannada, Malayalam, and Hindi on 1TamilMV.",
+            "image": "/default-cover.jpg",
+            "genre": ["Tamil", "Telugu", "Kannada", "Malayalam", "Hindi"],
+          })}
+        </script>
+      </Helmet>
+
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-black/90 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
