@@ -128,12 +128,12 @@ const SearchResults = () => {
     <div className="px-4 sm:px-10 py-8 min-h-screen bg-gray-950 text-white">
       <Helmet>
   {/* Page Title */}
-  <title>Download {prettyQuery} Movies - Search Results | 1AnchorMovies</title>
+  <title>Download {prettyQuery} Movie - Search Results | 1AnchorMovies | 1TamilMV</title>
 
   {/* Meta Description */}
   <meta
     name="description"
-    content={`Download and watch the latest ${prettyQuery} movies in HD (480p, 720p, 1080p) on 1AnchorMovies. Fast and secure downloads.`}
+    content={`Download and watch the latest ${prettyQuery} movies in HD (480p, 720p, 1080p) on 1AnchorMovies 1Tamilmv . Fast and secure downloads.`}
   />
 
   {/* Canonical URL */}
