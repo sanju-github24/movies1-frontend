@@ -273,6 +273,9 @@ const MovieDetail = () => {
       embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
     }
 
+    // Detect Torrent file
+    const isTorrent = /\.torrent$/i.test(download.url);
+
     return (
       <React.Fragment key={index}>
         <div className="bg-gray-50 border border-gray-300 p-3 rounded text-center text-xs sm:text-sm text-black shadow-sm">
@@ -281,7 +284,7 @@ const MovieDetail = () => {
             {quality} - {format}
           </div>
 
-          {/* Conditional: YouTube Embed / Playable / Download */}
+          {/* Conditional: YouTube Embed / Playable / Download / External */}
           {embedUrl ? (
             <div className="mt-2 aspect-video">
               <iframe
@@ -303,14 +306,26 @@ const MovieDetail = () => {
               )}
             </div>
           ) : (
-            <button
-              onClick={() => handleDownload(download.url, filename, index)}
-              className="text-blue-700 underline hover:text-blue-900 text-sm font-semibold"
-            >
-              📥 {download.quality}
-            </button>
+            <>
+              {isTorrent ? (
+                <button
+                  onClick={() => handleDownload(download.url, filename, index)}
+                  className="text-blue-700 underline hover:text-blue-900 text-sm font-semibold"
+                >
+                  📥 {download.quality}
+                </button>
+              ) : (
+                <a
+                  href={download.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-700 underline hover:text-blue-900 text-sm font-semibold"
+                >
+                  🌐 {download.quality}
+                </a>
+              )}
+            </>
           )}
-
           {/* Copy Link */}
           <button
             onClick={() => {
