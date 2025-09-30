@@ -15,6 +15,8 @@ const UploadWatchHtml = () => {
   const [poster, setPoster] = useState("");
   const [coverPoster, setCoverPoster] = useState("");
   const [loading, setLoading] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+
 
   const navigate = useNavigate();
 
@@ -59,6 +61,7 @@ const UploadWatchHtml = () => {
       html_code2: htmlCode2.trim(),
       poster: poster.trim(),
       cover_poster: coverPoster.trim(),
+      video_url: videoUrl.trim(), // ✅ NEW
       created_at: new Date().toISOString(),
     };
 
@@ -163,6 +166,20 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
+  <label className="block font-semibold mb-2">Video URL</label>
+  <input
+    type="text"
+    className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
+    value={videoUrl}
+    onChange={(e) => setVideoUrl(e.target.value)}
+    placeholder="https://example.com/video.mp4"
+  />
+  
+</div>
+
+
+
+          <div className="mb-5">
             <label className="block font-semibold mb-2">
               Watch HTML Code (Server 1)
             </label>
@@ -228,6 +245,7 @@ const UploadWatchHtml = () => {
         </div>
       </div>
     </div>
+    
   );
 };
 
@@ -242,6 +260,8 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [editCoverPoster, setEditCoverPoster] = useState(item.cover_poster || "");
   const [editHtml, setEditHtml] = useState(item.html_code || "");
   const [editHtml2, setEditHtml2] = useState(item.html_code2 || "");
+  const [editVideoUrl, setEditVideoUrl] = useState(item.video_url || "");
+
 
   // 📌 Episodes
   const [episodes, setEpisodes] = useState([]);
@@ -265,16 +285,18 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   // 💾 Save Movie
   const handleSave = async () => {
     const { error } = await supabase
-      .from("watch_html")
-      .update({
-        title: editTitle.trim(),
-        slug: editSlug.trim(),
-        poster: editPoster.trim(),
-        cover_poster: editCoverPoster.trim(),
-        html_code: editHtml.trim(),
-        html_code2: editHtml2.trim(),
-      })
-      .eq("id", item.id);
+  .from("watch_html")
+  .update({
+    title: editTitle.trim(),
+    slug: editSlug.trim(),
+    poster: editPoster.trim(),
+    cover_poster: editCoverPoster.trim(),
+    html_code: editHtml.trim(),
+    html_code2: editHtml2.trim(),
+    video_url: editVideoUrl.trim(), // ✅ NEW
+  })
+  .eq("id", item.id);
+
 
     if (error) toast.error("⚠️ Failed to update!");
     else {
@@ -359,6 +381,13 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
             onChange={(e) => setEditPoster(e.target.value)}
             className="p-2 rounded bg-gray-700 text-white"
           />
+          <input
+  value={editVideoUrl}
+  onChange={(e) => setEditVideoUrl(e.target.value)}
+  placeholder="Video URL"
+  className="p-2 rounded bg-gray-700 text-white"
+/>
+
           <textarea
             value={editHtml}
             onChange={(e) => setEditHtml(e.target.value)}
@@ -402,6 +431,14 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
                 onError={(e) => (e.currentTarget.src = "/default-poster.jpg")}
               />
             )}
+            {item.video_url && (
+  <video
+    src={item.video_url}
+    controls
+    className="w-32 h-20 object-cover mt-2 rounded"
+  />
+)}
+
           </div>
           <div className="flex gap-3">
             <button

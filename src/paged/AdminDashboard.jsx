@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext } from "react";
 import { supabase } from "../utils/supabaseClient";
 import AdminLayout from "../components/AdminLayout";
-import { Bar, Pie } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 import { Link } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { backendUrl } from "../utils/api";
@@ -34,15 +34,16 @@ const AdminDashboard = () => {
   const [expandedLangs, setExpandedLangs] = useState({});
   const [showWeeklyStats, setShowWeeklyStats] = useState(false);
   const [userSearch, setUserSearch] = useState("");
-
-
-
-  // toggleable sections
   const [showWeeklyByLang, setShowWeeklyByLang] = useState(false);
   const [showMoviesByLang, setShowMoviesByLang] = useState(false);
 
+  // 🎬 Watch Movies state
+  const [watchMovies, setWatchMovies] = useState([]);
+  const [showWatchMovies, setShowWatchMovies] = useState(false);
+
   useEffect(() => {
     fetchMovies();
+    fetchWatchMovies();
   }, [fetchMovies]);
 
   const fetchAllUsers = async () => {
@@ -52,8 +53,6 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setAllUsers(data.users);
-      } else {
-        console.error("Failed to fetch users:", data.message);
       }
     } catch (error) {
       console.error("Error fetching all users:", error);
@@ -62,14 +61,22 @@ const AdminDashboard = () => {
     }
   };
 
-  const filteredUsers = allUsers
-  .filter((u) => u.email !== "sanjusanjay0444@gmail.com") // exclude admin
-  .filter(
-    (u) =>
-      u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email?.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const fetchWatchMovies = async () => {
+  const { data, error } = await supabase
+    .from("watch_html")
+    .select("id"); // only fetch IDs, no need for movies or extra fields
 
+  if (!error && data) setWatchMovies(data); // this will set watchMovies.length correctly
+};
+
+
+  const filteredUsers = allUsers
+    .filter((u) => u.email !== "sanjusanjay0444@gmail.com")
+    .filter(
+      (u) =>
+        u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email?.toLowerCase().includes(userSearch.toLowerCase())
+    );
 
   const toggleLang = (lang) => {
     setExpandedLangs((prev) => ({
@@ -77,9 +84,8 @@ const AdminDashboard = () => {
       [lang]: !prev[lang],
     }));
   };
-  
 
-  // 📊 Weekly Upload Stats
+  // Weekly Upload Stats
   const weeklyStats = (() => {
     const counts = {};
     movies.forEach((m) => {
@@ -106,7 +112,7 @@ const AdminDashboard = () => {
     ],
   };
 
-  // 🌍 Language Breakdown
+  // Movies by language
   const languageCounts = (() => {
     const counts = {};
     movies.forEach((m) => {
@@ -135,7 +141,7 @@ const AdminDashboard = () => {
     ],
   };
 
-  // 📊 Weekly Uploads BY LANGUAGE
+  // Weekly uploads by language
   const weeklyByLang = (() => {
     const data = {};
     movies.forEach((m) => {
@@ -170,7 +176,7 @@ const AdminDashboard = () => {
     };
   })();
 
-  // 📂 Movies by language (expandable list)
+  // Movies grouped by language
   const moviesByLanguage = (() => {
     const grouped = {};
     movies.forEach((m) => {
@@ -182,15 +188,12 @@ const AdminDashboard = () => {
     return grouped;
   })();
 
-  // 📂 Total Categories
   const totalCategories = [
     ...new Set(movies.flatMap((m) => m.categories || [])),
   ].length;
 
   const toggleUsers = () => {
-    if (!showUsers) {
-      fetchAllUsers();
-    }
+    if (!showUsers) fetchAllUsers();
     setShowUsers(!showUsers);
   };
 
@@ -218,7 +221,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <div className="bg-gray-900 p-6 rounded shadow border border-gray-800">
             <h2 className="text-xl font-bold">🎬 Total Movies</h2>
             <p className="text-3xl mt-2 text-blue-400 font-semibold">
@@ -243,77 +246,109 @@ const AdminDashboard = () => {
               {showUsers ? "Click to collapse" : "Click to expand"}
             </p>
           </div>
+          <div className="bg-gray-900 p-6 rounded shadow border border-gray-800">
+            <h2 className="text-xl font-bold">📺 Watchable Movies</h2>
+            <p className="text-3xl mt-2 text-yellow-400 font-semibold">
+              {watchMovies.length}
+            </p>
+          </div>
         </div>
 
-        {/* Expanded Users */}
-{showUsers && (
-  <div className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6">
-    <h2 className="text-lg font-semibold mb-4">👥 User Details</h2>
-
-    <input
-      type="text"
-      placeholder="🔍 Search users by name or email"
-      className="p-2 mb-4 w-full rounded bg-gray-800 placeholder-gray-400 text-white"
-      value={userSearch}
-      onChange={(e) => setUserSearch(e.target.value)}
-    />
-
-    {loadingUsers ? (
-      <p className="text-gray-400 italic">Loading users...</p>
-    ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-800 text-gray-300">
-              <th className="p-3 border-b border-gray-700">#</th>
-              <th className="p-3 border-b border-gray-700">Name</th>
-              <th className="p-3 border-b border-gray-700">Email</th>
-              <th className="p-3 border-b border-gray-700">Joined</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredUsers.length > 0 ? (
-              filteredUsers.map((user, idx) => (
-                <tr
-                  key={user._id || idx}
-                  className="hover:bg-gray-800 transition text-gray-200"
-                >
-                  <td className="p-3 border-b border-gray-700">{idx + 1}</td>
-                  <td className="p-3 border-b border-gray-700">{user.name || "N/A"}</td>
-                  <td className="p-3 border-b border-gray-700">{user.email}</td>
-                  <td className="p-3 border-b border-gray-700">{getJoinDate(user)}</td>
-                </tr>
-              ))
+        {/* Watchable Movies List */}
+        {showWatchMovies && (
+          <div className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6">
+            <h2 className="text-lg font-semibold mb-4">📺 Watchable Movies</h2>
+            {watchMovies.length === 0 ? (
+              <p className="text-gray-400 italic">No watchable movies</p>
             ) : (
-              <tr>
-                <td colSpan="4" className="p-3 text-center text-gray-400 italic">
-                  No users found
-                </td>
-              </tr>
+              <div className="space-y-4">
+                {watchMovies.map((wm) => (
+                  <div
+                    key={wm.id}
+                    className="bg-gray-800 p-4 rounded-lg border border-gray-700"
+                  >
+                    <h3 className="text-xl font-bold text-blue-400 mb-1">
+                      {wm.movies?.title || "Untitled"}
+                    </h3>
+                    <p className="text-sm text-gray-300">
+                      {wm.movies?.language?.join(", ") || "Unknown"} |{" "}
+                      {wm.movies?.categories?.join(", ") || "No Categories"}
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {wm.movies?.description || "No description available"}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </div>
-)}
+          </div>
+        )}
 
-        {/* Weekly Uploads (expandable) */}
-<div
-  className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6 cursor-pointer"
-  onClick={() => setShowWeeklyStats(!showWeeklyStats)}
->
-  <h2 className="text-lg font-semibold mb-4 flex justify-between">
-    📈 Weekly Upload Stats
-    <span className="text-sm text-gray-400">
-      {showWeeklyStats ? "▼ Collapse" : "▶ Expand"}
-    </span>
-  </h2>
-  {showWeeklyStats && <Bar data={chartData} />}
-</div>
+        {/* Expanded Users */}
+        {showUsers && (
+          <div className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6">
+            <h2 className="text-lg font-semibold mb-4">👥 User Details</h2>
+            <input
+              type="text"
+              placeholder="🔍 Search users by name or email"
+              className="p-2 mb-4 w-full rounded bg-gray-800 placeholder-gray-400 text-white"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+            />
+            {loadingUsers ? (
+              <p className="text-gray-400 italic">Loading users...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-800 text-gray-300">
+                      <th className="p-3 border-b border-gray-700">#</th>
+                      <th className="p-3 border-b border-gray-700">Name</th>
+                      <th className="p-3 border-b border-gray-700">Email</th>
+                      <th className="p-3 border-b border-gray-700">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length > 0 ? (
+                      filteredUsers.map((user, idx) => (
+                        <tr
+                          key={user._id || idx}
+                          className="hover:bg-gray-800 transition text-gray-200"
+                        >
+                          <td className="p-3 border-b border-gray-700">{idx + 1}</td>
+                          <td className="p-3 border-b border-gray-700">{user.name || "N/A"}</td>
+                          <td className="p-3 border-b border-gray-700">{user.email}</td>
+                          <td className="p-3 border-b border-gray-700">{getJoinDate(user)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="p-3 text-center text-gray-400 italic">
+                          No users found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
+        {/* Charts */}
+        <div
+          className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6 cursor-pointer"
+          onClick={() => setShowWeeklyStats(!showWeeklyStats)}
+        >
+          <h2 className="text-lg font-semibold mb-4 flex justify-between">
+            📈 Weekly Upload Stats
+            <span className="text-sm text-gray-400">
+              {showWeeklyStats ? "▼ Collapse" : "▶ Expand"}
+            </span>
+          </h2>
+          {showWeeklyStats && <Bar data={chartData} />}
+        </div>
 
-        {/* Weekly Uploads by Language */}
         <div
           className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6 cursor-pointer"
           onClick={() => setShowWeeklyByLang(!showWeeklyByLang)}
@@ -327,59 +362,51 @@ const AdminDashboard = () => {
           {showWeeklyByLang && <Bar data={weeklyByLang} />}
         </div>
 
-{/* Movies by Language (list) */}
-<div
-  className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6 cursor-pointer"
-  onClick={() => setShowMoviesByLang(!showMoviesByLang)}
->
-  <h2 className="text-lg font-semibold mb-4 flex justify-between">
-    🎞 Movies by Language (List)
-    <span className="text-sm text-gray-400">
-      {showMoviesByLang ? "▼ Collapse" : "▶ Expand"}
-    </span>
-  </h2>
-
-  {showMoviesByLang && (
-    <div className="space-y-4">
-      {Object.entries(moviesByLanguage).map(([lang, list]) => (
+        {/* Movies by Language List */}
         <div
-          key={lang}
-          className="bg-gray-800 p-4 rounded cursor-pointer"
+          className="bg-gray-900 p-6 rounded shadow border border-gray-800 mb-6 cursor-pointer"
+          onClick={() => setShowMoviesByLang(!showMoviesByLang)}
         >
-          <h3
-  className="font-semibold text-blue-400 mb-2 flex justify-between"
-  onClick={(e) => {
-    e.stopPropagation(); // ✅ prevents outer collapse
-    toggleLang(lang);
-  }}
->
-  {lang} ({list.length})
-  <span className="text-sm text-gray-400">
-    {expandedLangs[lang] ? "▼ Collapse" : "▶ Expand"}
-  </span>
-</h3>
-
-
-          {expandedLangs[lang] && (
-            <div className="flex flex-wrap gap-2">
-              {list.map((m) => (
-                <Link
-                  to={`/movie/${m.id}`}
-                  key={m.id}
-                  className="px-3 py-1 bg-gray-700 rounded text-sm hover:bg-blue-600 transition"
-                >
-                  {m.title}
-                </Link>
+          <h2 className="text-lg font-semibold mb-4 flex justify-between">
+            🎞 Movies by Language
+            <span className="text-sm text-gray-400">
+              {showMoviesByLang ? "▼ Collapse" : "▶ Expand"}
+            </span>
+          </h2>
+          {showMoviesByLang && (
+            <div className="space-y-4">
+              {Object.entries(moviesByLanguage).map(([lang, list]) => (
+                <div key={lang} className="bg-gray-800 p-4 rounded cursor-pointer">
+                  <h3
+                    className="font-semibold text-blue-400 mb-2 flex justify-between"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleLang(lang);
+                    }}
+                  >
+                    {lang} ({list.length})
+                    <span className="text-sm text-gray-400">
+                      {expandedLangs[lang] ? "▼ Collapse" : "▶ Expand"}
+                    </span>
+                  </h3>
+                  {expandedLangs[lang] && (
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((m) => (
+                        <Link
+                          to={`/movie/${m.id}`}
+                          key={m.id}
+                          className="px-3 py-1 bg-gray-700 rounded text-sm hover:bg-blue-600 transition"
+                        >
+                          {m.title}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
-      ))}
-    </div>
-  )}
-</div>
-
-
       </div>
     </AdminLayout>
   );

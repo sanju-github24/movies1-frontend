@@ -2,15 +2,14 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { Helmet } from "react-helmet"; // <-- Install react-helmet for SEO
+import { Helmet } from "react-helmet";
 
-/* ====== Language Row (swipe + arrows) ====== */
+/* ====== Language Row Component ====== */
 const LanguageRow = ({ language, movies }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
   const navigate = useNavigate();
-
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
 
@@ -22,12 +21,8 @@ const LanguageRow = ({ language, movies }) => {
   };
 
   const scroll = (dir) => {
-    if (rowRef.current) {
-      rowRef.current.scrollBy({
-        left: dir === "left" ? -300 : 300,
-        behavior: "smooth",
-      });
-    }
+    if (!rowRef.current) return;
+    rowRef.current.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
   };
 
   const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
@@ -38,9 +33,8 @@ const LanguageRow = ({ language, movies }) => {
   };
 
   useEffect(() => {
-    if (!rowRef.current) return;
     checkScroll();
-    rowRef.current.addEventListener("scroll", checkScroll);
+    rowRef.current?.addEventListener("scroll", checkScroll);
     window.addEventListener("resize", checkScroll);
     return () => {
       rowRef.current?.removeEventListener("scroll", checkScroll);
@@ -50,10 +44,7 @@ const LanguageRow = ({ language, movies }) => {
 
   return (
     <div className="mb-10 w-full">
-      <h2 className="text-xl font-semibold text-blue-300 mb-4 border-b border-gray-700 pb-2">
-        {language}
-      </h2>
-
+      <h2 className="text-xl font-semibold text-blue-300 mb-4 border-b border-gray-700 pb-2">{language}</h2>
       <div className="relative group">
         {showLeft && (
           <button
@@ -63,7 +54,6 @@ const LanguageRow = ({ language, movies }) => {
             ◀
           </button>
         )}
-
         <div
           ref={rowRef}
           className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-3"
@@ -80,12 +70,9 @@ const LanguageRow = ({ language, movies }) => {
             >
               {movie.subCategory?.length > 0 && (
                 <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                  {Array.isArray(movie.subCategory)
-                    ? movie.subCategory[0]
-                    : movie.subCategory}
+                  {Array.isArray(movie.subCategory) ? movie.subCategory[0] : movie.subCategory}
                 </span>
               )}
-
               <img
                 src={movie.poster}
                 alt={movie.title}
@@ -108,7 +95,6 @@ const LanguageRow = ({ language, movies }) => {
             </div>
           ))}
         </div>
-
         {showRight && (
           <button
             onClick={() => scroll("right")}
@@ -122,41 +108,37 @@ const LanguageRow = ({ language, movies }) => {
   );
 };
 
-/* ====== Watch List Page ====== */
+/* ====== Watch List Page Component ====== */
 const WatchListPage = () => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const slideRef = useRef(null);
+  const [showVideo, setShowVideo] = useState(false);
+  const latestMovieTimer = useRef(null);
+  const navigate = useNavigate();
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // default muted
 
+  /* ===== Fetch Movies ===== */
   useEffect(() => {
     const fetchMovies = async () => {
       setLoading(true);
       try {
         const [watchRes, moviesRes] = await Promise.all([
-          supabase
-            .from("watch_html")
-            .select("id, title, slug, poster, cover_poster, created_at")
-            .order("created_at", { ascending: false })
-            .limit(100),
-          supabase
-            .from("movies")
-            .select("slug, title, language, categories, subCategory, description"),
+          supabase.from("watch_html").select("id, title, slug, poster, cover_poster, video_url, created_at").order("created_at", { ascending: false }).limit(100),
+          supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
         ]);
 
         if (watchRes.error) throw new Error(watchRes.error.message);
         if (moviesRes.error) throw new Error(moviesRes.error.message);
 
         const moviesData = moviesRes.data || [];
-
         const merged = watchRes.data.map((item) => {
           const match =
             moviesData.find((m) => m.slug === item.slug) ||
-            moviesData.find(
-              (m) => m.title?.toLowerCase() === item.title?.toLowerCase()
-            );
+            moviesData.find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
 
           return {
             id: item.id,
@@ -164,6 +146,7 @@ const WatchListPage = () => {
             title: item.title,
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || "/default-cover.jpg",
+            video_url: item.video_url || "",
             created_at: item.created_at,
             language: match?.language?.length ? match.language : ["Unknown"],
             categories: match?.categories || [],
@@ -179,15 +162,12 @@ const WatchListPage = () => {
         setLoading(false);
       }
     };
-
     fetchMovies();
   }, []);
 
+  /* ===== Filter & Group Movies ===== */
   const filtered = useMemo(
-    () =>
-      movies.filter((m) =>
-        m.title.toLowerCase().includes(search.toLowerCase())
-      ),
+    () => movies.filter((m) => m.title.toLowerCase().includes(search.toLowerCase())),
     [movies, search]
   );
 
@@ -209,25 +189,32 @@ const WatchListPage = () => {
 
   const latestMovies = filtered.slice(0, 5);
 
+  /* ===== Hero Slider Logic ===== */
   useEffect(() => {
     if (latestMovies.length === 0) return;
-    const interval = setInterval(() => {
+
+    if (latestMovieTimer.current) clearTimeout(latestMovieTimer.current);
+
+    // Reset video
+    setShowVideo(false);
+
+    const currentMovie = latestMovies[currentSlide];
+  
+  // If current slide is an image, auto-advance after 5s
+  if (!currentMovie?.video_url) {
+    const timer = setTimeout(() => {
       setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
-      if (slideRef.current) {
-        slideRef.current.scrollTo({
-          left:
-            slideRef.current.clientWidth *
-            ((currentSlide + 1) % latestMovies.length),
-          behavior: "smooth",
-        });
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [latestMovies, currentSlide]);
+    }, 5000); // 5 seconds per image
+    return () => clearTimeout(timer);
+  }
+  // Do nothing for video slides; they will advance on video end
+}, [currentSlide, latestMovies]);
+
+  const handleVideoEnd = () => setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* ===== SEO ===== */}
+      {/* SEO */}
       <Helmet>
         <title>Watch Movies Online | 1TamilMV - Latest & Trending</title>
         <meta
@@ -236,38 +223,6 @@ const WatchListPage = () => {
         />
         <meta name="robots" content="index, follow" />
         <link rel="canonical" href="https://www.1anchormovies.live/watchlist" />
-
-        {/* Open Graph */}
-        <meta property="og:title" content="Watch Movies Online | 1TamilMV" />
-        <meta
-          property="og:description"
-          content="Stream and download latest movies in HD on 1TamilMV. Tamil, Telugu, Kannada, Malayalam & Hindi movies available."
-        />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://www.1anchormovies.live/watchlist" />
-        <meta property="og:image" content="/default-cover.jpg" />
-
-        {/* Twitter Card */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Watch Movies Online | 1TamilMV" />
-        <meta
-          name="twitter:description"
-          content="Stream and download latest movies in HD on 1TamilMV. Tamil, Telugu, Kannada, Malayalam & Hindi movies available."
-        />
-        <meta name="twitter:image" content="/default-cover.jpg" />
-
-        {/* JSON-LD structured data */}
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "name": "1TamilMV Watchlist",
-            "url": "https://www.1anchormovies.live/watchlist",
-            "description": "Latest movies to watch online in Tamil, Telugu, Kannada, Malayalam, and Hindi on 1TamilMV.",
-            "image": "/default-cover.jpg",
-            "genre": ["Tamil", "Telugu", "Kannada", "Malayalam", "Hindi"],
-          })}
-        </script>
       </Helmet>
 
       {/* Navbar */}
@@ -277,28 +232,13 @@ const WatchListPage = () => {
             <img src="/logo_39.png" alt="Logo" className="h-10" />
           </Link>
           <nav className="hidden sm:flex gap-6 text-sm font-medium">
-            <Link to="/" className="hover:text-blue-400 transition">
-              Home
-            </Link>
-            <Link to="/latest" className="hover:text-blue-400 transition">
-              Latest
-            </Link>
-            <Link to="/blogs" className="hover:text-blue-400 transition">
-              Blogs
-            </Link>
-            <Link to="/watchlist" className="hover:text-blue-400 transition">
-              My Watchlist
-            </Link>
+            <Link to="/" className="hover:text-blue-400 transition">Home</Link>
+            <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
+            <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
+            <Link to="/watchlist" className="hover:text-blue-400 transition">My Watchlist</Link>
           </nav>
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            className="p-2 rounded-full bg-black/60 hover:bg-black/80"
-          >
-            {showSearch ? (
-              <XMarkIcon className="w-6 h-6 text-white" />
-            ) : (
-              <MagnifyingGlassIcon className="w-6 h-6 text-white" />
-            )}
+          <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-full bg-black/60 hover:bg-black/80">
+            {showSearch ? <XMarkIcon className="w-6 h-6 text-white" /> : <MagnifyingGlassIcon className="w-6 h-6 text-white" />}
           </button>
         </div>
         {showSearch && (
@@ -314,72 +254,101 @@ const WatchListPage = () => {
         )}
       </header>
 
-      {/* Hero Slider */}
-      {!loading &&
-        latestMovies.filter((m) => m.cover_poster).length > 0 && (
-          <div className="relative w-full overflow-hidden bg-black">
-            <div className="relative w-full h-[45vh] sm:h-[75vh] flex justify-center items-center">
-              {latestMovies
-                .filter((movie) => movie.cover_poster)
-                .map((movie, idx) => (
-                  <div
-                    key={movie.id}
-                    className={`absolute inset-0 transition-opacity duration-1000 ${
-                      idx === currentSlide
-                        ? "opacity-100 z-20 pointer-events-auto"
-                        : "opacity-0 z-10 pointer-events-none"
-                    }`}
-                  >
-                    <img
-                      src={movie.cover_poster}
-                      alt={movie.title || "Movie Cover"}
-                      loading="lazy"
-                      className="w-full h-full object-cover brightness-75"
-                      onError={(e) =>
-                        (e.currentTarget.src = "/default-cover.jpg")
-                      }
-                    />
+{/* Hero Slider */}
+{!loading && latestMovies.length > 0 && (
+  <div className="relative w-full overflow-hidden bg-black">
+    <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
+      {latestMovies.map((movie, idx) => {
+        const isActive = idx === currentSlide;
+        return (
+          <div
+            key={movie.id}
+            className={`absolute inset-0 transition-opacity duration-1000 ${
+              isActive ? "opacity-100 z-20 pointer-events-auto" : "opacity-0 z-10 pointer-events-none"
+            }`}
+          >
+            {isActive && movie.video_url ? (
+              <video
+                key={`${movie.slug}-${currentSlide}`} 
+                src={movie.video_url}
+                muted={isMuted}
+                playsInline
+                autoPlay
+                className="w-full h-full object-cover brightness-75"
+                onPlay={() => setIsVideoPlaying(true)}
+                onEnded={() => {
+                  setIsVideoPlaying(false);
+                  setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
+                }}
+                ref={(el) => {
+                  if (el && !el.playing) {
+                    el.muted = isMuted;
+                    el.play().catch(() => console.log("Autoplay blocked."));
+                  }
+                }}
+              />
+            ) : (
+              <img
+                src={movie.cover_poster}
+                alt={movie.title || "Movie Cover"}
+                className="w-full h-full object-cover brightness-75"
+                onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
+              />
+            )}
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-6 sm:p-10">
-                      <h2 className="text-white text-2xl sm:text-4xl font-extrabold drop-shadow-lg">
-                        {movie.slug}
-                      </h2>
-                      {movie.language?.length > 0 && (
-                        <p className="text-gray-300 text-sm sm:text-base">
-                          {movie.language.join(" • ")}
-                        </p>
-                      )}
-                      {movie.description && (
-                        <p className="hidden sm:block text-gray-200 text-sm md:text-base max-w-2xl line-clamp-3">
-                          {movie.description}
-                        </p>
-                      )}
-                      <Link
-                        to={`/watch/${movie.slug}`}
-                        className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
-                      >
-                        ▶ Watch
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+            {/* Gradient overlay with info */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-4 sm:p-10">
+              <h2 className="text-white text-xl sm:text-4xl font-extrabold drop-shadow-lg truncate">{movie.slug}</h2>
+              {movie.language?.length > 0 && (
+                <p className="text-gray-300 text-xs sm:text-base truncate">{movie.language.join(" • ")}</p>
+              )}
+              {movie.description && (
+                <p className="hidden sm:block text-gray-200 text-sm md:text-base max-w-full line-clamp-3">{movie.description}</p>
+              )}
+              <Link
+                to={`/watch/${movie.slug}`}
+                className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+              >
+                ▶ Watch
+              </Link>
             </div>
 
-            {/* Dots */}
-            <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
-              {latestMovies.map((_, idx) => (
-                <span
-                  key={idx}
-                  className={`w-2 h-2 rounded-full ${
-                    idx === currentSlide ? "bg-white" : "bg-gray-500"
-                  }`}
+            {/* Mute/Unmute Button */}
+            {isActive && movie.video_url && (
+              <button
+                onClick={() => {
+                  setIsMuted((prev) => !prev);
+                  const videoEl = document.querySelector(`video[key="${movie.slug}-${currentSlide}"]`);
+                  if (videoEl) videoEl.muted = !isMuted; 
+                }}
+                className="absolute bottom-3 right-3 z-30 bg-black/80 hover:bg-black p-2 rounded-full flex items-center justify-center border border-white shadow-lg hover:scale-110 transition-transform"
+              >
+                <img
+                  src={isMuted ? "/mute.png" : "/volume.png"}
+                  alt={isMuted ? "Muted" : "Volume"}
+                  className="w-6 h-6"
                 />
-              ))}
-            </div>
+              </button>
+            )}
           </div>
-        )}
+        );
+      })}
+    </div>
 
-      {/* Movies grouped by Language */}
+    {/* Slider Dots */}
+    <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
+      {latestMovies.map((_, idx) => (
+        <span
+          key={idx}
+          className={`w-2 h-2 rounded-full ${idx === currentSlide ? "bg-white" : "bg-gray-500"}`}
+        />
+      ))}
+    </div>
+  </div>
+)}
+
+
+      {/* Movies by Language */}
       <div className="p-6 flex flex-col items-center">
         {loading ? (
           <p className="text-center">⏳ Loading...</p>
