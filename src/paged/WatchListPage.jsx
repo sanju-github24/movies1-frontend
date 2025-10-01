@@ -336,7 +336,16 @@ const WatchListPage = () => {
                   )}
 
                   {/* Gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-4 justify-end p-4 sm:p-10">
+<div
+  className="
+    absolute inset-0 
+    bg-gradient-to-t 
+    from-black/60 via-black/40 to-transparent   /* lighter for mobile */
+    sm:from-black/95 sm:via-black/70 sm:to-transparent  /* darker for desktop */
+    flex flex-col gap-4 justify-end p-4 sm:p-10
+  "
+>
+
 {/* Movie Title Logo */}
 {movie.title_logo ? (
   <img
