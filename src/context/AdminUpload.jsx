@@ -36,6 +36,8 @@ const AdminUpload = () => {
     showOnHomepage: true,
     directLinksOnly: false,
     watchUrl: "",
+      note: "",   // ✅ NEW
+
   });
 
   const [downloadBlocks, setDownloadBlocks] = useState([
@@ -81,6 +83,7 @@ const AdminUpload = () => {
       showOnHomepage: true,
       directLinksOnly: false,
       watchUrl: "",
+      note: "",   // ✅ NEW
     });
     setDownloadBlocks([
       {
@@ -174,6 +177,7 @@ const AdminUpload = () => {
       showOnHomepage: movie.showOnHomepage ?? true,
       directLinksOnly: movie.directLinksOnly || false,
       watchUrl: movie.watchUrl || "",
+        note: movie.note?.trim() || "",   // ✅ SAVE NOTE
       uploaded_by,
       ...(editingMovieId ? {} : { created_at: new Date().toISOString() }),
     };
@@ -219,6 +223,7 @@ const AdminUpload = () => {
       showOnHomepage: m.showOnHomepage ?? true,
       directLinksOnly: m.directLinksOnly || false,
       watchUrl: m.watchUrl || "",
+      note: m.note || "",   // ✅ LOAD NOTE
     });
 
     setDownloadBlocks(
@@ -350,6 +355,13 @@ const AdminUpload = () => {
                 value={movie.description}
                 onChange={(e) => setMovie((m) => ({ ...m, description: e.target.value }))}
               />
+              <textarea
+  placeholder="🗒️ Note (for admin use or extra info)"
+  className="p-3 bg-gray-800 rounded w-full placeholder-gray-400"
+  rows={2}
+  value={movie.note}
+  onChange={(e) => setMovie((m) => ({ ...m, note: e.target.value }))}
+/>
 
               <div className="grid md:grid-cols-3 gap-4">
                 {/* Categories */}
