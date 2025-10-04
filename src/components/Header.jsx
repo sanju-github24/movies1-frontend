@@ -423,7 +423,7 @@ const Header = () => {
 )}
 {movie.note ? (
   <span className="ml-2 text-red-600 font-bold text-xs whitespace-nowrap">
-    - [{movie.note}]
+    - {movie.note}
   </span>
 ) : null}
 
