@@ -418,7 +418,7 @@ const Header = () => {
     rel="noopener noreferrer"
     className="ml-2 text-gray-600 font-bold text-xs whitespace-nowrap"
   >
-    - [Watch]
+    - [WATCH]
   </a>
 )}
 {movie.note ? (
