@@ -329,106 +329,128 @@ const WatchListPage = () => {
       </header>
 
       {/* ===== Hero Slider ===== */}
-      {!loading && latestMovies.length > 0 && (
-        <div className="relative w-full overflow-hidden bg-black">
-          <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
-            {latestMovies.map((movie, idx) => {
-              const isActive = idx === currentSlide;
-              return (
-                <div
-                  key={movie.id}
-                  className={`absolute inset-0 transition-opacity duration-1000 ${
-                    isActive
-                      ? "opacity-100 z-20 pointer-events-auto"
-                      : "opacity-0 z-10 pointer-events-none"
-                  }`}
-                >
-                  {isActive && movie.video_url ? (
-                    <video
-                      key={`${movie.slug}-${currentSlide}`}
-                      src={movie.video_url}
-                      muted={isMuted}
-                      playsInline
-                      autoPlay
-                      className="w-full h-full object-cover brightness-75"
-                      onEnded={() =>
-                        setCurrentSlide(
-                          (prev) => (prev + 1) % latestMovies.length
-                        )
-                      }
-                    />
-                  ) : (
-                    <img
-                      src={movie.cover_poster}
-                      alt={movie.title || "Movie Cover"}
-                      className="w-full h-full object-cover brightness-75 bg-black"
-                      onError={(e) =>
-                        (e.currentTarget.src = "/default-cover.jpg")
-                      }
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-transparent flex items-center p-4 sm:p-10">
-                    <div className="max-w-2xl flex flex-col gap-3">
-                      {movie.title_logo ? (
-                        <img
-                          src={movie.title_logo}
-                          alt={`${movie.title} Logo`}
-                          className="w-[260px] sm:w-[420px] object-contain drop-shadow-lg mb-3"
-                        />
-                      ) : (
-                        <h2 className="text-white text-xl sm:text-4xl font-extrabold drop-shadow-lg">
-                          {movie.slug}
-                        </h2>
-                      )}
-
-                      {movie.language?.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {movie.language.map((lang, i) => (
-                            <span
-                              key={i}
-                              className="px-3 py-1.5 bg-black/70 rounded-lg text-sm sm:text-base font-medium text-gray-100 shadow-md"
-                            >
-                              {lang}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {movie.description && (
-                        <p className="hidden sm:block text-gray-300 text-sm md:text-base leading-relaxed">
-                          {movie.description}
-                        </p>
-                      )}
-
-                      <Link
-                        to={`/watch/${movie.slug}`}
-                        className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
-                      >
-                        ▶ Watch
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Slider Dots */}
-          <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-            {latestMovies.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentSlide(idx)}
-                className={`h-1.5 rounded-full transition-all duration-300 focus:outline-none ${
-                  idx === currentSlide
-                    ? "w-6 bg-white"
-                    : "w-2 bg-gray-500 hover:bg-gray-400"
-                }`}
+{!loading && latestMovies.length > 0 && (
+  <div className="relative w-full overflow-hidden bg-black">
+    <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
+      {latestMovies.map((movie, idx) => {
+        const isActive = idx === currentSlide;
+        return (
+          <div
+            key={movie.id}
+            className={`absolute inset-0 transition-opacity duration-1000 ${
+              isActive
+                ? "opacity-100 z-20 pointer-events-auto"
+                : "opacity-0 z-10 pointer-events-none"
+            }`}
+          >
+            {/* Background video or image */}
+            {isActive && movie.video_url ? (
+              <video
+                key={`${movie.slug}-${currentSlide}`}
+                src={movie.video_url}
+                muted={isMuted}
+                playsInline
+                autoPlay
+                className="w-full h-full object-cover brightness-75"
+                onEnded={() =>
+                  setCurrentSlide((prev) => (prev + 1) % latestMovies.length)
+                }
               />
-            ))}
+            ) : (
+              <img
+                src={movie.cover_poster}
+                alt={movie.title || "Movie Cover"}
+                className="w-full h-full object-cover brightness-75 bg-black"
+                onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
+              />
+            )}
+
+            {/* Left-side Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-transparent flex items-center p-4 sm:p-10">
+              <div className="max-w-2xl flex flex-col gap-3">
+                {/* Title Logo or Fallback Text */}
+                {movie.title_logo ? (
+                  <img
+                    src={movie.title_logo}
+                    alt={`${movie.title} Logo`}
+                    className="w-[260px] sm:w-[420px] object-contain drop-shadow-lg mb-3"
+                  />
+                ) : (
+                  <h2 className="text-white text-xl sm:text-4xl font-extrabold drop-shadow-lg">
+                    {movie.slug}
+                  </h2>
+                )}
+
+                {/* Language Badges */}
+                {movie.language?.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {movie.language.map((lang, i) => (
+                      <span
+                        key={i}
+                        className="px-3 py-1.5 bg-black/70 rounded-lg text-sm sm:text-base font-medium text-gray-100 shadow-md"
+                      >
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Description */}
+                {movie.description && (
+                  <p className="hidden sm:block text-gray-300 text-sm md:text-base leading-relaxed">
+                    {movie.description}
+                  </p>
+                )}
+
+                {/* Watch Button */}
+                <Link
+                  to={`/watch/${movie.slug}`}
+                  className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+                >
+                  ▶ Watch
+                </Link>
+              </div>
+            </div>
+
+            {/* Mute/Unmute Button */}
+            {isActive && movie.video_url && (
+              <button
+                onClick={() => {
+                  setIsMuted((prev) => !prev);
+                  const videos = document.querySelectorAll("video");
+                  videos.forEach((v) => (v.muted = !isMuted));
+                }}
+                className="absolute bottom-3 right-3 z-30 bg-black/80 hover:bg-black p-2 rounded-full flex items-center justify-center border border-white shadow-lg hover:scale-110 transition-transform"
+              >
+                <img
+                  src={isMuted ? "/mute.png" : "/volume.png"}
+                  alt={isMuted ? "Muted" : "Volume"}
+                  className="w-6 h-6"
+                />
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
+    </div>
+
+    {/* Slider Dots */}
+    <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+      {latestMovies.map((_, idx) => (
+        <button
+          key={idx}
+          onClick={() => setCurrentSlide(idx)}
+          className={`h-1.5 rounded-full transition-all duration-300 focus:outline-none ${
+            idx === currentSlide
+              ? "w-6 bg-white"
+              : "w-2 bg-gray-500 hover:bg-gray-400"
+          }`}
+        />
+      ))}
+    </div>
+  </div>
+)}
+
 
       {/* ===== Continue Watching Row ===== */}
       {continueWatching.length > 0 && (
