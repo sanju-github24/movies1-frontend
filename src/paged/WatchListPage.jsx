@@ -150,6 +150,7 @@ const WatchListPage = () => {
   const [recommended, setRecommended] = useState([]);
   const latestMovieTimer = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
+  
   const [lastWatchedTitle, setLastWatchedTitle] = useState("");
 
 
@@ -365,8 +366,8 @@ const WatchListPage = () => {
               />
             )}
 
-            {/* Left-side Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-transparent flex items-center p-4 sm:p-10">
+            {/* ====== DESKTOP VIEW ====== */}
+            <div className="hidden sm:flex absolute inset-0 bg-gradient-to-r from-black/95 via-black/65 to-transparent items-center p-10">
               <div className="max-w-2xl flex flex-col gap-3">
                 {/* Title Logo or Fallback Text */}
                 {movie.title_logo ? (
@@ -376,7 +377,7 @@ const WatchListPage = () => {
                     className="w-[260px] sm:w-[420px] object-contain drop-shadow-lg mb-3"
                   />
                 ) : (
-                  <h2 className="text-white text-xl sm:text-4xl font-extrabold drop-shadow-lg">
+                  <h2 className="text-white text-4xl font-extrabold drop-shadow-lg">
                     {movie.slug}
                   </h2>
                 )}
@@ -387,7 +388,7 @@ const WatchListPage = () => {
                     {movie.language.map((lang, i) => (
                       <span
                         key={i}
-                        className="px-3 py-1.5 bg-black/70 rounded-lg text-sm sm:text-base font-medium text-gray-100 shadow-md"
+                        className="px-3 py-1.5 bg-black/70 rounded-lg text-base font-medium text-gray-100 shadow-md"
                       >
                         {lang}
                       </span>
@@ -397,7 +398,7 @@ const WatchListPage = () => {
 
                 {/* Description */}
                 {movie.description && (
-                  <p className="hidden sm:block text-gray-300 text-sm md:text-base leading-relaxed">
+                  <p className="text-gray-300 text-base leading-relaxed">
                     {movie.description}
                   </p>
                 )}
@@ -411,6 +412,48 @@ const WatchListPage = () => {
                 </Link>
               </div>
             </div>
+
+            {/* ====== MOBILE VIEW ====== */}
+<div className="sm:hidden">
+  {/* Background gradient overlay */}
+
+
+  {/* Title Logo */}
+  {movie.title_logo ? (
+    <img
+      src={movie.title_logo}
+      alt={`${movie.title} Logo`}
+      className="absolute bottom-24 left-1/2 -translate-x-1/2 w-64 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.9)]"
+    />
+  ) : (
+    <h2 className="absolute bottom-24 left-1/2 -translate-x-1/2 text-white text-3xl font-extrabold drop-shadow-lg text-center w-full px-4">
+      {movie.title}
+    </h2>
+  )}
+
+  {/* Language tags (bottom-left side) */}
+  {movie.language?.length > 0 && (
+    <div className="absolute bottom-10 left-4 flex flex-wrap gap-2">
+      {movie.language.map((lang, i) => (
+        <span
+          key={i}
+          className="px-3 py-1 bg-black/70 rounded-md text-xs font-medium text-gray-100 shadow-md"
+        >
+          {lang}
+        </span>
+      ))}
+    </div>
+  )}
+
+  {/* Watch Button (centered) */}
+  <Link
+    to={`/watch/${movie.slug}`}
+    className="absolute bottom-8 left-1/2 -translate-x-1/2 inline-flex w-max px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+  >
+    ▶ Watch
+  </Link>
+</div>
+
 
             {/* Mute/Unmute Button */}
             {isActive && movie.video_url && (
