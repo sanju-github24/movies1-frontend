@@ -422,7 +422,7 @@ const WatchListPage = () => {
   {movie.title_logo ? (
     <img
       src={movie.title_logo}
-      alt={`${movie.title} Logo`}
+      alt={`${movie.slug} Logo`}
       className="absolute bottom-24 left-1/2 -translate-x-1/2 w-64 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.9)]"
     />
   ) : (
