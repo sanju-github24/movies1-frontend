@@ -9,9 +9,9 @@ const WatchHtmlPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [movieMeta, setMovieMeta] = useState(null);
-  const [servers, setServers] = useState([]);
   const [episodes, setEpisodes] = useState([]);
   const [activeSrc, setActiveSrc] = useState(null);
+  const [servers, setServers] = useState([]);
 
   // 🔹 Fetch Movie + Episode Data
   useEffect(() => {
@@ -20,10 +20,10 @@ const WatchHtmlPage = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 🔹 Fetch movie details
+        // Fetch movie
         const { data: watchData, error: watchError } = await supabase
           .from("watch_html")
-          .select("id, slug, html_code, html_code2, title, poster, cover_poster")
+          .select("id, slug, title, poster, cover_poster, video_url, html_code")
           .eq("slug", slug)
           .single();
 
@@ -32,18 +32,12 @@ const WatchHtmlPage = () => {
           return;
         }
 
-        // 🔹 Fetch episodes
+        // Fetch episodes (optional)
         const { data: epData } = await supabase
           .from("watch_episodes")
-          .select("id, episode_title, episode_html")
+          .select("id, episode_title, video_url")
           .eq("watch_id", watchData.id)
           .order("created_at", { ascending: true });
-
-        // Extract iframe sources
-        const iframeSrc1 =
-          watchData.html_code?.match(/src="([^"]+)"/i)?.[1] || null;
-        const iframeSrc2 =
-          watchData.html_code2?.match(/src="([^"]+)"/i)?.[1] || null;
 
         if (isMounted) {
           setMovieMeta({
@@ -54,23 +48,25 @@ const WatchHtmlPage = () => {
               watchData.cover_poster || watchData.poster || "/poster.png",
           });
 
-          if (epData && epData.length > 0) {
-            // Show episodes
-            setEpisodes(epData);
-            setActiveSrc(
-              epData[0].episode_html?.match(/src="([^"]+)"/i)?.[1] || null
-            );
-          } else {
-            // Fallback to servers
-            const srv = [
-              { name: "Server 1", src: iframeSrc1 },
-              { name: "Server 2", src: iframeSrc2 },
-            ].filter((s) => s.src);
-            setServers(srv);
-            setActiveSrc(srv[0]?.src || null);
+          // 🔸 Determine servers
+          const availableServers = [];
+          if (watchData.video_url) availableServers.push({ name: "Server 1", type: "video", src: watchData.video_url });
+          if (watchData.html_code) availableServers.push({ name: "Server 2", type: "html", src: watchData.html_code });
+
+          setServers(availableServers);
+
+          // 🔹 Default active source: video_url first, fallback to html_code
+          if (watchData.video_url) {
+            setActiveSrc({ type: "video", src: watchData.video_url });
+          } else if (watchData.html_code) {
+            setActiveSrc({ type: "html", src: watchData.html_code });
           }
+
+          // Episodes setup
+          if (epData && epData.length > 0) setEpisodes(epData);
         }
-      } catch {
+      } catch (err) {
+        console.error(err);
         if (isMounted) setMovieMeta({ slug: "Error 🚫" });
       } finally {
         if (isMounted) setLoading(false);
@@ -86,8 +82,8 @@ const WatchHtmlPage = () => {
   // 🔹 SEO Meta Updates
   useEffect(() => {
     if (movieMeta?.slug) {
-      const titleText = `Watch ${movieMeta.slug} now in all languages | MovieStream`;
-      const descText = `Watch ${movieMeta.slug} online now in multiple languages. Stream or download all types of movies including action, drama, romance, and more.`;
+      const titleText = `Watch ${movieMeta.slug} now | MovieStream`;
+      const descText = `Watch ${movieMeta.slug} online in HD. Stream or download movies in all genres — action, drama, comedy, and more.`;
 
       document.title = titleText;
 
@@ -152,12 +148,12 @@ const WatchHtmlPage = () => {
             />
             <div className="text-center sm:text-left z-10">
               <h1 className="text-3xl sm:text-5xl font-bold text-white mb-4 drop-shadow-lg">
-                {movieMeta.title}
+                {movieMeta.slug}
               </h1>
               <p className="text-gray-300 max-w-lg leading-relaxed">
-                Watch <span className="text-blue-400">{movieMeta.title}</span> now in all
-                languages — enjoy movies of every genre including action, drama, comedy,
-                thriller, and romance. Stream or download anytime, anywhere!
+                Watch <span className="text-blue-400">{movieMeta.slug}</span> online in HD —
+                enjoy movies of every genre including action, drama, comedy,
+                thriller, and romance.
               </p>
             </div>
           </div>
@@ -173,51 +169,62 @@ const WatchHtmlPage = () => {
           ⬅ Previous Page
         </button>
 
-        {/* ▶️ Video Player */}
-        {activeSrc && (
-          <div className="mb-10">
-            <div className="w-full max-w-4xl mx-auto aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-lg">
-              <iframe
-                src={activeSrc}
-                frameBorder="0"
-                allowFullScreen
-                loading="lazy"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-                className="w-full h-full rounded-lg"
-              />
-            </div>
+        {/* 🌐 Server Buttons */}
+        {servers.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-5">
+            {servers.map((server, index) => (
+              <button
+                key={index}
+                onClick={() => setActiveSrc(server)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  activeSrc?.src === server.src
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-800 hover:bg-gray-700 text-gray-300"
+                }`}
+              >
+                {server.name}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* 📺 Episodes or Servers */}
-        {episodes.length > 0 ? (
+ {/* ▶️ Player Section */}
+{activeSrc ? (
+  <div className="w-full max-w-full mx-auto rounded-lg overflow-hidden shadow-lg bg-black relative" style={{ aspectRatio: "16/9" }}>
+    {activeSrc.type === "video" ? (
+      <iframe
+        src={activeSrc.src}
+        loading="lazy"
+        className="absolute top-0 left-0 w-full h-full"
+        style={{ border: 0 }}
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    ) : (
+      <div
+        className="absolute top-0 left-0 w-full h-full"
+        dangerouslySetInnerHTML={{
+          __html: activeSrc.src.replace(/width=\d+/gi, 'width="100%"').replace(/height=\d+/gi, 'height="100%"'),
+        }}
+      />
+    )}
+  </div>
+) : (
+  <p className="text-center text-gray-400 mt-4">⚠️ No video available.</p>
+)}
+
+        {/* 📺 Episodes */}
+        {episodes.length > 0 && (
           <div>
             <h2 className="text-xl font-semibold text-yellow-400 mb-4">📺 Episodes</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {episodes.map((ep) => (
                 <button
                   key={ep.id}
-                  onClick={() =>
-                    setActiveSrc(ep.episode_html?.match(/src="([^"]+)"/i)?.[1] || null)
-                  }
+                  onClick={() => setActiveSrc({ type: "video", src: ep.video_url })}
                   className="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
                 >
                   {ep.episode_title}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <h2 className="text-xl font-semibold text-green-400 mb-4">🎛️ Available Servers</h2>
-            <div className="flex gap-3 flex-wrap">
-              {servers.map((server, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveSrc(server.src)}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
-                >
-                  {server.name}
                 </button>
               ))}
             </div>

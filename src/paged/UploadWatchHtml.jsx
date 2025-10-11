@@ -4,25 +4,27 @@ import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-// ================== Main Upload Component ==================
 const UploadWatchHtml = () => {
-  const { userData } = useContext(AppContext);
+  const { userData, backendUrl } = useContext(AppContext);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [htmlCode, setHtmlCode] = useState("");
-  const [htmlCode2, setHtmlCode2] = useState(""); // ✅ New Server 2
+  const [htmlCode2, setHtmlCode2] = useState("");
   const [poster, setPoster] = useState("");
   const [coverPoster, setCoverPoster] = useState("");
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
-
-
-  const navigate = useNavigate();
-
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [watchList, setWatchList] = useState([]);
   const [search, setSearch] = useState("");
 
+  const navigate = useNavigate();
+
+  // 🚫 Admin Access Check
   if (userData?.email !== "sanjusanjay0444@gmail.com") {
     return (
       <div className="text-center mt-20 text-red-500 font-bold text-xl">
@@ -37,7 +39,6 @@ const UploadWatchHtml = () => {
       .from("watch_html")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (error) console.error(error.message);
     else setWatchList(data);
   };
@@ -46,10 +47,66 @@ const UploadWatchHtml = () => {
     fetchWatchPages();
   }, []);
 
-  // 📌 Upload Movie
+  // ---------------- Handle Video Upload ----------------
+  // ---------------- Handle Video Upload ----------------
+// ---------------- Handle Video Upload (Auto Replace URL After Processing) ----------------
+const handleVideoUpload = async (file) => {
+  if (!file) return toast.error("❌ No file selected!");
+  setIsUploading(true);
+  setUploadProgress("0% (0MB / 0MB)");
+
+  try {
+    const formData = new FormData();
+    formData.append("movie", file);
+
+    let lastLoaded = 0;
+    let lastTime = Date.now();
+
+    const res = await axios.post(`${backendUrl}/api/upload-bunnystream`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          const mbUploaded = (event.loaded / (1024 * 1024)).toFixed(2);
+          const mbTotal = (event.total / (1024 * 1024)).toFixed(2);
+
+          const now = Date.now();
+          const deltaTime = (now - lastTime) / 1000; // seconds
+          const deltaBytes = event.loaded - lastLoaded;
+          const speed = deltaTime > 0 ? (deltaBytes / (1024 * 1024 * deltaTime)).toFixed(2) : 0;
+
+          lastLoaded = event.loaded;
+          lastTime = now;
+
+          setUploadProgress(`${percent}% (${mbUploaded}MB / ${mbTotal}MB) [${speed} MB/s]`);
+        }
+      },
+      timeout: 0,
+    });
+
+    const { videoGuid, directUrl } = res.data;
+    if (!videoGuid || !directUrl) throw new Error("No video URL returned");
+
+    // ✅ Set direct playable iframe URL immediately
+    setVideoUrl(directUrl);
+    toast.success("✅ Video uploaded! Direct player URL is ready.");
+
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    toast.error("⚠️ Upload failed!");
+  } finally {
+    setIsUploading(false);
+    setSelectedFile(null);
+    setUploadProgress("");
+  }
+};
+
+
+
+  // ---------------- Upload Movie HTML ----------------
   const handleUpload = async () => {
-    if (!title.trim() || !slug.trim() || !htmlCode.trim() || !poster.trim()) {
-      return toast.error("❌ All fields are required!");
+    if (!title.trim() || !slug.trim() || !htmlCode.trim() || !poster.trim() || !videoUrl) {
+      return toast.error("❌ All fields including video URL are required!");
     }
     setLoading(true);
 
@@ -61,7 +118,7 @@ const UploadWatchHtml = () => {
       html_code2: htmlCode2.trim(),
       poster: poster.trim(),
       cover_poster: coverPoster.trim(),
-      video_url: videoUrl.trim(), // ✅ NEW
+      video_url: videoUrl.trim(),
       created_at: new Date().toISOString(),
     };
 
@@ -77,20 +134,19 @@ const UploadWatchHtml = () => {
       setHtmlCode2("");
       setPoster("");
       setCoverPoster("");
+      setVideoUrl("");
+      setSelectedFile(null);
       fetchWatchPages();
     }
     setLoading(false);
   };
 
-  // 📌 Delete Movie
+  // ---------------- Delete Movie ----------------
   const handleDelete = async (id) => {
     if (!window.confirm("⚠️ Are you sure you want to delete this?")) return;
-
     const { error } = await supabase.from("watch_html").delete().eq("id", id);
-    if (error) {
-      console.error(error.message);
-      toast.error("⚠️ Failed to delete!");
-    } else {
+    if (error) toast.error("⚠️ Failed to delete!");
+    else {
       toast.success("🗑️ Deleted successfully!");
       setWatchList(watchList.filter((item) => item.id !== id));
     }
@@ -116,9 +172,7 @@ const UploadWatchHtml = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel */}
         <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-blue-300">
-            ➕ Add New Movie
-          </h2>
+          <h2 className="text-xl font-semibold mb-4 text-blue-300">➕ Add New Movie</h2>
 
           {/* Movie Form */}
           <div className="mb-5">
@@ -166,23 +220,50 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-  <label className="block font-semibold mb-2">Video URL</label>
+  <label className="block font-semibold mb-2">Video URL (HLS)</label>
   <input
     type="text"
-    className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
+    className="border border-gray-700 bg-gray-800 p-3 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
     value={videoUrl}
-    onChange={(e) => setVideoUrl(e.target.value)}
-    placeholder="https://example.com/video.mp4"
+    onChange={(e) => setVideoUrl(e.target.value)} // ✅ made editable
+    placeholder="Enter or paste HLS video URL"
   />
-  
+  {videoUrl && <p className="text-green-400 text-sm mt-1">✅ HLS Ready</p>}
+  {uploadProgress && <p className="text-blue-300 mt-2 font-mono">{uploadProgress}</p>}
 </div>
 
 
+          <div className="mb-5 relative">
+            <label className="block font-semibold mb-2">
+              Upload Video (Server 1 – Auto converts to HLS)
+            </label>
+            <input
+              type="file"
+              accept="video/*,.mp4,.webm,.mkv,.mov,.avi,.m3u8,.ts"
+              onChange={(e) => setSelectedFile(e.target.files[0])}
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full text-white mb-2"
+            />
+            {selectedFile && !isUploading && (
+              <button
+                onClick={() => setSelectedFile(null)}
+                className="absolute top-9 right-2 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded font-bold"
+              >
+                ❌
+              </button>
+            )}
+            <button
+              onClick={() => handleVideoUpload(selectedFile)}
+              disabled={!selectedFile || isUploading}
+              className={`px-4 py-2 rounded font-semibold text-white ${
+                selectedFile ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-600 cursor-not-allowed"
+              }`}
+            >
+              {isUploading ? "⏳ Uploading..." : "🚀 Upload & Convert to HLS"}
+            </button>
+          </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">
-              Watch HTML Code (Server 1)
-            </label>
+            <label className="block font-semibold mb-2">Watch HTML Code (Server 1)</label>
             <textarea
               className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono"
               rows={5}
@@ -193,9 +274,7 @@ const UploadWatchHtml = () => {
           </div>
 
           <div className="mb-5">
-            <label className="block font-semibold mb-2">
-              Watch HTML Code (Server 2)
-            </label>
+            <label className="block font-semibold mb-2">Watch HTML Code (Server 2)</label>
             <textarea
               className="border border-gray-700 bg-gray-800 p-3 rounded w-full font-mono"
               rows={5}
@@ -207,7 +286,7 @@ const UploadWatchHtml = () => {
 
           <button
             onClick={handleUpload}
-            disabled={loading}
+            disabled={loading || !videoUrl}
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full"
           >
             {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
@@ -216,10 +295,7 @@ const UploadWatchHtml = () => {
 
         {/* Right Panel */}
         <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-green-400">
-            📌 Recently Uploaded
-          </h2>
-
+          <h2 className="text-xl font-semibold mb-4 text-green-400">📌 Recently Uploaded</h2>
           <input
             type="text"
             placeholder="🔍 Search by title..."
@@ -227,29 +303,23 @@ const UploadWatchHtml = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-
           {filteredList.length === 0 ? (
             <p className="text-gray-400">No results found.</p>
           ) : (
             <ul className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
               {filteredList.map((item) => (
-                <EditableItem
-                  key={item.id}
-                  item={item}
-                  fetchWatchPages={fetchWatchPages}
-                  handleDelete={handleDelete}
-                />
+                <EditableItem key={item.id} item={item} handleDelete={handleDelete} />
               ))}
             </ul>
           )}
         </div>
       </div>
     </div>
-    
   );
 };
 
 export default UploadWatchHtml;
+
 
 // ================== Inline Editable Item ==================
 const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
@@ -262,12 +332,10 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [editHtml2, setEditHtml2] = useState(item.html_code2 || "");
   const [editVideoUrl, setEditVideoUrl] = useState(item.video_url || "");
 
-
-  // 📌 Episodes
+  // Episodes
   const [episodes, setEpisodes] = useState([]);
   const [newEpisodes, setNewEpisodes] = useState([{ title: "", html: "" }]);
 
-  // Fetch episodes
   const fetchEpisodes = async () => {
     const { data, error } = await supabase
       .from("watch_episodes")
@@ -282,21 +350,20 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
     fetchEpisodes();
   }, []);
 
-  // 💾 Save Movie
+  // Save Movie
   const handleSave = async () => {
     const { error } = await supabase
-  .from("watch_html")
-  .update({
-    title: editTitle.trim(),
-    slug: editSlug.trim(),
-    poster: editPoster.trim(),
-    cover_poster: editCoverPoster.trim(),
-    html_code: editHtml.trim(),
-    html_code2: editHtml2.trim(),
-    video_url: editVideoUrl.trim(), // ✅ NEW
-  })
-  .eq("id", item.id);
-
+      .from("watch_html")
+      .update({
+        title: editTitle.trim(),
+        slug: editSlug.trim(),
+        poster: editPoster.trim(),
+        cover_poster: editCoverPoster.trim(),
+        html_code: editHtml.trim(),
+        html_code2: editHtml2.trim(),
+        video_url: editVideoUrl.trim(),
+      })
+      .eq("id", item.id);
 
     if (error) toast.error("⚠️ Failed to update!");
     else {
@@ -306,19 +373,16 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
     }
   };
 
-  // ➕ Add Episode Input Field
   const handleAddEpisodeField = () => {
     setNewEpisodes([...newEpisodes, { title: "", html: "" }]);
   };
 
-  // Change new episode input
   const handleEpisodeChange = (index, field, value) => {
     const updated = [...newEpisodes];
     updated[index][field] = value;
     setNewEpisodes(updated);
   };
 
-  // 💾 Save Episodes
   const handleSaveEpisodes = async () => {
     const validEpisodes = newEpisodes.filter(
       (ep) => ep.title.trim() && ep.html.trim()
@@ -344,7 +408,6 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
     }
   };
 
-  // 🗑️ Delete Episode
   const handleDeleteEpisode = async (id) => {
     if (!window.confirm("Delete this episode?")) return;
     const { error } = await supabase.from("watch_episodes").delete().eq("id", id);
@@ -358,7 +421,6 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   return (
     <li className="bg-gray-800 p-4 rounded-lg flex flex-col gap-3">
       {isEditing ? (
-        // ✏️ Edit Mode
         <div className="flex flex-col gap-2">
           <input
             value={editTitle}
@@ -382,12 +444,11 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
             className="p-2 rounded bg-gray-700 text-white"
           />
           <input
-  value={editVideoUrl}
-  onChange={(e) => setEditVideoUrl(e.target.value)}
-  placeholder="Video URL"
-  className="p-2 rounded bg-gray-700 text-white"
-/>
-
+            value={editVideoUrl}
+            onChange={(e) => setEditVideoUrl(e.target.value)}
+            placeholder="Video URL"
+            className="p-2 rounded bg-gray-700 text-white"
+          />
           <textarea
             value={editHtml}
             onChange={(e) => setEditHtml(e.target.value)}
@@ -418,7 +479,6 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           </div>
         </div>
       ) : (
-        // Normal View
         <div className="flex justify-between items-center">
           <div>
             <p className="font-semibold">{item.title}</p>
@@ -432,13 +492,12 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
               />
             )}
             {item.video_url && (
-  <video
-    src={item.video_url}
-    controls
-    className="w-32 h-20 object-cover mt-2 rounded"
-  />
-)}
-
+              <video
+                src={item.video_url}
+                controls
+                className="w-32 h-20 object-cover mt-2 rounded"
+              />
+            )}
           </div>
           <div className="flex gap-3">
             <button
@@ -457,7 +516,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
         </div>
       )}
 
-      {/* 🎬 Episodes */}
+      {/* Episodes */}
       <div className="mt-3 border-t border-gray-700 pt-3">
         <h3 className="font-semibold text-blue-300 mb-2">📺 Episodes</h3>
 

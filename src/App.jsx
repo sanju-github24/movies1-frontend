@@ -50,10 +50,10 @@ const App = () => {
   const hideNavbarAndCategoryBar =
     hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isAdminPath;
 
-  // ✅ Unified handler for language navigation
+  // Unified handler for language navigation
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
-    setMobileOpen(false); // close mobile drawer
+    setMobileOpen(false);
   };
 
   return (
@@ -72,39 +72,31 @@ const App = () => {
       {!hideNavbarAndCategoryBar && (
         <>
           {/* Desktop Navbar */}
-          
-<div className="hidden sm:block">
-  <Navbar 
-    searchTerm={searchTerm} 
-    setSearchTerm={setSearchTerm} 
-    onNavigate={handleNavigate} // ✅ pass it
-  />
-</div>
-
-
+          <div className="hidden sm:block">
+            <Navbar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              onNavigate={handleNavigate}
+            />
+          </div>
 
           {/* Mobile Navbar */}
           <div className="sm:hidden">
-          <Navbar
-  searchTerm={searchTerm}
-  setSearchTerm={setSearchTerm}
-  isMobile={true}
-  mobileOpen={mobileOpen}
-  setMobileOpen={setMobileOpen}
-  onNavigate={handleNavigate} // ✅ pass the handler
-/>
+            <Navbar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              isMobile={true}
+              mobileOpen={mobileOpen}
+              setMobileOpen={setMobileOpen}
+              onNavigate={handleNavigate}
+            />
 
-
-            {/* Mobile Drawer */}
             {mobileOpen && (
               <div className="fixed inset-0 z-50">
-                {/* Overlay */}
                 <div
                   className="absolute inset-0 bg-black/60"
                   onClick={() => setMobileOpen(false)}
-                ></div>
-
-                {/* Drawer */}
+                />
                 <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl">
                   <CategoryBar
                     isMobile={true}
@@ -117,23 +109,20 @@ const App = () => {
           </div>
         </>
       )}
+
       {/* Routes */}
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code" element={<MovieDetail />} />
         <Route path="/search" element={<SearchResults searchTerm={searchTerm} />} />
-
-        {/* Language Pages */}
         <Route path="/category/:name" element={<CategoryPage />} />
-
         <Route path="/latest" element={<LatestUploads />} />
         <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
         <Route path="/watch/:slug/*" element={<WatchPage />} />
 
-        
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
 
@@ -163,9 +152,11 @@ const App = () => {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-       <AdScriptLoader/>
-         <PopAdsScript/>  {/* ✅ Optional */}
-         <AdPopup/>      {/* ✅ Optional */}
+
+      {/* Ads */}
+      <AdScriptLoader />
+      <PopAdsScript />
+      <AdPopup />
     </div>
   );
 };

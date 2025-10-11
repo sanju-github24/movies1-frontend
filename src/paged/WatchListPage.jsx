@@ -9,7 +9,6 @@ const LanguageRow = ({ language, movies, overlay }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
-  
   const navigate = useNavigate();
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
@@ -74,23 +73,15 @@ const LanguageRow = ({ language, movies, overlay }) => {
               key={movie.id}
               className="relative flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg bg-gray-900 hover:bg-gray-800 cursor-pointer transform transition-transform duration-300 hover:scale-110 hover:z-20"
               onClick={() => {
-                saveRecentlyWatched(movie); // save clicked movie
+                saveRecentlyWatched(movie);
                 navigate(`/watch/${movie.slug}`);
               }}
             >
-              {/* SubCategory badge */}
               {movie.subCategory?.length > 0 && (
                 <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
                   {Array.isArray(movie.subCategory)
                     ? movie.subCategory[0]
                     : movie.subCategory}
-                </span>
-              )}
-
-              {/* Overlay for Continue Watching */}
-              {overlay && (
-                <span className="absolute top-2 right-2 bg-black/70 text-white text-xs px-1 rounded shadow">
-                  🕒
                 </span>
               )}
 
@@ -146,13 +137,9 @@ const WatchListPage = () => {
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [continueWatching, setContinueWatching] = useState([]);
   const [recommended, setRecommended] = useState([]);
   const latestMovieTimer = useRef(null);
-  const [isMuted, setIsMuted] = useState(true);
-  
   const [lastWatchedTitle, setLastWatchedTitle] = useState("");
-
 
   /* ===== Fetch Movies ===== */
   useEffect(() => {
@@ -209,6 +196,28 @@ const WatchListPage = () => {
     fetchMovies();
   }, []);
 
+  
+  /* ===== Load Recommendations ===== */
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem("recently_watched") || "[]");
+
+    if (stored.length > 0) {
+      const last = stored[0];
+      setLastWatchedTitle(last.slug || "a movie");
+
+      const related = movies.filter(
+        (m) =>
+          m.language?.[0] === last.language?.[0] ||
+          m.categories?.[0] === last.categories?.[0]
+      );
+      setRecommended(
+        related.filter((m) => m.slug !== last.slug).slice(0, 10)
+      );
+    }
+  }, [movies]);
+
+  
+
   /* ===== Filter & Group Movies ===== */
   const filtered = useMemo(
     () =>
@@ -236,40 +245,16 @@ const WatchListPage = () => {
 
   const latestMovies = filtered.slice(0, 5);
 
-  /* ===== Hero Slider Logic ===== */
-  useEffect(() => {
-    if (latestMovies.length === 0) return;
-    if (latestMovieTimer.current) clearTimeout(latestMovieTimer.current);
+  /* ===== Auto-Slide Effect ===== */
+useEffect(() => {
+  if (latestMovies.length === 0) return;
 
-    const currentMovie = latestMovies[currentSlide];
+  const interval = setInterval(() => {
+    setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
+  }, 6000); // 6000ms = 6 seconds
 
-    if (!currentMovie?.video_url) {
-      const timer = setTimeout(() => {
-        setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [currentSlide, latestMovies]);
-
-  /* ===== Load Continue Watching & Recommendations ===== */
-  useEffect(() => {
-  const stored = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-  setContinueWatching(stored);
-
-  if (stored.length > 0) {
-    const last = stored[0]; // most recent movie
-    setLastWatchedTitle(last.slug || "a movie");
-
-    const related = movies.filter(
-      (m) =>
-        m.language?.[0] === last.language?.[0] ||
-        m.categories?.[0] === last.categories?.[0]
-    );
-    setRecommended(
-      related.filter((m) => m.slug !== last.slug).slice(0, 10)
-    );
-  }
-}, [movies]);
+  return () => clearInterval(interval); // Cleanup on unmount
+}, [latestMovies]);
 
 
   return (
@@ -292,18 +277,10 @@ const WatchListPage = () => {
             <img src="/logo_39.png" alt="Logo" className="h-10" />
           </Link>
           <nav className="hidden sm:flex gap-6 text-sm font-medium">
-            <Link to="/" className="hover:text-blue-400 transition">
-              Home
-            </Link>
-            <Link to="/latest" className="hover:text-blue-400 transition">
-              Latest
-            </Link>
-            <Link to="/blogs" className="hover:text-blue-400 transition">
-              Blogs
-            </Link>
-            <Link to="/watchlist" className="hover:text-blue-400 transition">
-              My Watchlist
-            </Link>
+            <Link to="/" className="hover:text-blue-400 transition">Home</Link>
+            <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
+            <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
+            <Link to="/watchlist" className="hover:text-blue-400 transition">My Watchlist</Link>
           </nav>
           <button
             onClick={() => setShowSearch(!showSearch)}
@@ -316,6 +293,7 @@ const WatchListPage = () => {
             )}
           </button>
         </div>
+
         {showSearch && (
           <div className="px-4 pb-3 max-w-3xl mx-auto">
             <input
@@ -328,7 +306,6 @@ const WatchListPage = () => {
           </div>
         )}
       </header>
-
       {/* ===== Hero Slider ===== */}
 {!loading && latestMovies.length > 0 && (
   <div className="relative w-full overflow-hidden bg-black">
@@ -344,27 +321,13 @@ const WatchListPage = () => {
                 : "opacity-0 z-10 pointer-events-none"
             }`}
           >
-            {/* Background video or image */}
-            {isActive && movie.video_url ? (
-              <video
-                key={`${movie.slug}-${currentSlide}`}
-                src={movie.video_url}
-                muted={isMuted}
-                playsInline
-                autoPlay
-                className="w-full h-full object-cover brightness-75"
-                onEnded={() =>
-                  setCurrentSlide((prev) => (prev + 1) % latestMovies.length)
-                }
-              />
-            ) : (
-              <img
-                src={movie.cover_poster}
-                alt={movie.title || "Movie Cover"}
-                className="w-full h-full object-cover brightness-75 bg-black"
-                onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
-              />
-            )}
+            {/* Always show image (video removed) */}
+            <img
+              src={movie.cover_poster}
+              alt={movie.title || "Movie Cover"}
+              className="w-full h-full object-cover brightness-75 bg-black"
+              onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
+            />
 
             {/* ====== DESKTOP VIEW ====== */}
             <div className="hidden sm:flex absolute inset-0 bg-gradient-to-r from-black/95 via-black/65 to-transparent items-center p-10">
@@ -414,64 +377,42 @@ const WatchListPage = () => {
             </div>
 
             {/* ====== MOBILE VIEW ====== */}
-<div className="sm:hidden">
-  {/* Background gradient overlay */}
-
-
-  {/* Title Logo */}
-  {movie.title_logo ? (
-    <img
-      src={movie.title_logo}
-      alt={`${movie.title_logo} Logo`}
-      className="absolute bottom-24 left-1/2 -translate-x-1/2 w-64 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.9)]"
-    />
-  ) : (
-    <h2 className="absolute bottom-24 left-1/2 -translate-x-1/2 text-white text-3xl font-extrabold drop-shadow-lg text-center w-full px-4">
-      {movie.slug}
-    </h2>
-  )}
-
-  {/* Language tags (bottom-left side) */}
-  {movie.language?.length > 0 && (
-    <div className="absolute bottom-10 left-4 flex flex-wrap gap-2">
-      {movie.language.map((lang, i) => (
-        <span
-          key={i}
-          className="px-3 py-1 bg-black/70 rounded-md text-xs font-medium text-gray-100 shadow-md"
-        >
-          {lang}
-        </span>
-      ))}
-    </div>
-  )}
-
-  {/* Watch Button (centered) */}
-  <Link
-    to={`/watch/${movie.slug}`}
-    className="absolute bottom-8 left-1/2 -translate-x-1/2 inline-flex w-max px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
-  >
-    ▶ Watch
-  </Link>
-</div>
-
-
-            {/* Mute/Unmute Button */}
-            {isActive && movie.video_url && (
-              <button
-                onClick={() => {
-                  setIsMuted((prev) => !prev);
-                  const videos = document.querySelectorAll("video");
-                  videos.forEach((v) => (v.muted = !isMuted));
-                }}
-                className="absolute bottom-3 right-3 z-30 bg-black/80 hover:bg-black p-2 rounded-full flex items-center justify-center border border-white shadow-lg hover:scale-110 transition-transform"
-              >
+            <div className="sm:hidden">
+              {/* Title Logo */}
+              {movie.title_logo ? (
                 <img
-                  src={isMuted ? "/mute.png" : "/volume.png"}
-                  alt={isMuted ? "Muted" : "Volume"}
-                  className="w-6 h-6"
+                  src={movie.title_logo}
+                  alt={`${movie.title_logo} Logo`}
+                  className="absolute bottom-24 left-1/2 -translate-x-1/2 w-64 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.9)]"
                 />
-              </button>
-            )}
+              ) : (
+                <h2 className="absolute bottom-24 left-1/2 -translate-x-1/2 text-white text-3xl font-extrabold drop-shadow-lg text-center w-full px-4">
+                  {movie.slug}
+                </h2>
+              )}
+
+              {/* Language tags */}
+              {movie.language?.length > 0 && (
+                <div className="absolute bottom-10 left-4 flex flex-wrap gap-2">
+                  {movie.language.map((lang, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1 bg-black/70 rounded-md text-xs font-medium text-gray-100 shadow-md"
+                    >
+                      {lang}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Watch Button */}
+              <Link
+                to={`/watch/${movie.slug}`}
+                className="absolute bottom-8 left-1/2 -translate-x-1/2 inline-flex w-max px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+              >
+                ▶ Watch
+              </Link>
+            </div>
           </div>
         );
       })}
@@ -495,27 +436,15 @@ const WatchListPage = () => {
 )}
 
 
-      {/* ===== Continue Watching Row ===== */}
-      {continueWatching.length > 0 && (
+            {/* ===== Recommended Because You Watched ===== */}
+      {recommended.length > 0 && (
         <div className="p-6 flex flex-col items-center">
           <LanguageRow
-            language="⏸ Continue Watching"
-            movies={continueWatching}
-            overlay
+            language={`🎬 Because you watched: ${lastWatchedTitle}`}
+            movies={recommended}
           />
         </div>
       )}
-
-      {/* Recommended Because You Watched */}
-{recommended.length > 0 && (
-  <div className="p-6 flex flex-col items-center">
-    <LanguageRow
-      language={`🎬 Because you watched: ${lastWatchedTitle}`}
-      movies={recommended}
-    />
-  </div>
-)}
-
 
       {/* ===== Movies by Language ===== */}
       <div className="p-6 flex flex-col items-center">
