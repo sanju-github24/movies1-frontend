@@ -17,6 +17,7 @@ const UploadWatchHtml = () => {
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [directUrl, setDirectUrl] = useState("");
+  const [titleLogo, setTitleLogo] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -114,6 +115,7 @@ const UploadWatchHtml = () => {
       cover_poster: coverPoster.trim(),
       video_url: videoUrl.trim(),
       direct_url: directUrl.trim(),
+      title_logo: titleLogo.trim(),
       created_at: new Date().toISOString(),
     };
 
@@ -131,6 +133,7 @@ const UploadWatchHtml = () => {
       setCoverPoster("");
       setVideoUrl("");
       setDirectUrl("");
+      setTitleLogo("");
       setSelectedFile(null);
       fetchWatchPages();
     }
@@ -190,6 +193,17 @@ const UploadWatchHtml = () => {
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="unique-slug"
+            />
+          </div>
+
+           <div className="mb-5">
+            <label className="block font-semibold mb-2">Title Logo</label>
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-800 p-3 rounded w-full"
+              value={titleLogo}
+              onChange={(e) => setTitleLogo(e.target.value)}
+              placeholder="Title logo URL"
             />
           </div>
 
@@ -352,6 +366,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [editCoverPoster, setEditCoverPoster] = useState(item.cover_poster || "");
   const [editHtml, setEditHtml] = useState(item.html_code || "");
   const [editHtml2, setEditHtml2] = useState(item.html_code2 || "");
+  const [editTitleLogo, setEditTitleLogo] = useState(item.title_logo || "");
   const [editVideoUrl, setEditVideoUrl] = useState(item.video_url || "");
   const [editDirectUrl, setEditDirectUrl] = useState(item.direct_url || "");
 
@@ -384,6 +399,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
         html_code: editHtml.trim(),
         html_code2: editHtml2.trim(),
         video_url: editVideoUrl.trim(),
+        title_logo: editTitleLogo.trim(),
         direct_url: editDirectUrl.trim(),
       })
       .eq("id", item.id);
@@ -436,6 +452,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
           <input value={editPoster} onChange={(e) => setEditPoster(e.target.value)} className="p-2 rounded bg-gray-700 text-white" />
           <input value={editVideoUrl} onChange={(e) => setEditVideoUrl(e.target.value)} placeholder="Video URL" className="p-2 rounded bg-gray-700 text-white" />
           <input value={editDirectUrl} onChange={(e) => setEditDirectUrl(e.target.value)} placeholder="Direct URL" className="p-2 rounded bg-gray-700 text-white" />
+          <input value={editTitleLogo} onChange={(e) => setEditTitleLogo(e.target.value)} placeholder="Title Logo URL" className="p-2 rounded bg-gray-700 text-white" />
           <textarea value={editHtml} onChange={(e) => setEditHtml(e.target.value)} rows={3} className="p-2 rounded bg-gray-700 text-white" placeholder="Server 1 iframe" />
           <textarea value={editHtml2} onChange={(e) => setEditHtml2(e.target.value)} rows={3} className="p-2 rounded bg-gray-700 text-white" placeholder="Server 2 iframe" />
           <div className="flex gap-2">
