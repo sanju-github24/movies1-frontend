@@ -103,24 +103,33 @@ const AdminUpload = () => {
   };
 
   const toggleHomepage = async (movieObj) => {
-    const newStatus = !movieObj.showOnHomepage;
-    const { error } = await supabase
-      .from("movies")
-      .update({ showOnHomepage: newStatus })
-      .eq("id", movieObj.id);
+  const newStatus = !movieObj.showOnHomepage;
 
-    if (error) toast.error("❌ Failed to update homepage flag");
-    else {
-      toast.success(
-        `✅ ${movieObj.title} ${newStatus ? "added to" : "removed from"} homepage`
-      );
-      setMovies((prev) =>
-        prev.map((m) =>
-          m.id === movieObj.id ? { ...m, showOnHomepage: newStatus } : m
-        )
-      );
-    }
-  };
+  // Prepare update data
+  const updates = newStatus
+    ? { showOnHomepage: true, homepage_added_at: new Date().toISOString() }
+    : { showOnHomepage: false, homepage_added_at: null };
+
+  const { error } = await supabase
+    .from("movies")
+    .update(updates)
+    .eq("id", movieObj.id);
+
+  if (error) {
+    toast.error("❌ Failed to update homepage flag");
+  } else {
+    toast.success(
+      `✅ ${movieObj.title} ${newStatus ? "added to" : "removed from"} homepage`
+    );
+
+    // Update state locally for instant UI feedback
+    setMovies((prev) =>
+      prev.map((m) =>
+        m.id === movieObj.id ? { ...m, ...updates } : m
+      )
+    );
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -33,10 +33,14 @@ const Header = () => {
     : [];
 
   // Homepage movies
-  const latestMovies = [...movies]
+    const latestMovies = [...movies]
     .filter((m) => m.showOnHomepage)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .sort(
+      (a, b) =>
+        new Date(b.homepage_added_at || 0) - new Date(a.homepage_added_at || 0)
+    )
     .slice(0, 60);
+
 
   // ✅ Reorder helper (admin only)
   const moveMovie = (index, direction) => {
