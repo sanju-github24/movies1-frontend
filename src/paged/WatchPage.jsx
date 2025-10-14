@@ -16,36 +16,28 @@ const WatchHtmlPage = () => {
   const [servers, setServers] = useState([]);
   const [activeSrc, setActiveSrc] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState("");
+  const [showEpisodes, setShowEpisodes] = useState(false); // true = expanded by default
 
-  // 🔹 Fetch Movie + Episodes + Expiring Download URL
+  // 🔹 Fetch Movie + Episodes
   useEffect(() => {
     let isMounted = true;
 
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 1️⃣ Fetch movie data
-        const { data: watchData, error: watchError } = await supabase
+        // 1️⃣ Fetch main movie data
+        const { data: watchData, error } = await supabase
           .from("watch_html")
-          .select("id, slug, title, poster, cover_poster, video_url, html_code, direct_url")
+          .select("id, slug, title, poster, cover_poster, video_url, html_code, direct_url, episodes")
           .eq("slug", slug)
           .single();
 
-        if (watchError || !watchData) {
+        if (error || !watchData) {
           if (isMounted) setMovieMeta({ slug: "Not Found 🚫" });
           return;
         }
 
-        // 2️⃣ Fetch episodes
-        const { data: epData } = await supabase
-          .from("watch_episodes")
-          .select("id, episode_title, video_url")
-          .eq("watch_id", watchData.id)
-          .order("created_at", { ascending: true });
-
-        if (!isMounted) return;
-
-        // 3️⃣ Set movie meta
+        // 2️⃣ Set movie meta
         setMovieMeta({
           slug: watchData.slug,
           title: watchData.title || "Untitled Movie",
@@ -53,46 +45,39 @@ const WatchHtmlPage = () => {
           background: watchData.cover_poster || watchData.poster || "/poster.png",
         });
 
-        // 4️⃣ Prepare servers
+        // 3️⃣ Prepare servers (movie-level)
         const availableServers = [];
         if (watchData.video_url) {
-          availableServers.push({
-            name: "Server 1",
-            type: "video",
-            src: watchData.video_url,
-          });
+          availableServers.push({ name: "Server 1", type: "video", src: watchData.video_url });
         }
 
-        // 5️⃣ Fetch fresh expiring Bunny URL if direct_url exists
+        // 4️⃣ Add direct_url (fresh signed link if required)
         let freshDirectUrl = null;
         if (watchData.direct_url) {
           try {
-            const res = await axios.get(
-              `${backendUrl}/api/videos/${watchData.direct_url}/download`
-            );
+            const res = await axios.get(`${backendUrl}/api/videos/${watchData.direct_url}/download`);
             if (res.data?.directDownloadUrl) {
               freshDirectUrl = res.data.directDownloadUrl;
-              availableServers.push({
-                name: "Server 2",
-                type: "video",
-                src: freshDirectUrl,
-              });
+              availableServers.push({ name: "Server 2", type: "video", src: freshDirectUrl });
             }
           } catch (err) {
             console.error("❌ Failed to fetch download URL:", err);
           }
         }
 
+        // 5️⃣ Add html iframe player (if exists)
+        if (watchData.html_code) {
+          availableServers.push({ name: "Embed", type: "html", src: watchData.html_code });
+        }
+
         setServers(availableServers);
-
-        // 6️⃣ Set default active source
         if (availableServers.length > 0) setActiveSrc(availableServers[0]);
-
-        // 7️⃣ Set download URL
         setDownloadUrl(freshDirectUrl || "");
 
-        // 8️⃣ Set episodes
-        if (epData?.length > 0) setEpisodes(epData);
+        // 6️⃣ Episodes (stored as JSON in same row)
+        if (Array.isArray(watchData.episodes) && watchData.episodes.length > 0) {
+          setEpisodes(watchData.episodes);
+        }
       } catch (err) {
         console.error(err);
         if (isMounted) setMovieMeta({ slug: "Error 🚫" });
@@ -102,37 +87,26 @@ const WatchHtmlPage = () => {
     };
 
     fetchData();
-
-    // 🔹 Expire download URL on page unload
-    const handleBeforeUnload = () => setDownloadUrl("");
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
     return () => {
       isMounted = false;
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [slug, backendUrl]);
 
   // 🔹 SEO Meta Updates
   useEffect(() => {
     if (movieMeta?.slug) {
-      const titleText = `Watch ${movieMeta.slug} now | MovieStream`;
-      const descText = `Watch ${movieMeta.slug} online in HD. Stream or download movies easily.`;
-
-      document.title = titleText;
-
-      let metaDesc = document.querySelector("meta[name='description']");
-      if (!metaDesc) {
-        metaDesc = document.createElement("meta");
-        metaDesc.name = "description";
-        document.head.appendChild(metaDesc);
+      document.title = `Watch ${movieMeta.slug} | MovieStream`;
+      let meta = document.querySelector("meta[name='description']");
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.name = "description";
+        document.head.appendChild(meta);
       }
-      metaDesc.content = descText;
+      meta.content = `Watch ${movieMeta.slug} online in HD. Stream or download easily.`;
     }
   }, [movieMeta]);
 
-  if (loading)
-    return <p className="text-center mt-20 text-gray-300 text-lg">⏳ Loading...</p>;
+  if (loading) return <p className="text-center mt-20 text-gray-300 text-lg">⏳ Loading...</p>;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -156,7 +130,7 @@ const WatchHtmlPage = () => {
         <Navbar />
       </div>
 
-      {/* Hero Section */}
+      {/* Hero */}
       {movieMeta && (
         <div className="relative w-full bg-black">
           {movieMeta.background && (
@@ -171,19 +145,14 @@ const WatchHtmlPage = () => {
             <img
               src={movieMeta.poster}
               alt={movieMeta.title}
-              loading="lazy"
               className="w-44 sm:w-56 rounded-lg shadow-lg z-10"
               onError={(e) => (e.currentTarget.src = "/poster.png")}
             />
             <div className="text-center sm:text-left z-10">
-              <h1 className="text-3xl sm:text-5xl font-bold text-white mb-4 drop-shadow-lg">
-                {movieMeta.slug}
-              </h1>
+              <h1 className="text-3xl sm:text-5xl font-bold mb-4 drop-shadow-lg">{movieMeta.slug}</h1>
               <p className="text-gray-300 max-w-lg leading-relaxed mb-4">
-                Watch <span className="text-blue-400">{movieMeta.slug}</span> online in HD — enjoy movies of every genre including action, drama, comedy, thriller, and romance.
+                Watch <span className="text-blue-400">{movieMeta.slug}</span> online in HD — enjoy movies of every genre.
               </p>
-
-              {/* Download Button */}
               {downloadUrl && (
                 <a
                   href={downloadUrl + "&download"}
@@ -198,11 +167,11 @@ const WatchHtmlPage = () => {
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main */}
       <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-24">
         <button
           onClick={() => navigate(-1)}
-          className="mb-6 w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg shadow text-white font-medium transition text-sm sm:text-base"
+          className="mb-6 w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition text-sm sm:text-base"
         >
           ⬅ Previous Page
         </button>
@@ -226,46 +195,74 @@ const WatchHtmlPage = () => {
           </div>
         )}
 
-        {/* Player Section */}
-        {activeSrc ? (
-          <div className="w-full max-w-full mx-auto rounded-lg overflow-hidden shadow-lg bg-black relative" style={{ aspectRatio: "16/9" }}>
-            {activeSrc.type === "video" ? (
-              <iframe
-                src={activeSrc.src}
-                loading="lazy"
-                className="absolute top-0 left-0 w-full h-full"
-                style={{ border: 0 }}
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            ) : (
-              <div
-                className="absolute top-0 left-0 w-full h-full"
-                dangerouslySetInnerHTML={{ __html: activeSrc.src }}
-              />
-            )}
-          </div>
-        ) : (
-          <p className="text-center text-gray-400 mt-4">⚠️ No video available.</p>
-        )}
+{/* Player */}
+{activeSrc ? (
+  <div
+    className="w-full max-w-full mx-auto rounded-lg overflow-hidden shadow-lg bg-black relative"
+    style={{ aspectRatio: "16/9" }}
+  >
+    {activeSrc.type === "video" ? (
+      <iframe
+        src={activeSrc.src}
+        loading="lazy"
+        className="absolute top-0 left-0 w-full h-full"
+        style={{ border: 0 }}
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    ) : (
+      <div
+        className="absolute top-0 left-0 w-full h-full"
+        dangerouslySetInnerHTML={{ __html: activeSrc.src }}
+      />
+    )}
+  </div>
+) : episodes.length === 0 ? ( // ✅ only show when NO episodes and NO active video
+  <p className="text-center text-gray-400 mt-4">⚠️ No video available.</p>
+) : null}
 
-        {/* Episodes */}
-        {episodes.length > 0 && (
-          <div>
-            <h2 className="text-xl font-semibold text-yellow-400 mb-4">📺 Episodes</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {episodes.map((ep) => (
-                <button
-                  key={ep.id}
-                  onClick={() => setActiveSrc({ type: "video", src: ep.video_url })}
-                  className="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200"
-                >
-                  {ep.episode_title}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+{/* Episodes */}
+{episodes.length > 0 && (
+  <div className="mt-8">
+    {/* Header with arrow */}
+    <button
+      onClick={() => setShowEpisodes((prev) => !prev)}
+      className="flex items-center gap-2 text-xl font-semibold text-yellow-400 mb-4 focus:outline-none"
+    >
+      📺 Episodes
+      <span
+        className={`inline-block transition-transform duration-200 ${
+          showEpisodes ? "rotate-180" : "rotate-0"
+        }`}
+      >
+        ▼
+      </span>
+    </button>
+
+    {/* Episode list (only show if expanded) */}
+    {showEpisodes && (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {episodes.map((ep, index) => (
+          <button
+            key={index}
+            onClick={() =>
+              setActiveSrc(
+                ep.direct_url
+                  ? { type: "video", src: ep.direct_url }
+                  : { type: "html", src: ep.html }
+              )
+            }
+            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-200 truncate"
+          >
+            {ep.title || `Episode ${index + 1}`}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
+
       </div>
     </div>
   );

@@ -23,10 +23,10 @@ const UploadWatchHtml = () => {
   const [uploadProgress, setUploadProgress] = useState("");
   const [watchList, setWatchList] = useState([]);
   const [search, setSearch] = useState("");
+const [episodes, setEpisodes] = useState([{ title: "", html: "", direct_url: "" },]);
 
   const navigate = useNavigate();
 
-  // 🚫 Admin Access Check
   if (userData?.email !== "sanjusanjay0444@gmail.com") {
     return (
       <div className="text-center mt-20 text-red-500 font-bold text-xl">
@@ -35,7 +35,6 @@ const UploadWatchHtml = () => {
     );
   }
 
-  // 📌 Fetch Movies
   const fetchWatchPages = async () => {
     const { data, error } = await supabase
       .from("watch_html")
@@ -49,19 +48,15 @@ const UploadWatchHtml = () => {
     fetchWatchPages();
   }, []);
 
-  // ---------------- Handle Video Upload (Server 1) ----------------
   const handleVideoUpload = async (file) => {
     if (!file) return toast.error("❌ No file selected!");
     setIsUploading(true);
     setUploadProgress("0% (0MB / 0MB)");
-
     try {
       const formData = new FormData();
       formData.append("movie", file);
-
       let lastLoaded = 0;
       let lastTime = Date.now();
-
       const res = await axios.post(`${backendUrl}/api/upload-bunnystream`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (event) => {
@@ -69,24 +64,19 @@ const UploadWatchHtml = () => {
             const percent = Math.round((event.loaded / event.total) * 100);
             const mbUploaded = (event.loaded / (1024 * 1024)).toFixed(2);
             const mbTotal = (event.total / (1024 * 1024)).toFixed(2);
-
             const now = Date.now();
             const deltaTime = (now - lastTime) / 1000;
             const deltaBytes = event.loaded - lastLoaded;
             const speed = deltaTime > 0 ? (deltaBytes / (1024 * 1024 * deltaTime)).toFixed(2) : 0;
-
             lastLoaded = event.loaded;
             lastTime = now;
-
             setUploadProgress(`${percent}% (${mbUploaded}MB / ${mbTotal}MB) [${speed} MB/s]`);
           }
         },
         timeout: 0,
       });
-
       const { videoGuid, directUrl } = res.data;
       if (!videoGuid || !directUrl) throw new Error("No video URL returned");
-
       setVideoUrl(directUrl);
       toast.success("✅ Video uploaded! Direct player URL is ready.");
     } catch (err) {
@@ -99,48 +89,52 @@ const UploadWatchHtml = () => {
     }
   };
 
-  // ---------------- Upload Movie HTML ----------------
   const handleUpload = async () => {
-    if (!title.trim() || !slug.trim() || !htmlCode.trim() || !poster.trim() || !videoUrl) {
-      return toast.error("❌ All fields including video URL are required!");
-    }
-    setLoading(true);
+  if (!title.trim()) {
+    return toast.error("❌ Please enter a title!");
+  }
 
-    const record = {
-      id: uuidv4(),
-      title: title.trim(),
-      slug: slug.trim(),
-      html_code: htmlCode.trim(),
-      poster: poster.trim(),
-      cover_poster: coverPoster.trim(),
-      video_url: videoUrl.trim(),
-      direct_url: directUrl.trim(),
-      title_logo: titleLogo.trim(),
-      created_at: new Date().toISOString(),
-    };
+  setLoading(true);
 
-    const { error } = await supabase.from("watch_html").insert([record]);
-    if (error) {
-      console.error(error.message);
-      toast.error("⚠️ Failed to upload!");
-    } else {
-      toast.success("✅ HTML Code Uploaded!");
-      setTitle("");
-      setSlug("");
-      setHtmlCode("");
-      setHtmlCode2("");
-      setPoster("");
-      setCoverPoster("");
-      setVideoUrl("");
-      setDirectUrl("");
-      setTitleLogo("");
-      setSelectedFile(null);
-      fetchWatchPages();
-    }
-    setLoading(false);
+  const record = {
+    id: uuidv4(),
+    title: title.trim(),
+    slug: slug.trim() || title.trim().toLowerCase().replace(/\s+/g, "-"), // auto-generate slug if empty
+    html_code: htmlCode.trim() || "",
+    poster: poster.trim() || "",
+    cover_poster: coverPoster.trim() || "",
+    video_url: videoUrl.trim() || "",
+    direct_url: directUrl.trim() || "",
+    title_logo: titleLogo.trim() || "",
+    episodes: episodes.filter(
+      (ep) => ep.title || ep.html || ep.direct_url
+    ),
+    created_at: new Date().toISOString(),
   };
 
-  // ---------------- Delete Movie ----------------
+  const { error } = await supabase.from("watch_html").insert([record]);
+  if (error) {
+    console.error(error.message);
+    toast.error("⚠️ Failed to upload!");
+  } else {
+    toast.success("✅ Movie Uploaded Successfully!");
+    setTitle("");
+    setSlug("");
+    setHtmlCode("");
+    setHtmlCode2("");
+    setPoster("");
+    setCoverPoster("");
+    setVideoUrl("");
+    setDirectUrl("");
+    setTitleLogo("");
+    setEpisodes([{ title: "", html: "", direct_url: "" }]);
+    setSelectedFile(null);
+    fetchWatchPages();
+  }
+
+  setLoading(false);
+};
+
   const handleDelete = async (id) => {
     if (!window.confirm("⚠️ Are you sure you want to delete this?")) return;
     const { error } = await supabase.from("watch_html").delete().eq("id", id);
@@ -321,16 +315,79 @@ const UploadWatchHtml = () => {
             />
           </div>
 
+          {/* ✅ Add Episodes Section */}
+<div className="mb-5">
+  <label className="block font-semibold mb-3 text-yellow-400">🎞️ Episodes</label>
+  {episodes.map((ep, index) => (
+    <div
+      key={index}
+      className="mb-4 border border-gray-700 rounded-lg p-3 bg-gray-800 relative"
+    >
+      <input
+        type="text"
+        className="border border-gray-700 bg-gray-900 p-2 rounded w-full mb-2"
+        placeholder={`Episode ${index + 1} Title`}
+        value={ep.title}
+        onChange={(e) => {
+          const updated = [...episodes];
+          updated[index].title = e.target.value;
+          setEpisodes(updated);
+        }}
+      />
+      <textarea
+        rows={3}
+        className="border border-gray-700 bg-gray-900 p-2 rounded w-full font-mono mb-2"
+        placeholder="<iframe src='...'></iframe>"
+        value={ep.html}
+        onChange={(e) => {
+          const updated = [...episodes];
+          updated[index].html = e.target.value;
+          setEpisodes(updated);
+        }}
+      />
+      <input
+        type="text"
+        className="border border-gray-700 bg-gray-900 p-2 rounded w-full"
+        placeholder="Direct URL (optional)"
+        value={ep.direct_url}
+        onChange={(e) => {
+          const updated = [...episodes];
+          updated[index].direct_url = e.target.value;
+          setEpisodes(updated);
+        }}
+      />
+      <button
+        onClick={() => {
+          const updated = episodes.filter((_, i) => i !== index);
+          setEpisodes(updated);
+        }}
+        className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+      >
+        ❌
+      </button>
+    </div>
+  ))}
+  <button
+    onClick={() =>
+      setEpisodes([...episodes, { title: "", html: "", direct_url: "" }])
+    }
+    className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-white font-semibold"
+  >
+    ➕ Add Episode
+  </button>
+</div>
+
+
           <button
             onClick={handleUpload}
-            disabled={loading || !videoUrl}
+             disabled={!title}
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full"
           >
             {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
           </button>
         </div>
 
-        {/* Right Panel */}
+        {/* Right Panel stays unchanged */}
         <div className="bg-gray-900 text-white shadow-xl rounded-xl p-6">
           <h2 className="text-xl font-semibold mb-4 text-green-400">📌 Recently Uploaded</h2>
           <input
@@ -345,7 +402,12 @@ const UploadWatchHtml = () => {
           ) : (
             <ul className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
               {filteredList.map((item) => (
-                <EditableItem key={item.id} item={item} fetchWatchPages={fetchWatchPages} handleDelete={handleDelete} />
+                <EditableItem
+                  key={item.id}
+                  item={item}
+                  fetchWatchPages={fetchWatchPages}
+                  handleDelete={handleDelete}
+                />
               ))}
             </ul>
           )}
