@@ -140,6 +140,7 @@ const WatchListPage = () => {
   const [recommended, setRecommended] = useState([]);
   const latestMovieTimer = useRef(null);
   const [lastWatchedTitle, setLastWatchedTitle] = useState("");
+  const [heroMovies, setHeroMovies] = useState([]);
 
   /* ===== Fetch Movies ===== */
   useEffect(() => {
@@ -196,6 +197,30 @@ const WatchListPage = () => {
     fetchMovies();
   }, []);
 
+  useEffect(() => {
+  if (movies.length === 0) return;
+
+  const today = new Date().toISOString().split("T")[0];
+  const lastVisit = localStorage.getItem("last_visit_date");
+
+  // Default: Recently uploaded
+  let heroSelection = [...movies].slice(0, 5);
+
+  if (lastVisit === today) {
+    // User already visited today → mix in some random older movies
+    const olderMovies = [...movies].slice(5, 50); // get older ones
+    const randomPicks = olderMovies
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 2); // 2 random movies
+    heroSelection = [...heroSelection.slice(0, 3), ...randomPicks];
+  } else {
+    // First visit today → store visit date
+    localStorage.setItem("last_visit_date", today);
+  }
+
+  setHeroMovies(heroSelection);
+}, [movies]);
+
   
   /* ===== Load Recommendations ===== */
   useEffect(() => {
@@ -243,7 +268,8 @@ const WatchListPage = () => {
     }, {});
   }, [filtered]);
 
-  const latestMovies = filtered.slice(0, 5);
+ const latestMovies = heroMovies;
+
 
   /* ===== Auto-Slide Effect ===== */
 useEffect(() => {
