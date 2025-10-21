@@ -13,7 +13,7 @@ const WatchHtmlPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [movieMeta, setMovieMeta] = useState(null); // Local Supabase data (title, slug, posters)
-  const [tmdbMeta, setTmdbMeta] = useState(null);   // TMDB rich metadata (cast, year, etc.)
+  const [tmdbMeta, setTmdbMeta] = useState(null);   // TMDB rich metadata (cast, year, genres, etc.)
   const [episodes, setEpisodes] = useState([]);
   const [servers, setServers] = useState([]);
   const [activeSrc, setActiveSrc] = useState(null);
@@ -200,11 +200,26 @@ const WatchHtmlPage = () => {
               
               {/* IMDb Rating Display */}
               {movieMeta.imdbRating && (
-                <p className="text-xl font-bold text-yellow-400 mb-6 flex items-center justify-center sm:justify-start">
+                <p className="text-xl font-bold text-yellow-400 mb-4 flex items-center justify-center sm:justify-start">
                   <Star className="w-6 h-6 fill-yellow-400 mr-2" />
                   <span className="text-white">{movieMeta.imdbRating}</span>
                 </p>
               )}
+              
+              {/* ✅ NEW: Genre Display */}
+              {tmdbMeta?.genres?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6 justify-center sm:justify-start">
+                    {tmdbMeta.genres.map((genre, index) => (
+                        <span 
+                            key={index} 
+                            className="px-3 py-1 text-xs font-medium text-gray-200 bg-gray-700/70 rounded-full border border-gray-600/50 shadow-md"
+                        >
+                            {genre}
+                        </span>
+                    ))}
+                </div>
+              )}
+
 
               {downloadUrl && (
                 <a

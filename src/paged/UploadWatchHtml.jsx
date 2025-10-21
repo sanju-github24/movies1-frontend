@@ -165,12 +165,13 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
 
 
 // =========================================================================
-//                             UPLOAD WATCH HTML COMPONENT
+//                             UPLOAD WATCH HTML COMPONENT (UPDATED)
 // =========================================================================
 const UploadWatchHtml = () => {
   // Accessing Supabase and Context values
-  const { userData, } = useContext(AppContext);
+  const { userData, backendUrl } = useContext(AppContext); // Ensure backendUrl is available from context
   const navigate = useNavigate();
+  // ... (rest of state definitions remain the same) ...
 
   // --- FORM STATE ---
   const [title, setTitle] = useState("");
@@ -178,7 +179,7 @@ const UploadWatchHtml = () => {
   const [htmlCode, setHtmlCode] = useState("");
   const [htmlCode2, setHtmlCode2] = useState("");
   const [poster, setPoster] = useState("");
-  const [coverPoster, setCoverPoster] = useState(""); // This is the target field
+  const [coverPoster, setCoverPoster] = useState("");
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [directUrl, setDirectUrl] = useState("");
@@ -196,6 +197,7 @@ const UploadWatchHtml = () => {
   const [tmdbSearchQuery, setTmdbSearchQuery] = useState(""); 
   const [tmdbSearchResult, setTmdbSearchResult] = useState(null); 
   const [isSearching, setIsSearching] = useState(false); 
+  const [isSaving, setIsSaving] = useState(false); // ⬅️ NEW: State for saving to JSON
   
   // --- EPISODE STATE ---
   const [episodes, setEpisodes] = useState([{ title: "", html: "", direct_url: "" }]);
@@ -210,21 +212,8 @@ const UploadWatchHtml = () => {
     );
   }
 
-  // --- Supabase Data Fetching ---
-  const fetchWatchPages = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("watch_html")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) console.error("Supabase Fetch Error:", error.message);
-    else setWatchList(data);
-  }, []);
-
-  // --- Initial Load ---
-  useEffect(() => {
-    fetchWatchPages();
-  }, [fetchWatchPages]);
-
+  // ... (fetchWatchPages and useEffect remain the same) ...
+  
   // --- TMDB Metadata Fetch Handler (Calls new /tmdb-details endpoint) ---
   const handleTMDBSearch = async () => {
     if (!tmdbSearchQuery.trim()) {
@@ -259,6 +248,63 @@ const UploadWatchHtml = () => {
       setIsSearching(false);
     }
   };
+  
+  // ------------------------------------------------------------------
+  // --- NEW: Handler to Save Extracted Metadata to Backend JSON File ---
+  // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+// --- NEW: Handler to Save Extracted Metadata to Backend JSON File ---
+// ------------------------------------------------------------------
+const handleSaveMetadata = async (metadata) => {
+    if (!backendUrl) {
+        return toast.error("❌ Backend URL missing for save operation.");
+    }
+    if (!metadata || !metadata.title) {
+        return toast.error("❌ Cannot save empty metadata.");
+    }
+    
+    setIsSaving(true);
+    
+    // Construct the final object to send to the backend
+    const movieDataToSave = {
+        // Essential identifying data
+        title: metadata.title,
+        year: metadata.year,
+        
+        // Metadata fields from TMDB
+        description: metadata.description,
+        poster_url: metadata.poster_url,
+        cover_poster_url: metadata.cover_poster_url,
+        imdb_rating: metadata.imdb_rating,
+        cast: metadata.cast,
+        // ✅ ADDED: Include the genres array
+        genres: metadata.genres || [], 
+        
+        metadata_source: 'TMDB' 
+    };
+
+    try {
+        // This calls the new POST route we added to your router file
+        const res = await axios.post(`${backendUrl}/api/save-movie-metadata`, movieDataToSave);
+
+        if (res.data.success) {
+            toast.success(`💾 Metadata for ${metadata.title} saved to JSON file!`);
+            // Optional: Clear the search result after saving
+            setTmdbSearchResult(null); 
+            setTmdbSearchQuery("");
+        } else {
+            throw new Error(res.data.message || "Failed to save data on server.");
+        }
+    } catch (err) {
+        const errorMessage = err.response?.data?.message || err.message;
+        console.error("Metadata Save Error:", errorMessage);
+        toast.error(`⚠️ Failed to save to JSON file: ${errorMessage}`);
+    } finally {
+        setIsSaving(false);
+    }
+};
+
+// ... (Rest of the component code remains the same) ...
   
   // ------------------------------------------------------------------
   // ✅ FIX APPLIED HERE: Using data.cover_poster_url for setCoverPoster
@@ -436,7 +482,7 @@ const UploadWatchHtml = () => {
         ⬅️ Back to Dashboard
       </button>
 
-      <h1 className="text-3xl font-bold mb-6 text-center text-blue-400">
+<h1 className="text-3xl font-bold mb-6 text-center text-blue-400">
         🎬 Upload Watch HTML
       </h1>
       
@@ -496,12 +542,29 @@ const UploadWatchHtml = () => {
                         <Star className="h-4 w-4 text-yellow-500 inline-block fill-yellow-500 mr-1" />
                         {tmdbSearchResult.imdb_rating.toFixed(1)}/10
                     </p>
-                    <button
-                        onClick={() => handleUseMetadata(tmdbSearchResult)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold transition shadow-md"
-                    >
-                        Apply Metadata to Form
-                    </button>
+                    {/* BUTTON GROUP FOR ACTIONS */}
+                    <div className='flex flex-wrap gap-2'> 
+                        <button
+                            onClick={() => handleUseMetadata(tmdbSearchResult)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold transition shadow-md text-sm"
+                        >
+                            Apply Metadata to Form
+                        </button>
+                        
+                        {/* ⬅️ NEW BUTTON: Save to JSON File */}
+                        <button
+                            onClick={() => handleSaveMetadata(tmdbSearchResult)}
+                            disabled={isSaving || !backendUrl}
+                            className={`px-4 py-2 rounded-lg font-bold transition shadow-md text-sm ${
+                                isSaving 
+                                    ? 'bg-yellow-800 cursor-not-allowed' 
+                                    : 'bg-yellow-600 hover:bg-yellow-700'
+                            }`}
+                        >
+                            {isSaving ? "⏳ Saving..." : "💾 Save to JSON File"}
+                        </button>
+                    </div>
+
                     {tmdbSearchResult.cast && tmdbSearchResult.cast.length > 0 && (
                         <p className="text-xs text-gray-400 mt-2">
                             Top Cast: {tmdbSearchResult.cast.map(c => c.name).join(', ')}
