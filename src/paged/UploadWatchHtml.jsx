@@ -169,9 +169,8 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
 // =========================================================================
 const UploadWatchHtml = () => {
   // Accessing Supabase and Context values
-  const { userData, backendUrl } = useContext(AppContext); // Ensure backendUrl is available from context
+  const { userData, backendUrl } = useContext(AppContext);
   const navigate = useNavigate();
-  // ... (rest of state definitions remain the same) ...
 
   // --- FORM STATE ---
   const [title, setTitle] = useState("");
@@ -191,18 +190,18 @@ const UploadWatchHtml = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   
-  // --- TMDB SEARCH STATE (NEW) ---
+  // --- TMDB SEARCH STATE ---
   const [watchList, setWatchList] = useState([]);
   const [search, setSearch] = useState(""); 
   const [tmdbSearchQuery, setTmdbSearchQuery] = useState(""); 
   const [tmdbSearchResult, setTmdbSearchResult] = useState(null); 
   const [isSearching, setIsSearching] = useState(false); 
-  const [isSaving, setIsSaving] = useState(false); // ⬅️ NEW: State for saving to JSON
+  const [isSaving, setIsSaving] = useState(false); 
   
-  // --- EPISODE STATE ---
+  // --- EPISODE STATE (Moved from EditableItem) ---
   const [episodes, setEpisodes] = useState([{ title: "", html: "", direct_url: "" }]);
   
-  // --- Admin Check ---
+  // --- Admin Check (Dummy for now, use actual context check) ---
   const isAdmin = true; 
   if (!isAdmin) {
     return (
@@ -211,8 +210,43 @@ const UploadWatchHtml = () => {
       </div>
     );
   }
+  
+  // --- Episode handlers (Copied from EditableItem) ---
+  const handleEpisodeChange = (index, field, value) => {
+    const updated = [...episodes];
+    updated[index][field] = value;
+    setEpisodes(updated);
+  };
 
-  // ... (fetchWatchPages and useEffect remain the same) ...
+  const handleAddEpisode = () => {
+    setEpisodes([...episodes, { title: "", html: "", direct_url: "" }]);
+  };
+
+  const handleRemoveEpisode = (index) => {
+    const updated = episodes.filter((_, i) => i !== index);
+    setEpisodes(updated);
+  };
+
+  // --- Fetch Watch Pages (boilerplate for list functionality) ---
+  const fetchWatchPages = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("watch_html")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching watch pages:", error.message);
+      toast.error("⚠️ Failed to load list!");
+    } else {
+      setWatchList(data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchWatchPages();
+  }, [fetchWatchPages]);
   
   // --- TMDB Metadata Fetch Handler (Calls new /tmdb-details endpoint) ---
   const handleTMDBSearch = async () => {
@@ -249,13 +283,8 @@ const UploadWatchHtml = () => {
     }
   };
   
-  // ------------------------------------------------------------------
-  // --- NEW: Handler to Save Extracted Metadata to Backend JSON File ---
-  // ------------------------------------------------------------------
-  // ------------------------------------------------------------------
-// --- NEW: Handler to Save Extracted Metadata to Backend JSON File ---
-// ------------------------------------------------------------------
-const handleSaveMetadata = async (metadata) => {
+  // --- Handler to Save Extracted Metadata to Backend JSON File ---
+  const handleSaveMetadata = async (metadata) => {
     if (!backendUrl) {
         return toast.error("❌ Backend URL missing for save operation.");
     }
@@ -277,14 +306,12 @@ const handleSaveMetadata = async (metadata) => {
         cover_poster_url: metadata.cover_poster_url,
         imdb_rating: metadata.imdb_rating,
         cast: metadata.cast,
-        // ✅ ADDED: Include the genres array
         genres: metadata.genres || [], 
         
         metadata_source: 'TMDB' 
     };
 
     try {
-        // This calls the new POST route we added to your router file
         const res = await axios.post(`${backendUrl}/api/save-movie-metadata`, movieDataToSave);
 
         if (res.data.success) {
@@ -302,13 +329,9 @@ const handleSaveMetadata = async (metadata) => {
     } finally {
         setIsSaving(false);
     }
-};
+  };
 
-// ... (Rest of the component code remains the same) ...
-  
-  // ------------------------------------------------------------------
-  // ✅ FIX APPLIED HERE: Using data.cover_poster_url for setCoverPoster
-  // ------------------------------------------------------------------
+  // --- Handler to apply TMDB metadata to the form ---
   const handleUseMetadata = (data) => {
       
       // 1. Title
@@ -322,7 +345,6 @@ const handleSaveMetadata = async (metadata) => {
       
       // 3. Poster URLs
       setPoster(data.poster_url || '');
-      // Use the newly available cover poster URL from the backend
       setCoverPoster(data.cover_poster_url || data.poster_url || ''); 
       
       // 4. IMDb Rating (Formatted nicely)
@@ -341,7 +363,6 @@ const handleSaveMetadata = async (metadata) => {
       setTmdbSearchResult(null); 
       setTmdbSearchQuery(""); 
   };
-  // ------------------------------------------------------------------
 
   // --- Video Upload Handler (Bunny Stream) ---
   const handleVideoUpload = async (file) => {
@@ -498,7 +519,7 @@ const handleSaveMetadata = async (metadata) => {
         {/* Left Panel - Forms and Search */}
         <div className="bg-gray-800 text-white shadow-xl rounded-xl p-6">
             
-          {/* --- TMDB MOVIE SEARCH (NEW) --- */}
+          {/* --- TMDB MOVIE SEARCH --- */}
           <h2 className="text-xl font-semibold mb-4 text-purple-300 border-b border-gray-700 pb-2">
              🔍 TMDB Movie Metadata Search
           </h2>
@@ -551,7 +572,7 @@ const handleSaveMetadata = async (metadata) => {
                             Apply Metadata to Form
                         </button>
                         
-                        {/* ⬅️ NEW BUTTON: Save to JSON File */}
+                        {/* Save to JSON File */}
                         <button
                             onClick={() => handleSaveMetadata(tmdbSearchResult)}
                             disabled={isSaving || !backendUrl}
@@ -664,8 +685,9 @@ const handleSaveMetadata = async (metadata) => {
                 if (!backendUrl) return toast.error("❌ Backend URL missing for fetch!");
                 try {
                   setIsUploading(true);
+                  // Assuming this endpoint exists and returns the direct HLS URL
                   const res = await axios.get(`${backendUrl}/api/videos/${directUrl.trim()}/download`);
-                  setVideoUrl(res.data.directDownloadUrl);
+                  setVideoUrl(res.data.directDownloadUrl); 
                   toast.success("✅ Direct video URL fetched from Bunny Stream!");
                 } catch (err) {
                   console.error(err.response?.data || err.message);
@@ -720,138 +742,150 @@ const handleSaveMetadata = async (metadata) => {
             )}
             <button
               onClick={() => handleVideoUpload(selectedFile)}
-              disabled={!selectedFile || isUploading || !backendUrl}
-              className={`px-4 py-2 rounded-lg font-semibold text-white transition ${
-                selectedFile && backendUrl ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-600 cursor-not-allowed"
+              disabled={isUploading || !selectedFile || !backendUrl}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold transition ${
+                isUploading
+                  ? "bg-blue-800 cursor-wait"
+                  : selectedFile
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-gray-600 cursor-not-allowed"
               }`}
             >
-              {isUploading ? "⏳ Uploading..." : "🚀 Upload & Convert to HLS"}
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Uploading...
+                </>
+              ) : (
+                "⬆️ Start Video Upload"
+              )}
             </button>
           </div>
-
+          
           <div className="mb-5">
-            <label className="block font-semibold mb-2">Watch HTML Code (Server 1)</label>
+            <label className="block font-semibold mb-2">HTML Embed Code (Server 1 Fallback)</label>
             <textarea
-              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full font-mono placeholder-gray-400"
-              rows={5}
+              rows={3}
+              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full font-mono text-sm"
               value={htmlCode}
               onChange={(e) => setHtmlCode(e.target.value)}
-              placeholder="<iframe src='...'></iframe>"
+              placeholder="Paste custom HTML embed code (iframe, script, etc.) for Server 1"
             />
           </div>
 
-          {/* Server 2 HTML Code */}
           <div className="mb-5">
-            <label className="block font-semibold mb-2">Watch HTML Code (Server 2)</label>
+            <label className="block font-semibold mb-2">HTML Embed Code (Server 2 Fallback)</label>
             <textarea
-              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full font-mono placeholder-gray-400"
-              rows={5}
+              rows={3}
+              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full font-mono text-sm"
               value={htmlCode2}
               onChange={(e) => setHtmlCode2(e.target.value)}
-              placeholder="<iframe src='...'></iframe>"
+              placeholder="Paste custom HTML embed code (iframe, script, etc.) for Server 2"
             />
           </div>
 
-          {/* ✅ Add Episodes Section */}
-          <div className="mb-5 mt-6 border-t border-gray-700 pt-4">
-            <label className="block font-semibold mb-3 text-yellow-400">🎞️ Episodes (For Series)</label>
-            <div className="max-h-60 overflow-y-auto custom-scroll pr-2">
-                {episodes.map((ep, index) => (
-                <div
-                    key={index}
-                    className="mb-4 border border-gray-700 rounded-lg p-3 bg-gray-700 relative shadow-inner"
-                >
-                    <input
-                    type="text"
-                    className="border border-gray-600 bg-gray-800 p-2 rounded-lg w-full mb-2 placeholder-gray-400"
-                    placeholder={`Episode ${index + 1} Title`}
-                    value={ep.title}
-                    onChange={(e) => {
-                        const updated = [...episodes];
-                        updated[index].title = e.target.value;
-                        setEpisodes(updated);
-                    }}
-                    />
-                    <textarea
-                    rows={3}
-                    className="border border-gray-600 bg-gray-800 p-2 rounded-lg w-full font-mono mb-2 text-sm placeholder-gray-400"
-                    placeholder="<iframe src='...'></iframe>"
-                    value={ep.html}
-                    onChange={(e) => {
-                        const updated = [...episodes];
-                        updated[index].html = e.target.value;
-                        setEpisodes(updated);
-                    }}
-                    />
-                    <input
-                    type="text"
-                    className="border border-gray-600 bg-gray-800 p-2 rounded-lg w-full text-sm placeholder-gray-400"
-                    placeholder="Direct URL (optional)"
-                    value={ep.direct_url}
-                    onChange={(e) => {
-                        const updated = [...episodes];
-                        updated[index].direct_url = e.target.value;
-                        setEpisodes(updated);
-                    }}
-                    />
-                    {episodes.length > 1 && (
-                        <button
-                        onClick={() => {
-                            const updated = episodes.filter((_, i) => i !== index);
-                            setEpisodes(updated);
-                        }}
-                        className="absolute top-2 right-2 text-red-500 hover:text-red-400 p-1 rounded-full bg-gray-800"
-                        title="Remove Episode"
-                        >
-                        ❌
-                        </button>
-                    )}
-                </div>
-                ))}
-            </div>
-            <button
-              onClick={() =>
-                setEpisodes([...episodes, { title: "", html: "", direct_url: "" }])
-              }
-              className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg text-white font-semibold mt-3"
-            >
-              ➕ Add Episode
-            </button>
+          {/* --- Episodes Section (New in Upload Form) --- */}
+          <h2 className="text-xl font-semibold mb-4 text-yellow-400 border-b border-gray-700 pb-2 mt-6">🎞️ Series Episodes</h2>
+          <div className="mb-5">
+              <label className="block font-semibold mb-2 text-sm text-gray-300">Add episodes for TV series (leave empty for movies).</label>
+              <div className="max-h-60 overflow-y-auto custom-scroll p-2 bg-gray-700 rounded-lg">
+                  {episodes.map((ep, index) => (
+                      <div key={index} className="p-3 mb-3 bg-gray-600 rounded relative border border-gray-500">
+                          <h5 className="text-xs font-bold text-yellow-300 mb-1">Episode {index + 1}</h5>
+                          <input 
+                              type="text" 
+                              className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-sm placeholder-gray-400" 
+                              value={ep.title} 
+                              onChange={(e) => handleEpisodeChange(index, "title", e.target.value)} 
+                              placeholder={`Episode Title (e.g., S01E01 - Pilot)`} 
+                          />
+                          <input 
+                              type="text" 
+                              className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-xs placeholder-gray-400" 
+                              value={ep.direct_url} 
+                              onChange={(e) => handleEpisodeChange(index, "direct_url", e.target.value)} 
+                              placeholder="Direct Video URL (e.g., HLS link)" 
+                          />
+                          <textarea 
+                              rows={1} 
+                              className="w-full p-1 rounded bg-gray-700 border border-gray-500 text-xs font-mono placeholder-gray-400" 
+                              value={ep.html} 
+                              onChange={(e) => handleEpisodeChange(index, "html", e.target.value)} 
+                              placeholder="HTML Embed Code (Fallback)" 
+                          />
+                          {episodes.length > 1 && (
+                              <button 
+                                  onClick={() => handleRemoveEpisode(index)} 
+                                  className="absolute top-1 right-1 text-red-400 hover:text-red-500 text-xs p-1 bg-gray-600 rounded-full"
+                              >
+                                  ❌
+                              </button>
+                          )}
+                      </div>
+                  ))}
+              </div>
+              <button 
+                  onClick={handleAddEpisode} 
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded mt-3 font-semibold"
+              >
+                  + Add New Episode
+              </button>
           </div>
+          {/* --- End Episodes Section --- */}
 
 
           <button
             onClick={handleUpload}
-            disabled={!title || !slug || loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 transition text-white px-6 py-3 rounded-lg font-semibold w-full mt-6 shadow-2xl"
+            disabled={loading}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold transition mt-8 ${
+              loading
+                ? "bg-green-800 cursor-wait"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
           >
-            {loading ? "⏳ Uploading..." : "🚀 Upload HTML"}
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" /> Uploading to Supabase...
+              </>
+            ) : (
+              "🚀 Finalize & Upload Watch Page"
+            )}
           </button>
         </div>
 
-        {/* Right Panel - Uploaded List */}
+        {/* Right Panel - Watch List and Search */}
         <div className="bg-gray-800 text-white shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-green-400 border-b border-gray-700 pb-2">📌 Recently Uploaded</h2>
-          <input
-            type="text"
-            placeholder="🔍 Search uploaded items by title..."
-            className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full mb-4 placeholder-gray-40
-            "
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {filteredList.length === 0 ? (
-            <p className="text-gray-400">No results found.</p>
+          <h2 className="text-xl font-semibold mb-4 text-yellow-300 border-b border-gray-700 pb-2">
+            📄 Existing Watch Pages ({watchList.length})
+          </h2>
+          
+          <div className="mb-4">
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full placeholder-gray-400"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by title..."
+            />
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center items-center h-40">
+              <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
+            </div>
           ) : (
-            <ul className="space-y-3 max-h-[750px] overflow-y-auto pr-2 custom-scroll">
-              {filteredList.map((item) => (
-                <EditableItem
-                  key={item.id}
-                  item={item}
-                  fetchWatchPages={fetchWatchPages}
-                  handleDelete={handleDelete}
-                />
-              ))}
+            <ul className="space-y-3 custom-scroll max-h-[80vh] overflow-y-auto">
+              {filteredList.length === 0 ? (
+                <p className="text-gray-400 text-center py-10">No pages found matching your search.</p>
+              ) : (
+                filteredList.map((item) => (
+                  <EditableItem
+                    key={item.id}
+                    item={item}
+                    fetchWatchPages={fetchWatchPages}
+                    handleDelete={handleDelete}
+                  />
+                ))
+              )}
             </ul>
           )}
         </div>
@@ -859,5 +893,5 @@ const handleSaveMetadata = async (metadata) => {
     </div>
   );
 };
-  
+
 export default UploadWatchHtml;
