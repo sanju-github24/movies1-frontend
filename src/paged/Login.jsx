@@ -5,10 +5,12 @@ import { toast } from 'react-toastify';
 import { assets } from '../assets/assets';
 import { AppContext } from '../context/AppContext';
 import { Helmet } from 'react-helmet';
+import { Loader2 } from 'lucide-react'; // Import Loader icon for better UX
 
 const Login = () => {
   const navigate = useNavigate();
-  const { backendUrl, setIsLoggedIn, setUserData, setIsAdmin } = useContext(AppContext);
+  // We keep backendUrl in context but will use a relative path for local development
+  const { backendUrl, setIsLoggedIn, setUserData, setIsAdmin } = useContext(AppContext); 
 
   const [mode, setMode] = useState('Sign Up');
   const [name, setName] = useState('');
@@ -19,35 +21,64 @@ const Login = () => {
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     setLoading(true);
+    // Ensure credentials are sent with every request
     axios.defaults.withCredentials = true;
 
     try {
       const endpoint = mode === 'Sign Up' ? 'register' : 'login';
-      const url = `${backendUrl}/api/auth/${endpoint}`;
+      
+      // 🚀 CRITICAL FIX: Use a relative path to enable the Vite proxy.
+      // The path starts with '/api' which Vite intercepts and forwards to http://localhost:4000
+      const url = `/api/auth/${endpoint}`; 
+      
       const payload = mode === 'Sign Up' ? { name, email, password } : { email, password };
 
       const { data } = await axios.post(url, payload);
 
       if (data.success) {
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userData', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token);
-      
-        setIsLoggedIn(true);
-        setUserData(data.user);
-        setIsAdmin(data.user.email === 'sanjusanjay0444@gmail.com');
-      
-        // ✅ Toast notification for successful login
-        toast.success(`Login successful! Welcome, ${data.user.name}`);
-      
-        navigate('/');
+        
+        // --- Success Logic ---
+        if (mode === 'Sign Up') {
+          toast.success(`🎉 Registration successful! Please check your email to verify your account.`);
+          
+          // Clear form fields
+          setName('');
+          setEmail('');
+          setPassword('');
+          
+          // Switch to Login mode and optionally guide them to a verification page
+          setMode('Login');
+          navigate('/verify-account'); // Redirect to a page that tells them to verify
+          
+        } else { // Login Success
+          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('userData', JSON.stringify(data.user));
+          localStorage.setItem('token', data.token); 
+        
+          setIsLoggedIn(true);
+          setUserData(data.user);
+          
+          // Security Note: Hardcoding admin email is functional but role-based authorization is recommended
+          setIsAdmin(data.user.email === 'sanjusanjay0444@gmail.com');
+        
+          toast.success(`✅ Login successful! Welcome back, ${data.user.name || data.user.email}`);
+        
+          navigate('/');
+        }
+        
       } else {
+        // Backend returns success: false with a message
         toast.error(data.message || 'Unknown error occurred.');
       }
       
     } catch (error) {
+      // Network/Server error
       console.error('Login/Register Error:', error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'Something went wrong. Please try again.');
+      
+      // Use the message from the backend response, or a generic error message
+      const errorMessage = error.response?.data?.message || 'Something went wrong. Please check your connection.';
+      toast.error(errorMessage);
+      
     } finally {
       setLoading(false);
     }
@@ -56,10 +87,10 @@ const Login = () => {
   return (
     <>
       <Helmet>
-        <title>Login | 1AnchorMovies</title>
+        <title>{mode === 'Sign Up' ? 'Sign Up' : 'Login'} | 1AnchorMovies</title>
         <meta
           name="description"
-          content="Login to 1AnchorMovies to browse, upload, or download the latest HD Kannada, Tamil, Telugu, and Malayalam movies."
+          content="Login or create your account on 1AnchorMovies to browse, upload, or download the latest HD movies."
         />
         <link rel="canonical" href="https://www.1anchormovies.live/login" />
       </Helmet>
@@ -91,7 +122,7 @@ const Login = () => {
                   value={name}
                   type="text"
                   placeholder="Full Name"
-                  required
+                  required={mode === 'Sign Up'} // Only required for Sign Up
                   className="w-full bg-transparent text-white placeholder-blue-200 outline-none text-sm sm:text-base"
                 />
               </div>
@@ -121,19 +152,29 @@ const Login = () => {
               />
             </div>
 
-            <p
-              onClick={() => navigate('/reset-password')}
-              className="text-indigo-200 hover:underline cursor-pointer text-xs sm:text-sm text-right"
-            >
-              Forgot Password?
-            </p>
+            {mode === 'Login' && (
+                <p
+                    onClick={() => navigate('/reset-password')}
+                    className="text-indigo-200 hover:underline cursor-pointer text-xs sm:text-sm text-right"
+                >
+                    Forgot Password?
+                </p>
+            )}
+
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-full bg-black text-white font-semibold hover:bg-white hover:text-black transition duration-200 text-sm sm:text-base"
+              className="w-full py-2.5 rounded-full bg-black text-white font-semibold hover:bg-white hover:text-black transition duration-200 text-sm sm:text-base flex justify-center items-center gap-2"
             >
-              {loading ? 'Processing...' : mode}
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                mode
+              )}
             </button>
           </form>
 

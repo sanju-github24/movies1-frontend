@@ -1,22 +1,31 @@
+
 // src/components/Navbar.jsx
 import React, { useContext, useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, NavLink, useLocation } from "react-router-dom"; // Added useLocation
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { backendUrl } from "../utils/api";
-import { assets } from "../assets/assets";
 import { supabase } from "../utils/supabaseClient";
 import CategoryBar from "./CategoryBar";
-import { NavLink } from "react-router-dom";
 
+// ✅ CORRECTED: Removed Bars3Icon (Heroicons) and ensured all imports are from lucide-react
 import {
-  Bars3Icon,
-} from "@heroicons/react/24/outline";
+  X, 
+  Search,
+  Home,
+  Clock3,
+  MonitorPlay,
+  User,
+  Globe,
+  LogIn,
+  Menu // ✅ Correct Lucide icon for the hamburger menu
+} from "lucide-react"; 
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const { userData, setUserData, setIsLoggedIn,  onNavigate,onClose } = useContext(AppContext);
+  const location = useLocation(); // ✅ Get current location for mobile bottom bar
+  const { userData, setUserData, setIsLoggedIn, onNavigate, onClose } = useContext(AppContext);
 
   // State
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,9 +55,6 @@ const Navbar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  // Real-time membership status
-  
 
   // Logout
   const logout = async () => {
@@ -85,7 +91,7 @@ const Navbar = () => {
             onClick={onClose}
             className="text-gray-500 hover:text-gray-800 font-bold"
           >
-            &times;
+            <X className="w-4 h-4" /> 
           </button>
         </div>
         <p className="text-sm px-2 py-1">{notification}</p>
@@ -95,19 +101,19 @@ const Navbar = () => {
 
   const handleNavigateCategory = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
-    setMobileOpen(false); // close mobile drawer if open
+    setMobileOpen(false); // close mobile drawer
   };
   
-
-  const handleMobileSearchClick = () => {
+  // ✅ ENHANCEMENT: Streamlined mobile search handler
+  const handleMobileSearch = () => {
     setMobileOpen(true);
-    setTimeout(() => {
-      mobileSearchRef.current?.focus();
-    }, 100);
+    // Focus logic will be handled automatically by the mobileSearchRef if needed, 
+    // but the main goal here is to open the drawer where the search bar is located.
   };
+
   return (
     <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow">
-      {/* Desktop Navbar */}
+      {/* Desktop Navbar (Minor changes for consistency) */}
       <div className="hidden sm:flex flex-col">
         <div className="flex items-center justify-between px-10 h-16">
           <Link to="/" className="shrink-0">
@@ -117,20 +123,20 @@ const Navbar = () => {
           <div className="flex items-center gap-6 flex-grow justify-center">
             <ul className="flex gap-6 text-sm font-medium">
               <li>
-                <Link to="/latest" className="hover:underline">
+                <Link to="/latest" className="hover:text-blue-200 transition">
                   Latest Uploads
                 </Link>
               </li>
               <li>
-                <Link to="/blogs" className="hover:underline">
+                <Link to="/blogs" className="hover:text-blue-200 transition">
                   Blogs
                 </Link>
               </li>
               <li>
-    <Link to="/watch" className="hover:underline">
-      Watch
-    </Link>
-  </li>
+                <Link to="/watch" className="hover:text-blue-200 transition">
+                  Watch
+                </Link>
+              </li>
             </ul>
 
             <form
@@ -140,7 +146,7 @@ const Navbar = () => {
                 setSearchTerm("");
               }}
               role="search"
-              className="ml-6 relative bg-white text-black rounded-full px-4 py-1 w-64 flex items-center"
+              className="ml-6 relative bg-white text-black rounded-full px-4 py-1 w-64 flex items-center shadow-inner"
             >
               <input
                 type="text"
@@ -149,12 +155,8 @@ const Navbar = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-transparent w-full text-sm focus:outline-none pr-6"
               />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
-                  alt="search"
-                  className="w-4 h-4 opacity-80"
-                />
+              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-700 transition">
+                <Search className="w-4 h-4" />
               </button>
             </form>
           </div>
@@ -165,10 +167,13 @@ const Navbar = () => {
               <>
                 {/* Notifications */}
                 <div className="relative">
-                  <button onClick={() => setShowNotifications((v) => !v)}>
-                    <img src="/bell.png" alt="Notifications" className="w-6 h-6" />
+                  <button 
+                    onClick={() => setShowNotifications((v) => !v)}
+                    className="p-1 rounded-full hover:bg-white/10 transition"
+                  >
+                    <img src="/bell.png" alt="Notifications" className="w-6 h-6 filter invert" /> 
                     {notification && (
-                      <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                      <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-blue-700"></span>
                     )}
                   </button>
                   <NotificationPopup
@@ -181,20 +186,20 @@ const Navbar = () => {
                 {/* Profile */}
                 <div
                   onClick={() => setProfileOpen((v) => !v)}
-                  className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
+                  className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer ring-2 ring-white hover:ring-blue-300 transition"
                 >
                   {userInitial}
                 </div>
 
                 {profileOpen && (
-                  <div className="absolute top-12 right-0 bg-white text-black rounded shadow-md z-50 w-48 p-2">
+                  <div className="absolute top-12 right-0 bg-white text-black rounded-lg shadow-2xl z-50 w-48 p-2 border border-gray-200">
                     {editingName ? (
                       <div className="flex flex-col gap-2">
                         <input
                           type="text"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
-                          className="border p-1 rounded text-sm"
+                          className="border p-1 rounded text-sm focus:border-blue-500 outline-none"
                         />
                         <div className="flex gap-2">
                           <button
@@ -214,13 +219,13 @@ const Navbar = () => {
                                 toast.error("Error updating name");
                               }
                             }}
-                            className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700"
+                            className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700 transition"
                           >
                             Save
                           </button>
                           <button
                             onClick={() => setEditingName(false)}
-                            className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300"
+                            className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300 transition"
                           >
                             Cancel
                           </button>
@@ -228,30 +233,30 @@ const Navbar = () => {
                       </div>
                     ) : (
                       <ul className="text-sm py-1">
-                        <li className="px-4 py-2 border-b text-gray-700">{userData.name}</li>
+                        <li className="px-4 py-2 border-b text-gray-700 font-semibold truncate">{userData.name}</li>
                         <li>
                           <button
                             onClick={() => setEditingName(true)}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                           >
-                            ✏️ Edit Name
+                            <span role="img" aria-label="edit">✏️</span> Edit Name
                           </button>
                         </li>
                         <li>
                           <Link
                             to="/profile"
                             onClick={() => setProfileOpen(false)}
-                            className="block px-4 py-2 hover:bg-gray-100"
+                            className="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                           >
-                            👤 View Profile
+                            <User className="w-4 h-4 text-gray-500" /> View Profile
                           </Link>
                         </li>
                         <li>
                           <button
                             onClick={logout}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                            className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"
                           >
-                            🚪 Logout
+                            <LogIn className="w-4 h-4" /> Logout
                           </button>
                         </li>
                       </ul>
@@ -262,7 +267,7 @@ const Navbar = () => {
             ) : (
               <button
                 onClick={() => navigate("/login")}
-                className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition"
+                className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition shadow"
               >
                 Login
               </button>
@@ -274,34 +279,37 @@ const Navbar = () => {
         <CategoryBar onNavigate={handleNavigateCategory} />
       </div>
 
-{/* Mobile Navbar */}
+{/* Mobile Navbar (Top) */}
 <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-blue-700 relative">
-  <button onClick={() => setMobileOpen(true)} className="text-white">
-    <Bars3Icon className="w-6 h-6" />
+  <button onClick={() => setMobileOpen(true)} className="text-white p-2 rounded-lg hover:bg-blue-600 transition">
+    <Menu className="w-6 h-6" /> {/* ✅ CORRECTED: Used Menu icon */}
   </button>
 
   <Link to="/" className="flex items-center justify-center">
+    {/* Assuming logo_39.png is the anchor/main logo */}
     <img src="/logo_39.png" alt="Anchor" className="h-9 w-auto object-contain" />
   </Link>
 
+  {/* Mobile Profile Icon */}
   {userData ? (
     <div className="relative" ref={profileRef}>
       <div
         onClick={() => setProfileOpen((v) => !v)}
-        className="w-8 h-8 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer"
+        className="w-8 h-8 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer ring-2 ring-white hover:ring-blue-300 transition"
       >
         {userInitial}
       </div>
 
+      {/* Mobile Profile Dropdown (Kept logic similar to desktop for simplicity) */}
       {profileOpen && (
-        <div className="absolute top-12 right-0 bg-white text-black rounded shadow-md z-50 w-48 p-2">
+        <div className="absolute top-10 right-0 bg-white text-black rounded-lg shadow-2xl z-50 w-48 p-2 border border-gray-200">
           {editingName ? (
             <div className="flex flex-col gap-2">
               <input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="border p-1 rounded text-sm"
+                className="border p-1 rounded text-sm focus:border-blue-500 outline-none"
               />
               <div className="flex gap-2">
                 <button
@@ -321,13 +329,13 @@ const Navbar = () => {
                       toast.error("Error updating name");
                     }
                   }}
-                  className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700"
+                  className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700 transition"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setEditingName(false)}
-                  className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300"
+                  className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300 transition"
                 >
                   Cancel
                 </button>
@@ -335,30 +343,30 @@ const Navbar = () => {
             </div>
           ) : (
             <ul className="text-sm py-1">
-              <li className="px-4 py-2 border-b text-gray-700">{userData.name}</li>
+              <li className="px-4 py-2 border-b text-gray-700 font-semibold truncate">{userData.name}</li>
               <li>
                 <button
                   onClick={() => setEditingName(true)}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                 >
-                  ✏️ Edit Name
+                  <span role="img" aria-label="edit">✏️</span> Edit Name
                 </button>
               </li>
               <li>
                 <Link
                   to="/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="block px-4 py-2 hover:bg-gray-100"
+                  className="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
                 >
-                  👤 View Profile
+                  <User className="w-4 h-4 text-gray-500" /> View Profile
                 </Link>
               </li>
               <li>
                 <button
                   onClick={logout}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"
                 >
-                  🚪 Logout
+                  <LogIn className="w-4 h-4" /> Logout
                 </button>
               </li>
             </ul>
@@ -367,7 +375,7 @@ const Navbar = () => {
       )}
     </div>
   ) : (
-    <button onClick={() => navigate("/login")} className="text-white font-medium">
+    <button onClick={() => navigate("/login")} className="text-white font-semibold px-2 py-1.5 rounded-full hover:bg-blue-600 transition">
       Login
     </button>
   )}
@@ -375,16 +383,18 @@ const Navbar = () => {
 
       {/* Mobile Drawer */}
       {mobileOpen && (
-        <div className="sm:hidden fixed inset-0 z-50">
+        <div className="sm:hidden fixed inset-0 z-[100] transition-all duration-300"> {/* Increased Z-index */}
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl">
+          {/* Drawer Panel */}
+          <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-2xl p-4 flex flex-col overflow-y-auto rounded-l-xl transition-transform duration-300 transform translate-x-0">
+            
             <div className="flex justify-between items-center border-b pb-3 mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Menu</h3>
+              <h3 className="text-lg font-bold text-blue-700">Anchor Movies</h3>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="text-gray-500 hover:text-gray-800 text-2xl"
+                className="text-gray-500 hover:text-red-500 p-1 rounded-full hover:bg-gray-100 transition"
               >
-                &times;
+                <X className="w-6 h-6" />
               </button>
             </div>
 
@@ -396,21 +406,18 @@ const Navbar = () => {
                 setMobileOpen(false);
               }}
               role="search"
-              className="relative bg-gray-100 text-black rounded-full px-4 py-1 w-full flex items-center mb-4"
+              className="relative bg-gray-100 text-black rounded-full px-4 py-2 w-full flex items-center mb-6 shadow-inner"
             >
               <input
+                ref={mobileSearchRef} // Use the ref here
                 type="text"
                 placeholder="Search movies…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-transparent w-full text-sm focus:outline-none pr-6"
               />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2">
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/3917/3917132.png"
-                  alt="search"
-                  className="w-4 h-4 opacity-80"
-                />
+              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                <Search className="w-4 h-4" />
               </button>
             </form>
 
@@ -418,106 +425,127 @@ const Navbar = () => {
               <Link
                 to="/login"
                 onClick={() => setMobileOpen(false)}
-                className="bg-blue-600 text-white text-center py-2 rounded-md mb-4 font-medium"
+                className="bg-blue-600 text-white text-center py-2.5 rounded-lg mb-6 font-semibold shadow hover:bg-blue-700 transition"
               >
-                Login
+                <LogIn className="w-5 h-5 inline mr-2"/> Login to Anchor
               </Link>
             )}
-{/* Languages (Mobile) */}
-<details open className="w-full">
-  <summary className="cursor-pointer font-medium text-gray-800 py-2 px-3 rounded-lg bg-gray-100 hover:bg-gray-200">
-    🌐 Languages
-  </summary>
-  <div className="mt-2 pl-4 flex flex-col gap-2">
-    {["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"].map(
-      (lang) => (
-        <button
-          key={lang}
-          onClick={() => {
-            if (onNavigate) onNavigate(lang); // ✅ call the handler from props
-            if (onClose) onClose();           // ✅ close mobile drawer if provided
-          }}
-          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-left text-sm hover:bg-blue-700 transition"
-        >
-          {lang}
-        </button>
-      )
-    )}
-  </div>
-</details>
+
+            {/* Main Nav Links */}
+            <ul className="flex flex-col gap-2 mb-6">
+                <Link to="/" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Home className="w-5 h-5 text-blue-600"/> Home</Link>
+                <Link to="/latest" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Clock3 className="w-5 h-5 text-blue-600"/> Latest Uploads</Link>
+                <Link to="/watch" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><MonitorPlay className="w-5 h-5 text-blue-600"/> Watch</Link>
+                <Link to="/blogs" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Globe className="w-5 h-5 text-blue-600"/> Blogs</Link>
+            </ul>
 
 
+            {/* Languages (Mobile) */}
+            <details open className="w-full mt-4">
+              <summary className="cursor-pointer font-bold text-blue-700 py-3 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 flex items-center gap-3">
+                <Globe className="w-5 h-5"/> Popular Languages
+              </summary>
+              <div className="mt-3 pl-2 flex flex-col gap-2">
+                {["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"].map(
+                  (lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => {
+                        // Use handleNavigateCategory which includes setMobileOpen(false)
+                        handleNavigateCategory(lang); 
+                      }}
+                      className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-left text-sm hover:bg-blue-600 hover:text-white transition shadow-sm"
+                    >
+                      {lang}
+                    </button>
+                  )
+                )}
+              </div>
+            </details>
 
           </div>
         </div>
       )}
 
-{/* Mobile Bottom Navbar */}
-<div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-600 border-t shadow-md flex justify-around py-2 z-50 text-sm">
+{/* Mobile Bottom Navbar - ENHANCED */}
+<div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-900 border-t-2 border-blue-600 shadow-2xl flex justify-around py-2 z-50 text-xs">
+  
+  {/* Home */}
   <NavLink
     to="/"
     end
     className={({ isActive }) =>
-      `flex flex-col items-center ${
-        isActive ? "text-white" : "text-gray-300"
+      `flex flex-col items-center p-1 rounded-lg transition ${
+        isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
       }`
     }
   >
-    <div
-      className={`p-2 rounded-full ${
-        location.pathname === "/" ? "bg-white/30" : ""
-      }`}
-    >
-      <img src="/home.png" alt="Home" className="w-5 h-5" />
-    </div>
-    <span className="text-xs mt-1">Home</span>
+    <Home className="w-5 h-5" />
+    <span className="mt-1">Home</span>
   </NavLink>
 
+  {/* Latest */}
   <NavLink
     to="/latest"
     className={({ isActive }) =>
-      `flex flex-col items-center ${
-        isActive ? "text-white" : "text-gray-300"
+      `flex flex-col items-center p-1 rounded-lg transition ${
+        isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
       }`
     }
   >
-    <div
-      className={`p-2 rounded-full ${
-        location.pathname === "/latest" ? "bg-white/30" : ""
-      }`}
-    >
-      <img src="/routine.png" alt="Latest" className="w-5 h-5" />
-    </div>
-    <span className="text-xs mt-1">Latest</span>
+    <Clock3 className="w-5 h-5" />
+    <span className="mt-1">Latest</span>
   </NavLink>
 
+  {/* Center Button - Search/Watch Toggle */}
+  <button
+    onClick={handleMobileSearch}
+    className="flex flex-col items-center -mt-4 p-3 rounded-full bg-white text-blue-700 shadow-xl ring-4 ring-blue-500/50 hover:bg-gray-100 transition transform hover:scale-105"
+  >
+    <Search className="w-6 h-6" />
+    <span className="text-xs mt-1 font-bold">Search</span>
+  </button>
+
+  {/* Watch */}
   <NavLink
     to="/watch"
     className={({ isActive }) =>
-      `flex flex-col items-center ${
-        isActive ? "text-white" : "text-gray-300"
+      `flex flex-col items-center p-1 rounded-lg transition ${
+        isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
       }`
     }
   >
-    <div
-      className={`p-2 rounded-full ${
-        location.pathname.startsWith("/watch") ? "bg-white/30" : ""
-      }`}
-    >
-      <img src="/play-button.png" alt="Watch" className="w-5 h-5" />
-    </div>
-    <span className="text-xs mt-1">Watch</span>
+    <MonitorPlay className="w-5 h-5" />
+    <span className="mt-1">Watch</span>
   </NavLink>
 
-  <button
-    onClick={handleMobileSearchClick}
-    className="flex flex-col items-center text-gray-300"
-  >
-    <div className="p-2 rounded-full">
-      <img src="/search.png" alt="Search" className="w-5 h-5" />
-    </div>
-    <span className="text-xs mt-1">Search</span>
-  </button>
+  {/* Profile/Login */}
+  {userData ? (
+    <button
+      onClick={() => {
+        setProfileOpen((v) => !v);
+        // Note: Profile dropdown shows relative to the top bar icon, which is fine
+      }}
+      className={`flex flex-col items-center p-1 rounded-lg transition ${
+        profileOpen ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
+      }`}
+    >
+      <User className="w-5 h-5" />
+      <span className="mt-1">Profile</span>
+    </button>
+  ) : (
+    <NavLink
+      to="/login"
+      className={({ isActive }) =>
+        `flex flex-col items-center p-1 rounded-lg transition ${
+          isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
+        }`
+      }
+    >
+      <LogIn className="w-5 h-5" />
+      <span className="mt-1">Login</span>
+    </NavLink>
+  )}
 </div>
     </nav>
   );

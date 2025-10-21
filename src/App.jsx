@@ -34,6 +34,7 @@ import AdminUp4streamFiles from './components/AdminUp4streamFiles';
 
 
 
+
 const App = () => {
   const { isLoggedIn } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,7 +43,7 @@ const App = () => {
   const navigate = useNavigate();
 
   // Hide navbar & category bar on specific paths
-  const hidePaths = ["/login", "/verify-account", "/reset-password"];
+  const hidePaths = ["/login", "/verify-account", "/reset-password","/blogs"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
   const isAdminPath = location.pathname.startsWith("/admin");
@@ -121,6 +122,7 @@ const App = () => {
         <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
+        
         <Route path="/watch/:slug/*" element={<WatchPage />} />
 
         {/* Profile */}
