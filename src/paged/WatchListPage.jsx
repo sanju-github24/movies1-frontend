@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 
 /* ====== Language Row Component (UNCHANGED) ====== */
 const LanguageRow = ({ language, movies, overlay }) => {
-// ... (LanguageRow component code is unchanged)
+  // ... (LanguageRow component code is unchanged)
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -152,6 +152,7 @@ const LanguageRow = ({ language, movies, overlay }) => {
     </div>
   );
 };
+
 /* ===== Helper: Save Recently Watched (UNCHANGED) ===== */
 const saveRecentlyWatched = (movie) => {
   const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
@@ -406,8 +407,8 @@ useEffect(() => {
         )}
       </header>
 
-{/* ===== Hero Slider (UNCHANGED) ===== */}
-      {!loading && latestMovies.length > 0 && (
+{/* ===== Hero Slider (MODIFIED: HIDDEN IF SEARCH IS ACTIVE) ===== */}
+      {!loading && latestMovies.length > 0 && search === "" && ( // <--- KEY CHANGE: search === ""
         <div className="relative w-full overflow-hidden mt-[-60px] sm:mt-[-64px]"> 
           <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
             {latestMovies.map((movie, idx) => {
@@ -541,8 +542,8 @@ useEffect(() => {
 )}
 
 
-            {/* ===== Recommended Because You Watched (UNCHANGED) ===== */}
-      {recommended.length > 0 && (
+{/* ===== Recommended Because You Watched (MODIFIED: HIDDEN IF SEARCH IS ACTIVE) ===== */}
+      {recommended.length > 0 && search === "" && ( // <--- KEY CHANGE: search === ""
         <div className="p-6 flex flex-col items-center">
           <LanguageRow
             language={`🎬 Because you watched: ${lastWatchedTitle}`}
@@ -551,11 +552,24 @@ useEffect(() => {
         </div>
       )}
 
-      {/* ===== Movies by Language (UNCHANGED) ===== */}
+{/* ===== Movies by Language / Search Results (UPDATED: Added Search Heading) ===== */}
       {/* Apply opacity transition to the main content area for a smooth load-in effect */}
       <div className={`p-6 flex flex-col items-center transition-opacity duration-500 ${!loading ? 'opacity-100' : 'opacity-0'}`}>
+        
+        {/* ✅ ADDED: Clear Search Heading */}
+        {search !== "" && (
+            <h2 className="text-2xl font-bold text-blue-400 mb-6 w-full max-w-7xl px-4 text-left">
+                Search Results for: "{search}"
+            </h2>
+        )}
+        
         {Object.keys(groupedByLanguage).length === 0 ? (
-          <p className="text-center text-gray-400">No movies found.</p>
+          <p className="text-center text-gray-400">
+            {/* Improved No Results message */}
+            {search === "" 
+             ? "No movies found." 
+             : `No movies found matching "${search}".`} 
+          </p>
         ) : (
           Object.entries(groupedByLanguage).map(([language, movies]) => (
             <LanguageRow key={language} language={language} movies={movies} />
