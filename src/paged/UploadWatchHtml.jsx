@@ -184,6 +184,8 @@ const UploadWatchHtml = () => {
   const [directUrl, setDirectUrl] = useState("");
   const [titleLogo, setTitleLogo] = useState("");
   const [imdbRating, setImdbRating] = useState(""); 
+  // ⬅️ NEW: Field to store the IMDb ID (e.g., tt1234567)
+  const [imdbId, setImdbId] = useState(""); 
   
   // --- MEDIA UPLOAD STATE ---
   const [selectedFile, setSelectedFile] = useState(null);
@@ -248,10 +250,13 @@ const UploadWatchHtml = () => {
     fetchWatchPages();
   }, [fetchWatchPages]);
   
-  // --- TMDB Metadata Fetch Handler (Calls new /tmdb-details endpoint) ---
+  // -----------------------------------------------------------
+  // --- UPDATED TMDB Metadata Fetch Handler ⬅️
+  // -----------------------------------------------------------
   const handleTMDBSearch = async () => {
-    if (!tmdbSearchQuery.trim()) {
-      return toast.error("❌ Please enter a movie title to search.");
+    const query = tmdbSearchQuery.trim();
+    if (!query) {
+      return toast.error("❌ Please enter a title or IMDb ID to search.");
     }
     if (!backendUrl) {
       return toast.error("❌ Backend URL is not configured in AppContext.");
@@ -259,17 +264,23 @@ const UploadWatchHtml = () => {
 
     setIsSearching(true);
     setTmdbSearchResult(null); 
+    
+    // Determine if the query is an IMDb ID (starts with 'tt' followed by digits)
+    const isImdbId = /^tt\d+$/i.test(query); 
+    
+    // Construct the parameters for the backend request
+    const params = isImdbId 
+        ? { imdb_id: query } 
+        : { title: query };
 
     try {
-      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { 
-        params: { title: tmdbSearchQuery }
-      });
+      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params });
 
       if (res.data.success && res.data.data) {
         setTmdbSearchResult(res.data.data);
         toast.success(`✅ Found metadata for: ${res.data.data.title}`);
       } else if (res.data.error_type === "TitleNotFound") {
-          toast.error(`⚠️ Could not find title: "${tmdbSearchQuery}"`);
+          toast.error(`⚠️ Could not find entry for: "${query}"`);
       } else {
           throw new Error(res.data.message || "Unknown error during search.");
       }
@@ -282,8 +293,11 @@ const UploadWatchHtml = () => {
       setIsSearching(false);
     }
   };
+  // -----------------------------------------------------------
   
+  // -----------------------------------------------------------
   // --- Handler to Save Extracted Metadata to Backend JSON File ---
+  // -----------------------------------------------------------
   const handleSaveMetadata = async (metadata) => {
     if (!backendUrl) {
         return toast.error("❌ Backend URL missing for save operation.");
@@ -299,6 +313,9 @@ const UploadWatchHtml = () => {
         // Essential identifying data
         title: metadata.title,
         year: metadata.year,
+        
+        // ⬅️ NEW: Include IMDb ID for better tracking in the JSON file
+        imdb_id: metadata.imdb_id, 
         
         // Metadata fields from TMDB
         description: metadata.description,
@@ -331,7 +348,9 @@ const UploadWatchHtml = () => {
     }
   };
 
-  // --- Handler to apply TMDB metadata to the form ---
+  // -----------------------------------------------------------
+  // --- UPDATED Handler to apply TMDB metadata to the form ⬅️ ---
+  // -----------------------------------------------------------
   const handleUseMetadata = (data) => {
       
       // 1. Title
@@ -351,6 +370,9 @@ const UploadWatchHtml = () => {
       const formattedRating = data.imdb_rating ? `${data.imdb_rating.toFixed(1)}/10` : '';
       setImdbRating(formattedRating); 
       
+      // 5. ⬅️ NEW: Set the IMDb ID
+      setImdbId(data.imdb_id || '');
+      
       // Clear all other media-specific fields
       setHtmlCode('');
       setHtmlCode2('');
@@ -363,6 +385,7 @@ const UploadWatchHtml = () => {
       setTmdbSearchResult(null); 
       setTmdbSearchQuery(""); 
   };
+  // -----------------------------------------------------------
 
   // --- Video Upload Handler (Bunny Stream) ---
   const handleVideoUpload = async (file) => {
@@ -435,6 +458,8 @@ const UploadWatchHtml = () => {
       direct_url: directUrl.trim() || "",
       title_logo: titleLogo.trim() || "",
       imdb_rating: imdbRating.trim() || "",
+      // ⬅️ NEW: Include IMDb ID in the Supabase record
+      imdb_id: imdbId.trim() || "", 
       episodes: validEpisodes, 
       created_at: new Date().toISOString(),
     };
@@ -456,6 +481,7 @@ const UploadWatchHtml = () => {
       setDirectUrl("");
       setTitleLogo("");
       setImdbRating("");
+      setImdbId(""); // ⬅️ Reset new field
       setEpisodes([{ title: "", html: "", direct_url: "" }]);
       setSelectedFile(null);
       setTmdbSearchQuery(""); 
@@ -486,6 +512,7 @@ const UploadWatchHtml = () => {
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-900 min-h-screen text-white">
       {/* Tailwind CSS Script for proper styling */}
+      {/* Note: In a real React app, you would rely on your build setup (e.g., PostCSS/Webpack) for styling. */}
       <script src="https://cdn.tailwindcss.com"></script>
       <style>{`
         /* Custom scrollbar for better visibility */
@@ -521,7 +548,7 @@ const UploadWatchHtml = () => {
             
           {/* --- TMDB MOVIE SEARCH --- */}
           <h2 className="text-xl font-semibold mb-4 text-purple-300 border-b border-gray-700 pb-2">
-             🔍 TMDB Movie Metadata Search
+             🔍 TMDB Metadata Search (Title or IMDb ID)
           </h2>
           
           <div className="flex gap-2 mb-4">
@@ -530,7 +557,7 @@ const UploadWatchHtml = () => {
                 className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 value={tmdbSearchQuery}
                 onChange={(e) => setTmdbSearchQuery(e.target.value)}
-                placeholder="Enter movie or TV show title (e.g., Baahubali)"
+                placeholder="Enter title (e.g., Baahubali) OR IMDb ID (e.g., tt1375666)"
                 onKeyDown={(e) => e.key === 'Enter' && handleTMDBSearch()}
                 disabled={isSearching}
               />
@@ -558,10 +585,15 @@ const UploadWatchHtml = () => {
                 />
                 <div className="flex-grow">
                     <h3 className="text-xl font-bold text-green-300 mb-1">{tmdbSearchResult.title} ({tmdbSearchResult.year})</h3>
-                    <p className="text-sm text-gray-300 mb-3">
+                    <p className="text-sm text-gray-300 mb-1">
                         <span className="font-semibold mr-2">Rating:</span> 
                         <Star className="h-4 w-4 text-yellow-500 inline-block fill-yellow-500 mr-1" />
                         {tmdbSearchResult.imdb_rating.toFixed(1)}/10
+                    </p>
+                    {/* ⬅️ NEW: Display IMDb ID */}
+                    <p className="text-xs text-gray-400 mb-3">
+                         <span className="font-semibold mr-1">IMDb ID:</span> 
+                         <span className="font-mono text-yellow-400">{tmdbSearchResult.imdb_id || 'N/A'}</span>
                     </p>
                     {/* BUTTON GROUP FOR ACTIONS */}
                     <div className='flex flex-wrap gap-2'> 
@@ -621,6 +653,19 @@ const UploadWatchHtml = () => {
               placeholder="unique-slug (Pre-filled from Search)"
             />
           </div>
+          
+          {/* ⬅️ NEW: IMDb ID input field */}
+          <div className="mb-5">
+            <label className="block font-semibold mb-2">IMDb ID (tt...)</label>
+            <input
+              type="text"
+              className="border border-gray-700 bg-gray-700 p-3 rounded-lg w-full font-mono"
+              value={imdbId}
+              onChange={(e) => setImdbId(e.target.value)}
+              placeholder="IMDb ID (e.g., tt1375666) (Pre-filled from Search)"
+            />
+          </div>
+          {/* ⬅️ END NEW FIELD */}
 
           <div className="mb-5">
             <label className="block font-semibold mb-2">IMDb Rating (e.g., 8.5/10)</label>
