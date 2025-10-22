@@ -23,6 +23,8 @@ import {
   MessageCircle,
   Search,
   Zap, // Icon for TMDB fetch button
+  Star, // Added Star icon for rating
+  Loader2, // Assuming Loader2 is available from lucide-react or similar
 } from "lucide-react"; 
 import axios from "axios"; 
 
@@ -122,10 +124,35 @@ const DownloadBlock = ({ block, index, onChange, onRemove, isLast }) => {
   );
 };
 
+// --- CheckboxGroup Component (Added from original plan) ---
+const CheckboxGroup = ({ title, options, selected, onChange, color }) => (
+    <fieldset className="p-4 rounded-lg bg-gray-800 border border-gray-700">
+        <legend className="text-base font-bold text-gray-300 mb-2">{title}</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {options.map((option) => (
+                <label key={option} className="flex items-center text-sm cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={selected.includes(option)}
+                        onChange={() => {
+                            const newSelected = selected.includes(option)
+                                ? selected.filter(s => s !== option)
+                                : [...selected, option];
+                            onChange(newSelected);
+                        }}
+                        className={`w-4 h-4 rounded ${color}`}
+                    />
+                    <span className="ml-2 text-gray-300">{option}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>
+);
+
 
 // --- Main Component ---
 const AdminUpload = () => {
-  const { userData } = useContext(AppContext);
+  const { userData, backendUrl } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -133,7 +160,11 @@ const AdminUpload = () => {
   const [editingMovieId, setEditingMovieId] = useState(null);
   const [movies, setMovies] = useState([]);
   const [formOpen, setFormOpen] = useState(true);
-  const [tmdbTitleSearch, setTmdbTitleSearch] = useState(""); 
+  
+  // --- NEW TMDB STATES ---
+  const [tmdbSearchQuery, setTmdbSearchQuery] = useState(""); 
+  const [tmdbSearchResult, setTmdbSearchResult] = useState(null); 
+  const [isSearching, setIsSearching] = useState(false); 
 
   // State for the main movie details
   const [movie, setMovie] = useState({
@@ -165,46 +196,62 @@ const AdminUpload = () => {
     },
   ]);
 
-  // --- TMDB Fetch Functionality ---
-  const fetchTmdbDetails = async () => {
-    if (!tmdbTitleSearch.trim()) {
-      toast.warn("Please enter a title to search TMDB.");
-      return;
+  // --- TMDB Fetch Functionality (Copied/Adapted from UploadWatchHtml) ---
+  const handleTMDBSearch = async () => {
+    if (!tmdbSearchQuery.trim()) {
+      return toast.error("❌ Please enter a movie title to search.");
+    }
+    if (!backendUrl) {
+      return toast.error("❌ Backend URL is not configured in AppContext.");
     }
 
-    setLoading(true);
-    toast.info(`Searching TMDB for "${tmdbTitleSearch}"...`);
+    setIsSearching(true);
+    setTmdbSearchResult(null); 
 
     try {
-      const response = await axios.get('/api/tmdb-details', { 
-        params: { title: tmdbTitleSearch.trim() }
+      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { 
+        params: { title: tmdbSearchQuery }
       });
 
-      if (response.data.success) {
-        const data = response.data.data;
-        
-        // Auto-populate the movie state
-        setMovie((prev) => ({
+      if (res.data.success && res.data.data) {
+        setTmdbSearchResult(res.data.data);
+        toast.success(`✅ Found metadata for: ${res.data.data.title}`);
+      } else if (res.data.error_type === "TitleNotFound") {
+          toast.error(`⚠️ Could not find title: "${tmdbSearchQuery}"`);
+      } else {
+          throw new Error(res.data.message || "Unknown error during search.");
+      }
+
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message;
+      console.error("TMDB Search Error:", errorMessage);
+      toast.error(`⚠️ TMDB Search failed: ${errorMessage}`);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // --- Handler to apply TMDB metadata to the form ---
+  const handleUseMetadata = (data) => {
+      
+      const newSlug = data.title 
+          ? slugify(data.title)
+          : movie.slug;
+      
+      setMovie((prev) => ({
           ...prev,
           title: data.title || prev.title,
           poster: data.poster_url || prev.poster,
           description: data.description || prev.description,
-          // Auto-generate slug if it's a new entry
-          slug: editingMovieId ? prev.slug : slugify(data.title || tmdbTitleSearch),
-        }));
-        
-        toast.success(`✅ Details for "${data.title}" loaded successfully!`);
-
-      } else {
-        toast.error(`❌ TMDB Error: ${response.data.message || "Could not find details for that title."}`);
-      }
-
-    } catch (error) {
-      console.error("TMDB Fetch Error:", error);
-      toast.error("⚠️ Failed to connect to TMDB backend service.");
-    } finally {
-      setLoading(false);
-    }
+          // Auto-generate slug only if it's a new entry AND the title changed
+          slug: editingMovieId && prev.title === data.title ? prev.slug : newSlug, 
+      }));
+      
+      // Clear search results after applying
+      setTmdbSearchResult(null); 
+      setTmdbSearchQuery("");
+      
+      toast.info(`🎬 Form pre-filled: Title, Slug, Poster, and Description from ${data.title}.`);
   };
 
 
@@ -253,7 +300,8 @@ const AdminUpload = () => {
     ]);
     setEditingMovieId(null);
     setFormOpen(true);
-    setTmdbTitleSearch(""); 
+    setTmdbSearchQuery(""); 
+    setTmdbSearchResult(null); 
   };
 
   // --- Handlers ---
@@ -490,7 +538,7 @@ const AdminUpload = () => {
                     className={`${showPreview ? 'lg:col-span-2' : 'lg:col-span-1'} space-y-8 bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-800`}
                 >
                 
-                {/* --- TMDB Search Bar --- */}
+                {/* --- TMDB Search Bar (ENHANCED) --- */}
                 <div className="space-y-4 border-b border-gray-700 pb-6">
                     <h2 className="text-xl font-bold text-yellow-400 flex items-center gap-2">
                         <Zap className="w-5 h-5 text-yellow-400"/> Auto-Fill Details (TMDB)
@@ -500,19 +548,51 @@ const AdminUpload = () => {
                             type="text"
                             placeholder="Search Movie/Show title on TMDB"
                             className="p-3 bg-gray-800 rounded-lg placeholder-gray-400 border border-gray-700 focus:ring-yellow-500 focus:border-yellow-500 flex-grow"
-                            value={tmdbTitleSearch}
-                            onChange={(e) => setTmdbTitleSearch(e.target.value)}
-                            disabled={loading}
+                            value={tmdbSearchQuery}
+                            onChange={(e) => setTmdbSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleTMDBSearch()}
+                            disabled={isSearching}
                         />
                         <button
                             type="button"
-                            onClick={fetchTmdbDetails}
+                            onClick={handleTMDBSearch}
                             className="bg-yellow-600 hover:bg-yellow-700 px-4 py-3 rounded-lg font-semibold transition flex items-center gap-2 disabled:opacity-50"
-                            disabled={loading || !tmdbTitleSearch.trim()}
+                            disabled={isSearching || !tmdbSearchQuery.trim() || !backendUrl}
                         >
-                            <Search className="w-5 h-5"/> Fetch Details
+                             {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="w-5 h-5"/>} 
+                            Search
                         </button>
                     </div>
+
+                    {/* TMDB Search Result Display (NEW) */}
+                    {tmdbSearchResult && (
+                        <div className="bg-gray-700 p-4 rounded-xl border border-yellow-500/50 flex gap-4 mt-4">
+                            <img 
+                                src={tmdbSearchResult.poster_url || 'https://placehold.co/100x150/1f2937/9ca3af?text=No+Poster'} 
+                                alt={tmdbSearchResult.title} 
+                                className="w-20 h-30 object-cover rounded-lg shadow-lg"
+                                onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x150/1f2937/9ca3af?text=No+Poster'; }}
+                            />
+                            <div className="flex-grow">
+                                <h3 className="text-lg font-bold text-green-300 mb-1">{tmdbSearchResult.title} ({tmdbSearchResult.year || 'N/A'})</h3>
+                                <p className="text-xs text-gray-300 mb-2 truncate">
+                                    {tmdbSearchResult.description.substring(0, 80)}...
+                                </p>
+                                <div className='flex items-center text-sm text-gray-300 mb-2'> 
+                                    <Star className="h-4 w-4 text-yellow-500 inline-block fill-yellow-500 mr-1" />
+                                    {tmdbSearchResult.imdb_rating ? `${tmdbSearchResult.imdb_rating.toFixed(1)}/10` : 'No Rating'}
+                                </div>
+
+                                <button
+                                    onClick={() => handleUseMetadata(tmdbSearchResult)}
+                                    type="button"
+                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold transition shadow-md text-sm mt-1"
+                                >
+                                    Apply Metadata to Form
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
 
@@ -688,7 +768,7 @@ const AdminUpload = () => {
                         disabled={loading}
                     >
                     {loading ? (
-                        "Processing..."
+                        <><Loader2 className="h-5 w-5 animate-spin" /> Processing...</>
                     ) : editingMovieId ? (
                         <><Save className="w-5 h-5"/> Update Movie</>
                     ) : (
@@ -785,6 +865,10 @@ const AdminUpload = () => {
                       {m.categories?.join(', ') || 'No Categories'}
                   </p>
                   
+                  {m.note && (
+                      <p className="text-xs text-red-400 italic mb-2 border-t border-gray-700 pt-2">Admin Note: {m.note}</p>
+                  )}
+
                   <div className="mt-auto flex flex-wrap gap-2">
                     <button 
                         onClick={() => handleEdit(m)} 
@@ -793,45 +877,32 @@ const AdminUpload = () => {
                         <Pencil className="w-4 h-4 mr-1"/> Edit
                     </button>
                     <button 
-                        onClick={() => handleDelete(m.id)} 
-                        className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm font-medium transition flex items-center"
+                        onClick={() => toggleHomepage(m)} 
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition flex items-center ${
+                            m.showOnHomepage ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                        }`}
                     >
-                        <Trash2 className="w-4 h-4 mr-1"/> Delete
+                        {m.showOnHomepage ? (
+                            <><Minus className="w-4 h-4 mr-1"/> Remove Home</>
+                        ) : (
+                            <><Home className="w-4 h-4 mr-1"/> Add Home</>
+                        )}
                     </button>
-                    {m.showOnHomepage ? (
-                      <button 
-                          onClick={() => toggleHomepage(m)} 
-                          className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-lg text-sm font-medium transition"
-                          title="Remove from Homepage"
-                      >
-                          ❌ Homepage
-                      </button>
-                    ) : (
-                      <button 
-                          onClick={() => toggleHomepage(m)} 
-                          className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg text-sm font-medium transition"
-                          title="Add to Homepage"
-                      >
-                          ➕ Homepage
-                      </button>
-                    )}
+                    <button 
+                        onClick={() => handleDelete(m.id)} 
+                        className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg text-sm font-medium transition flex items-center"
+                    >
+                        <Trash2 className="w-4 h-4"/>
+                    </button>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 col-span-full">No movies match your search.</p>
+                <p className="text-gray-400 text-center col-span-full py-10">
+                    {search ? `No movies found matching "${search}".` : "No movies uploaded yet."}
+                </p>
             )}
           </div>
-        </div>
-        
-        {/* Back to Home Button at bottom */}
-        <div className="flex justify-center pt-8 mt-8 border-t border-gray-700">
-            <Link 
-                to="/" 
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl shadow-lg transition transform hover:scale-[1.02] font-semibold flex items-center gap-2"
-            >
-                <Home className="w-5 h-5"/> Back to User Home
-            </Link>
         </div>
       </div>
     </AdminLayout>
@@ -839,30 +910,3 @@ const AdminUpload = () => {
 };
 
 export default AdminUpload;
-// --- Reusable Checkbox Group Component ---
-const CheckboxGroup = ({ title, options, selected, onChange, color }) => {
-    const handleChange = (option) => {
-        const newSelected = selected.includes(option)
-            ? selected.filter((s) => s !== option)
-            : [...selected, option];
-        onChange(newSelected);
-    };
-    return (
-        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-            <label className="block mb-3 text-sm text-gray-300 font-bold border-b border-gray-700 pb-2">{title}</label>
-            <div className="grid grid-cols-2 gap-2">
-                {options.map((option) => (
-                    <label key={option} className="flex items-center space-x-2 text-gray-200 text-sm cursor-pointer hover:text-white transition">
-                        <input
-                            type="checkbox"
-                            checked={selected.includes(option)}
-                            onChange={() => handleChange(option)}
-                            className={`${color} w-4 h-4 rounded`}
-                        />
-                        <span>{option}</span>
-                    </label>
-                ))}
-            </div>
-        </div>
-    );
-};
