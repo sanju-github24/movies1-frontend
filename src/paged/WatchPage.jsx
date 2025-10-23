@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useContext, useCallback } from "react";
+import React, { useEffect, useRef, useState, useContext, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
-import { Loader2, Star, User } from "lucide-react";
+import { Loader2, Star, User, Download } from "lucide-react";
 
 const WatchHtmlPage = () => {
   const { slug } = useParams();
@@ -17,14 +17,13 @@ const WatchHtmlPage = () => {
   const [episodes, setEpisodes] = useState([]);
   const [servers, setServers] = useState([]);
   const [activeSrc, setActiveSrc] = useState(null);
-  const [downloadUrl, setDownloadUrl] = useState("");
+  // const [downloadUrl, setDownloadUrl] = useState(""); // URL for the MAIN download button // COMMENTED: Main Download
   const [showEpisodes, setShowEpisodes] = useState(false);
 
   // 🔹 Helper function to fetch TMDB data using the **Supabase Slug** as the search term
   const fetchTmdbMetadata = useCallback(async (searchTerm) => {
     if (!backendUrl || !searchTerm) return null;
     try {
-      // ✅ UPDATED: Now passing the slug as the search term to the TMDB API endpoint
       const res = await axios.get(`${backendUrl}/api/tmdb-details`, {
         params: { title: searchTerm }, // The Express server expects 'title' query parameter
       });
@@ -58,13 +57,12 @@ const WatchHtmlPage = () => {
       }
 
       // 2️⃣ Fetch rich metadata from TMDB using the movie's **SLUG**
-      // The backend must be configured to handle slugs (e.g., replace hyphens with spaces)
-      const tmdbResult = await fetchTmdbMetadata(watchData.slug); // ✅ CHANGED: Used watchData.slug
+      const tmdbResult = await fetchTmdbMetadata(watchData.slug);
       if (isMounted) {
           setTmdbMeta(tmdbResult);
       }
 
-      // 3️⃣ Set local movie meta state (prioritize TMDB data for visual assets)
+      // 3️⃣ Set local movie meta state
       const finalPoster = tmdbResult?.poster_url || watchData.poster || "/poster.png";
       const finalBackground = tmdbResult?.cover_poster_url || watchData.cover_poster || watchData.poster || "/poster.png";
       const finalImdbRating = tmdbResult?.imdb_rating ? `${tmdbResult.imdb_rating.toFixed(1)}/10` : watchData.imdb_rating || null;
@@ -82,36 +80,50 @@ const WatchHtmlPage = () => {
 
       // 4️⃣ Prepare servers and direct URL
       const availableServers = [];
-      if (watchData.video_url) {
-        availableServers.push({ name: "Server 1 (HLS)", type: "video", src: watchData.video_url });
-      }
+      // let freshDirectUrl = null; // COMMENTED: Direct URL fetch logic
 
-      let freshDirectUrl = null;
-      if (watchData.direct_url && backendUrl) {
-        try {
-          const res = await axios.get(`${backendUrl}/api/videos/${watchData.direct_url}/download`);
-          if (res.data?.directDownloadUrl) {
-            freshDirectUrl = res.data.directDownloadUrl;
-            availableServers.push({ name: "Server 2 (Direct)", type: "video", src: freshDirectUrl });
-          }
-        } catch (err) {
-          console.error("❌ Failed to fetch direct video URL:", err);
-        }
-      }
+      // 🚨 ORDER SERVER LOGIC HERE 🚨
 
+      // Server 1 (HLS) // COMMENTED: HLS Server
+      // if (watchData.video_url) {
+      //   availableServers.push({ name: "Server 1 (HLS)", type: "video", src: watchData.video_url });
+      // }
+
+      // Server 2 (Direct URL - requires backend fetch) // COMMENTED: Direct URL Server
+      // if (watchData.direct_url && backendUrl) {
+      //   try {
+      //     const res = await axios.get(`${backendUrl}/api/videos/${watchData.direct_url}/download`);
+      //     if (res.data?.directDownloadUrl) {
+      //       freshDirectUrl = res.data.directDownloadUrl;
+      //       availableServers.push({ name: "Server 2 (Direct)", type: "video", src: freshDirectUrl });
+      //     }
+      //   } catch (err) {
+      //     console.error("❌ Failed to fetch direct video URL:", err);
+      //   }
+      // }
+
+      // Server 3 (Embed - html_code)
       if (watchData.html_code) {
-        availableServers.push({ name: "Embed (S3)", type: "html", src: watchData.html_code });
+        availableServers.push({ name: "Server 3 (Embed S3)", type: "html", src: watchData.html_code });
       }
       
+      // Server 4 (Embed - html_code2)
       if (watchData.html_code2) {
-        availableServers.push({ name: "Embed (S4)", type: "html", src: watchData.html_code2 });
+        availableServers.push({ name: "Server 4 (Embed S4)", type: "html", src: watchData.html_code2 });
       }
+
 
       if (isMounted) {
           setServers(availableServers);
-          if (availableServers.length > 0) setActiveSrc(availableServers[0]);
-          setDownloadUrl(freshDirectUrl || "");
-          setEpisodes(Array.isArray(watchData.episodes) ? watchData.episodes : []);
+          // Set the first available server as active
+          if (availableServers.length > 0) setActiveSrc(availableServers[0]); 
+          // setDownloadUrl(freshDirectUrl || ""); // COMMENTED: Main Download URL state
+          
+          // Filter episodes to only include those that have HTML embed code
+          const embedOnlyEpisodes = Array.isArray(watchData.episodes) 
+            ? watchData.episodes.filter(ep => ep.html) // Filter to only keep episodes with an 'html' embed
+            : [];
+          setEpisodes(embedOnlyEpisodes); 
           setLoading(false);
       }
     };
@@ -122,10 +134,9 @@ const WatchHtmlPage = () => {
     };
   }, [slug, backendUrl, fetchTmdbMetadata]);
 
-  // 🔹 SEO Meta Updates (Using slug for consistency, but maybe title is better for SEO here)
+  // 🔹 SEO Meta Updates
   useEffect(() => {
     if (movieMeta?.title) {
-      // Use the slug in the page title for URL consistency/branding
       document.title = `Watch ${movieMeta.slug} | MovieStream`;
       let meta = document.querySelector("meta[name='description']");
       if (!meta) {
@@ -149,7 +160,7 @@ const WatchHtmlPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Navbar (Header) components remain the same */}
+      {/* Navbar remains here... */}
       <header className="hidden sm:block sticky top-0 z-50 bg-black/90 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link to="/" className="flex items-center">
@@ -183,7 +194,7 @@ const WatchHtmlPage = () => {
             {/* Poster */}
             <img
               src={movieMeta.poster}
-              alt={movieMeta.slug} // Use slug for alt text
+              alt={movieMeta.slug}
               className="w-44 sm:w-64 rounded-xl shadow-2xl border-4 border-gray-800 z-10 object-cover"
               style={{ aspectRatio: '2/3' }}
               onError={(e) => (e.currentTarget.src = "/poster.png")}
@@ -206,7 +217,7 @@ const WatchHtmlPage = () => {
                 </p>
               )}
               
-              {/* ✅ NEW: Genre Display */}
+              {/* Genre Display */}
               {tmdbMeta?.genres?.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6 justify-center sm:justify-start">
                     {tmdbMeta.genres.map((genre, index) => (
@@ -221,15 +232,17 @@ const WatchHtmlPage = () => {
               )}
 
 
-              {downloadUrl && (
+              {/* 🔑 FIX: Main Download Button (Removed target="_blank") */}
+              {/* COMMENTED: Main Download Button */}
+              {/* {downloadUrl && (
                 <a
-                  href={downloadUrl + "&download"}
-                  download={`${movieMeta.slug || "movie"}.mp4`}
+                  href={downloadUrl} 
+                  download={`${movieMeta.slug || "movie"}.mp4`} 
                   className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-xl font-bold transition duration-300 transform hover:scale-105"
                 >
-                  ⬇️ Download Movie
+                  <Download className="w-5 h-5" /> Download Movie
                 </a>
-              )}
+              )} */}
             </div>
           </div>
         </div>
@@ -301,7 +314,8 @@ const WatchHtmlPage = () => {
             className="w-full max-w-full mx-auto rounded-xl overflow-hidden shadow-2xl bg-black relative border-4 border-gray-800"
             style={{ aspectRatio: "16/9" }}
           >
-            {activeSrc.type === "video" ? (
+            {/* COMMENTED: HLS/Direct Video Player Logic */}
+            {/* {activeSrc.type === "video" ? (
               <iframe
                 src={activeSrc.src}
                 title={`Video Player for ${movieMeta.slug}`}
@@ -311,12 +325,13 @@ const WatchHtmlPage = () => {
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
               />
-            ) : (
+            ) : ( */}
               <div
                 className="absolute top-0 left-0 w-full h-full"
                 dangerouslySetInnerHTML={{ __html: activeSrc.src }}
               />
-            )}
+            {/* )} */}
+           
           </div>
         ) : episodes.length === 0 && servers.length > 0 ? (
           <p className="text-center text-gray-400 mt-4 p-4 bg-gray-800 rounded-lg">⚠️ Please select a server to watch the content.</p>
@@ -342,23 +357,42 @@ const WatchHtmlPage = () => {
 
             {/* Episode list (only show if expanded) */}
             {showEpisodes && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 mt-4 max-h-64 overflow-y-auto custom-scroll">
-                {episodes.map((ep, index) => (
-                  <button
-                    key={index}
-                    onClick={() =>
-                      setActiveSrc(
-                        // Prioritize the direct URL for HLS playback if available
-                        ep.direct_url
-                          ? { name: ep.title || `Episode ${index + 1}`, type: "video", src: ep.direct_url }
-                          : { name: ep.title || `Episode ${index + 1}`, type: "html", src: ep.html }
-                      )
-                    }
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-200 truncate border border-gray-600"
-                  >
-                    {ep.title || `Episode ${index + 1}`}
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4 max-h-64 overflow-y-auto custom-scroll">
+                {episodes.map((ep, index) => {
+                    const epTitle = ep.title || `Episode ${index + 1}`;
+                    return (
+                        <div key={index} className="flex gap-2 p-1 bg-gray-700 rounded-lg border border-gray-600">
+                            {/* Play Button - NOW ONLY USES ep.html (embed) */}
+                            <button
+                                onClick={() =>
+                                    setActiveSrc(
+                                        // This checks if 'html' is present before setting it as the active source
+                                        ep.html
+                                        ? { name: epTitle, type: "html", src: ep.html } 
+                                        : null
+                                    )
+                                }
+                                // Added disabled state for clarity, although filtered episodes should all have HTML
+                                disabled={!ep.html} 
+                                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium text-gray-200 truncate disabled:opacity-50"
+                            >
+                                {epTitle}
+                            </button>
+
+                            {/* COMMENTED: Episode Download Button */}
+                            {/* {ep.direct_url && (
+                                <a
+                                    href={ep.direct_url}
+                                    download={`${movieMeta.slug}-${epTitle}.mp4`} 
+                                    title={`Download ${epTitle}`}
+                                    className="p-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition flex-shrink-0"
+                                >
+                                    <Download className="w-5 h-5" />
+                                </a>
+                            )} */}
+                        </div>
+                    );
+                })}
               </div>
             )}
           </div>

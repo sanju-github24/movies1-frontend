@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import Hls from "hls.js";
+// Ensure hls.js is installed: npm install hls.js
+import Hls from "hls.js"; 
+// Ensure framer-motion is installed: npm install framer-motion
 import { motion, AnimatePresence } from "framer-motion";
+// Ensure lucide-react is installed: npm install lucide-react
 import {
   Maximize2,
   Play,
@@ -10,6 +13,12 @@ import {
   RotateCcw,
 } from "lucide-react";
 
+// 💡 Define your specific HLS URL here
+const HLS_STREAM_URL = 'https://vz-fdc974fc-344.b-cdn.net/45a9ffc2-b123-4a31-8570-44919ed4ed51/playlist.m3u8';
+
+// =========================================================
+// VIDEO PLAYER COMPONENT
+// =========================================================
 const VideoPlayer = ({ url }) => {
   const videoRef = useRef();
   const containerRef = useRef();
@@ -26,11 +35,11 @@ const VideoPlayer = ({ url }) => {
   const [isBuffering, setIsBuffering] = useState(false);
   const [hlsInstance, setHlsInstance] = useState(null);
 
-  // 🔹 New states for quality control
+  // States for quality control
   const [levels, setLevels] = useState([]);
   const [selectedLevel, setSelectedLevel] = useState(-1); // -1 = Auto
 
-  // ---------------- Load Video ----------------
+  // ---------------- Load Video (Mount & URL Change) ----------------
   useEffect(() => {
     if (!url) return;
     const video = videoRef.current;
@@ -56,14 +65,17 @@ const VideoPlayer = ({ url }) => {
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         setLevels(data.levels || []);
         setAudioTracks(hls.audioTracks || []);
-        video.play();
+        video.play().catch(e => console.log("Auto-play blocked:", e));
         setIsPlaying(true);
       });
 
       // Handle duration updates
       hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
-        if (data.details.live) setDuration(0);
-        else setDuration(data.details.totalduration || video.duration);
+        if (!data.details.live) { 
+            setDuration(data.details.totalduration || video.duration);
+        } else {
+            setDuration(0); 
+        }
       });
 
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_, data) => {
@@ -89,10 +101,10 @@ const VideoPlayer = ({ url }) => {
 
       setHlsInstance(hls);
     } else {
-      // MP4 fallback
+      // MP4 fallback or native HLS (Safari)
       video.src = url;
       video.load();
-      video.play();
+      video.play().catch(e => console.log("Auto-play blocked:", e));
       setIsPlaying(true);
       setDuration(video.duration || 0);
     }
@@ -102,36 +114,40 @@ const VideoPlayer = ({ url }) => {
     const handleWaiting = () => setIsBuffering(true);
     const handlePlaying = () => setIsBuffering(false);
     const handleDurationChange = () => setDuration(video.duration);
+    const handleLoadedMetadata = () => setDuration(video.duration);
 
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("waiting", handleWaiting);
     video.addEventListener("playing", handlePlaying);
     video.addEventListener("durationchange", handleDurationChange);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+
 
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("waiting", handleWaiting);
       video.removeEventListener("playing", handlePlaying);
       video.removeEventListener("durationchange", handleDurationChange);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       if (hls) hls.destroy();
     };
   }, [url]);
 
-  // ---------------- Audio Track Switching ----------------
+  // ---------------- Audio Track Switching (Effect) ----------------
   useEffect(() => {
     if (hlsInstance && audioTracks.length > 0) {
       hlsInstance.audioTrack = selectedAudio;
     }
   }, [selectedAudio, hlsInstance, audioTracks]);
 
-  // ---------------- Quality Switching ----------------
+  // ---------------- Quality Switching (Effect) ----------------
   useEffect(() => {
     if (hlsInstance && levels.length > 0) {
-      hlsInstance.currentLevel = selectedLevel; // -1 = auto
+      hlsInstance.currentLevel = selectedLevel;
     }
   }, [selectedLevel, hlsInstance, levels]);
 
-  // ---------------- Controls ----------------
+  // ---------------- Controls Handlers ----------------
   const togglePlay = () => {
     const video = videoRef.current;
     if (isPlaying) {
@@ -188,6 +204,14 @@ const VideoPlayer = ({ url }) => {
     const seconds = Math.floor(t % 60);
     return `${minutes}:${seconds < 10 ? "0" + seconds : seconds}`;
   };
+  
+  const handleAudioChange = (e) => {
+    setSelectedAudio(parseInt(e.target.value, 10));
+  };
+
+  const handleLevelChange = (e) => {
+    setSelectedLevel(parseInt(e.target.value, 10));
+  };
 
   // ---------------- Auto-hide Controls ----------------
   useEffect(() => {
@@ -199,11 +223,11 @@ const VideoPlayer = ({ url }) => {
     };
     const container = containerRef.current;
     container.addEventListener("mousemove", show);
-    container.addEventListener("click", show);
+    container.addEventListener("mouseup", show); 
     return () => {
       clearTimeout(timer);
       container.removeEventListener("mousemove", show);
-      container.removeEventListener("click", show);
+      container.removeEventListener("mouseup", show);
     };
   }, []);
 
@@ -211,6 +235,7 @@ const VideoPlayer = ({ url }) => {
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black flex items-center justify-center rounded-lg overflow-hidden select-none"
+      style={{ aspectRatio: '16/9' }} 
     >
       <video
         ref={videoRef}
@@ -302,16 +327,16 @@ const VideoPlayer = ({ url }) => {
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Audio Tracks */}
+                {/* Audio Tracks (Language) */}
                 {audioTracks.length > 1 && (
                   <select
                     value={selectedAudio}
-                    onChange={(e) => setSelectedAudio(parseInt(e.target.value))}
-                    className="bg-black/70 rounded px-2 py-1 text-sm"
+                    onChange={handleAudioChange}
+                    className="bg-black/70 rounded px-2 py-1 text-sm appearance-none"
                   >
                     {audioTracks.map((track, i) => (
                       <option key={i} value={i}>
-                        {track.name || `Track ${i + 1}`}
+                        {track.name || track.lang || `Track ${i + 1}`}
                       </option>
                     ))}
                   </select>
@@ -321,13 +346,13 @@ const VideoPlayer = ({ url }) => {
                 {levels.length > 0 && (
                   <select
                     value={selectedLevel}
-                    onChange={(e) => setSelectedLevel(parseInt(e.target.value))}
-                    className="bg-black/70 rounded px-2 py-1 text-sm"
+                    onChange={handleLevelChange}
+                    className="bg-black/70 rounded px-2 py-1 text-sm appearance-none"
                   >
                     <option value={-1}>Auto</option>
                     {levels.map((lvl, i) => (
                       <option key={i} value={i}>
-                        {lvl.height}p
+                        {lvl.height ? `${lvl.height}p` : `Level ${i + 1}`}
                       </option>
                     ))}
                   </select>
@@ -337,7 +362,7 @@ const VideoPlayer = ({ url }) => {
                 <select
                   value={speed}
                   onChange={(e) => changeSpeed(e.target.value)}
-                  className="bg-black/70 rounded px-2 py-1 text-sm"
+                  className="bg-black/70 rounded px-2 py-1 text-sm appearance-none"
                 >
                   {[0.5, 1, 1.25, 1.5, 2].map((s) => (
                     <option key={s} value={s}>
@@ -358,4 +383,22 @@ const VideoPlayer = ({ url }) => {
   );
 };
 
-export default VideoPlayer;
+// =========================================================
+// MAIN APPLICATION COMPONENT (App.jsx)
+// =========================================================
+export default function App() {
+  return (
+    <div className="p-4 bg-gray-100 min-h-screen">
+      <h1 className="text-2xl font-bold mb-4 text-center">HLS Player with Quality/Audio Switching</h1>
+      
+      <div className="w-full max-w-4xl mx-auto shadow-xl rounded-lg" style={{ height: '500px' }}>
+        {/* Pass the HLS URL defined at the top */}
+        <VideoPlayer url={HLS_STREAM_URL} />
+      </div>
+
+      <p className="mt-6 text-sm text-gray-600 text-center">
+        The Quality and Audio Track selectors will appear if the stream contains multiple options.
+      </p>
+    </div>
+  );
+}
