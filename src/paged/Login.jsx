@@ -17,6 +17,9 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Define the specific admin email outside of the handler for clarity
+  const ADMIN_EMAIL = 'sanjusanjay0444@gmail.com';
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
@@ -51,6 +54,17 @@ const Login = () => {
           navigate('/verify-account'); // Redirect to a page that tells them to verify
           
         } else { // Login Success
+          
+          // --- 🌟 START OF MODIFICATION FOR ADMIN BYPASS 🌟 ---
+          // This check assumes the backend is NOT blocking the login for unverified users
+          // If the backend IS blocking the login for unverified users, the 'data.success' block will never be reached,
+          // and the backend logic must be updated instead.
+          const isBypassingVerification = data.user.email === ADMIN_EMAIL && data.user.isVerified === false;
+
+          // If the email is the admin email, force the login even if 'isVerified' is false 
+          // (assuming the backend's successful response *already* gives us the user data.)
+          // The primary function of this frontend code is to *allow* the user to proceed after a successful API call.
+          
           localStorage.setItem('isLoggedIn', 'true');
           localStorage.setItem('userData', JSON.stringify(data.user));
           localStorage.setItem('token', data.token); 
@@ -58,16 +72,25 @@ const Login = () => {
           setIsLoggedIn(true);
           setUserData(data.user);
           
-          // Security Note: Hardcoding admin email is functional but role-based authorization is recommended
-          setIsAdmin(data.user.email === 'sanjusanjay0444@gmail.com');
-        
-          toast.success(`✅ Login successful! Welcome back, ${data.user.name || data.user.email}`);
-        
+          // Set isAdmin based on the defined email
+          setIsAdmin(data.user.email === ADMIN_EMAIL);
+          
+          // Provide specific feedback for the bypassed login
+          if (isBypassingVerification) {
+             toast.warn(`🚨 Admin Bypass: Login successful for ${data.user.email} without verification.`);
+          } else {
+             toast.success(`✅ Login successful! Welcome back, ${data.user.name || data.user.email}`);
+          }
+          
+          // --- 🌟 END OF MODIFICATION FOR ADMIN BYPASS 🌟 ---
+
           navigate('/');
         }
         
       } else {
-        // Backend returns success: false with a message
+        // Backend returns success: false with a message (e.g., 'Account not verified')
+        // NOTE: If the backend returns an 'Account not verified' error, the admin bypass needs to happen on the backend.
+        // On the frontend, we can only display what the backend tells us.
         toast.error(data.message || 'Unknown error occurred.');
       }
       
