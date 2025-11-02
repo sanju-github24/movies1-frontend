@@ -411,7 +411,12 @@ const Header = () => {
     {/* Admin Link */}
     {isAdmin && (
       <div className="text-center pt-2">
-        <Link to="/admin" className="text-red-500 hover:text-red-600 font-bold underline transition">
+        <Link 
+          to="/admin" 
+          className="text-red-500 hover:text-red-600 font-bold underline transition"
+          target="_blank" // <--- Add this attribute
+          rel="noopener noreferrer" // <--- It's best practice to add this too
+        >
           <span className="inline-block px-3 py-1 bg-red-50 rounded-lg shadow-sm">
             🔧 Go to Admin Panel
           </span>
@@ -475,40 +480,40 @@ const Header = () => {
 
 {/* --- Popups --- */}
 
-{/* Share Popup */}
+{/* Share Popup (Modified for Mandatory Telegram Join) */}
 {showSharePopup && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-blue-600/50">
-      <h2 className="text-2xl font-extrabold mb-2 text-blue-400">👋 Welcome!</h2>
+      <h2 className="text-2xl font-extrabold mb-2 text-blue-400">🚨 Important Step!</h2>
       <p className="text-sm text-gray-300 mb-6">
-        Please support us by sharing the site link with your friends. Thank you!
+        To continue and access the site, you **must join our Telegram Channel** for updates and support.
       </p>
 
       <div className="flex justify-center gap-4 mb-6">
         <a
-          href={`https://wa.me/?text=${encodeURIComponent(
-            "Check out AnchorMovies: " + siteUrl
-          )}`}
+          // Link updated to your specified Telegram channel
+          href="https://t.me/AnchorMovies" 
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 text-sm font-semibold transition transform hover:scale-[1.05]"
-          onClick={handleShareComplete}
+          className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 text-sm font-semibold transition transform hover:scale-[1.05]"
+          onClick={handleShareComplete} // Closes the popup and continues
         >
-          <FaWhatsapp className="text-xl" /> Share on WhatsApp
+          {/* Ensure FaTelegramPlane is imported */}
+          <FaTelegramPlane className="text-xl" /> Must Click & Join Our Channel
         </a>
       </div>
 
       <button
         onClick={handleShareComplete}
-        className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold"
+        className="w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 text-sm font-semibold"
       >
-        I've already shared or will share later
+        I have successfully joined the Channel
       </button>
     </div>
   </div>
 )}
 
-{/* Membership Popup */}
+{/* Membership Popup (Unchanged) */}
 {showMemberPopup && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-yellow-500/50">
@@ -548,5 +553,4 @@ const Header = () => {
     </div>
   );
 };
-
 export default Header;
