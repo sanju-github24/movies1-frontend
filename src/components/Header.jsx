@@ -4,7 +4,8 @@ import { supabase } from "../utils/supabaseClient";
 // Icons
 import { EyeIcon } from "@heroicons/react/24/outline";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
-import { Copy, CornerRightDown, Zap } from "lucide-react"; // Added Lucide icons for modern look
+import { Copy, CornerRightDown, Zap, ArrowUp, ArrowDown } from "lucide-react"; // **Imported ArrowUp, ArrowDown**
+import { FaTelegramPlane } from "react-icons/fa"; // **Imported FaTelegramPlane for popup**
 // Context
 import { AppContext } from "../context/AppContext";
 
@@ -24,6 +25,9 @@ const Header = () => {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [showMemberPopup, setShowMemberPopup] = useState(false);
 
+  // State for reordering
+  const [isUpdatingPosition, setIsUpdatingPosition] = useState(false); // To prevent multiple rapid clicks
+
   const navigate = useNavigate();
 
   const adminEmail = "sanjusanjay0444@gmail.com";
@@ -31,6 +35,7 @@ const Header = () => {
   const siteUrl = "https://www.1anchormovies.live";
 
   // --- Movie Logic ---
+  // Ensure we sort and slice to get the list we want to display/reorder
   const latestMovies = [...movies]
     .filter((m) => m.showOnHomepage)
     .sort(
@@ -39,18 +44,84 @@ const Header = () => {
     )
     .slice(0, 60);
 
-  // Helper function for admin reorder (currently not used in return, kept for context)
-  // const moveMovie = (index, direction) => {
-  //   const newMovies = [...latestMovies];
-  //   const targetIndex = index + direction;
-  //   if (targetIndex < 0 || targetIndex >= newMovies.length) return;
-  //   [newMovies[index], newMovies[targetIndex]] = [
-  //     newMovies[targetIndex],
-  //     newMovies[index],
-  //   ];
-  //   setMovies(newMovies); // update global context
-  // };
+  // Helper function to update position in Supabase
+  const updateMoviePosition = async (movieId, newTimestamp) => {
+    setIsUpdatingPosition(true);
+    const { error } = await supabase
+      .from("movies")
+      .update({ homepage_added_at: newTimestamp })
+      .eq("id", movieId);
 
+    if (error) {
+      console.error("Error updating movie position:", error);
+    }
+    setIsUpdatingPosition(false);
+    // Optionally, re-fetch all movies here if the context refresh isn't automatic
+    // You should probably re-fetch all movies into the context to ensure all components see the updated list
+    const { data: updatedMovies, error: fetchError } = await supabase
+        .from("movies")
+        .select("*");
+    if (!fetchError) {
+        setMovies(updatedMovies);
+    } else {
+        console.error("Error re-fetching movies:", fetchError);
+    }
+  };
+
+
+  // Helper function for admin reorder
+  const moveMovie = (index, direction) => {
+    if (isUpdatingPosition) return;
+    
+    // Create a mutable copy of the latestMovies array
+    const currentList = [...latestMovies];
+    const targetIndex = index + direction;
+    
+    // Check if the target index is valid (within the list and the top 5 we care about)
+    if (index >= 5 || targetIndex < 0 || targetIndex >= 5) return;
+
+    // Swap the elements in the local list
+    [currentList[index], currentList[targetIndex]] = [
+      currentList[targetIndex],
+      currentList[index],
+    ];
+
+    // --- Core Logic: Update Timestamps for Fixed Positioning ---
+    // The positioning is based on `homepage_added_at` being the latest.
+    // To move a movie *up* (to a lower index/higher priority), we must give it a NEW, LATER timestamp.
+    // To move a movie *down* (to a higher index/lower priority), we must give the movie it is replacing a NEW, LATER timestamp.
+    
+    // We only need to adjust the timestamp of ONE of the two swapped movies
+    // to force the new order on the next sort/fetch.
+    
+    // For simplicity and robustness, let's create a *fresh, guaranteed latest* timestamp
+    // and assign it to the movie that should now be *first* in the sort order.
+    
+    const now = new Date().toISOString();
+    let movieToUpdate;
+
+    if (direction === -1) { // Moving movie at 'index' UP to 'targetIndex'
+        movieToUpdate = currentList[targetIndex]; // The movie that is now at the TOP position
+    } else { // direction === 1, Moving movie at 'index' DOWN to 'targetIndex'
+        movieToUpdate = currentList[targetIndex]; // The movie that is now at the BOTTOM position
+    }
+
+    // Since we only want to move a movie *up* in the sorted list by giving it a *newer* timestamp,
+    // we only need to update the movie that is moving to the *lower* index (higher priority).
+    // However, the *entire list* must be re-sorted based on the change.
+    
+    // Simpler: Just give the movie that is now at the highest priority (lowest index) a fresh timestamp
+    // OR, just give the one that moved up a fresh timestamp.
+    
+    // Let's update the movie that is now at the highest priority position among the two.
+    // That is the movie at `currentList[Math.min(index, targetIndex)]`
+    const highestPriorityMovie = currentList[Math.min(index, targetIndex)];
+    
+    // Perform the API update
+    updateMoviePosition(highestPriorityMovie.id, now);
+    // Note: The global context `setMovies` is updated inside `updateMoviePosition` after a fetch.
+  };
+  
   // --- Popups Logic ---
   useEffect(() => {
     if (isAdmin) return;
@@ -209,7 +280,7 @@ const Header = () => {
 
   return (
     <div className="flex flex-col items-center mt-1 px-5 w-full">
-      {/* Stories Section */}
+      {/* ... (Stories Section - Unchanged) ... */}
       {stories.length > 0 && (
         <div className="w-full max-w-7xl px-2 sm:px-4 mt-2">
           <div className="bg-white rounded-xl shadow-lg p-4">
@@ -247,7 +318,7 @@ const Header = () => {
       )}
       
 
-      {/* Active Story Viewer */}
+      {/* ... (Active Story Viewer - Unchanged) ... */}
       {activeStory && (
         <div
           className="fixed inset-0 bg-black/95 flex flex-col items-center justify-center z-50 transition-opacity duration-300"
@@ -366,8 +437,6 @@ const Header = () => {
           **Grab the newest HD downloads here.** Can't find an older title? Check out the <span className="text-blue-600 font-bold">Search</span> or <span className="text-blue-600 font-bold">Categories</span> to explore our full library!
         </p>
       </div>
-      {/* Share Button (unchanged) */}
-
       {/* Share Button (Cleaned up hover menu) */}
       <div className="relative group ml-2 mt-1">
         <button className="flex items-center gap-1 bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md hover:bg-blue-600 transition">
@@ -414,19 +483,22 @@ const Header = () => {
         <Link 
           to="/admin" 
           className="text-red-500 hover:text-red-600 font-bold underline transition"
-          target="_blank" // <--- Add this attribute
-          rel="noopener noreferrer" // <--- It's best practice to add this too
+          target="_blank" 
+          rel="noopener noreferrer" 
         >
           <span className="inline-block px-3 py-1 bg-red-50 rounded-lg shadow-sm">
             🔧 Go to Admin Panel
           </span>
         </Link>
+        <p className="text-xs text-red-500 mt-1">
+            (Arrows visible below only to admin: click to reorder the top 5 movies)
+        </p>
       </div>
     )}
 
     {/* Movie List */}
     <div className="flex flex-col gap-1 mt-4 border border-gray-200 rounded-lg overflow-hidden">
-      {latestMovies.map((movie) => (
+      {latestMovies.map((movie, index) => (
         <div
           key={movie.id}
           className="flex items-center justify-between text-black text-sm bg-white hover:bg-gray-50 transition p-3 border-b border-gray-100 last:border-b-0"
@@ -464,13 +536,35 @@ const Header = () => {
               ) : null}
             </div>
           </div>
+          
+          {/* Admin Reorder Arrows - Visible for top 5 movies */}
+          {isAdmin && index < 5 && (
+            <div className="flex flex-col ml-3 gap-1">
+              <button
+                onClick={() => moveMovie(index, -1)}
+                disabled={index === 0 || isUpdatingPosition}
+                className={`p-1 rounded ${index === 0 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
+                title="Move Up"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => moveMovie(index, 1)}
+                disabled={index === latestMovies.length - 1 || index === 4 || isUpdatingPosition}
+                className={`p-1 rounded ${index === latestMovies.length - 1 || index === 4 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
+                title="Move Down"
+              >
+                <ArrowDown className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
   </div>
 )}
 
-      {/* Footer */}
+      {/* ... (Footer - Unchanged) ... */}
 <div className="w-full py-6 mt-12 text-center border-t border-gray-200 text-sm">
   <p className="flex justify-center items-center gap-2 text-gray-500">
     <span className="text-gray-800 text-lg font-bold">©</span>
@@ -498,7 +592,7 @@ const Header = () => {
           className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 text-sm font-semibold transition transform hover:scale-[1.05]"
           onClick={handleShareComplete} // Closes the popup and continues
         >
-          {/* Ensure FaTelegramPlane is imported */}
+          {/* FaTelegramPlane is assumed to be imported from 'react-icons/fa' or similar */}
           <FaTelegramPlane className="text-xl" /> Must Click & Join Our Channel
         </a>
       </div>
