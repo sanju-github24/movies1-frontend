@@ -4,8 +4,8 @@ import { supabase } from "../utils/supabaseClient";
 // Icons
 import { EyeIcon } from "@heroicons/react/24/outline";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
-import { Copy, CornerRightDown, Zap, ArrowUp, ArrowDown } from "lucide-react"; // **Imported ArrowUp, ArrowDown**
-import { FaTelegramPlane } from "react-icons/fa"; // **Imported FaTelegramPlane for popup**
+import { Copy, CornerRightDown, Zap, ArrowUp, ArrowDown } from "lucide-react"; 
+import { FaTelegramPlane } from "react-icons/fa"; 
 // Context
 import { AppContext } from "../context/AppContext";
 
@@ -77,8 +77,8 @@ const Header = () => {
     const currentList = [...latestMovies];
     const targetIndex = index + direction;
     
-    // Check if the target index is valid (within the list and the top 5 we care about)
-    if (index >= 5 || targetIndex < 0 || targetIndex >= 5) return;
+    // *** MODIFICATION 1: Check against the full list length ***
+    if (targetIndex < 0 || targetIndex >= currentList.length) return;
 
     // Swap the elements in the local list
     [currentList[index], currentList[targetIndex]] = [
@@ -87,34 +87,11 @@ const Header = () => {
     ];
 
     // --- Core Logic: Update Timestamps for Fixed Positioning ---
-    // The positioning is based on `homepage_added_at` being the latest.
-    // To move a movie *up* (to a lower index/higher priority), we must give it a NEW, LATER timestamp.
-    // To move a movie *down* (to a higher index/lower priority), we must give the movie it is replacing a NEW, LATER timestamp.
-    
-    // We only need to adjust the timestamp of ONE of the two swapped movies
-    // to force the new order on the next sort/fetch.
-    
-    // For simplicity and robustness, let's create a *fresh, guaranteed latest* timestamp
-    // and assign it to the movie that should now be *first* in the sort order.
+    // Give the movie that moved to the highest priority (lowest index) a fresh timestamp
     
     const now = new Date().toISOString();
-    let movieToUpdate;
-
-    if (direction === -1) { // Moving movie at 'index' UP to 'targetIndex'
-        movieToUpdate = currentList[targetIndex]; // The movie that is now at the TOP position
-    } else { // direction === 1, Moving movie at 'index' DOWN to 'targetIndex'
-        movieToUpdate = currentList[targetIndex]; // The movie that is now at the BOTTOM position
-    }
-
-    // Since we only want to move a movie *up* in the sorted list by giving it a *newer* timestamp,
-    // we only need to update the movie that is moving to the *lower* index (higher priority).
-    // However, the *entire list* must be re-sorted based on the change.
     
-    // Simpler: Just give the movie that is now at the highest priority (lowest index) a fresh timestamp
-    // OR, just give the one that moved up a fresh timestamp.
-    
-    // Let's update the movie that is now at the highest priority position among the two.
-    // That is the movie at `currentList[Math.min(index, targetIndex)]`
+    // This is the movie that needs the newest timestamp to jump ahead in the sort
     const highestPriorityMovie = currentList[Math.min(index, targetIndex)];
     
     // Perform the API update
@@ -491,7 +468,7 @@ const Header = () => {
           </span>
         </Link>
         <p className="text-xs text-red-500 mt-1">
-            (Arrows visible below only to admin: click to reorder the top 5 movies)
+            (Arrows visible below only to admin: click to reorder any movie)
         </p>
       </div>
     )}
@@ -537,9 +514,18 @@ const Header = () => {
             </div>
           </div>
           
-          {/* Admin Reorder Arrows - Visible for top 5 movies */}
-          {isAdmin && index < 5 && (
-            <div className="flex flex-col ml-3 gap-1">
+          {/* Navigation Arrow for ALL users */}
+          <Link 
+            to={`/movie/${movie.slug}`}
+            className="ml-4 p-2 rounded-full text-blue-500 hover:bg-blue-100 transition flex-shrink-0"
+            title="View Details"
+          >
+            <CornerRightDown className="w-5 h-5"/>
+          </Link>
+
+          {/* *** MODIFICATION 2: Admin Reorder Arrows - Removed index < 5 restriction *** */}
+          {isAdmin && (
+            <div className="flex flex-col ml-3 gap-1 flex-shrink-0">
               <button
                 onClick={() => moveMovie(index, -1)}
                 disabled={index === 0 || isUpdatingPosition}
@@ -550,8 +536,8 @@ const Header = () => {
               </button>
               <button
                 onClick={() => moveMovie(index, 1)}
-                disabled={index === latestMovies.length - 1 || index === 4 || isUpdatingPosition}
-                className={`p-1 rounded ${index === latestMovies.length - 1 || index === 4 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
+                disabled={index === latestMovies.length - 1 || isUpdatingPosition}
+                className={`p-1 rounded ${index === latestMovies.length - 1 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
                 title="Move Down"
               >
                 <ArrowDown className="w-4 h-4" />
