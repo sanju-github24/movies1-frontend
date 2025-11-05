@@ -71,3 +71,139 @@
 .animate-zoom {
   animation: zoom 20s ease-in-out infinite;
 }
+/* Custom CSS for Range Input - to match Hotstar's thin scrubber */
+input[type="range"] {
+  -webkit-appearance: none; /* Hides the default slider */
+  width: 100%; /* Full-width */
+  height: 0.25rem; /* Make the track thin */
+  background: transparent; /* Track background handled by linear-gradient in JSX */
+  outline: none; /* Remove focus outline */
+  cursor: pointer;
+  border-radius: 9999px; /* Fully rounded track */
+}
+
+/* For Webkit Browsers (Chrome, Safari) */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; /* Hides the default thumb */
+  width: 1.25rem; /* Size of the thumb */
+  height: 1.25rem; /* Size of the thumb */
+  border-radius: 50%; /* Make it round */
+  background: #EF4444; /* Hotstar red for the thumb */
+  border: 2px solid #ffffff; /* White border for emphasis */
+  cursor: grab;
+  margin-top: -0.5rem; /* Adjust thumb vertical position to center on track */
+  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.5); /* Optional shadow */
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 0.25rem; /* Match the thumb height */
+  background: #6B7280; /* Gray for the un-progressed part */
+  border-radius: 9999px;
+}
+
+/* For Firefox */
+input[type="range"]::-moz-range-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #EF4444;
+  border: 2px solid #ffffff;
+  cursor: grab;
+  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.5);
+}
+
+input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 0.25rem;
+  background: #6B7280;
+  border-radius: 9999px;
+}
+
+/* For IE */
+input[type="range"]::-ms-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #EF4444;
+  border: 2px solid #ffffff;
+  cursor: grab;
+  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.5);
+}
+
+input[type="range"]::-ms-track {
+  width: 100%;
+  height: 0.25rem;
+  background: #6B7280;
+  border-radius: 9999px;
+  color: transparent; /* Hide the default track color */
+}
+input[type="range"]::-ms-fill-lower {
+    background: #EF4444; /* Progressed part for IE */
+    border-radius: 9999px;
+}
+input[type="range"]::-ms-fill-upper {
+    background: #6B7280; /* Unprogressed part for IE */
+    border-radius: 9999px;
+}
+
+/* Vertical volume slider adjustment */
+/* You'll need specific styles for vertical range input if you implement it vertically */
+/* For now, the example keeps it horizontal in the pop-up */
+
+/* Custom CSS to force consistent range input styling */
+
+/* Define the two colors we want to use (Light Blue for filled, Dark Blue for empty) */
+:root {
+  --blue-filled: #22D3EE;  /* Light Blue/Cyan */
+  --blue-empty: #2563EB;   /* Dark Blue */
+}
+
+/* Global class for the custom progress bar look */
+.range-custom-blue {
+    /* Use the CSS variable to control the coloring in modern browsers */
+    --current-progress: calc(var(--value, 0) * 100%);
+    background: linear-gradient(to right, var(--blue-filled) var(--current-progress), var(--blue-empty) var(--current-progress));
+    height: 4px;
+    border-radius: 9999px; 
+}
+
+/* 1. WebKit (Chrome, Safari, newer Edge) Track Styling */
+.range-custom-blue::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, var(--blue-filled) var(--current-progress), var(--blue-empty) var(--current-progress));
+    height: 4px;
+    border-radius: 9999px; 
+}
+
+/* 2. Mozilla (Firefox) Track Styling */
+.range-custom-blue::-moz-range-track {
+    background: var(--blue-empty);
+    height: 4px;
+    border-radius: 9999px;
+}
+
+/* 3. Mozilla (Firefox) Filled Progress Styling (Fix) */
+.range-custom-blue::-moz-range-progress {
+    background: var(--blue-filled);
+    height: 4px;
+    border-radius: 9999px;
+}
+
+/* OPTIONAL: Styling the draggable Thumb/Handle (Making it a white circle with a blue border) */
+.range-custom-blue::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    background: white; 
+    border: 2px solid var(--blue-filled);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-top: -5px; /* Adjust vertical positioning relative to the 4px track */
+}
+
+.range-custom-blue::-moz-range-thumb {
+    background: white; 
+    border: 2px solid var(--blue-filled);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
