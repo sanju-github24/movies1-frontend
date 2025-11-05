@@ -4,7 +4,16 @@ import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
-import { Loader2, Star, User, Download } from "lucide-react";
+import { Loader2, Star, User, Download, ChevronDown, ChevronUp } from "lucide-react";
+// NOTE: Make sure to install hls.js: npm install hls.js
+import Hls from "hls.js"; 
+// 🔑 CORRECT IMPORT: The component should be imported from its dedicated file!
+import VideoPlayer from "./VideoPlayer"; 
+
+// =========================================================
+// 🎬 WatchHtmlPage Component
+// The main page component that manages data fetching and server selection.
+// =========================================================
 
 const WatchHtmlPage = () => {
   const { slug } = useParams();
@@ -17,8 +26,12 @@ const WatchHtmlPage = () => {
   const [episodes, setEpisodes] = useState([]);
   const [servers, setServers] = useState([]);
   const [activeSrc, setActiveSrc] = useState(null);
+  const [activeEpisode, setActiveEpisode] = useState(null); // 🔑 Tracks the current episode playing
   const [downloadUrl, setDownloadUrl] = useState(""); // URL for the MAIN download button
   const [showEpisodes, setShowEpisodes] = useState(false);
+  const [playerKey, setPlayerKey] = useState(0); // 🔑 Forces VideoPlayer re-render
+
+  
 
   // 🔹 Helper function to fetch TMDB data using the **Supabase Slug** as the search term
   const fetchTmdbMetadata = useCallback(async (searchTerm) => {
@@ -35,6 +48,37 @@ const WatchHtmlPage = () => {
     }
     return null;
   }, [backendUrl]);
+  
+  // 🔑 HANDLER: Selects an episode and updates the player source
+  const handleEpisodeSelect = (episode, allEpisodes = episodes) => {
+    // 🚨 FIX FOR TypeError: Cannot read properties of undefined (reading 'toString')
+    // Ensure episode.season is a number, defaulting to 1 if missing.
+    const seasonNumber = (episode?.season && !isNaN(Number(episode.season))) ? Number(episode.season) : 1;
+      
+    // Use the validated seasonNumber for string construction
+    const episodeTitle = `S${seasonNumber.toString().padStart(2, '0')}E${allEpisodes.indexOf(episode) + 1} - ${episode.title || 'Untitled'}`;
+    
+    let newActiveSrc = null;
+
+    if (episode.direct_url) {
+        // Direct URL (likely HLS/MP4 link)
+        newActiveSrc = { name: episodeTitle, type: "video", src: episode.direct_url, isEpisode: true };
+    } else if (episode.html) {
+        // Embed HTML fallback
+        newActiveSrc = { name: episodeTitle, type: "html", src: episode.html, isEpisode: true };
+    } else {
+        // No source, set to null
+        newActiveSrc = null;
+    }
+    
+    // Update state
+    setActiveSrc(newActiveSrc);
+    setActiveEpisode(episode);
+    
+    // Force VideoPlayer to re-render to load the new source
+    setPlayerKey(prev => prev + 1); 
+  };
+
 
   // 🔹 Fetch Movie + Episodes
   useEffect(() => {
@@ -78,15 +122,13 @@ const WatchHtmlPage = () => {
         });
       }
 
-      // 4️⃣ Prepare servers and direct URL
+      // 4️⃣ Prepare servers for the **MAIN MOVIE/ENTRY**
       const availableServers = [];
       let freshDirectUrl = null;
 
-      // 🚨 ORDER SERVER LOGIC HERE 🚨
-
       // Server 1 (HLS)
       if (watchData.video_url) {
-        availableServers.push({ name: "Server 1 (HLS)", type: "video", src: watchData.video_url });
+        availableServers.push({ name: "Server 1 (Custom HLS)", type: "video", src: watchData.video_url, isMain: true });
       }
 
       // Server 2 (Direct URL - requires backend fetch)
@@ -95,7 +137,7 @@ const WatchHtmlPage = () => {
           const res = await axios.get(`${backendUrl}/api/videos/${watchData.direct_url}/download`);
           if (res.data?.directDownloadUrl) {
             freshDirectUrl = res.data.directDownloadUrl;
-            availableServers.push({ name: "Server 2 (Direct)", type: "video", src: freshDirectUrl });
+            availableServers.push({ name: "Server 2 (Direct/HLS)", type: "video", src: freshDirectUrl, isMain: true });
           }
         } catch (err) {
           console.error("❌ Failed to fetch direct video URL:", err);
@@ -104,35 +146,49 @@ const WatchHtmlPage = () => {
 
       // Server 3 (Embed - html_code)
       if (watchData.html_code) {
-        availableServers.push({ name: "Server 3 (Embed S3)", type: "html", src: watchData.html_code });
+        availableServers.push({ name: "Server 3 (Embed S3)", type: "html", src: watchData.html_code, isMain: true });
       }
       
       // Server 4 (Embed - html_code2)
       if (watchData.html_code2) {
-        availableServers.push({ name: "Server 4 (Embed S4)", type: "html", src: watchData.html_code2 });
+        availableServers.push({ name: "Server 4 (Embed S4)", type: "html", src: watchData.html_code2, isMain: true });
       }
+      
+      const parsedEpisodes = Array.isArray(watchData.episodes) ? watchData.episodes : [];
 
 
       if (isMounted) {
           setServers(availableServers);
-          // Set the first available server as active
-          if (availableServers.length > 0) setActiveSrc(availableServers[0]); 
+          // 🔑 Initial active source logic
+          if (availableServers.length > 0) {
+            setActiveSrc(availableServers[0]); 
+            setActiveEpisode(null);
+          } else if (parsedEpisodes.length > 0) {
+              // Call the handler to correctly set the initial episode
+              handleEpisodeSelect(parsedEpisodes[0], parsedEpisodes); 
+          }
+
           setDownloadUrl(freshDirectUrl || ""); 
-          setEpisodes(Array.isArray(watchData.episodes) ? watchData.episodes : []);
+          setEpisodes(parsedEpisodes);
           setLoading(false);
       }
     };
 
     fetchData();
+    // Reset player key to ensure re-render on slug change
+    setPlayerKey(prev => prev + 1); 
+    
     return () => {
       isMounted = false;
     };
   }, [slug, backendUrl, fetchTmdbMetadata]);
+  
+
 
   // 🔹 SEO Meta Updates
   useEffect(() => {
     if (movieMeta?.title) {
-      document.title = `Watch ${movieMeta.slug} | MovieStream`;
+      document.title = `Watch ${movieMeta.title} | MovieStream`;
       let meta = document.querySelector("meta[name='description']");
       if (!meta) {
         meta = document.createElement("meta");
@@ -142,6 +198,12 @@ const WatchHtmlPage = () => {
       meta.content = `Watch ${movieMeta.title} online in HD. Stream or download easily.`;
     }
   }, [movieMeta]);
+  
+  // 🔑 Back Navigation Handler
+  const handleBackToPreviousPage = useCallback(() => {
+      navigate(-1);
+  }, [navigate]);
+
 
   if (loading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-blue-400" /></div>;
 
@@ -152,6 +214,40 @@ const WatchHtmlPage = () => {
       <Link to="/" className="text-blue-400 hover:text-blue-300 mt-4 block">Go to Homepage</Link>
     </div>
   );
+  
+  // Combine servers and episodes for display logic. 
+  const displayServers = servers.map(s => ({ 
+      ...s, 
+      display: s.name, 
+      isEpisode: false 
+  }));
+  
+  // Create a pseudo-server list from episodes for seamless selection
+  const episodeServers = episodes.map((ep, index) => {
+      // 🚨 Ensure season is available here too, for the display title
+      const seasonNumber = (ep?.season && !isNaN(Number(ep.season))) ? Number(ep.season) : 1; 
+      const epTitle = `S${seasonNumber.toString().padStart(2, '0')}E${index + 1} - ${ep.title || 'Stream'}`;
+      
+      // Only include if a source exists
+      if (ep.direct_url || ep.html) {
+          return {
+              name: epTitle, 
+              type: ep.direct_url ? "video" : "html", 
+              src: ep.direct_url || ep.html,
+              isEpisode: true,
+              episode: ep, // Pass the full episode object
+              index: index
+          };
+      }
+      return null;
+  }).filter(Boolean); // Filter out nulls (episodes with no source)
+  
+  const allPlayableSources = [...displayServers, ...episodeServers];
+  
+  // Determine if the current source is an episode and get its index for the button styling
+  const currentEpisodeIndex = activeSrc?.isEpisode ? 
+    episodeServers.findIndex(es => es.src === activeSrc.src) : -1;
+
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -227,18 +323,27 @@ const WatchHtmlPage = () => {
               )}
 
 
-              {/* 🔑 FIX: Main Download Button (Removed target="_blank") */}
-              {downloadUrl && (
+              {/* Main Download Button */}
+              {/* {downloadUrl && episodes.length === 0 && (
                 <a
-                  href={downloadUrl} // The downloadUrl already points to the signed URL
-                  download={`${movieMeta.slug || "movie"}.mp4`} // ⬅️ The key attribute
-                  // target="_blank" removed
-                  // rel="noopener noreferrer" removed
+                  href={downloadUrl} 
+                  download={`${movieMeta.slug || "movie"}.mp4`} 
                   className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-xl font-bold transition duration-300 transform hover:scale-105"
                 >
                   <Download className="w-5 h-5" /> Download Movie
                 </a>
-              )}
+              )} */}
+              
+              {/* Episode Download Button */}
+              {/* {activeSrc?.isEpisode && activeEpisode?.direct_url && (
+                <a
+                  href={activeEpisode.direct_url} 
+                  download={`${movieMeta.slug}_${activeSrc.name}.mp4`} 
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-xl font-bold transition duration-300 transform hover:scale-105"
+                >
+                  <Download className="w-5 h-5" /> Download {activeSrc.name}
+                </a>
+              )} */}
             </div>
           </div>
         </div>
@@ -247,14 +352,6 @@ const WatchHtmlPage = () => {
       {/* Main Content Area */}
       <div className="max-w-6xl mx-auto px-4 py-8 pb-24">
         
-        {/* Back Button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-8 w-full sm:w-auto px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition text-sm sm:text-base border border-gray-700"
-        >
-          ⬅ Back to Previous Page
-        </button>
-
         {/* Cast Section */}
         {tmdbMeta?.cast?.length > 0 && (
             <>
@@ -280,111 +377,103 @@ const WatchHtmlPage = () => {
             </div>
             </>
         )}
+        
+        {/* --- Player Area Start --- */}
+        <h2 className="text-2xl font-bold mt-8 mb-4 text-blue-400">
+            {episodes.length > 0 && activeSrc?.isEpisode ? 
+                `Now Playing: ${activeSrc.name}` : 
+                `Select Source for: ${movieMeta?.slug || 'Movie'}`
+            }
+        </h2>
 
-
-        {/* Server Buttons */}
-        {servers.length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold mb-4 text-blue-400">Select Server</h2>
+        {/* Server Buttons (Combined) */}
+        {allPlayableSources.length > 0 && (
+          <div className="mt-4">
             <div className="flex flex-wrap gap-3 mb-5 p-3 bg-gray-800 rounded-lg shadow-inner">
-                {servers.map((server, index) => (
+                {allPlayableSources.map((source, index) => (
                 <button
                     key={index}
-                    onClick={() => setActiveSrc(server)}
+                    // Handle episode click vs regular server click
+                    onClick={() => source.isEpisode ? handleEpisodeSelect(source.episode) : setActiveSrc(source)}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                    activeSrc?.src === server.src
+                    activeSrc?.src === source.src
                         ? "bg-blue-600 text-white shadow-md shadow-blue-500/50"
                         : "bg-gray-700 hover:bg-gray-600 text-gray-300"
                     }`}
                 >
-                    {server.name}
+                    {source.name}
                 </button>
                 ))}
             </div>
           </div>
         )}
 
-        {/* Player */}
+        {/* Player Rendering */}
         {activeSrc ? (
-          <div
-            className="w-full max-w-full mx-auto rounded-xl overflow-hidden shadow-2xl bg-black relative border-4 border-gray-800"
+          <div 
+            className="w-full mx-auto" 
             style={{ aspectRatio: "16/9" }}
           >
             {activeSrc.type === "video" ? (
-              <iframe
-                src={activeSrc.src}
-                title={`Video Player for ${movieMeta.slug}`}
-                loading="eager"
-                className="absolute top-0 left-0 w-full h-full"
-                style={{ border: 0 }}
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
+              // 🔑 Added playerKey to force re-render when source or episode changes
+              <VideoPlayer 
+                key={playerKey} 
+                src={activeSrc.src} 
+                title={activeSrc.name || movieMeta?.title || "Streaming Content"} 
+                onBackClick={handleBackToPreviousPage} 
+              /> 
             ) : (
+              // Fallback to div with dangerouslySetInnerHTML for "html" type (Embeds)
               <div
-                className="absolute top-0 left-0 w-full h-full"
+                className="w-full h-full rounded-xl overflow-hidden shadow-2xl bg-black relative border-4 border-gray-800"
                 dangerouslySetInnerHTML={{ __html: activeSrc.src }}
               />
             )}
-           
           </div>
-        ) : episodes.length === 0 && servers.length > 0 ? (
-          <p className="text-center text-gray-400 mt-4 p-4 bg-gray-800 rounded-lg">⚠️ Please select a server to watch the content.</p>
-        ) : null}
+        ) : (
+          <p className="text-center text-gray-400 mt-4 p-4 bg-gray-800 rounded-lg">⚠️ No playable sources available for this content.</p>
+        )}
+        {/* --- Player Area End --- */}
 
-        {/* Episodes */}
+        {/* Episodes - Now just a collapsible list */}
         {episodes.length > 0 && (
           <div className="mt-8 bg-gray-800 p-4 rounded-xl">
             {/* Header with arrow */}
             <button
               onClick={() => setShowEpisodes((prev) => !prev)}
-              className="flex items-center gap-2 text-xl font-semibold text-yellow-400 focus:outline-none w-full pb-2"
+              className="flex items-center gap-2 text-xl font-semibold text-yellow-400 focus:outline-none w-full pb-2 border-b border-gray-700/50"
             >
-              📺 Episodes ({episodes.length})
+              📺 Full Episode List
               <span
-                className={`ml-auto inline-block transition-transform duration-200 ${
-                  showEpisodes ? "rotate-180" : "rotate-0"
-                }`}
+                className={`ml-auto inline-block transition-transform duration-200`}
               >
-                ▼
+                {showEpisodes ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
               </span>
             </button>
 
-            {/* Episode list (only show if expanded) */}
+            {/* Episode List */}
             {showEpisodes && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4 max-h-64 overflow-y-auto custom-scroll">
-                {episodes.map((ep, index) => {
-                    const epTitle = ep.title || `Episode ${index + 1}`;
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 max-h-96 overflow-y-auto pr-2 custom-scroll">
+                {episodes.map((episode, index) => {
+                    // 🚨 Ensure season is available here for the title rendering, defaulting to 1
+                    const seasonNumber = (episode?.season && !isNaN(Number(episode.season))) ? Number(episode.season) : 1; 
+                    const titleText = `S${seasonNumber.toString().padStart(2, '0')} E${index + 1}`;
+                    const fullTitle = episode.title ? `${titleText}: ${episode.title}` : titleText;
+                    const isCurrent = activeEpisode === episode;
+                    
                     return (
-                        <div key={index} className="flex gap-2 p-1 bg-gray-700 rounded-lg border border-gray-600">
-                            {/* Play Button */}
-                            <button
-                                onClick={() =>
-                                    setActiveSrc(
-                                        ep.direct_url
-                                        ? { name: epTitle, type: "video", src: ep.direct_url }
-                                        : { name: epTitle, type: "html", src: ep.html }
-                                    )
-                                }
-                                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm font-medium text-gray-200 truncate"
-                            >
-                                {epTitle}
-                            </button>
-
-                            {/* 🔑 FIX: Download Button for Episode (Removed target="_blank") */}
-                            {ep.direct_url && (
-                                <a
-                                    href={ep.direct_url}
-                                    download={`${movieMeta.slug}-${epTitle}.mp4`} // ⬅️ The key attribute
-                                    // target="_blank" removed
-                                    // rel="noopener noreferrer" removed
-                                    title={`Download ${epTitle}`}
-                                    className="p-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition flex-shrink-0"
-                                >
-                                    <Download className="w-5 h-5" />
-                                </a>
-                            )}
-                        </div>
+                        <button 
+                            key={index} 
+                            onClick={() => handleEpisodeSelect(episode)}
+                            disabled={!episode.direct_url && !episode.html}
+                            className={`p-3 rounded-lg text-center text-xs sm:text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 
+                                ${isCurrent 
+                                    ? "bg-red-600 text-white shadow-lg shadow-red-500/50 scale-105" 
+                                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                                }`}
+                        >
+                            {fullTitle}
+                        </button>
                     );
                 })}
               </div>
@@ -396,4 +485,4 @@ const WatchHtmlPage = () => {
   );
 };
 
-export default WatchHtmlPage; 
+export default WatchHtmlPage;
