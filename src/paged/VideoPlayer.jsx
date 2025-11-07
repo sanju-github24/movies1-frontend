@@ -12,16 +12,12 @@ const formatTime = (seconds) => {
     return timeString.startsWith('00:') ? timeString.substring(3) : timeString;
 };
 
-// --- PERSISTENCE UTILITY FUNCTIONS REMOVED/DISABLED ---
-// Get last stored playback time for a given video source (returns 0 if not found)
+// --- PERSISTENCE UTILITY FUNCTIONS (DISABLED) ---
 const getLastPlaybackTime = (src) => {
-    // Persistence disabled, always return 0
     return 0; 
 };
 
-// Set the current playback time for a given video source
 const setLastPlaybackTime = (src, time) => {
-    // Persistence disabled, no-op
     return;
 };
 
@@ -44,17 +40,17 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
     const [showOverlay, setShowOverlay] = useState(false); 
     const [showControls, setShowControls] = useState(true); 
     const [showVolumeSlider, setShowVolumeSlider] = useState(false); 
+    const [isHlsSource, setIsHlsSource] = useState(false); // 🔑 NEW: Track if the current source is HLS
 
     // --- HLS Track State ---
     const [audioTracks, setAudioTracks] = useState([]);
-    const [currentAudioTrackId, setCurrentAudioTrackId] = useState(-1); // -1 is typically 'Auto' or default
+    const [currentAudioTrackId, setCurrentAudioTrackId] = useState(-1);
     const [qualityLevels, setQualityLevels] = useState([]);
-    const [currentQualityLevel, setCurrentQualityLevel] = useState(-1); // -1 is 'Auto'
+    const [currentQualityLevel, setCurrentQualityLevel] = useState(-1);
 
     // 🔑 STATES for right-side panels
     const [showQualityPanel, setShowQualityPanel] = useState(false);
     const [showAudioPanel, setShowAudioPanel] = useState(false);
-    // Subtitles are not fully implemented here but typically share the audio panel
 
     // --- Player Actions ---
     const togglePlayPause = () => {
@@ -64,6 +60,7 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
         if (isPlaying) {
             videoEl.pause();
         } else {
+            // Check for potential autoplay issues when initiating play
             videoEl.play().catch(e => console.error("Play failed:", e));
         }
         // Central Overlay Logic
@@ -76,35 +73,30 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
         const videoEl = videoRef.current;
         if (!videoEl) return;
         
-        // If the slider is hidden, toggle mute and show the slider momentarily
+        // If the slider is hidden, open the slider (default action for the volume button)
         if (!showVolumeSlider) {
-             // If currently muted, unmute (but don't open the slider)
-            if (isMuted) {
+             // If currently muted, unmute on first click, then open slider on second click
+             if (isMuted) {
                 videoEl.muted = false;
                 setIsMuted(false);
                 setVolume(volume || 1); 
-            } else {
-                // If not muted, open the slider (which is the default action for the volume button in this design)
-                setShowVolumeSlider(true);
             }
+             setShowVolumeSlider(true);
         } else {
              // If the slider is open, toggle mute
              videoEl.muted = !isMuted;
              setIsMuted(!isMuted);
-             // Ensure the slider value reflects the muted state immediately
+             // Set volume to 0 if muted, or back to previous if unmuted
              setVolume(isMuted ? (videoEl.volume || 1) : 0);
              setShowVolumeSlider(false); // Close the slider after clicking the icon
         }
-        
     };
     
-    // Handler to toggle Mute when clicking the area of the slider, but not the range input
+    // Handler to close the volume slider when clicking the area outside the range input
     const handleVolumeSliderClick = (e) => {
         e.stopPropagation();
-        // If the click is on the range input itself, do nothing, allowing range input to work
-        if (e.target.type !== 'range') {
-             // If clicking the div area, we can choose to close the slider or toggle mute
-             // Let's make it close the slider on click outside the input
+        // Check if the click target is the container div, not the range input
+        if (e.currentTarget === e.target) {
              setShowVolumeSlider(false); 
         }
     }
@@ -131,19 +123,15 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
         const seekTime = parseFloat(e.target.value);
         videoEl.currentTime = seekTime;
         setCurrentTime(seekTime);
-        // Persistence disabled
-        // setLastPlaybackTime(src, seekTime); 
     };
 
-    const seekRelative = (seconds) => {
+    const seekRelative = useCallback((seconds) => {
         const videoEl = videoRef.current;
         if (videoEl) {
             videoEl.currentTime = Math.max(0, Math.min(duration, videoEl.currentTime + seconds));
             setCurrentTime(videoEl.currentTime);
-            // Persistence disabled
-            // setLastPlaybackTime(src, videoEl.currentTime); 
         }
-    };
+    }, [duration]);
 
     const toggleFullScreen = useCallback(() => {
         const container = playerContainerRef.current;
@@ -197,22 +185,17 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
     }, [isPlaying, showQualityPanel, showAudioPanel, showVolumeSlider]);
 
     useEffect(() => {
-        // Initial call to show controls briefly
         showControlsTemporarily();
 
         const handleClickOutside = (event) => {
-            // Check if the click is outside the player container
             if (playerContainerRef.current && !playerContainerRef.current.contains(event.target)) {
                 setShowQualityPanel(false);
                 setShowAudioPanel(false);
-                // setShowVolumeSlider(false); // Let volume slider handle its own close on icon click
             }
         };
         
-        // --- Fullscreen change listener for controls logic ---
         const handleFullscreenChange = () => {
             setIsFullScreen(!!document.fullscreenElement);
-            // When exiting fullscreen, ensure controls are visible
             if (!document.fullscreenElement) {
                 setShowControls(true);
             }
@@ -220,10 +203,8 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
 
         const playerContainer = playerContainerRef.current;
         if (playerContainer) {
-            // Add mouse move listener
             playerContainer.addEventListener('mousemove', showControlsTemporarily);
             
-            // Hide controls on mouse leave unless a panel/slider is open
             const handleMouseLeave = () => {
                  if (isPlaying && !showQualityPanel && !showAudioPanel && !showVolumeSlider) {
                      setShowControls(false);
@@ -233,7 +214,6 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
             
             document.addEventListener('mousedown', handleClickOutside);
             document.addEventListener('fullscreenchange', handleFullscreenChange);
-
         }
 
         return () => {
@@ -242,7 +222,6 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
             }
             if (playerContainer) {
                 playerContainer.removeEventListener('mousemove', showControlsTemporarily);
-                // Need to remove the named function reference
                 const handleMouseLeave = () => {
                     if (isPlaying && !showQualityPanel && !showAudioPanel && !showVolumeSlider) {
                         setShowControls(false);
@@ -292,21 +271,60 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
     }, [togglePlayPause, seekRelative, showControlsTemporarily]); 
 
 
-    // --- 📹 Core HLS and Video Setup (Persistence Disabled) ---
+    // --- 📹 Core HLS and Direct Video Setup ---
     useEffect(() => {
         const videoEl = videoRef.current;
-        if (!videoEl) return;
+        if (!videoEl || !src) return;
 
+        // Cleanup existing player instance
         if (hlsInstanceRef.current) {
             hlsInstanceRef.current.destroy();
+            hlsInstanceRef.current = null;
         }
         
-        setIsLoading(true);
+        // --- HTML Video Element Event Handlers ---
+        const handleTimeUpdate = () => {
+            const time = videoEl.currentTime;
+            setCurrentTime(time);
+            // setLastPlaybackTime(src, time); // Disabled persistence
+        };
+        const handleLoadedMetadata = () => {
+            setDuration(videoEl.duration);
+            setIsLoading(false);
+        };
+        const handlePlay = () => setIsPlaying(true);
+        const handlePause = () => setIsPlaying(false);
+        const handleWaiting = () => setIsLoading(true);
+        const handlePlaying = () => setIsLoading(false);
+        const handleVolumeChangeUpdate = () => {
+            setVolume(videoEl.volume);
+            setIsMuted(videoEl.muted);
+        };
+        const handleError = (e) => {
+             console.error("Video element error:", e);
+             setIsLoading(false);
+        };
 
-        // 1. 🔍 RETRIEVE PERSISTENCE DATA - DISABLED
+        videoEl.addEventListener('timeupdate', handleTimeUpdate);
+        videoEl.addEventListener('loadedmetadata', handleLoadedMetadata);
+        videoEl.addEventListener('play', handlePlay);
+        videoEl.addEventListener('pause', handlePause);
+        videoEl.addEventListener('waiting', handleWaiting);
+        videoEl.addEventListener('playing', handlePlaying);
+        videoEl.addEventListener('volumechange', handleVolumeChangeUpdate);
+        videoEl.addEventListener('error', handleError);
+
+
+        // --- Source Type Detection ---
+        // 🔑 Crucial check to support .mkv and other direct files
+        const isHls = src.toLowerCase().includes('.m3u8');
+        setIsHlsSource(isHls);
+        
+        setIsLoading(true);
         let savedTime = getLastPlaybackTime(src); // Always returns 0
 
-        if (Hls.isSupported()) {
+        if (isHls && Hls.isSupported()) {
+            // --- HLS Stream Setup ---
             const hls = new Hls();
             hlsInstanceRef.current = hls;
 
@@ -315,16 +333,15 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
                 const levels = data.levels.map((level, index) => ({
                     id: index,
                     bitrate: Math.round(level.bitrate / 1000),
-                    resolution: `${level.width}x${level.height}`
+                    // Use height for label if available, fallback to full resolution string
+                    resolution: level.height ? `${level.height}p` : `${level.width}x${level.height}`, 
+                    fullResolution: `${level.width}x${level.height}`
                 }));
                 setQualityLevels(levels);
                 setAudioTracks(hls.audioTracks || []);
                 
-                // 2. ⚙️ APPLY SAVED QUALITY LEVEL (Default to Auto)
-                setCurrentQualityLevel(-1); 
+                setCurrentQualityLevel(-1); // Auto
                 hls.currentLevel = -1; 
-                
-                // 3. 🗣️ APPLY SAVED AUDIO TRACK (Default to HLS selection)
                 setCurrentAudioTrackId(hls.audioTrack); 
                 
                 setIsLoading(false);
@@ -338,14 +355,11 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
             hls.on(Hls.Events.MEDIA_ATTACHED, () => {
                 hls.loadSource(src);
                 
-                // 4. ⏯️ APPLY SAVED PLAYBACK TIME (Will only be 0)
                 videoEl.addEventListener('loadeddata', () => {
-                    if (savedTime > 0 && savedTime < videoEl.duration - 5) { // savedTime is 0 here
+                    if (savedTime > 0 && savedTime < videoEl.duration - 5) {
                         videoEl.currentTime = savedTime;
                         setCurrentTime(savedTime);
-                        console.log(`Resuming playback at: ${formatTime(savedTime)}`);
                     }
-                    // Attempt to play after setting time
                     videoEl.play().catch(() => console.log("Autoplay failed."));
                 }, { once: true }); 
 
@@ -359,53 +373,41 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
                 }
             });
 
-        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        } else if (isHls && videoEl.canPlayType('application/vnd.apple.mpegurl')) {
             // Native HLS Fallback for Safari/iOS
             videoEl.src = src;
-            videoEl.addEventListener('loadedmetadata', () => setDuration(videoEl.duration));
-             // 5. ⏯️ APPLY SAVED PLAYBACK TIME (Native Fallback - Will only be 0)
              videoEl.addEventListener('loadeddata', () => {
-                 if (savedTime > 0 && savedTime < videoEl.duration - 5) { // savedTime is 0 here
+                 if (savedTime > 0 && savedTime < videoEl.duration - 5) {
                      videoEl.currentTime = savedTime;
                      setCurrentTime(savedTime);
-                     console.log(`Resuming playback at: ${formatTime(savedTime)} (Native)`);
                  }
                  videoEl.play();
              }, { once: true });
-        } else {
-            console.error("HLS playback is not supported on this browser.");
-        }
         
-        // --- HTML Video Element Event Handlers ---
-        const handleTimeUpdate = () => {
-            const time = videoEl.currentTime;
-            setCurrentTime(time);
-        };
-        const handleLoadedMetadata = () => setDuration(videoEl.duration);
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
-        const handleWaiting = () => setIsLoading(true);
-        const handlePlaying = () => setIsLoading(false);
-        const handleVolumeChangeUpdate = () => {
-            setVolume(videoEl.volume);
-            setIsMuted(videoEl.muted);
-        };
+        } else {
+             // --- Direct/Native Video Playback (For .mp4, .mkv, etc.) ---
+             // 🔑 This is the logic that supports the direct .mkv link you provided.
+             console.log("Attempting native playback for direct video source:", src);
+             // Clear HLS state since we are using native player
+             setQualityLevels([]);
+             setAudioTracks([]);
+             setCurrentQualityLevel(-1);
+             setCurrentAudioTrackId(-1);
 
-        videoEl.addEventListener('timeupdate', handleTimeUpdate);
-        videoEl.addEventListener('loadedmetadata', handleLoadedMetadata);
-        videoEl.addEventListener('play', handlePlay);
-        videoEl.addEventListener('pause', handlePause);
-        videoEl.addEventListener('waiting', handleWaiting);
-        videoEl.addEventListener('playing', handlePlaying);
-        videoEl.addEventListener('volumechange', handleVolumeChangeUpdate);
+             videoEl.src = src;
+             videoEl.load();
+
+             videoEl.addEventListener('loadeddata', () => {
+                 if (savedTime > 0 && savedTime < videoEl.duration - 5) {
+                     videoEl.currentTime = savedTime;
+                     setCurrentTime(savedTime);
+                 }
+                 videoEl.play().catch(() => console.log("Autoplay failed on native source."));
+             }, { once: true });
+        }
 
 
         return () => {
-            // 6. 💾 PERSISTENCE: FINAL SAVE ON UNMOUNT/RELOAD - DISABLED
-            // if (videoRef.current) {
-            //     setLastPlaybackTime(src, videoRef.current.currentTime);
-            // }
-
             if (hlsInstanceRef.current) hlsInstanceRef.current.destroy();
             videoEl.removeEventListener('timeupdate', handleTimeUpdate);
             videoEl.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -414,47 +416,48 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick }) => { 
             videoEl.removeEventListener('waiting', handleWaiting);
             videoEl.removeEventListener('playing', handlePlaying);
             videoEl.removeEventListener('volumechange', handleVolumeChangeUpdate);
+            videoEl.removeEventListener('error', handleError);
+            // Ensure src is cleared to stop playback completely
+            videoEl.src = '';
+            videoEl.load();
         };
 
-    }, [src]); // Re-run effect when 'src' changes (server switches)
+    }, [src]);
 
     // --- Helper Functions to get current text labels for UI ---
     const getCurrentQualityLabel = () => {
+        if (!isHlsSource || qualityLevels.length === 0) return "Default"; // Show default for native playback
         if (currentQualityLevel === -1) return "Auto";
         const level = qualityLevels.find(l => l.id === currentQualityLevel);
-        // Find resolution height
-        return level ? `${level.resolution.split('x')[1]}p` : "Custom";
+        return level ? level.resolution : "Custom";
     };
 
     const getCurrentAudioLabel = () => {
-        if (currentAudioTrackId === -1) return "Default"; // Assuming default for -1 or if not found
+        if (!isHlsSource || audioTracks.length === 0) return "Default"; // Show default for native playback
+        if (currentAudioTrackId === -1) return "Default"; 
         const track = audioTracks.find(t => t.id === currentAudioTrackId);
-        // Use name, then lang, then fallback
         return track ? (track.name || track.lang || `Track ${track.id}`) : "Unknown";
     };
 
-    // --- Main Render ---
-    // 1. Updated Play/Pause Icon for mobile responsiveness
+
+    // --- Render Components ---
     const PlayPauseIcon = isPlaying ? (
         <Pause className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
     ) : (
         <Play className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
     );
 
-    // 2. Updated Mute/Volume Icon for mobile responsiveness
     const MuteVolumeIcon = isMuted || volume === 0 ? (
         <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
     ) : (
         <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
     );
 
-    // 3. Updated Fullscreen Icon for mobile responsiveness
     const FullscreenIcon = isFullScreen ? (
         <Minimize className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
     ) : (
         <Maximize className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
     );
-
 
     return (
         <div 
