@@ -21,7 +21,6 @@ const VideoPlayerPage = () => {
   const [videoTitle, setVideoTitle] = useState(null);
 
   // Read navigation state (if any)
-  // WatchHtmlPage uses: navigate('/player', { state: { src: activeSrc, movieMeta, tmdbMeta } })
   const passedState = location.state || {};
   const passedSrc = passedState.src || null;           // could be object or string
   const passedMovieMeta = passedState.movieMeta || null;
@@ -45,14 +44,36 @@ const VideoPlayerPage = () => {
     return null;
   };
 
-  // Helper: normalize DB row into preferred source sequence
+  // Helper: pick best source from an episodes array (preferring html -> video_url -> direct_url)
+  const pickFromEpisodes = (episodes) => {
+    if (!Array.isArray(episodes)) return null;
+    for (const ep of episodes) {
+      if (!ep) continue;
+      if (ep.html_code) return { src: ep.html_code, type: 'html' };
+      if (ep.video_url) return { src: ep.video_url, type: 'video' };
+      if (ep.direct_url) return { src: ep.direct_url, type: 'video' };
+    }
+    return null;
+  };
+
+  // Helper: normalize DB row into preferred source sequence (includes episodes)
   const pickSourceFromRow = (row) => {
     if (!row) return null;
-    // prefer embed fields first
+
+    // 1) episode-level sources (if present)
+    if (row.episodes) {
+      const epPick = pickFromEpisodes(row.episodes);
+      if (epPick) return epPick;
+    }
+
+    // 2) prefer embed fields on row first
     if (row.html_code) return { src: row.html_code, type: 'html' };
     if (row.html_code2) return { src: row.html_code2, type: 'html' };
+
+    // 3) row-level video/direct
     if (row.video_url) return { src: row.video_url, type: 'video' };
     if (row.direct_url) return { src: row.direct_url, type: 'video' };
+
     return null;
   };
 
@@ -64,19 +85,22 @@ const VideoPlayerPage = () => {
       setLoading(true);
       setError(null);
 
+      // Local chosen source (avoid reading/updating state mid-effect)
+      let chosen = null;
+      let chosenType = null;
+      let chosenTitle = null;
+
       // 1) Normalize passed state first (fast-path)
       const normalized = normalizePassedSrc(passedSrc);
 
-      // If normalized passedSrc is embed HTML, use it immediately
+      // If normalized passedSrc is embed HTML, choose it immediately
       if (normalized && (normalized.type === 'html' || normalized.html)) {
-        if (mounted) {
-          setFinalSource(normalized.html || normalized.src);
-          setSourceType('html');
-          setVideoTitle(normalized.title || (passedMovieMeta?.title) || slug);
-        }
+        chosen = normalized.html || normalized.src;
+        chosenType = 'html';
+        chosenTitle = normalized.title || (passedMovieMeta?.title) || slug;
       }
 
-      // 2) Optionally fetch DB row (if slug provided) to fill overlay fields and fallback
+      // 2) Fetch DB row (if slug provided) to fill overlay & fallback
       let watchData = null;
       if (slug) {
         try {
@@ -96,66 +120,68 @@ const VideoPlayerPage = () => {
         }
       }
 
-      // 3) If we don't already have an embed chosen from passed state,
-      //    try to pick from DB row (embed preferred), otherwise video sources.
-      if (!(normalized && (normalized.type === 'html' || normalized.html))) {
-        // prefer a source from passedMovieMeta (if it contains html_code/html_code2 or video_url)
+      // 3) If not already chosen from passed embed, prefer passedMovieMeta embeds / video
+      if (!chosen) {
         if (passedMovieMeta) {
           if (passedMovieMeta.html_code) {
-            if (mounted) {
-              setFinalSource(passedMovieMeta.html_code);
-              setSourceType('html');
-              setVideoTitle(passedMovieMeta.title || slug);
-            }
+            chosen = passedMovieMeta.html_code;
+            chosenType = 'html';
+            chosenTitle = passedMovieMeta.title || slug;
           } else if (passedMovieMeta.html_code2) {
-            if (mounted) {
-              setFinalSource(passedMovieMeta.html_code2);
-              setSourceType('html');
-              setVideoTitle(passedMovieMeta.title || slug);
-            }
+            chosen = passedMovieMeta.html_code2;
+            chosenType = 'html';
+            chosenTitle = passedMovieMeta.title || slug;
           } else if (passedMovieMeta.video_url) {
-            if (mounted) {
-              setFinalSource(passedMovieMeta.video_url);
-              setSourceType('video');
-              setVideoTitle(passedMovieMeta.title || slug);
-            }
-          }
-        }
-
-        // if still nothing, try watchData
-        if (!finalSource && watchData) {
-          const picked = pickSourceFromRow(watchData);
-          if (picked) {
-            if (mounted) {
-              setFinalSource(picked.src);
-              setSourceType(picked.type);
-              setVideoTitle(watchData.title || slug);
-            }
-          } else {
-            if (mounted) setError("No playable source found for this title.");
-          }
-        }
-      } else {
-        // If normalized passedSrc was video (not html) and has a src string, use it
-        if (normalized && normalized.src && normalized.type === 'video') {
-          if (mounted) {
-            setFinalSource(normalized.src);
-            setSourceType('video');
-            setVideoTitle(normalized.title || (passedMovieMeta?.title) || slug);
+            chosen = passedMovieMeta.video_url;
+            chosenType = 'video';
+            chosenTitle = passedMovieMeta.title || slug;
           }
         }
       }
 
-      // Edge case: if nothing chosen yet but passedState.src is a plain string
-      if (!finalSource && passedSrc && typeof passedSrc === 'string') {
+      // 4) If still not chosen, inspect DB row (episodes then row-level)
+      if (!chosen && watchData) {
+        const picked = pickSourceFromRow(watchData);
+        if (picked) {
+          chosen = picked.src;
+          chosenType = picked.type;
+          chosenTitle = watchData.title || slug;
+        } else {
+          // nothing playable in row
+          // set an error later if nothing else
+        }
+      }
+
+      // 5) If normalized passedSrc is a video (not html) and has a src string, prefer it (over DB row)
+      if (normalized && !chosen && normalized.src && normalized.type === 'video') {
+        chosen = normalized.src;
+        chosenType = 'video';
+        chosenTitle = normalized.title || (passedMovieMeta?.title) || slug;
+      }
+
+      // 6) Edge case: passedSrc is plain string (already covered by normalized), but keep fallback
+      if (!chosen && passedSrc && typeof passedSrc === 'string') {
+        chosen = passedSrc;
+        chosenType = 'video';
+        chosenTitle = passedMovieMeta?.title || slug;
+      }
+
+      // 7) If nothing chosen at all, set error
+      if (!chosen) {
         if (mounted) {
-          setFinalSource(passedSrc);
-          setSourceType('video');
-          setVideoTitle(passedMovieMeta?.title || slug);
+          setError("No playable source found for this title.");
+          setLoading(false);
         }
+        return;
       }
 
-      if (mounted) setLoading(false);
+      // Commit chosen source to state once
+      if (mounted) {
+        setFinalSource(chosen);
+        setSourceType(chosenType);
+        setVideoTitle(chosenTitle || (watchData?.title) || slug);
+        setLoading(false);
+      }
     };
 
     init();
@@ -175,7 +201,6 @@ const VideoPlayerPage = () => {
 
   // Helper: derive download link if direct_url provided (passed state or DB row)
   const getDownloadUrl = () => {
-    // prefer passed state
     if (passedState?.src && typeof passedState.src === 'object' && passedState.src.direct_url) {
       return passedState.src.direct_url;
     }
@@ -191,13 +216,11 @@ const VideoPlayerPage = () => {
     const fromTmdb = passedTmdbMeta || {};
     const fromRow = movieRow || {};
 
-    // prefer genres array from TMDB; fallback to comma string from DB row
     let genresArray = null;
     if (fromTmdb.genres && Array.isArray(fromTmdb.genres)) genresArray = fromTmdb.genres;
     else if (fromRow.genres && typeof fromRow.genres === 'string') genresArray = fromRow.genres.split(',').map(g => g.trim());
     else if (fromState.genres && Array.isArray(fromState.genres)) genresArray = fromState.genres;
 
-    // activeEpisode if passedSrc was an episode object
     const activeEpisode = (passedSrc && typeof passedSrc === 'object' && passedSrc.isEpisode) ? passedSrc.episode : undefined;
 
     return {
@@ -274,7 +297,7 @@ const VideoPlayerPage = () => {
             </div>
           </div>
 
-          {/* Responsive embed wrapper: preserves aspect ratio but allows embedded code to size itself */}
+          {/* Responsive embed wrapper */}
           <div className="relative w-full rounded-lg overflow-hidden bg-black border border-gray-800" style={{ paddingTop: '56.25%' }}>
             <div
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
