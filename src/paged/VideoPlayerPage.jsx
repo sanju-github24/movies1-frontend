@@ -27,20 +27,32 @@ const VideoPlayerPage = () => {
   const passedMovieMeta = passedState.movieMeta || null;
   const passedTmdbMeta = passedState.tmdbMeta || null;
 
-  // Helper: normalize passedSrc into { src, type, title, episode }
+  // Helper: normalize passedSrc into { src, type, html, title, episode }
   const normalizePassedSrc = (ps) => {
     if (!ps) return null;
     if (typeof ps === 'object') {
       return {
         src: ps.src || ps.direct_url || null,
-        type: ps.type || (ps.html ? 'html' : 'video'),
+        type: ps.type || (ps.html ? 'html' : (ps.src && String(ps.src).toLowerCase().includes('.m3u8') ? 'video' : 'video')),
+        html: ps.html || ps.embed || null,
         title: ps.name || ps.title || null,
         episode: ps.episode || null
       };
     }
     if (typeof ps === 'string') {
-      return { src: ps, type: 'video', title: null, episode: null };
+      return { src: ps, type: 'video', html: null, title: null, episode: null };
     }
+    return null;
+  };
+
+  // Helper: normalize DB row into preferred source sequence
+  const pickSourceFromRow = (row) => {
+    if (!row) return null;
+    // prefer embed fields first
+    if (row.html_code) return { src: row.html_code, type: 'html' };
+    if (row.html_code2) return { src: row.html_code2, type: 'html' };
+    if (row.video_url) return { src: row.video_url, type: 'video' };
+    if (row.direct_url) return { src: row.direct_url, type: 'video' };
     return null;
   };
 
@@ -52,23 +64,25 @@ const VideoPlayerPage = () => {
       setLoading(true);
       setError(null);
 
-      // 1) Prefer passed state source (fast-path)
+      // 1) Normalize passed state first (fast-path)
       const normalized = normalizePassedSrc(passedSrc);
-      if (normalized && normalized.src) {
+
+      // If normalized passedSrc is embed HTML, use it immediately
+      if (normalized && (normalized.type === 'html' || normalized.html)) {
         if (mounted) {
-          setFinalSource(normalized.src);
-          setSourceType(normalized.type || 'video');
+          setFinalSource(normalized.html || normalized.src);
+          setSourceType('html');
           setVideoTitle(normalized.title || (passedMovieMeta?.title) || slug);
         }
       }
 
-      // 2) Optionally fetch DB row (if slug provided) to fill overlay fields
+      // 2) Optionally fetch DB row (if slug provided) to fill overlay fields and fallback
       let watchData = null;
       if (slug) {
         try {
           const { data, error: dbErr } = await supabase
             .from('watch_html')
-            .select('slug, title, video_url, html_code, direct_url, imdb_rating, title_logo, poster, episodes')
+            .select('slug, title, video_url, html_code, html_code2, direct_url, imdb_rating, title_logo, poster, episodes, genres, overview, year, language')
             .eq('slug', slug)
             .single();
 
@@ -82,45 +96,62 @@ const VideoPlayerPage = () => {
         }
       }
 
-      // 3) If no normalized source from state, pick fallback from DB row
-      if ((!normalized || !normalized.src)) {
-        if (watchData) {
-          let fallbackUrl = null;
-          let fallbackType = null;
-
-          if (watchData.video_url) {
-            fallbackUrl = watchData.video_url;
-            fallbackType = 'video';
-          } else if (watchData.direct_url) {
-            fallbackUrl = watchData.direct_url;
-            fallbackType = 'video';
-          } else if (watchData.html_code) {
-            fallbackUrl = watchData.html_code;
-            fallbackType = 'html';
-          }
-
-          if (fallbackUrl) {
+      // 3) If we don't already have an embed chosen from passed state,
+      //    try to pick from DB row (embed preferred), otherwise video sources.
+      if (!(normalized && (normalized.type === 'html' || normalized.html))) {
+        // prefer a source from passedMovieMeta (if it contains html_code/html_code2 or video_url)
+        if (passedMovieMeta) {
+          if (passedMovieMeta.html_code) {
             if (mounted) {
-              setFinalSource(fallbackUrl);
-              setSourceType(fallbackType);
-              setVideoTitle(watchData.title || slug);
+              setFinalSource(passedMovieMeta.html_code);
+              setSourceType('html');
+              setVideoTitle(passedMovieMeta.title || slug);
             }
-          } else {
-            if (mounted) setError("No playable source found for this title.");
-          }
-        } else {
-          // No normalized source and no DB row
-          if (passedMovieMeta && passedMovieMeta.video_url) {
+          } else if (passedMovieMeta.html_code2) {
+            if (mounted) {
+              setFinalSource(passedMovieMeta.html_code2);
+              setSourceType('html');
+              setVideoTitle(passedMovieMeta.title || slug);
+            }
+          } else if (passedMovieMeta.video_url) {
             if (mounted) {
               setFinalSource(passedMovieMeta.video_url);
               setSourceType('video');
               setVideoTitle(passedMovieMeta.title || slug);
             }
-          } else {
-            if (mounted && !finalSource) {
-              setError("400 - Missing playback source. Provide a slug in the URL or pass the source via navigation state.");
-            }
           }
+        }
+
+        // if still nothing, try watchData
+        if (!finalSource && watchData) {
+          const picked = pickSourceFromRow(watchData);
+          if (picked) {
+            if (mounted) {
+              setFinalSource(picked.src);
+              setSourceType(picked.type);
+              setVideoTitle(watchData.title || slug);
+            }
+          } else {
+            if (mounted) setError("No playable source found for this title.");
+          }
+        }
+      } else {
+        // If normalized passedSrc was video (not html) and has a src string, use it
+        if (normalized && normalized.src && normalized.type === 'video') {
+          if (mounted) {
+            setFinalSource(normalized.src);
+            setSourceType('video');
+            setVideoTitle(normalized.title || (passedMovieMeta?.title) || slug);
+          }
+        }
+      }
+
+      // Edge case: if nothing chosen yet but passedState.src is a plain string
+      if (!finalSource && passedSrc && typeof passedSrc === 'string') {
+        if (mounted) {
+          setFinalSource(passedSrc);
+          setSourceType('video');
+          setVideoTitle(passedMovieMeta?.title || slug);
         }
       }
 
@@ -132,6 +163,7 @@ const VideoPlayerPage = () => {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, passedSrc, passedMovieMeta]);
 
   // Decide back target: prefer movie slug if known, otherwise go back to home
@@ -222,10 +254,51 @@ const VideoPlayerPage = () => {
     );
   }
 
+  // If sourceType is 'html' — render embed HTML directly (responsive container)
+  if (sourceType === 'html') {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center py-8 px-4">
+        <div className="w-full max-w-6xl">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-white text-xl font-semibold">{playerOverlayData.title || playerOverlayData.slug}</h1>
+              {playerOverlayData.year && <div className="text-sm text-gray-400">{playerOverlayData.year}</div>}
+            </div>
+            <div>
+              <button
+                onClick={handleBack}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+
+          {/* Responsive embed wrapper: preserves aspect ratio but allows embedded code to size itself */}
+          <div className="relative w-full rounded-lg overflow-hidden bg-black border border-gray-800" style={{ paddingTop: '56.25%' }}>
+            <div
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              // NOTE: We are trusting the embed HTML stored in DB / passed state.
+              // If you are concerned about unsafe HTML, sanitize with DOMPurify before inserting.
+              dangerouslySetInnerHTML={{ __html: finalSource }}
+            />
+          </div>
+
+          {/* Optional: show metadata/description below embed */}
+          {playerOverlayData.overview && (
+            <div className="mt-4 text-gray-300">
+              <p>{playerOverlayData.overview}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Render VideoPlayer only — playerOverlayData is passed so the player shows the paused overlay inside the player.
   return (
     <div className="min-h-screen bg-black flex flex-col items-center">
-      <div className="w-full max-w-8xl px-9 py-9">
+      <div className="w-full max-w-8xl px-4 py-8">
         <VideoPlayer
           src={finalSource}
           title={videoTitle || (playerOverlayData.title || playerOverlayData.slug)}
