@@ -474,52 +474,81 @@ const WatchListPage = () => {
         </div>
       )}
 
-      {/* ===== CONTINUE WATCHING SECTION (COVER POSTER stays only here) ===== */}
-      {continueList.length > 0 && (
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching</h2>
-          <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
-            {continueList.map(({ movie, time }) => {
-              const resumeText = `${Math.floor(time / 60)}m ${Math.floor(time % 60)}s`;
+{/* ===== CONTINUE WATCHING SECTION (CLEAN + MOBILE TAP RESUME) ===== */}
+{continueList.length > 0 && (
+  <div className="max-w-6xl mx-auto px-4 py-6">
+    <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching</h2>
 
-              return (
-                <div key={movie.slug} className="relative flex-none w-64 sm:w-72 md:w-80 border border-gray-700 rounded-lg overflow-hidden bg-gray-900 flex">
-                  {/* LEFT VERTICAL LINED BAR + COVER (cover_poster only used here) */}
-                  <div className="relative w-24 sm:w-28 bg-black/60 flex-shrink-0">
-                    {/* vertical lined bar - using repeating-linear-gradient */}
-                    <div className="absolute inset-y-0 left-0 w-3" style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.6))" }} />
-                    <div className="absolute inset-y-0 left-0 w-3 pointer-events-none" style={{ background: "repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 2px, transparent 2px, transparent 6px)" }} />
-                    <img src={movie.cover_poster || movie.poster} alt={movie.title} className="h-full w-full object-cover ml-3" onError={(e) => (e.currentTarget.src = "/default-cover.jpg")} />
-                  </div>
+    <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-1 px-1">
+      {continueList.map(({ movie, time }) => {
+        const resumeText = `${Math.floor(time / 60)}m ${Math.floor(time % 60)}s`;
+        const percent = Math.round(Math.min(100, (time / 7200) * 100)); // approx max 2hr
 
-                  {/* Right content */}
-                  <div className="p-3 flex-1">
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white truncate">{movie.title}</div>
-                        <div className="text-xs text-gray-400 mt-1 truncate">{movie.slug}</div>
-                      </div>
-                      <div className="text-xs text-gray-300 bg-black/40 px-2 py-1 rounded">{resumeText}</div>
-                    </div>
+        return (
+          <div
+            key={movie.slug}
+            onClick={() => handleResume(movie, time)} // 📱 MOBILE: tap whole card
+            className="
+              relative flex-none rounded-lg overflow-hidden bg-gray-900 
+              border border-gray-800 shadow-sm cursor-pointer
+              w-40 sm:w-48 md:w-56 
+              group
+            "
+          >
+            {/* Poster */}
+            <div className="relative">
+              <img
+                src={movie.cover_poster || movie.poster}
+                alt={movie.title}
+                className="w-full h-32 sm:h-40 md:h-44 object-cover"
+                onError={(e) => (e.currentTarget.src = '/default-cover.jpg')}
+              />
 
-                    <div className="mt-3">
-                      <div className="w-full bg-gray-700 h-2 rounded overflow-hidden">
-                        <div className="bg-green-500 h-2" style={{ width: `${Math.min(80, Math.max(8, (time / (60 * 60)) * 100))}%` }} />
-                      </div>
+              {/* Desktop Hover Resume Button */}
+              <div
+                className="
+                  hidden sm:flex         /* DESKTOP ONLY */
+                  absolute inset-0 items-center justify-center 
+                  opacity-0 group-hover:opacity-100 
+                  transition-opacity duration-200
+                "
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // do not trigger parent click
+                    handleResume(movie, time);
+                  }}
+                  className="px-4 py-2 bg-white text-black font-semibold rounded shadow hover:bg-gray-100"
+                >
+                  ▶ Resume
+                </button>
+              </div>
+            </div>
 
-                      <div className="mt-3 flex gap-2">
-                        <button onClick={() => handleResume(movie, time)} className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded">▶ Resume</button>
-
-                        <button onClick={() => { try { localStorage.removeItem(`${STORAGE_PREFIX}${movie.slug}`); window.location.reload(); } catch (e) {} }} className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 rounded" title="Remove progress">✕</button>
-                      </div>
-                    </div>
-                  </div>
+            {/* Text & Progress */}
+            <div className="px-3 py-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-gray-300 truncate max-w-[60%]">
+                  {movie.title}
                 </div>
-              );
-            })}
+                <div className="text-[10px] text-gray-400">{resumeText}</div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-2 h-1.5 w-full bg-gray-700 rounded overflow-hidden">
+                <div
+                  className="h-1.5 bg-red-600"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
+    </div>
+  </div>
+)}
+
 
       {/* Recommended */}
       {recommended.length > 0 && search === "" && (
