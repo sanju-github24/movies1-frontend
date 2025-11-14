@@ -1,7 +1,8 @@
 import React, { useContext, useState } from 'react';
-import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter ,Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
 
 import Navbar from './components/Navbar';
 import CategoryBar from './components/CategoryBar';
@@ -31,11 +32,12 @@ import WatchPage from './paged/WatchPage';
 import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
 import WatchListPage from "./paged/WatchListPage";
 import AdminUp4streamFiles from './components/AdminUp4streamFiles';
+import VideoPlayerPage from './paged/VideoPlayerPage';
 
 
 
 
-const App = () => {
+const AppContent = () => {
   const { isLoggedIn } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -43,15 +45,16 @@ const App = () => {
   const navigate = useNavigate();
 
   // Hide navbar & category bar on specific paths
-  const hidePaths = ["/login", "/verify-account", "/reset-password","/blogs"];
+  const hidePaths = ["/login", "/verify-account", "/reset-password", "/blogs"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
+  const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); // <-- hide on /player and /player/:slug and deeper
   const isAdminPath = location.pathname.startsWith("/admin");
 
   const hideNavbarAndCategoryBar =
-    hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isAdminPath;
+    hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isPlayerPath || isAdminPath;
 
-  // Unified handler for language navigation
+  // Unified handler for language/navigation
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
     setMobileOpen(false);
@@ -122,8 +125,9 @@ const App = () => {
         <Route path="/watch" element={<WatchListPage />} />
         <Route path="/blogs" element={<BlogList />} />
         <Route path="/blogs/:slug" element={<BlogViewer />} />
-        
+
         <Route path="/watch/:slug/*" element={<WatchPage />} />
+        <Route path="/player/:slug?" element={<VideoPlayerPage />} />
 
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
@@ -155,12 +159,19 @@ const App = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Ads */}
-      <AdScriptLoader />
-      <PopAdsScript />
-      <AdPopup />
+      {/* Ads — hide on player page too */}
+      {!isPlayerPath && <AdScriptLoader />}
+      {!isPlayerPath && <PopAdsScript />}
+      {!isPlayerPath && <AdPopup />}
     </div>
   );
 };
 
-export default App;
+// Export wrapped with BrowserRouter if you don't have a router in index.js
+const App = () => (
+  <BrowserRouter>
+    <AppContent />
+  </BrowserRouter>
+);
+
+export default AppContent;

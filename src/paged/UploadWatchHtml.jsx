@@ -10,7 +10,7 @@ import { Search, Loader2, Star } from "lucide-react";
 import { backendUrl } from "../utils/api";
 
 // =========================================================================
-//                             EDITABLE ITEM COMPONENT
+//                             EDITABLE ITEM COMPONENT (UPDATED)
 // =========================================================================
 // This component handles the rendering and editing of existing entries in the list.
 const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
@@ -27,21 +27,35 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
   const [editImdbRating, setEditImdbRating] = useState(item.imdb_rating || "");
   const [isSaving, setIsSaving] = useState(false);
   
+  // 🔑 UPDATED: Initialize with the 'season' field
   const [editEpisodes, setEditEpisodes] = useState(
     item.episodes && Array.isArray(item.episodes) && item.episodes.length > 0
-      ? item.episodes
-      : [{ title: "", html: "", direct_url: "" }]
+      ? item.episodes.map(ep => ({ 
+          // Ensure all required fields exist, defaulting season to 1 if missing
+          title: ep.title || "", 
+          html: ep.html || "", 
+          direct_url: ep.direct_url || "", 
+          season: ep.season !== undefined ? ep.season : 1 // 🔑 Season added
+        }))
+      : [{ title: "", html: "", direct_url: "", season: 1 }] // 🔑 Default season to 1 for new episodes
   );
   
   // Episode handlers
   const handleEpisodeChange = (index, field, value) => {
     const updated = [...editEpisodes];
-    updated[index][field] = value;
+    // Special handling for season: ensure it's a number (or string '1' if empty)
+    if (field === 'season') {
+        const numValue = parseInt(value, 10);
+        updated[index][field] = isNaN(numValue) || numValue < 1 ? 1 : numValue;
+    } else {
+        updated[index][field] = value;
+    }
     setEditEpisodes(updated);
   };
 
   const handleAddEpisode = () => {
-    setEditEpisodes([...editEpisodes, { title: "", html: "", direct_url: "" }]);
+    // 🔑 New episode defaults to season 1
+    setEditEpisodes([...editEpisodes, { title: "", html: "", direct_url: "", season: 1 }]);
   };
 
   const handleRemoveEpisode = (index) => {
@@ -57,9 +71,15 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
 
     setIsSaving(true);
     
+    // Filter out episodes that are completely empty
     const validEpisodes = editEpisodes.filter(
       (ep) => ep.title || ep.html || ep.direct_url
-    );
+    ).map(ep => ({
+        ...ep,
+        // Ensure season is stored as a number (or falls back to 1)
+        season: parseInt(ep.season, 10) || 1, 
+    }));
+
 
     const updatedRecord = {
       title: editTitle.trim(),
@@ -72,7 +92,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
       direct_url: editDirectUrl.trim(),
       title_logo: editTitleLogo.trim(),
       imdb_rating: editImdbRating.trim(),
-      episodes: validEpisodes,
+      episodes: validEpisodes, // Now includes season number
     };
 
     const { error } = await supabase
@@ -113,15 +133,33 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete }) => {
         {/* --- Episodes Editing --- */}
         <div className="mt-4 border-t border-gray-600 pt-3">
             <h5 className="font-semibold text-sm text-yellow-400 mb-2">🎞️ Episodes</h5>
-            <div className="max-h-40 overflow-y-auto custom-scroll pr-2">
+            <div className="max-h-60 overflow-y-auto custom-scroll pr-2">
                 {editEpisodes.map((ep, index) => (
-                    <div key={index} className="p-2 mb-2 bg-gray-600 rounded relative">
-                        <input type="text" className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-xs placeholder-gray-400" value={ep.title} onChange={(e) => handleEpisodeChange(index, "title", e.target.value)} placeholder={`Ep ${index + 1} Title`} />
+                    <div key={index} className="p-2 mb-2 bg-gray-600 rounded relative border border-gray-500">
+                        {/* 🔑 ADDED: Season Input */}
+                        <div className="flex gap-2 mb-1">
+                            <input 
+                                type="number" 
+                                className="w-1/4 p-1 rounded bg-gray-700 border border-gray-500 text-xs text-yellow-300 placeholder-gray-400" 
+                                value={ep.season} 
+                                onChange={(e) => handleEpisodeChange(index, "season", e.target.value)} 
+                                placeholder="Season" 
+                                min="1"
+                            />
+                            <input 
+                                type="text" 
+                                className="flex-1 p-1 rounded bg-gray-700 border border-gray-500 text-xs placeholder-gray-400" 
+                                value={ep.title} 
+                                onChange={(e) => handleEpisodeChange(index, "title", e.target.value)} 
+                                placeholder={`Ep ${index + 1} Title`} 
+                            />
+                            {editEpisodes.length > 1 && (
+                                <button onClick={() => handleRemoveEpisode(index)} className="text-red-400 text-xs px-2">❌</button>
+                            )}
+                        </div>
+
                          <textarea rows={1} className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-xs font-mono placeholder-gray-400" value={ep.html} onChange={(e) => handleEpisodeChange(index, "html", e.target.value)} placeholder="HTML Code" />
                         <input type="text" className="w-full p-1 rounded bg-gray-700 border border-gray-500 text-xs placeholder-gray-400" value={ep.direct_url} onChange={(e) => handleEpisodeChange(index, "direct_url", e.target.value)} placeholder="Direct URL" />
-                        {editEpisodes.length > 1 && (
-                            <button onClick={() => handleRemoveEpisode(index)} className="absolute top-1 right-1 text-red-400 text-xs p-1">❌</button>
-                        )}
                     </div>
                 ))}
             </div>
@@ -184,7 +222,6 @@ const UploadWatchHtml = () => {
   const [directUrl, setDirectUrl] = useState("");
   const [titleLogo, setTitleLogo] = useState("");
   const [imdbRating, setImdbRating] = useState(""); 
-  // ⬅️ NEW: Field to store the IMDb ID (e.g., tt1234567)
   const [imdbId, setImdbId] = useState(""); 
   
   // --- MEDIA UPLOAD STATE ---
@@ -200,8 +237,10 @@ const UploadWatchHtml = () => {
   const [isSearching, setIsSearching] = useState(false); 
   const [isSaving, setIsSaving] = useState(false); 
   
-  // --- EPISODE STATE (Moved from EditableItem) ---
-  const [episodes, setEpisodes] = useState([{ title: "", html: "", direct_url: "" }]);
+  // --- EPISODE STATE (UPDATED: Added 'season') ---
+  const [episodes, setEpisodes] = useState([
+    { title: "", html: "", direct_url: "", season: 1 } // ⬅️ NEW DEFAULT SEASON
+  ]);
   
   // --- Admin Check (Dummy for now, use actual context check) ---
   const isAdmin = true; 
@@ -213,16 +252,28 @@ const UploadWatchHtml = () => {
     );
   }
   
-  // --- Episode handlers (Copied from EditableItem) ---
+  // --- Episode handlers (UPDATED) ---
   const handleEpisodeChange = (index, field, value) => {
     const updated = [...episodes];
-    updated[index][field] = value;
+    // Convert season to a number if the field is 'season'
+    const finalValue = field === 'season' ? parseInt(value, 10) || 1 : value;
+    updated[index][field] = finalValue;
     setEpisodes(updated);
   };
 
   const handleAddEpisode = () => {
-    setEpisodes([...episodes, { title: "", html: "", direct_url: "" }]);
+    // Get the season number of the *last* episode, default to 1 if list is empty
+    const lastSeason = episodes.length > 0 ? episodes[episodes.length - 1].season : 1;
+    // Auto-populate the new episode with the previous episode's season number
+    setEpisodes([...episodes, { title: "", html: "", direct_url: "", season: lastSeason }]);
   };
+  
+  // ⬅️ NEW: Handler to increment the season number for the next episode
+  const handleAddNextSeasonEpisode = () => {
+    const nextSeason = episodes.length > 0 ? episodes[episodes.length - 1].season + 1 : 1;
+    setEpisodes([...episodes, { title: "", html: "", direct_url: "", season: nextSeason }]);
+  };
+  // ⬅️ END NEW HANDLER
 
   const handleRemoveEpisode = (index) => {
     const updated = episodes.filter((_, i) => i !== index);
@@ -251,7 +302,7 @@ const UploadWatchHtml = () => {
   }, [fetchWatchPages]);
   
   // -----------------------------------------------------------
-  // --- UPDATED TMDB Metadata Fetch Handler ⬅️
+  // --- TMDB Metadata Fetch Handler (No Change) 
   // -----------------------------------------------------------
   const handleTMDBSearch = async () => {
     const query = tmdbSearchQuery.trim();
@@ -296,7 +347,7 @@ const UploadWatchHtml = () => {
   // -----------------------------------------------------------
   
   // -----------------------------------------------------------
-  // --- Handler to Save Extracted Metadata to Backend JSON File ---
+  // --- Handler to Save Extracted Metadata to Backend JSON File (No Change) ---
   // -----------------------------------------------------------
   const handleSaveMetadata = async (metadata) => {
     if (!backendUrl) {
@@ -314,7 +365,7 @@ const UploadWatchHtml = () => {
         title: metadata.title,
         year: metadata.year,
         
-        // ⬅️ NEW: Include IMDb ID for better tracking in the JSON file
+        // NEW: Include IMDb ID for better tracking in the JSON file
         imdb_id: metadata.imdb_id, 
         
         // Metadata fields from TMDB
@@ -349,7 +400,7 @@ const UploadWatchHtml = () => {
   };
 
   // -----------------------------------------------------------
-  // --- UPDATED Handler to apply TMDB metadata to the form ⬅️ ---
+  // --- Handler to apply TMDB metadata to the form (Season/Episode reset updated) ---
   // -----------------------------------------------------------
   const handleUseMetadata = (data) => {
       
@@ -370,7 +421,7 @@ const UploadWatchHtml = () => {
       const formattedRating = data.imdb_rating ? `${data.imdb_rating.toFixed(1)}/10` : '';
       setImdbRating(formattedRating); 
       
-      // 5. ⬅️ NEW: Set the IMDb ID
+      // 5. Set the IMDb ID
       setImdbId(data.imdb_id || '');
       
       // Clear all other media-specific fields
@@ -379,7 +430,9 @@ const UploadWatchHtml = () => {
       setVideoUrl('');
       setDirectUrl('');
       setTitleLogo('');
-      setEpisodes([{ title: "", html: "", direct_url: "" }]);
+      
+      // ⬅️ UPDATED: Reset episodes with the new 'season: 1' default
+      setEpisodes([{ title: "", html: "", direct_url: "", season: 1 }]);
       
       toast.info(`🎬 Form pre-filled: Title, Slug, Poster, and IMDb Rating from ${data.title}.`);
       setTmdbSearchResult(null); 
@@ -387,7 +440,7 @@ const UploadWatchHtml = () => {
   };
   // -----------------------------------------------------------
 
-  // --- Video Upload Handler (Bunny Stream) ---
+  // --- Video Upload Handler (Bunny Stream) (No Change) ---
   const handleVideoUpload = async (file) => {
     if (!file) return toast.error("❌ No file selected!");
     if (!backendUrl) return toast.error("❌ Backend URL missing for upload!");
@@ -431,7 +484,7 @@ const UploadWatchHtml = () => {
     }
   };
 
-  // --- Main Upload Handler (Supabase) ---
+  // --- Main Upload Handler (Supabase) (UPDATED to include 'season') ---
   const handleUpload = async () => {
     if (!title.trim()) {
       return toast.error("❌ Please enter a title!");
@@ -442,6 +495,7 @@ const UploadWatchHtml = () => {
 
     setLoading(true);
 
+    // Filter valid episodes: must have at least one field filled
     const validEpisodes = episodes.filter(
       (ep) => ep.title || ep.html || ep.direct_url
     );
@@ -458,8 +512,8 @@ const UploadWatchHtml = () => {
       direct_url: directUrl.trim() || "",
       title_logo: titleLogo.trim() || "",
       imdb_rating: imdbRating.trim() || "",
-      // ⬅️ NEW: Include IMDb ID in the Supabase record
       imdb_id: imdbId.trim() || "", 
+      // Ensure the 'episodes' array contains the new 'season' field
       episodes: validEpisodes, 
       created_at: new Date().toISOString(),
     };
@@ -481,8 +535,9 @@ const UploadWatchHtml = () => {
       setDirectUrl("");
       setTitleLogo("");
       setImdbRating("");
-      setImdbId(""); // ⬅️ Reset new field
-      setEpisodes([{ title: "", html: "", direct_url: "" }]);
+      setImdbId(""); 
+      // ⬅️ UPDATED: Reset new field for episodes
+      setEpisodes([{ title: "", html: "", direct_url: "", season: 1 }]); 
       setSelectedFile(null);
       setTmdbSearchQuery(""); 
       setTmdbSearchResult(null);
@@ -492,7 +547,7 @@ const UploadWatchHtml = () => {
     setLoading(false);
   };
 
-  // --- Delete Handler (Supabase) ---
+  // --- Delete Handler (Supabase) (No Change) ---
   const handleDelete = async (id) => {
     if (!window.confirm("⚠️ Are you sure you want to delete this?")) return;
     
@@ -590,7 +645,7 @@ const UploadWatchHtml = () => {
                         <Star className="h-4 w-4 text-yellow-500 inline-block fill-yellow-500 mr-1" />
                         {tmdbSearchResult.imdb_rating.toFixed(1)}/10
                     </p>
-                    {/* ⬅️ NEW: Display IMDb ID */}
+                    {/* NEW: Display IMDb ID */}
                     <p className="text-xs text-gray-400 mb-3">
                          <span className="font-semibold mr-1">IMDb ID:</span> 
                          <span className="font-mono text-yellow-400">{tmdbSearchResult.imdb_id || 'N/A'}</span>
@@ -654,7 +709,7 @@ const UploadWatchHtml = () => {
             />
           </div>
           
-          {/* ⬅️ NEW: IMDb ID input field */}
+          {/* NEW: IMDb ID input field */}
           <div className="mb-5">
             <label className="block font-semibold mb-2">IMDb ID (tt...)</label>
             <input
@@ -665,7 +720,7 @@ const UploadWatchHtml = () => {
               placeholder="IMDb ID (e.g., tt1375666) (Pre-filled from Search)"
             />
           </div>
-          {/* ⬅️ END NEW FIELD */}
+          {/* END NEW FIELD */}
 
           <div className="mb-5">
             <label className="block font-semibold mb-2">IMDb Rating (e.g., 8.5/10)</label>
@@ -828,21 +883,37 @@ const UploadWatchHtml = () => {
             />
           </div>
 
-          {/* --- Episodes Section (New in Upload Form) --- */}
+          {/* --- Episodes Section (UPDATED with Season Field) --- */}
           <h2 className="text-xl font-semibold mb-4 text-yellow-400 border-b border-gray-700 pb-2 mt-6">🎞️ Series Episodes</h2>
           <div className="mb-5">
-              <label className="block font-semibold mb-2 text-sm text-gray-300">Add episodes for TV series (leave empty for movies).</label>
+              <label className="block font-semibold mb-2 text-sm text-gray-300">Add episodes for TV series (leave empty for movies). **Season** is now included.</label>
               <div className="max-h-60 overflow-y-auto custom-scroll p-2 bg-gray-700 rounded-lg">
                   {episodes.map((ep, index) => (
                       <div key={index} className="p-3 mb-3 bg-gray-600 rounded relative border border-gray-500">
-                          <h5 className="text-xs font-bold text-yellow-300 mb-1">Episode {index + 1}</h5>
-                          <input 
-                              type="text" 
-                              className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-sm placeholder-gray-400" 
-                              value={ep.title} 
-                              onChange={(e) => handleEpisodeChange(index, "title", e.target.value)} 
-                              placeholder={`Episode Title (e.g., S01E01 - Pilot)`} 
-                          />
+                          <h5 className="text-xs font-bold text-yellow-300 mb-1">
+                              Episode {index + 1} 
+                              <span className="ml-2 text-sm text-blue-300">| S<span className='font-mono'>{ep.season}</span>E<span className='font-mono'>{index + 1}</span></span>
+                          </h5>
+                          
+                          {/* ⬅️ NEW: Season Input */}
+                          <div className='flex gap-2 mb-1'>
+                              <input 
+                                  type="number" 
+                                  min="1"
+                                  className="w-1/4 p-1 rounded bg-gray-700 border border-gray-500 text-sm placeholder-gray-400 text-center font-bold" 
+                                  value={ep.season} 
+                                  onChange={(e) => handleEpisodeChange(index, "season", e.target.value)} 
+                                  placeholder="Ssn" 
+                              />
+                              <input 
+                                  type="text" 
+                                  className="w-3/4 p-1 rounded bg-gray-700 border border-gray-500 text-sm placeholder-gray-400" 
+                                  value={ep.title} 
+                                  onChange={(e) => handleEpisodeChange(index, "title", e.target.value)} 
+                                  placeholder={`Episode Title (e.g., Pilot)`} 
+                              />
+                          </div>
+
                           <input 
                               type="text" 
                               className="w-full p-1 rounded bg-gray-700 border border-gray-500 mb-1 text-xs placeholder-gray-400" 
@@ -868,12 +939,20 @@ const UploadWatchHtml = () => {
                       </div>
                   ))}
               </div>
-              <button 
-                  onClick={handleAddEpisode} 
-                  className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded mt-3 font-semibold"
-              >
-                  + Add New Episode
-              </button>
+              <div className="flex gap-2 mt-3">
+                  <button 
+                      onClick={handleAddEpisode} 
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded font-semibold"
+                  >
+                      + Add Next Episode (Same Season)
+                  </button>
+                  <button 
+                      onClick={handleAddNextSeasonEpisode} 
+                      className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-3 py-1 rounded font-semibold"
+                  >
+                      + Add Next Season
+                  </button>
+              </div>
           </div>
           {/* --- End Episodes Section --- */}
 
