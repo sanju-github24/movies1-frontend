@@ -169,6 +169,7 @@ const WatchHtmlPage = () => {
       genres: tmdbMeta?.genres?.join(", ") || null,
       slug: movieMeta?.slug,
       language: tmdbMeta?.original_language || null,
+      certification: tmdbMeta?.certification || null, // Added certification
     }),
     [movieMeta, tmdbMeta]
   );
@@ -342,6 +343,8 @@ const WatchHtmlPage = () => {
   const currentSourceKey = activeSrc?.src;
   const formattedReleaseDate = formatDate(movieMeta?.releaseDate);
   const trailerUrl = tmdbMeta?.trailer_url;
+  // ⭐️ Extract certification from tmdbMeta
+  const certification = tmdbMeta?.certification;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -379,13 +382,25 @@ const WatchHtmlPage = () => {
 
               {movieMeta.year && <p className="text-xl sm:text-2xl font-semibold text-gray-300 mb-4">{formattedReleaseDate ? formattedReleaseDate : `(${movieMeta.year})`}</p>}
 
-              {movieMeta.imdbRating && (
-                <p className="text-xl font-bold text-yellow-400 mb-4 flex items-center justify-center sm:justify-start">
-                  <Star className="w-6 h-6 fill-yellow-400 mr-2" />
-                  <span className="text-white">{movieMeta.imdbRating}</span>
-                </p>
-              )}
-
+              {/* ⭐️ UPDATED: Display IMDb Rating AND Certification Badge */}
+              <div className="flex items-center justify-center sm:justify-start gap-6 mb-4">
+                
+                {/* IMDb Rating Display */}
+                {movieMeta.imdbRating && (
+                    <p className="text-xl font-bold text-yellow-400 flex items-center">
+                    <Star className="w-6 h-6 fill-yellow-400 mr-2" />
+                    <span className="text-white">{movieMeta.imdbRating}</span>
+                    </p>
+                )}
+                
+                {/* Certification Badge Display */}
+                {certification && (
+                    <span className="px-3 py-1 bg-red-600/90 text-white text-sm font-bold rounded-md shadow-md border border-red-500">
+                        {certification}
+                    </span>
+                )}
+              </div>
+              
               {trailerUrl && (
                 <a href={trailerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-xl transition transform hover:scale-[1.02] active:scale-95 mb-6">
                   <Play className="w-5 h-5 mr-2 fill-white" />

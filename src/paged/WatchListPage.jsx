@@ -1,13 +1,49 @@
 // src/pages/WatchListPage.jsx
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
 import { Loader2 } from "lucide-react";
+import axios from "axios";
+import { AppContext } from "../context/AppContext";
+
+/* ===== Helper: Save Recently Watched (UNCHANGED) ===== */
+const saveRecentlyWatched = (movie) => {
+  const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
+  const filtered = existing.filter((m) => m.slug !== movie.slug);
+  const updated = [movie, ...filtered].slice(0, 10);
+  localStorage.setItem("recently_watched", JSON.stringify(updated));
+};
+
+/* ===== STORAGE helpers for resume times (match VideoPlayer key) ===== */
+const STORAGE_PREFIX = "video_last_time_v1:";
+
+const readAllResumeTimes = () => {
+  const resumeMap = {}; // slugOrSrc -> { time, updatedAt }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith(STORAGE_PREFIX)) {
+        const raw = localStorage.getItem(key);
+        try {
+          const parsed = JSON.parse(raw);
+          const id = key.replace(STORAGE_PREFIX, "");
+          resumeMap[id] = parsed;
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Failed reading resume times:", e);
+  }
+  return resumeMap;
+};
 
 /* ====== Language Row Component (uses poster now) ====== */
-const LanguageRow = ({ language, movies, overlay }) => {
+const LanguageRow = ({ language, movies }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -95,7 +131,7 @@ const LanguageRow = ({ language, movies, overlay }) => {
                 </span>
               )}
 
-              {/* <-- USE poster HERE (changed) */}
+              {/* <-- poster */}
               <img
                 src={movie.poster || "/default-poster.jpg"}
                 alt={movie.title}
@@ -143,42 +179,10 @@ const LanguageRow = ({ language, movies, overlay }) => {
   );
 };
 
-/* ===== Helper: Save Recently Watched (UNCHANGED) ===== */
-const saveRecentlyWatched = (movie) => {
-  const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-  const filtered = existing.filter((m) => m.slug !== movie.slug);
-  const updated = [movie, ...filtered].slice(0, 10);
-  localStorage.setItem("recently_watched", JSON.stringify(updated));
-};
-
-/* ===== STORAGE helpers for resume times (match VideoPlayer key) ===== */
-const STORAGE_PREFIX = "video_last_time_v1:";
-
-const readAllResumeTimes = () => {
-  const resumeMap = {}; // slugOrSrc -> { time, updatedAt }
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (key.startsWith(STORAGE_PREFIX)) {
-        const raw = localStorage.getItem(key);
-        try {
-          const parsed = JSON.parse(raw);
-          const id = key.replace(STORAGE_PREFIX, "");
-          resumeMap[id] = parsed;
-        } catch (e) {
-          // ignore parse errors
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("Failed reading resume times:", e);
-  }
-  return resumeMap;
-};
-
 /* ====== Watch List Page Component ====== */
 const WatchListPage = () => {
+  const { backendUrl } = useContext(AppContext);
+
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -190,7 +194,22 @@ const WatchListPage = () => {
   const [heroMovies, setHeroMovies] = useState([]);
   const [scrolled, setScrolled] = useState(false);
 
+  // refresh toggle to re-read resume times (instead of page reload)
+  const [resumeRefresh, setResumeRefresh] = useState(0);
+
   const navigate = useNavigate();
+
+  /* ===== Helper: fetch TMDB details from backend (mirrors WatchHtmlPage) ===== */
+  const fetchTmdbDetails = async (imdbId) => {
+    if (!backendUrl || !imdbId) return null;
+    try {
+      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId } });
+      if (res.data?.success && res.data.data) return res.data.data;
+    } catch (err) {
+      console.error("tmdb fetch error:", err?.message || err);
+    }
+    return null;
+  };
 
   /* ===== Fetch Movies ===== */
   useEffect(() => {
@@ -200,12 +219,11 @@ const WatchListPage = () => {
         const [watchRes, moviesRes] = await Promise.all([
           supabase
             .from("watch_html")
-            .select("id, title, slug, poster, cover_poster, video_url, created_at, title_logo")
+            // included imdb_id so we can enrich hero slides later
+            .select("id, title, slug, poster, cover_poster, video_url, created_at, title_logo, imdb_id")
             .order("created_at", { ascending: false })
-            .limit(100),
-          supabase
-            .from("movies")
-            .select("slug, title, language, categories, subCategory, description"),
+            .limit(200),
+          supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
         ]);
 
         if (watchRes.error) throw new Error(watchRes.error.message);
@@ -223,9 +241,11 @@ const WatchListPage = () => {
             title: item.title,
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || item.poster || "/default-cover.jpg",
+            table_cover_poster: item.cover_poster || null,
             video_url: item.video_url || "",
             created_at: item.created_at,
             title_logo: item.title_logo || "",
+            imdb_id: item.imdb_id || null,
             language: match?.language?.length ? match.language : ["Unknown"],
             categories: match?.categories || [],
             subCategory: match?.subCategory || [],
@@ -235,15 +255,15 @@ const WatchListPage = () => {
 
         setMovies(merged);
       } catch (err) {
-        console.error("Fetch error:", err.message);
+        console.error("Fetch error:", err.message || err);
       } finally {
         setLoading(false);
       }
     };
     fetchMovies();
-  }, []);
+  }, [backendUrl]);
 
-  /* ===== Hero / latest selection logic ===== */
+  /* ===== Hero / latest selection logic (initial selection from movies) ===== */
   useEffect(() => {
     if (movies.length === 0) return;
 
@@ -262,6 +282,57 @@ const WatchListPage = () => {
 
     setHeroMovies(heroSelection);
   }, [movies]);
+
+  /* ===== Enrich heroMovies with TMDB details (cert, year, genres, poster/cover) =====
+     This runs when heroMovies change or backendUrl changes. It fetches TMDB details only for the
+     first few hero candidates (keeps network calls small). */
+  useEffect(() => {
+    if (!heroMovies || heroMovies.length === 0 || !backendUrl) return;
+
+    let cancelled = false;
+
+    const enrich = async () => {
+      const candidates = heroMovies.slice(0, 8); // keep small
+      const promises = candidates.map(async (m) => {
+        if (!m.imdb_id) return m;
+        const tmdb = await fetchTmdbDetails(m.imdb_id);
+        if (!tmdb) return m;
+
+        return {
+          ...m,
+          poster: tmdb.poster_url || m.poster,
+          cover_poster: tmdb.cover_poster_url || m.cover_poster || m.poster,
+          certification: tmdb.certification || m.certification || "",
+          year: tmdb.year || m.year || (tmdb.release_date ? new Date(tmdb.release_date).getFullYear() : null),
+          tmdb_genres: tmdb.genres || null,
+          trailer_url: tmdb.trailer_url || null,
+        };
+      });
+
+      try {
+        const enriched = await Promise.all(promises);
+        if (cancelled) return;
+
+        // Replace matching entries in heroMovies by slug (preserve order)
+        setHeroMovies((prev) => {
+          const bySlug = Object.fromEntries(prev.map((p) => [p.slug, p]));
+          enriched.forEach((e) => {
+            if (e.slug) bySlug[e.slug] = e;
+          });
+          // maintain previous ordering
+          return prev.map((p) => bySlug[p.slug] || p);
+        });
+      } catch (err) {
+        console.error("hero enrich error:", err);
+      }
+    };
+
+    enrich();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [heroMovies, backendUrl]);
 
   /* ===== Load Recommendations (based on recently watched) ===== */
   useEffect(() => {
@@ -301,14 +372,15 @@ const WatchListPage = () => {
 
   /* ===== Auto-Slide Effect ===== */
   useEffect(() => {
-    if (latestMovies.length === 0) return;
+  if (!latestMovies || latestMovies.length === 0) return;
 
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
-    }, 6000);
+  const interval = setInterval(() => {
+    setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
+  }, 5000); // <-- 5 seconds now
 
-    return () => clearInterval(interval);
-  }, [latestMovies]);
+  return () => clearInterval(interval);
+}, [latestMovies]);
+
 
   // Handle Scroll to toggle navbar background
   useEffect(() => {
@@ -337,7 +409,7 @@ const WatchListPage = () => {
       }
     });
     return mapped; // keyed by slug
-  }, [movies]);
+  }, [movies, resumeRefresh]);
 
   // Create sorted continue list (most recent first) and filter out very short times (under 5s)
   const continueList = useMemo(() => {
@@ -362,6 +434,21 @@ const WatchListPage = () => {
     };
 
     navigate("/player", { state: { src: activeSrc, movieMeta, tmdbMeta: null } });
+  };
+
+  // remove stored resume time & refresh continue list reactively
+  const handleRemoveProgress = (slug) => {
+    try {
+      localStorage.removeItem(`${STORAGE_PREFIX}${slug}`);
+      // also remove from recently_watched if present
+      try {
+        const rw = JSON.parse(localStorage.getItem("recently_watched") || "[]");
+        localStorage.setItem("recently_watched", JSON.stringify(rw.filter((m) => m.slug !== slug)));
+      } catch (e) {}
+      setResumeRefresh((r) => r + 1);
+    } catch (err) {
+      console.error("Failed to remove progress:", err);
+    }
   };
 
   // LOADING UI
@@ -411,145 +498,256 @@ const WatchListPage = () => {
         )}
       </header>
 
-      {/* Hero Slider (uses poster now) */}
-      {!loading && latestMovies.length > 0 && search === "" && (
-        <div className="relative w-full overflow-hidden mt-[-60px] sm:mt-[-64px]">
-          <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
-            {latestMovies.map((movie, idx) => {
-              const isActive = idx === currentSlide;
-              return (
-                <div key={movie.id} className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? "opacity-100 z-20 pointer-events-auto" : "opacity-0 z-10 pointer-events-none"}`}>
-                  {/* <-- HERO USES poster now */}
-                  <img src={movie.cover_poster} alt={movie.title || "Movie Cover"} className="w-full h-full object-cover brightness-75 object-position-right sm:object-center" onError={(e) => (e.currentTarget.src = "/default-cover.jpg")} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent sm:hidden" />
-                  <div className="hidden sm:flex absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent items-center p-10">
-                    <div className="max-w-2xl flex flex-col gap-3">
-                      {movie.title_logo ? (
-                        <img src={movie.title_logo} alt={`${movie.title} Logo`} className="w-[260px] sm:w-[420px] object-contain drop-shadow-lg mb-3" />
-                      ) : (
-                        <h2 className="text-white text-4xl font-extrabold drop-shadow-lg">{movie.slug}</h2>
-                      )}
+      {/* Hero Slider (uses poster/cover and enriched fields when available) */}
+      {/* Hero Slider (uses poster/cover and enriched fields when available)
+    — unified layout: same info on mobile & desktop
+*/}
+{/* Hero Slider */}
+{!loading && latestMovies.length > 0 && search === "" && (
+  <div className="relative w-full overflow-hidden mt-[-60px] sm:mt-[-64px]">
+    <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
+      {latestMovies.map((movie, idx) => {
+        const isActive = idx === currentSlide;
 
-                      {movie.language?.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {movie.language.map((lang, i) => (
-                            <span key={i} className="px-3 py-1.5 bg-black/50 rounded-lg text-base font-medium text-gray-100 shadow-sm">{lang}</span>
-                          ))}
-                        </div>
-                      )}
-
-                      {movie.description && <p className="text-gray-300 text-base leading-relaxed">{movie.description}</p>}
-
-                      <Link to={`/watch/${movie.slug}`} className="inline-flex w-max px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md">▶ Watch</Link>
-                    </div>
-                  </div>
-
-                  <div className="sm:hidden absolute inset-0 flex flex-col justify-end items-center pb-24 z-30">
-                    {movie.title_logo ? (
-                      <img src={movie.title_logo} alt={`${movie.title_logo} Logo`} className="w-64 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.9)] mb-4" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    ) : (
-                      <h2 className="text-white text-3xl font-extrabold drop-shadow-lg text-center w-full px-4 mb-4">{movie.slug}</h2>
-                    )}
-
-                    {movie.language?.length > 0 && (
-                      <div className="flex flex-wrap gap-2 justify-center mb-6">
-                        {movie.language.map((lang, i) => (
-                          <span key={i} className="px-3 py-1 bg-black/70 rounded-md text-xs font-medium text-gray-100 shadow-md">{lang}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    <Link to={`/watch/${movie.slug}`} className="inline-flex w-max px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md">▶ Watch</Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-            {latestMovies.map((_, idx) => (
-              <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-1.5 rounded-full transition-all duration-300 focus:outline-none ${idx === currentSlide ? "w-6 bg-white" : "w-2 bg-gray-500 hover:bg-gray-400"}`} />
-            ))}
-          </div>
-        </div>
-      )}
-
-{/* ===== CONTINUE WATCHING SECTION (CLEAN + MOBILE TAP RESUME) ===== */}
-{continueList.length > 0 && (
-  <div className="max-w-10xl mx-auto px-4 py-6">
-    <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching For You</h2>
-
-    <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-1 px-1">
-      {continueList.map(({ movie, time }) => {
-        const resumeText = `${Math.floor(time / 60)}m ${Math.floor(time % 60)}s`;
-        const percent = Math.round(Math.min(100, (time / 7200) * 100)); // approx max 2hr
+        const title = movie.slug;
+        const titleLogo = movie.title_logo || null;
+        const cert = movie.certification || movie.cert || "";
+        const year = movie.year || (movie.created_at ? new Date(movie.created_at).getFullYear() : "");
+        const genres = movie.tmdb_genres || movie.categories || [];
+        const cover = movie.table_cover_poster || movie.cover_poster || movie.poster || "/default-cover.jpg";
 
         return (
           <div
-            key={movie.slug}
-            onClick={() => handleResume(movie, time)} // 📱 MOBILE: tap whole card
-            className="
-              relative flex-none rounded-lg overflow-hidden bg-gray-900 
-              border border-gray-800 shadow-sm cursor-pointer
-              w-70 sm:w-80 md:w-95 
-              group
-            "
+            key={movie.id || movie.slug || idx}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+              isActive ? "opacity-100 z-20" : "opacity-0 z-10"
+            }`}
           >
-            {/* Poster */}
-            <div className="relative">
-              <img
-                src={movie.cover_poster || movie.poster}
-                alt={movie.title}
-                className="w-full h-36 sm:h-44 md:h-52 object-cover"
-                onError={(e) => (e.currentTarget.src = '/default-cover.jpg')}
-              />
+            <img
+              src={cover}
+              alt={title}
+              className="w-full h-full object-cover brightness-75"
+              draggable={false}
+              onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
+            />
 
-              {/* Desktop Hover Resume Button */}
-              <div
-                className="
-                  hidden sm:flex         /* DESKTOP ONLY */
-                  absolute inset-0 items-center justify-center 
-                  opacity-0 group-hover:opacity-100 
-                  transition-opacity duration-200
-                "
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // do not trigger parent click
-                    handleResume(movie, time);
-                  }}
-                  className="px-4 py-2 bg-white text-black font-semibold rounded shadow hover:bg-gray-100"
-                >
-                  ▶ Resume
-                </button>
-              </div>
-            </div>
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-transparent flex items-end sm:items-center p-6 sm:p-10 pointer-events-none">
+              <div className="max-w-3xl md:max-w-2xl flex flex-col gap-4 w-full pointer-events-auto">
 
-            {/* Text & Progress */}
-            <div className="px-3 py-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-300 truncate max-w-[72%]">
-                  {movie.slug}
+                {/* Title */}
+                {titleLogo ? (
+                  <img
+                    src={titleLogo}
+                    alt={`${title} Logo`}
+                    className="w-52 sm:w-[420px] object-contain drop-shadow-lg"
+                    onError={(e) => (e.target.style.display = "none")}
+                  />
+                ) : (
+                  <h2 className="text-white text-3xl sm:text-5xl font-extrabold drop-shadow-lg">
+                    {title}
+                  </h2>
+                )}
+
+                {/* MOBILE META ROW (Genres + Languages) */}
+                <div className="sm:hidden flex flex-wrap gap-2">
+                  {movie.language?.slice(0, 3).map((l, i) => (
+                    <span key={i} className="px-3 py-1 bg-black/70 text-white text-xs rounded-md">
+                      {l}
+                    </span>
+                  ))}
+
+                  {genres?.slice(0, 3).map((g, i) => (
+                    <span key={i} className="px-3 py-1 bg-gray-800/70 text-gray-200 text-xs rounded-md">
+                      {g}
+                    </span>
+                  ))}
                 </div>
-                <div className="text-xs text-gray-400 ml-2">{resumeText}</div>
-              </div>
 
-              {/* Progress Bar */}
-              <div className="mt-2 h-1.5 w-full bg-gray-700 rounded overflow-hidden">
-                <div
-                  className="h-1.5 bg-red-600"
-                  style={{ width: `${percent}%` }}
-                />
+                {/* DESKTOP META ROW */}
+                <div className="hidden sm:flex flex-wrap items-center gap-3">
+                  {year && <span className="px-3 py-1.5 bg-gray-800/70 rounded text-base">{year}</span>}
+                  {cert && <span className="px-3 py-1.5 bg-red-600/90 rounded text-base text-white">{cert}</span>}
+                  {genres.length > 0 && (
+                    <span className="px-3 py-1.5 bg-black/50 rounded text-base text-gray-200">
+                      {genres.slice(0, 3).join(" • ")}
+                    </span>
+                  )}
+                </div>
+
+                {/* DESCRIPTION (Desktop only) */}
+                {movie.description && (
+                  <p className="hidden sm:block text-gray-300 text-base max-w-xl line-clamp-4">
+                    {movie.description}
+                  </p>
+                )}
+
+                {/* ACTIONS */}
+                <div className="flex items-center gap-3 mt-2">
+                  <Link
+                    to={`/watch/${movie.slug}`}
+                    className="inline-flex items-center gap-3 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
+                  >
+                    ▶ Watch
+                  </Link>
+                </div>
+
               </div>
             </div>
           </div>
         );
       })}
     </div>
+
+    {/* Dots */}
+    <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+      {latestMovies.map((_, idx) => (
+        <button
+          key={idx}
+          onClick={() => setCurrentSlide(idx)}
+          className={`h-1.5 rounded-full transition-all ${
+            idx === currentSlide ? "w-6 bg-white" : "w-2 bg-gray-500 hover:bg-gray-400"
+          }`}
+        />
+      ))}
+    </div>
   </div>
 )}
 
 
+
+      {/* ===== CONTINUE WATCHING SECTION (CLEAN + DESKTOP HOVER OVERLAY + MOBILE TAP) ===== */}
+      {continueList.length > 0 && (
+        <div className="max-w-10xl mx-auto px-4 py-6">
+          <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching For You</h2>
+
+          <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-1 px-1">
+            {continueList.map(({ movie, time }) => {
+              const resumeText = `${Math.floor(time / 60)}m ${Math.floor(time % 60)}s`;
+              const percent = Math.round(Math.min(100, (time / 7200) * 100)); // approx max 2hr
+
+              // metadata fallbacks
+              const titleLogo = movie.title_logo || null;
+              const cert = movie.certification || movie.certificate || "";
+              const year = movie.year || (movie.created_at ? new Date(movie.created_at).getFullYear() : null);
+              const shortDesc = movie.description ? (movie.description.length > 160 ? movie.description.slice(0, 157) + "…" : movie.description) : "";
+
+              return (
+                <div
+                  key={movie.slug}
+                  onClick={() => handleResume(movie, time)} // mobile: tap whole card
+                  className="
+                    relative flex-none rounded-lg overflow-hidden bg-gray-900 
+                    border border-gray-800 shadow-sm cursor-pointer
+                    w-[280px] sm:w-[320px] md:w-[380px]
+                    group
+                  "
+                >
+                  {/* Poster */}
+                  <div className="relative">
+                    <img
+                      src={movie.cover_poster || movie.poster}
+                      alt={movie.title}
+                      className="w-full h-36 sm:h-44 md:h-52 object-cover"
+                      onError={(e) => (e.currentTarget.src = '/default-cover.jpg')}
+                    />
+
+                    {/* DESKTOP HOVER OVERLAY (shows logo, cert, year, desc, Resume) */}
+                    <div
+                      className="
+                        hidden sm:flex
+                        absolute inset-0 bg-gradient-to-t from-black/85 via-black/60 to-transparent
+                        flex-col justify-end p-4 gap-3
+                        opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                      "
+                      onClick={(e) => e.stopPropagation()} // prevent parent click when clicking overlay controls
+                    >
+                      {/* Title logo or fallback title */}
+                      <div className="flex items-center gap-3">
+                        {titleLogo ? (
+                          <img src={titleLogo} alt={movie.title} className="h-12 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                        ) : (
+                          <div className="text-lg font-bold text-white truncate">{movie.title}</div>
+                        )}
+
+                        {/* badges */}
+                        <div className="ml-auto flex items-center gap-2">
+                          {cert && <span className="text-xs font-bold px-2 py-1 bg-red-600/90 text-white rounded">{cert}</span>}
+                          {year && <span className="text-xs text-gray-200 px-2 py-1 bg-black/30 rounded">{year}</span>}
+                        </div>
+                      </div>
+
+                      {/* Description (single paragraph) */}
+                      {shortDesc && <p className="text-sm text-gray-200 leading-tight max-h-20 overflow-hidden line-clamp-3">{shortDesc}</p>}
+
+                      {/* Actions row */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleResume(movie, time)}
+                          className="inline-flex items-center px-4 py-2 bg-white text-black font-semibold rounded shadow hover:bg-gray-100"
+                        >
+                          ▶ Resume
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveProgress(movie.slug); }}
+                          className="px-3 py-2 bg-gray-800 text-gray-200 rounded hover:bg-gray-700 ml-2"
+                          title="Remove Progress"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Desktop-only subtle overlay to indicate hover area (keeps poster readable) */}
+                    <div className="hidden sm:block absolute inset-0 pointer-events-none bg-gradient-to-t from-black/0 to-black/20 opacity-0 group-hover:opacity-60 transition-opacity duration-200" />
+                  </div>
+
+                  {/* Text & Progress (visible always) */}
+                  <div className="px-3 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-300 truncate max-w-[72%]">
+                        {movie.slug}
+                      </div>
+                      <div className="text-xs text-gray-400 ml-2">{resumeText}</div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mt-2 h-1.5 w-full bg-gray-700 rounded overflow-hidden">
+                      <div
+                        className="h-1.5 bg-red-600"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* MOBILE: small inline resume button shown under the image for easier accessibility (visible only on small screens) */}
+                  <div className="sm:hidden px-3 pb-3">
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResume(movie, time); }}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded"
+                      >
+                        ▶ Resume
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveProgress(movie.slug);
+                        }}
+                        className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 rounded"
+                        title="Remove progress"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Recommended */}
       {recommended.length > 0 && search === "" && (
