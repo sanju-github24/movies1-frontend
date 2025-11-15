@@ -476,8 +476,8 @@ const WatchListPage = () => {
 
 {/* ===== CONTINUE WATCHING SECTION (CLEAN + MOBILE TAP RESUME) ===== */}
 {continueList.length > 0 && (
-  <div className="max-w-6xl mx-auto px-4 py-6">
-    <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching</h2>
+  <div className="max-w-10xl mx-auto px-4 py-6">
+    <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching For You</h2>
 
     <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-1 px-1">
       {continueList.map(({ movie, time }) => {
@@ -491,7 +491,7 @@ const WatchListPage = () => {
             className="
               relative flex-none rounded-lg overflow-hidden bg-gray-900 
               border border-gray-800 shadow-sm cursor-pointer
-              w-40 sm:w-48 md:w-56 
+              w-70 sm:w-80 md:w-95 
               group
             "
           >
@@ -500,7 +500,7 @@ const WatchListPage = () => {
               <img
                 src={movie.cover_poster || movie.poster}
                 alt={movie.title}
-                className="w-full h-32 sm:h-40 md:h-44 object-cover"
+                className="w-full h-36 sm:h-44 md:h-52 object-cover"
                 onError={(e) => (e.currentTarget.src = '/default-cover.jpg')}
               />
 
@@ -528,10 +528,10 @@ const WatchListPage = () => {
             {/* Text & Progress */}
             <div className="px-3 py-3">
               <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-300 truncate max-w-[60%]">
-                  {movie.title}
+                <div className="text-sm text-gray-300 truncate max-w-[72%]">
+                  {movie.slug}
                 </div>
-                <div className="text-[10px] text-gray-400">{resumeText}</div>
+                <div className="text-xs text-gray-400 ml-2">{resumeText}</div>
               </div>
 
               {/* Progress Bar */}
@@ -548,6 +548,7 @@ const WatchListPage = () => {
     </div>
   </div>
 )}
+
 
 
       {/* Recommended */}
