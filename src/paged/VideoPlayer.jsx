@@ -15,7 +15,6 @@ import {
   Check,
   Equal,
   Music,
-  Star,
   Settings,
 } from "lucide-react";
 
@@ -31,9 +30,32 @@ const formatTime = (seconds) => {
 // --------------------
 // Persistence helpers
 // --------------------
-const STORAGE_KEY_PREFIX = "video_last_time_v1:"; // versioned key so you can change format later
+const STORAGE_KEY_PREFIX = "video_last_time_v1:";
 const getStorageKey = (slugOrSrc) => `${STORAGE_KEY_PREFIX}${slugOrSrc}`;
 
+// Quality Persistence Helpers
+const QUALITY_STORAGE_KEY = "video_default_quality_v1";
+
+const getDefaultQualityLevel = () => {
+    try {
+        const raw = localStorage.getItem(QUALITY_STORAGE_KEY);
+        // Default is -1 (Auto)
+        return raw ? parseInt(raw, 10) : -1; 
+    } catch (e) {
+        console.warn("Failed to read default quality level:", e);
+        return -1;
+    }
+};
+
+const setDefaultQualityLevel = (levelId) => {
+    try {
+        localStorage.setItem(QUALITY_STORAGE_KEY, String(levelId));
+    } catch (e) {
+        console.warn("Failed to save default quality level:", e);
+    }
+};
+
+// Playback Time Persistence Helpers
 const getLastPlaybackTime = (src, slug) => {
   try {
     const key = getStorageKey(slug || src);
@@ -58,11 +80,9 @@ const setLastPlaybackTime = (src, slug, time) => {
   }
 };
 
-// Keep recently watched in sync so the watchlist page can show it
 const updateRecentlyWatched = (meta = {}) => {
   try {
     const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-    // meta should contain at least slug and title; poster/cover/titleLogo are optional
     if (!meta || !meta.slug) return;
     const filtered = existing.filter((m) => m.slug !== meta.slug);
     const updatedEntry = {
@@ -73,7 +93,7 @@ const updateRecentlyWatched = (meta = {}) => {
       title_logo: meta.titleLogoUrl || "",
       lastSeenAt: Date.now(),
     };
-    const updated = [updatedEntry, ...filtered].slice(0, 20); // keep up to 20
+    const updated = [updatedEntry, ...filtered].slice(0, 20);
     localStorage.setItem("recently_watched", JSON.stringify(updated));
   } catch (e) {
     console.warn("Failed to update recently_watched:", e);
@@ -81,15 +101,16 @@ const updateRecentlyWatched = (meta = {}) => {
 };
 
 // --------------------
-// VideoPlayer
+// VideoPlayer Component
 // --------------------
 const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayData = {}, language }) => {
   const videoRef = useRef(null);
   const hlsInstanceRef = useRef(null);
   const playerContainerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
-  const savedTimeRef = useRef(null); // used when switching quality/audio
-  const periodicSaveRef = useRef(null); // interval id for periodic save
+  const savedTimeRef = useRef(null);
+  const periodicSaveRef = useRef(null);
+  const lastInteractionTimeRef = useRef(Date.now());
 
   // --- Player State ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -99,8 +120,8 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isLive, setIsLive] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(false); // quick flash on play/pause clicks
+  const [isLive, setIsLive] = useState(false); 
+  const [showOverlay, setShowOverlay] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [isHlsSource, setIsHlsSource] = useState(false);
@@ -109,16 +130,14 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const [audioTracks, setAudioTracks] = useState([]);
   const [currentAudioTrackId, setCurrentAudioTrackId] = useState(-1);
   const [qualityLevels, setQualityLevels] = useState([]);
-  const [currentQualityLevel, setCurrentQualityLevel] = useState(-1);
+  const [defaultQualityLevel, setDefaultQualityLevelState] = useState(getDefaultQualityLevel()); 
+  const [currentQualityLevel, setCurrentQualityLevel] = useState(defaultQualityLevel); 
 
-  // 🔑 STATES for right-side panels
+  // --- Panels State ---
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
-  // ⭐️ State for the Netflix-style metadata overlay (PAUSE OVERLAY)
-  const [showMetadataOverlay, setShowMetadataOverlay] = useState(false);
-
-  // 📱 Mobile View Detection
+  // Mobile View Detection
   const [isMobileView, setIsMobileView] = useState(window.matchMedia("(max-width: 768px)").matches);
 
   // Resize / media query handler
@@ -139,6 +158,8 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const togglePlayPause = useCallback(() => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
+    
+    lastInteractionTimeRef.current = Date.now();
 
     if (isPlaying) {
       videoEl.pause();
@@ -146,7 +167,7 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       videoEl.play().catch((e) => console.error("Play failed:", e));
     }
 
-    // small feedback overlay
+    // Show quick play/pause feedback overlay
     setShowOverlay(true);
     setTimeout(() => setShowOverlay(false), 400);
   }, [isPlaying]);
@@ -190,11 +211,12 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const handleSeek = (e) => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
+    if (isLive) return; 
+
     const seekTime = parseFloat(e.target.value);
     videoEl.currentTime = seekTime;
     setCurrentTime(seekTime);
 
-    // Save immediately on user seek
     try {
       setLastPlaybackTime(src, getKeyId(), seekTime);
     } catch (e) {}
@@ -203,17 +225,20 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const seekRelative = useCallback(
     (seconds) => {
       const videoEl = videoRef.current;
+      if (isLive) return; 
+      
+      lastInteractionTimeRef.current = Date.now();
+
       if (videoEl) {
         videoEl.currentTime = Math.max(0, Math.min(duration, videoEl.currentTime + seconds));
         setCurrentTime(videoEl.currentTime);
 
-        // Save after seeking
         try {
           setLastPlaybackTime(src, getKeyId(), videoEl.currentTime);
         } catch (e) {}
       }
     },
-    [duration, src]
+    [duration, src, isLive]
   );
 
   const toggleFullScreen = useCallback(() => {
@@ -229,14 +254,12 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     }
   }, []);
 
-  // --- Improved handlers for audio & quality switching (smooth) ---
   const handleAudioTrackChange = useCallback(
     (newTrackId) => {
       const hls = hlsInstanceRef.current;
       const videoEl = videoRef.current;
       if (!hls || newTrackId === currentAudioTrackId) return;
 
-      // Save pos
       savedTimeRef.current = videoEl?.currentTime || 0;
       setIsLoading(true);
 
@@ -253,6 +276,7 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     [currentAudioTrackId]
   );
 
+  // MODIFIED: Quality Change handler now saves the preference
   const handleQualityChange = useCallback(
     (newLevel) => {
       const hls = hlsInstanceRef.current;
@@ -264,13 +288,17 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
 
       savedTimeRef.current = videoEl?.currentTime || 0;
       setIsLoading(true);
+      
+      // SAVE new default quality level
+      setDefaultQualityLevel(newLevel);
+      setDefaultQualityLevelState(newLevel);
 
       try {
         if (newLevel === -1) {
           hls.currentLevel = -1;
           setCurrentQualityLevel(-1);
         } else {
-          hls.currentLevel = newLevel;
+          hls.currentLevel = newLevel; 
           setCurrentQualityLevel(newLevel);
         }
       } catch (err) {
@@ -348,54 +376,45 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     };
   }, [isPlaying, showControlsTemporarily, showQualityPanel, showAudioPanel, showVolumeSlider]);
 
-  // --- PAUSE / PLAY overlay logic (immediate) ---
+
+  // Persistence and metadata update on pause/unmount
   useEffect(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
+      if (!isPlaying) {
+          const v = videoRef.current;
+          
+          if (v && v.readyState >= 2 && (v.duration > 0 || isLive)) {
+            // Save playback time on pause
+            try {
+              if (v && src && !isLive) {
+                setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
+              }
+            } catch (e) {}
 
-    const handlePause = () => {
-      setShowMetadataOverlay(true);
-      setShowControls(false);
-
-      // Save playback time on pause
-      try {
-        const v = videoRef.current;
-        if (v && src) {
-          setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
-        }
-      } catch (e) {}
-
-      // Update recently watched metadata so main page can surface this movie
-      try {
-        updateRecentlyWatched({
-          slug: playerOverlayData?.slug,
-          title: playerOverlayData?.title || title,
-          poster: playerOverlayData?.poster || playerOverlayData?.titleLogoUrl || "",
-          cover_poster: playerOverlayData?.cover_poster || "",
-          titleLogoUrl: playerOverlayData?.titleLogoUrl || "",
-        });
-      } catch (e) {}
-    };
-
-    const handlePlay = () => {
-      setShowMetadataOverlay(false);
-      showControlsTemporarily();
-    };
-
-    videoEl.addEventListener("pause", handlePause);
-    videoEl.addEventListener("play", handlePlay);
-
-    return () => {
-      videoEl.removeEventListener("pause", handlePause);
-      videoEl.removeEventListener("play", handlePlay);
-    };
-  }, [showControlsTemporarily, playerOverlayData, src, title]);
+            // Update recently watched metadata
+            try {
+              updateRecentlyWatched({
+                slug: playerOverlayData?.slug,
+                title: playerOverlayData?.title || title,
+                poster: playerOverlayData?.poster || playerOverlayData?.titleLogoUrl || "",
+                cover_poster: playerOverlayData?.cover_poster || "",
+                titleLogoUrl: playerOverlayData?.titleLogoUrl || "",
+              });
+            } catch (e) {}
+          }
+      } 
+      else {
+          showControlsTemporarily();
+      }
+      
+  }, [isPlaying, isLive, showControlsTemporarily, playerOverlayData, src, title]); 
 
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // Ignore keypresses if the user is focused on an input field
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
 
+      // Prevent the spacebar from scrolling the page
       if (event.code === "Space") event.preventDefault();
 
       switch (event.key) {
@@ -403,11 +422,13 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
           togglePlayPause();
           break;
         case "ArrowRight":
-          seekRelative(10);
+          // Only seek if not live
+          if (!isLive) seekRelative(10);
           showControlsTemporarily();
           break;
         case "ArrowLeft":
-          seekRelative(-10);
+          // Only seek if not live
+          if (!isLive) seekRelative(-10);
           showControlsTemporarily();
           break;
         default:
@@ -417,14 +438,13 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlayPause, seekRelative, showControlsTemporarily]);
+  }, [togglePlayPause, seekRelative, showControlsTemporarily, isLive]); 
 
-  // --- Core HLS and direct video setup (with resume restore/save) ---
+  // --- Core HLS and direct video setup ---
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl || !src) return;
 
-    // cleanup previous HLS instance
     if (hlsInstanceRef.current) {
       try {
         hlsInstanceRef.current.destroy();
@@ -435,25 +455,14 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     }
 
     // element handlers
-    const handleTimeUpdate = () => {
-      setCurrentTime(videoEl.currentTime);
-    };
-    const handleLoadedMetadata = () => {
-      setDuration(videoEl.duration || 0);
-      setIsLoading(false);
-    };
+    const handleTimeUpdate = () => { setCurrentTime(videoEl.currentTime); };
+    const handleLoadedMetadata = () => { setDuration(videoEl.duration || 0); setIsLoading(false); };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
-    const handleWaiting = () => setIsLoading(true);
+    const handleWaiting = () => setIsLoading(true); 
     const handlePlaying = () => setIsLoading(false);
-    const handleVolumeChangeUpdate = () => {
-      setVolume(videoEl.volume);
-      setIsMuted(videoEl.muted);
-    };
-    const handleError = (e) => {
-      console.error("Video element error:", e);
-      setIsLoading(false);
-    };
+    const handleVolumeChangeUpdate = () => { setVolume(videoEl.volume); setIsMuted(videoEl.muted); };
+    const handleError = (e) => { console.error("Video element error:", e); setIsLoading(false); };
 
     videoEl.addEventListener("timeupdate", handleTimeUpdate);
     videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -466,22 +475,17 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
 
     const isHls = typeof src === "string" && src.toLowerCase().includes(".m3u8");
     setIsHlsSource(isHls);
-
+    setIsLive(false); 
     setIsLoading(true);
 
-    // restore saved time
     const savedTime = getLastPlaybackTime(src, getKeyId()) || 0;
 
-    // start periodic save every 5 seconds while mounted
-    if (periodicSaveRef.current) {
-      clearInterval(periodicSaveRef.current);
-      periodicSaveRef.current = null;
-    }
+    // Periodic Save Setup
+    if (periodicSaveRef.current) { clearInterval(periodicSaveRef.current); periodicSaveRef.current = null; }
     periodicSaveRef.current = setInterval(() => {
       try {
         const v = videoRef.current;
-        if (v && src) {
-          // only save when user has progressed a bit (avoid saving 0 frequently)
+        if (v && src && !isLive) { 
           setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
         }
       } catch (e) {}
@@ -492,7 +496,9 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       hlsInstanceRef.current = hls;
 
       hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        // LIVE Detection
         setIsLive(!!data?.live);
+        
         const levels = (data?.levels || []).map((level, index) => ({
           id: index,
           bitrate: Math.round((level?.bitrate || 0) / 1000),
@@ -501,7 +507,19 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
         }));
         setQualityLevels(levels);
         setAudioTracks(hls.audioTracks || []);
-        setCurrentQualityLevel(hls.currentLevel ?? -1);
+        
+        // APPLY DEFAULT QUALITY LEVEL LOGIC
+        const defaultLevel = getDefaultQualityLevel();
+        if (defaultLevel !== -1 && defaultLevel < levels.length) {
+            hls.currentLevel = defaultLevel;
+            setCurrentQualityLevel(defaultLevel);
+        } else {
+            hls.currentLevel = -1; 
+            setCurrentQualityLevel(-1); 
+            // If the saved level is not found, revert default to Auto
+            if(defaultLevel !== -1) setDefaultQualityLevel(-1); 
+        }
+
         setCurrentAudioTrackId(hls.audioTrack ?? -1);
         setIsLoading(false);
       });
@@ -509,10 +527,8 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       hls.on(Hls.Events.LEVEL_LOADING, () => setIsLoading(true));
       hls.on(Hls.Events.LEVEL_LOADED, () => {
         const v = videoRef.current;
-        if (savedTimeRef.current != null && v) {
-          try {
-            v.currentTime = Math.min(savedTimeRef.current, v.duration || savedTimeRef.current);
-          } catch (e) {}
+        if (!isLive && savedTimeRef.current != null && v) {
+          try { v.currentTime = Math.min(savedTimeRef.current, v.duration || savedTimeRef.current); } catch (e) {}
         }
         setTimeout(() => setIsLoading(false), 150);
       });
@@ -522,31 +538,21 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (event, data) => {
         setCurrentAudioTrackId(data.id);
         const v = videoRef.current;
-        if (savedTimeRef.current != null && v) {
-          try {
-            v.currentTime = Math.min(savedTimeRef.current, v.duration || savedTimeRef.current);
-          } catch (e) {}
+        if (!isLive && savedTimeRef.current != null && v) {
+          try { v.currentTime = Math.min(savedTimeRef.current, v.duration || savedTimeRef.current); } catch (e) {}
         }
         setTimeout(() => setIsLoading(false), 120);
       });
 
       hls.attachMedia(videoEl);
       hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-        try {
-          hls.loadSource(src);
-        } catch (err) {
-          console.error("HLS loadSource error:", err);
-        }
+        try { hls.loadSource(src); } catch (err) { console.error("HLS loadSource error:", err); }
 
         videoEl.addEventListener(
           "loadeddata",
           () => {
-            // restore saved playback position (from localStorage)
-            if (savedTime > 0 && savedTime < (videoEl.duration || Infinity) - 5) {
-              try {
-                videoEl.currentTime = savedTime;
-                setCurrentTime(savedTime);
-              } catch (e) {}
+            if (!isLive && savedTime > 0 && savedTime < (videoEl.duration || Infinity) - 5) {
+              try { videoEl.currentTime = savedTime; setCurrentTime(savedTime); } catch (e) {}
             }
             videoEl.play().catch(() => {});
           },
@@ -569,6 +575,7 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
         }
       });
     } else if (isHls && videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+      // Native HLS fallback
       videoEl.src = src;
       videoEl.addEventListener(
         "loadeddata",
@@ -581,10 +588,12 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
         { once: true }
       );
     } else {
+      // Non-HLS setup
       setQualityLevels([]);
       setAudioTracks([]);
       setCurrentQualityLevel(-1);
       setCurrentAudioTrackId(-1);
+      setIsLive(false); 
 
       videoEl.src = src;
       videoEl.load();
@@ -601,23 +610,20 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       );
     }
 
-    // save on unload (tab close / refresh)
     const handleBeforeUnload = () => {
       try {
         const v = videoRef.current;
-        if (v && src) setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
+        if (v && src && !isLive) setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
       } catch (e) {}
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      // final save
       try {
         const v = videoRef.current;
-        if (v && src) setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
+        if (v && src && !isLive) setLastPlaybackTime(src, getKeyId(), v.currentTime || 0);
       } catch (e) {}
 
-      // ensure we add to recently watched on unmount as well (with last saved time)
       try {
         updateRecentlyWatched({
           slug: playerOverlayData?.slug,
@@ -628,16 +634,9 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
         });
       } catch (e) {}
 
-      // clear periodic save
-      if (periodicSaveRef.current) {
-        clearInterval(periodicSaveRef.current);
-        periodicSaveRef.current = null;
-      }
+      if (periodicSaveRef.current) { clearInterval(periodicSaveRef.current); periodicSaveRef.current = null; }
 
-      if (hlsInstanceRef.current) {
-        try { hlsInstanceRef.current.destroy(); } catch (e) {}
-        hlsInstanceRef.current = null;
-      }
+      if (hlsInstanceRef.current) { try { hlsInstanceRef.current.destroy(); } catch (e) {} hlsInstanceRef.current = null; }
 
       videoEl.removeEventListener("timeupdate", handleTimeUpdate);
       videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
@@ -648,15 +647,12 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       videoEl.removeEventListener("volumechange", handleVolumeChangeUpdate);
       videoEl.removeEventListener("error", handleError);
 
-      try {
-        videoEl.src = "";
-        videoEl.load();
-      } catch (e) {}
+      try { videoEl.src = ""; videoEl.load(); } catch (e) {}
 
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, playerOverlayData?.slug]);
+  }, [src, playerOverlayData?.slug, isLive]); 
 
   // --- Helper Labels ---
   const getCurrentQualityLabel = () => {
@@ -673,22 +669,6 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     return track ? track.name || track.lang || `Track ${track.id}` : "Unknown";
   };
 
-  // --- Overlay data from props ---
-  const { logoUrl, year, overview, slug, genres } = playerOverlayData || {};
-  const displayName = playerOverlayData?.title || title;
-  const displaySlug = slug
-    ? slug.toUpperCase()
-    : (displayName || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .toUpperCase() || "SLUG-UNKNOWN";
-
-  const has16Plus = true;
-  const hasSub = true;
-  const has4k = true;
-  const hasDolby = true;
-
   // Panels classes
   const panelBaseClasses = "absolute p-4 bg-black/95 shadow-2xl text-white z-[70] transition-all duration-300 transform";
   const mobilePanelClasses = "inset-x-0 rounded-t-lg shadow-2xl p-6 h-1/2 overflow-y-auto custom-scroll touch-pan-y";
@@ -697,22 +677,32 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
   const audioPanelClasses = isMobileView ? `${panelBaseClasses} ${mobilePanelClasses}` : `${panelBaseClasses} ${desktopPanelClasses}`;
   const mobilePanelBottom = isMobileView && showControls ? "88px" : "0";
 
-  // Quality / Audio panels
+  // Quality Panel
   const QualityPanel = () => (
     <div role="dialog" aria-label="Video quality settings" className={qualityPanelClasses} style={isMobileView ? { bottom: mobilePanelBottom } : undefined} onClick={(e) => e.stopPropagation()}>
       <h3 className={`text-lg font-bold mb-3 ${isMobileView ? "text-center text-lg" : "text-left"}`}>Video Quality</h3>
       <ul className="space-y-2 max-h-64 overflow-y-auto custom-scroll">
+        
+        {/* Auto (Best available) Option */}
         <li onClick={() => { handleQualityChange(-1); setShowControls(true); }} className={`flex items-center justify-between p-3 cursor-pointer rounded transition ${currentQualityLevel === -1 ? "bg-blue-600 font-bold" : "hover:bg-gray-700"}`}>
           <span>Auto (Best available)</span>
           {currentQualityLevel === -1 && <Check className="w-4 h-4" />}
         </li>
 
-        {qualityLevels.slice().reverse().map((level) => (
-          <li key={level.id} onClick={() => { handleQualityChange(level.id); setShowControls(true); }} className={`flex items-center justify-between p-3 cursor-pointer rounded transition ${currentQualityLevel === level.id ? "bg-blue-600 font-bold" : "hover:bg-gray-700"}`}>
-            <span className="break-words">{level.resolution} ({level.bitrate} kbps)</span>
-            {currentQualityLevel === level.id && <Check className="w-4 h-4" />}
-          </li>
-        ))}
+        {/* Quality Levels */}
+        {qualityLevels.slice().reverse().map((level) => {
+          const isCurrent = currentQualityLevel === level.id;
+          const isDefault = defaultQualityLevel === level.id;
+          return (
+            <li key={level.id} onClick={() => { handleQualityChange(level.id); setShowControls(true); }} className={`flex items-center justify-between p-3 cursor-pointer rounded transition ${isCurrent ? "bg-blue-600 font-bold" : "hover:bg-gray-700"}`}>
+              <span className="break-words">
+                {level.resolution} ({level.bitrate} kbps)
+                {isDefault && !isCurrent && <span className="text-gray-400 text-xs ml-2">(Default)</span>} 
+              </span>
+              {isCurrent && <Check className="w-4 h-4" />}
+            </li>
+          );
+        })}
       </ul>
 
       {audioTracks.length > 0 && (
@@ -723,6 +713,7 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
     </div>
   );
 
+  // Audio Panel
   const AudioPanel = () => (
     <div role="dialog" aria-label="Audio and subtitles settings" className={audioPanelClasses} style={isMobileView ? { bottom: mobilePanelBottom } : undefined} onClick={(e) => e.stopPropagation()}>
       <h3 className={`font-bold mb-3 border-b border-gray-700 pb-2 flex justify-between items-center ${isMobileView ? "text-center text-lg" : "text-left"}`}>Audio <span className="text-sm font-medium text-gray-400">({getCurrentAudioLabel()})</span></h3>
@@ -773,13 +764,16 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
       {/* Video Element */}
       <video ref={videoRef} className="w-full h-full object-contain bg-black" onClick={togglePlayPause} autoPlay playsInline tabIndex={-1} />
 
-      {/* Loading Spinner */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
-          <Loader2 className="w-12 h-12 animate-spin text-cyan-400" />
-          <span className="ml-4 text-white text-lg">Loading Stream...</span>
-        </div>
-      )}
+      {/* Top Bar for Back Button */}
+      <div className="absolute top-0 left-0 right-0 p-3 z-60 transition-opacity duration-300">
+        <button
+          onClick={onBackClick}
+          className="p-2 rounded-full bg-black/50 hover:bg-black/80 text-white transition focus:outline-none focus:ring-2 focus:ring-cyan-400"
+          aria-label="Go back"
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+      </div>
 
       {/* Quick Play/Pause Feedback */}
       {showOverlay && !isLoading && (
@@ -790,157 +784,126 @@ const VideoPlayer = ({ src, title = "Video Title", onBackClick, playerOverlayDat
         </div>
       )}
 
-      {/* === PAUSED METADATA OVERLAY (IMMEDIATE, RELIABLE) === */}
-      {showMetadataOverlay && !isLoading && (
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm z-40 flex flex-col justify-end p-8 sm:p-16">
-          <div className="max-w-3xl">
-            <div className="mb-4">
-              {logoUrl ? (
-                <img src={logoUrl} alt={`${displayName} Logo`} className="h-24 max-w-full object-contain object-left" onError={(e) => (e.currentTarget.style.display = "none")} />
-              ) : (
-                <h1 className="text-5xl sm:text-7xl font-extrabold text-white drop-shadow-lg">{displayName}</h1>
-              )}
-              <span className="text-xl font-bold text-white block -mt-2 ml-1 uppercase">{displaySlug}</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-300 mb-4">
-              <span className="font-semibold text-white">{language || "Language Unknown"}</span>
-              <span className="text-gray-400">•</span>
-              <span className="text-cyan-400 font-medium">Ekka</span>
-              <span className="text-gray-400">|</span>
-              <span className="truncate">{Array.isArray(genres) ? genres.join(", ") : (genres || "")}</span>
-              <span className="text-gray-400">|</span>
-              <span>{year || "2025"}</span>
-              <span className="text-gray-400">|</span>
-              <span>— mins</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm mb-6">
-              {has16Plus && <span className="border border-white/80 px-1.5 py-0.5 text-white font-medium">16+</span>}
-              {hasSub && <span className="border border-white/80 px-1.5 py-0.5 text-white font-medium bg-gray-500/50">SUB</span>}
-              {has4k && <span className="border border-white/80 px-1.5 py-0.5 text-white font-medium bg-gray-500/50">4K</span>}
-              {hasDolby && <span className="font-bold text-blue-400"><span className="text-xs">D</span>Dolby Audio</span>}
-            </div>
-
-            {overview && <p className="text-sm sm:text-lg text-gray-200 mb-8 line-clamp-3 leading-relaxed max-w-xl">{overview}</p>}
-
-            <div className="flex gap-3">
-              <button onClick={togglePlayPause} className="inline-flex items-center px-6 py-3 bg-white hover:bg-gray-100 text-black font-semibold rounded-lg shadow-xl transition transform hover:scale-[1.02] active:scale-95 text-base sm:text-xl">
-                <Play className="w-5 h-5 sm:w-6 sm:h-6 mr-3 fill-black" />
-                Resume
-              </button>
-
-              {playerOverlayData?.downloadUrl && (
-                <a href={playerOverlayData.downloadUrl} className="inline-flex items-center px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-xl transition" title="Download">
-                  <Star className="w-4 h-4 mr-2" /> Download
-                </a>
-              )}
-            </div>
+      {/* Controls Bar (Bottom) */}
+      <div
+        className={`absolute bottom-0 left-0 right-0 p-3 sm:p-5 bg-gradient-to-t from-black/80 to-transparent z-60 transition-all duration-300 transform ${
+          showControls ? "translate-y-0" : "translate-y-full opacity-0"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+        aria-hidden={!showControls}
+      >
+        {/* Scrubber / Progress Bar (Hidden for Live Streams) */}
+        {!isLive && (
+          <div className="mb-2 sm:mb-3 flex items-center gap-3">
+            <span className="text-white text-xs sm:text-sm font-mono w-12 text-right">{formatTime(currentTime)}</span>
+            
+            <input
+              type="range"
+              min="0"
+              max={duration}
+              step="0.1"
+              value={currentTime}
+              onChange={handleSeek}
+              className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-lg range-red-500"
+              style={{
+                background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`,
+              }}
+            />
+            
+            <span className="text-white text-xs sm:text-sm font-mono w-12 text-left">{formatTime(duration)}</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Logo top-right */}
-      <div className="absolute top-0 right-0 p-4 pt-6 z-40 transition-opacity duration-300" onClick={(e) => e.stopPropagation()}>
-        <img src="/logo_39.png" alt="Brand Logo" className="h-6 sm:h-8 w-auto opacity-75" />
-      </div>
-
-      {/* TOP CONTROL BAR */}
-      <div className={`absolute top-0 inset-x-0 p-4 pt-6 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent z-40 transition-opacity duration-300 ${showControls || showQualityPanel || showAudioPanel ? "opacity-100" : "opacity-0 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          <button onClick={onBackClick} className="text-white p-1 sm:p-2 rounded-full hover:bg-white/20 transition" title="Back">
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-          <span className="text-white text-base sm:text-lg font-semibold truncate max-w-[150px] sm:max-w-[200px]">{title}</span>
-        </div>
-
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          {qualityLevels.length > 1 && (
-            <button onClick={() => { setShowQualityPanel((p) => !p); setShowAudioPanel(false); setShowVolumeSlider(false); setShowControls(true); }} className={`text-white text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full border border-white/50 bg-white/10 transition ${showQualityPanel ? "bg-white/30" : "hover:bg-white/30"}`} title="Video Quality">
-              <Settings className="w-4 h-4 inline mr-1" />
-              {getCurrentQualityLabel()}
-            </button>
-          )}
-          {audioTracks.length > 0 && (
-            <button onClick={() => { setShowAudioPanel((p) => !p); setShowQualityPanel(false); setShowVolumeSlider(false); setShowControls(true); }} className={`text-white text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full border border-white/50 bg-white/10 transition ${showAudioPanel ? "bg-white/30" : "hover:bg-white/30"}`} title="Audio & Subtitles">
-              <Music className="w-4 h-4 inline mr-1" />
-              Audio & Subtitles
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Panels */}
-      {showQualityPanel && <QualityPanel />}
-      {showAudioPanel && <AudioPanel />}
-
-      {/* BOTTOM CONTROL BAR */}
-      <div className={`absolute inset-x-0 bottom-0 z-40 transition-opacity duration-300 ${showControls || showVolumeSlider ? "opacity-100" : "opacity-0 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
-        <div className="w-full h-2 flex items-center px-4 pb-2">
-          <input
-            type="range"
-            min="0"
-            max={duration || 0}
-            step="0.1"
-            value={currentTime}
-            onChange={handleSeek}
-            className="w-full bg-blue-600 appearance-none cursor-pointer range-with-custom-thumb"
-            style={{
-              background: `linear-gradient(to right, #22D3EE 0%, #22D3EE ${(duration ? (currentTime / duration) * 100 : 0)}%, #ffffff40 ${(duration ? (currentTime / duration) * 100 : 0)}%, #ffffff40 100%)`,
-            }}
-          />
-        </div>
-
-        <div className="p-4 pt-0 pb-6 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent">
-          <div className="flex items-center space-x-3 sm:space-x-6">
-            <button onClick={() => seekRelative(-10)} className="text-white p-1 sm:p-2 hover:bg-white/20 rounded-full transition flex items-center relative" title="Rewind 10s">
-              <span className="absolute text-xs font-bold top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">10</span>
-              <Rewind className="w-6 h-6 sm:w-7 sm:h-7 opacity-70" />
-            </button>
-
-            <button onClick={togglePlayPause} className="text-white p-1 sm:p-2 hover:bg-white/20 rounded-full transition" title={isPlaying ? "Pause" : "Play"}>
+        {/* Main Controls Row */}
+        <div className="flex items-center justify-between">
+          {/* Left Controls (Play/Pause, Seek, Volume, LIVE Badge) */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            
+            <button onClick={togglePlayPause} className="p-1 rounded-full hover:bg-white/20 transition">
               {PlayPauseIcon}
             </button>
+            
+            {/* Quick Seek buttons (Hidden for Live) */}
+            {!isLive && (
+              <>
+                <button onClick={() => seekRelative(-30)} className="p-1 rounded-full hover:bg-white/20 transition hidden sm:block">
+                  <Rewind className="w-6 h-6 text-white" />
+                </button>
+                <button onClick={() => seekRelative(30)} className="p-1 rounded-full hover:bg-white/20 transition hidden sm:block">
+                  <FastForward className="w-6 h-6 text-white" />
+                </button>
+              </>
+            )}
 
-            <button onClick={() => seekRelative(10)} className="text-white p-1 sm:p-2 hover:bg-white/20 rounded-full transition flex items-center relative" title="Fast Forward 10s">
-              <span className="absolute text-xs font-bold top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">10</span>
-              <FastForward className="w-6 h-6 sm:w-7 sm:h-7 opacity-70" />
-            </button>
-
-            <div className="text-white text-sm sm:text-base font-medium ml-4">
-              {formatTime(currentTime)} / {isLive ? "LIVE" : formatTime(duration)}
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 sm:space-x-4">
-            <div className="relative volume-control-area">
-              <button onClick={toggleMute} className="text-white p-1 sm:p-2 hover:bg-white/20 rounded-full transition" title={isMuted || volume === 0 ? "Unmute" : "Mute"}>
+            {/* LIVE Badge */}
+            {isLive && (
+                <span className="ml-2 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-md animate-pulse">
+                    LIVE
+                </span>
+            )}
+            
+            {/* Volume Control */}
+            <div className="relative flex items-center volume-control-area">
+              <button onClick={toggleMute} className="p-1 rounded-full hover:bg-white/20 transition">
                 {MuteVolumeIcon}
               </button>
 
-              <div className={`absolute bottom-full mb-4 left-1/2 transform -translate-x-1/2 p-2 bg-black/80 rounded-lg shadow-xl transition-opacity duration-200 ${showVolumeSlider ? "opacity-100 visible" : "opacity-0 invisible"}`}>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  orient="vertical"
-                  className="h-24 w-1 appearance-none cursor-pointer bg-gray-600 volume-slider"
-                  style={{
-                    background: `linear-gradient(to top, #22D3EE 0%, #22D3EE ${(isMuted ? 0 : volume) * 100}%, #ffffff40 ${(isMuted ? 0 : volume) * 100}%, #ffffff40 100%)`,
-                  }}
-                />
-              </div>
+              {showVolumeSlider && (
+                <div className="absolute bottom-full mb-3 p-3 rounded-lg bg-black/70 shadow-lg flex flex-col items-center w-10 h-32">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-full h-full appearance-none bg-transparent transform rotate-[-90deg] origin-center"
+                    style={{
+                        WebkitAppearance: 'slider-vertical',
+                        MozAppearance: 'none',
+                        height: '100px',
+                        width: '100px',
+                        cursor: 'pointer'
+                    }}
+                  />
+                </div>
+              )}
             </div>
+            
+          </div>
 
-            <button onClick={toggleFullScreen} className="text-white p-1 sm:p-2 hover:bg-white/20 rounded-full transition" title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}>
+          {/* Right Controls (Settings, Fullscreen) */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            
+            {/* Settings Button (Quality/Audio) */}
+            {(qualityLevels.length > 0 || audioTracks.length > 0) && (
+              <button
+                onClick={() => {
+                  setShowQualityPanel(!showQualityPanel);
+                  setShowAudioPanel(false); 
+                  setShowControls(true); 
+                }}
+                className="p-1 rounded-full hover:bg-white/20 transition relative"
+              >
+                <Settings className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                <span className="absolute top-0 right-0 text-[10px] bg-red-600 text-white rounded-full px-1">
+                    {getCurrentQualityLabel()}
+                </span>
+              </button>
+            )}
+
+            {/* Fullscreen Button */}
+            <button onClick={toggleFullScreen} className="p-1 rounded-full hover:bg-white/20 transition">
               {FullscreenIcon}
             </button>
           </div>
         </div>
       </div>
+      
+      {/* Quality and Audio Panels */}
+      {showQualityPanel && <QualityPanel />}
+      {showAudioPanel && <AudioPanel />}
+      
     </div>
   );
 };

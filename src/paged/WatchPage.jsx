@@ -223,24 +223,31 @@ const WatchHtmlPage = () => {
         .eq("slug", slug)
         .single();
 
-      if (error || !watchData || !watchData.imdb_id) {
+      // 1. Handle case where slug is completely missing from watch_html
+      if (error || !watchData) {
         if (isMounted) setMovieMeta({ title: "Not Found 🚫" });
         setLoading(false);
         return;
       }
 
+      // 2. Attempt to fetch TMDB data only if imdb_id is present
       const primaryImdbId = watchData.imdb_id;
-      const tmdbResult = await fetchTmdbMetadata(primaryImdbId);
+      let tmdbResult = null;
+      if (primaryImdbId) {
+        tmdbResult = await fetchTmdbMetadata(primaryImdbId);
+      }
       if (isMounted) setTmdbMeta(tmdbResult);
 
+      // 3. Consolidate metadata, prioritizing TMDB but falling back to watchData
       const finalPoster = tmdbResult?.poster_url || watchData.poster || "/poster.png";
       const finalBackground = tmdbResult?.cover_poster_url || watchData.cover_poster || watchData.poster || "/poster.png";
       const finalImdbRating = tmdbResult?.imdb_rating ? `${tmdbResult.imdb_rating.toFixed(1)}/10` : watchData.imdb_rating || null;
-
+      
+      // We explicitly set a valid object here, even if TMDB failed
       if (isMounted) {
         setMovieMeta({
           slug: watchData.slug,
-          title: watchData.title || "Untitled Movie",
+          title: watchData.title || watchData.slug || "Untitled Movie",
           poster: finalPoster,
           background: finalBackground,
           imdbRating: finalImdbRating,
@@ -307,10 +314,10 @@ const WatchHtmlPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [slug, backendUrl, fetchTmdbMetadata]);
+  }, [slug, backendUrl, fetchTmdbMetadata]); // Removed the old dependency check that was causing the return
 
   useEffect(() => {
-    if (movieMeta?.title) {
+    if (movieMeta?.title && movieMeta.title !== "Not Found 🚫") {
       document.title = `Watch ${movieMeta.title} | MovieStream`;
       let meta = document.querySelector("meta[name='description']");
       if (!meta) {
@@ -333,7 +340,7 @@ const WatchHtmlPage = () => {
     return (
       <div className="min-h-screen bg-gray-950 text-white pt-20 text-center">
         <h1 className="text-3xl text-red-500">404 - Movie Not Found</h1>
-        <p className="text-gray-400 mt-2">The movie slug "{slug}" does not match any entry or lacks a valid IMDb ID.</p>
+        <p className="text-gray-400 mt-2">The movie slug "{slug}" does not match any entry in the database.</p>
         <Link to="/" className="text-blue-400 hover:text-blue-300 mt-4 block">
           Go to Homepage
         </Link>
@@ -426,7 +433,7 @@ const WatchHtmlPage = () => {
         <OverviewSection tmdbMeta={tmdbMeta} />
 
         <h2 className="text-2xl font-bold mt-8 mb-4 text-blue-400">
-          {episodes.length > 0 && activeSrc?.isEpisode ? `Now Playing: ${activeSrc.name}` : `Select Source for: ${movieMeta?.slug || "Movie"}`}
+          {episodes.length > 0 && activeSrc?.isEpisode ? `Now Playing: ${activeSrc.name}` : `Select Source for: ${movieMeta?.title || "Movie"}`}
         </h2>
 
         {allPlayableSources.length > 0 && (
