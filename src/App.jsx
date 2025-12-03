@@ -33,6 +33,9 @@ import AdminMembers from "./paged/AdminMembers"; // adjust path if needed
 import WatchListPage from "./paged/WatchListPage";
 import AdminUp4streamFiles from './components/AdminUp4streamFiles';
 import VideoPlayerPage from './paged/VideoPlayerPage';
+import LiveCricket from './paged/LiveCricket';
+import AdminLiveMatchUpload from './paged/AdminLiveMatchUpload';
+import LiveStreamPlayer from './paged/LiveStreamPlayer';
 
 
 
@@ -48,11 +51,25 @@ const AppContent = () => {
   const hidePaths = ["/login", "/verify-account", "/reset-password", "/blogs"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
-  const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); // <-- hide on /player and /player/:slug and deeper
+  const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); // <-- hides /player and /player/:slug
   const isAdminPath = location.pathname.startsWith("/admin");
+  
+  // --- NEW LIVE STREAM PLAYER PATH CHECK ---
+  // This checks for the dynamic route structure: /live-cricket/player/slug
+  const isLiveStreamPlayerPath = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname); 
+  // ----------------------------------------
+  
+  const isLiveCricketPath = location.pathname === "/live-cricket"; 
 
   const hideNavbarAndCategoryBar =
-    hidePaths.includes(location.pathname) || isBlogViewerPath || isWatchPath || isPlayerPath || isAdminPath;
+    hidePaths.includes(location.pathname) || 
+    isBlogViewerPath || 
+    isWatchPath || 
+    isPlayerPath || 
+    isAdminPath ||
+    isLiveCricketPath ||
+    // --- HIDE NAV/CAT BARS ON LIVE STREAM PLAYER PAGE ---
+    isLiveStreamPlayerPath; // <-- Added the new check
 
   // Unified handler for language/navigation
   const handleNavigate = (name) => {
@@ -73,6 +90,7 @@ const AppContent = () => {
         pauseOnHover
       />
 
+      {/* --- Navbar Rendering --- */}
       {!hideNavbarAndCategoryBar && (
         <>
           {/* Desktop Navbar */}
@@ -84,8 +102,9 @@ const AppContent = () => {
             />
           </div>
 
-          {/* Mobile Navbar */}
+          {/* Mobile Navbar (including the bottom bar and mobile menu) */}
           <div className="sm:hidden">
+            {/* The Navbar component handles both the top bar and the fixed bottom bar */}
             <Navbar
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
@@ -95,6 +114,7 @@ const AppContent = () => {
               onNavigate={handleNavigate}
             />
 
+            {/* Mobile Drawer Content */}
             {mobileOpen && (
               <div className="fixed inset-0 z-50">
                 <div
@@ -129,6 +149,11 @@ const AppContent = () => {
         <Route path="/watch/:slug/*" element={<WatchPage />} />
         <Route path="/player/:slug?" element={<VideoPlayerPage />} />
 
+        <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
+        
+        {/* --- NEW ROUTE ADDED HERE --- */}
+        <Route path="/live-cricket" element={<LiveCricket />} /> 
+
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />
 
@@ -151,6 +176,7 @@ const AppContent = () => {
           <Route path="blog-editor" element={<BlogEditor />} />
           <Route path="stories" element={<AdminStories />} />
           <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+          <Route path="live-upload" element={<AdminLiveMatchUpload />} />
           <Route path="members" element={<AdminMembers />} />
           <Route path="up4stream" element={<AdminUp4streamFiles />} />
         </Route>
@@ -159,10 +185,10 @@ const AppContent = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Ads — hide on player page too */}
-      {!isPlayerPath && <AdScriptLoader />}
-      {!isPlayerPath && <PopAdsScript />}
-      {!isPlayerPath && <AdPopup />}
+      {/* Ads — hide on player page and Live Cricket page (optional, but recommended) */}
+      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayerPath) && <AdScriptLoader />}
+      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayerPath) && <PopAdsScript />}
+      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayerPath) && <AdPopup />}
     </div>
   );
 };

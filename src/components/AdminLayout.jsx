@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   UserCircle,
-  LogOut, // Added for potential future use
+  LogOut,
+  Tv, // Used for the Live Match Upload page
 } from "lucide-react"; // Using lucide-react for modern icons
 
 // --- Sidebar Navigation Data ---
@@ -27,6 +28,12 @@ const ADMIN_LINKS = [
     path: "/admin/upload",
     icon: UploadCloud,
     label: "Movie Uploads",
+  },
+  {
+    // --- NEW LIVE MATCH UPLOAD LINK ---
+    path: "/admin/live-upload",
+    icon: Tv, // Using Tv icon to distinguish live content upload
+    label: "Live Match Upload",
   },
   {
     path: "/admin/upload-watch-html",
@@ -60,6 +67,8 @@ const AdminLayout = ({ children }) => {
   const { userData } = useContext(AppContext);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for mobile menu
 
+  // Helper function to check if the current path is active
+  // NOTE: This logic needs updating if you have nested active paths (e.g., /admin/live-upload/edit/1)
   const isActive = (target) => path === target;
 
   const userInitial =
@@ -67,7 +76,7 @@ const AdminLayout = ({ children }) => {
 
   // Mock logout handler (replace with actual logic)
   const handleLogout = () => {
-    // Implement actual logout logic here (e.g., supabase.auth.signOut())
+    // Implement actual logout logic here (e.g., contextLogout())
     console.log("User logged out (Mock)");
   };
 
@@ -79,7 +88,7 @@ const AdminLayout = ({ children }) => {
                    ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"} 
                    md:translate-x-0 md:relative transition-transform duration-300 ease-in-out
                    w-64 bg-gray-900 p-6 border-r border-gray-800 flex flex-col`}
-        onClick={() => setIsSidebarOpen(false)} // Close on item click
+        onClick={() => setIsSidebarOpen(false)} // Close on item click (but prevent closing on button clicks inside)
       >
         {/* Logo/Branding */}
         <div className="flex items-center gap-2 text-2xl font-extrabold text-white mb-8 border-b border-gray-800 pb-4">
@@ -138,6 +147,7 @@ const AdminLayout = ({ children }) => {
               <Menu className="w-6 h-6" />
             </button>
             <h2 className="text-2xl font-bold text-gray-200">
+                {/* Find the current page label based on path */}
                 {ADMIN_LINKS.find(link => link.path === path)?.label || "Admin Panel"}
             </h2>
           </div>
