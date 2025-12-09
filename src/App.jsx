@@ -36,7 +36,7 @@ import VideoPlayerPage from './paged/VideoPlayerPage';
 import LiveCricket from './paged/LiveCricket';
 import AdminLiveMatchUpload from './paged/AdminLiveMatchUpload';
 import LiveStreamPlayer from './paged/LiveStreamPlayer';
-
+import SeriesView from './paged/SeriesView';
 
 
 
@@ -153,6 +153,7 @@ const AppContent = () => {
         
         {/* --- NEW ROUTE ADDED HERE --- */}
         <Route path="/live-cricket" element={<LiveCricket />} /> 
+        <Route path="/series/:seriesSlug" element={<SeriesView />} />
 
         {/* Profile */}
         <Route path="/profile" element={<Profile />} />

@@ -1,14 +1,14 @@
 // src/pages/LiveCricket.jsx
 import React, { useState, useEffect } from "react";
-import { MonitorPlay, Zap, ArrowRight, Clock } from "lucide-react"; 
+import { MonitorPlay, Zap, ArrowRight, Clock, Box, Calendar } from "lucide-react";
 import { Link, useNavigate } from 'react-router-dom'; 
 import { toast } from "react-toastify"; 
 import { supabase } from '../utils/supabaseClient'; 
-import { DateTime } from 'luxon'; // 💡 ASSUMING LUXON IS INSTALLED: npm install luxon
+import { DateTime } from 'luxon'; 
 
 // --- Simple Navbar (No changes) ---
 const LivePageNavbar = () => {
-    // ... (component code remains the same)
+    // ... (Navbar code is unchanged)
     return (
         <nav className="sticky top-0 w-full bg-black/90 text-white z-[100] shadow-lg h-16 flex items-center px-4 sm:px-8">
             <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
@@ -28,8 +28,55 @@ const LivePageNavbar = () => {
 };
 // --- END LivePageNavbar Component ---
 
+// --- UPDATED: Series Block Component (Card Design) ---
+const SeriesBlock = ({ series }) => {
+    const statusClass = series.current_status === 'ONGOING' 
+        ? 'bg-red-600'
+        : series.current_status === 'UPCOMING'
+        ? 'bg-blue-600'
+        : 'bg-gray-700';
 
-// --- Reusable Match Card Component (CRITICAL LOGIC UPDATE) ---
+    const defaultSeriesImage = '/default-series-bg.jpg'; // Fallback image
+
+    return (
+        <Link 
+            to={`/series/${series.series_slug}`} 
+            className="group block relative overflow-hidden rounded-xl shadow-lg cursor-pointer transform transition duration-300 hover:shadow-2xl hover:scale-[1.02] border border-gray-700"
+        >
+            {/* Background Image Area (Using cover_image_url) */}
+            <div 
+                className="w-full h-40 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                style={{ 
+                    backgroundImage: `url(${series.cover_image_url || defaultSeriesImage})`,
+                }}
+            />
+
+            {/* Black Overlay */}
+            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors"></div>
+            
+            {/* Status Tag (Top Right) */}
+            <div className={`absolute top-2 right-2 text-xs font-bold px-3 py-1 rounded-full text-white ${statusClass} shadow-md`}>
+                {series.current_status}
+            </div>
+
+            {/* Series Info (Bottom Section - Overlaid) */}
+            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                <h3 className="text-xl font-extrabold text-white leading-tight truncate">
+                    {series.series_title}
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                    <Calendar className="w-3 h-3 inline-block mr-1"/>
+                    {series.start_date ? DateTime.fromISO(series.start_date).toFormat('LLL dd') : 'TBD'} - 
+                    {series.end_date ? DateTime.fromISO(series.end_date).toFormat('LLL dd, yyyy') : ' Ongoing'}
+                </p>
+            </div>
+        </Link>
+    );
+};
+// --- END Series Block Component ---
+
+
+// --- Reusable Match Card Component (No changes) ---
 const MatchCard = ({ match }) => {
     
     const isLive = match.status === 'LIVE';
@@ -44,26 +91,28 @@ const MatchCard = ({ match }) => {
     // *** Logic to determine if a scheduled match has passed its start time ***
     let isScheduledTimePassed = false;
     let scheduledMessage = match.live_start_time;
+    let finalStatus = match.status; // Default status display
 
     if (isScheduled && match.live_start_time) {
         try {
-            // 💡 WARNING: Timezone parsing is highly complex with string inputs like "10:30 AM IST".
-            // We use Luxon's best-guess local parsing for demonstration.
-            // For production, use a full ISO string from the DB!
-            const startTime = DateTime.fromFormat(match.live_start_time, "h:mm a ZZZ", { zone: 'system' });
+            const startTime = match.live_start_datetime 
+                ? DateTime.fromISO(match.live_start_datetime)
+                : DateTime.fromFormat(match.live_start_time, "h:mm a ZZZ", { zone: 'system' });
             
-            // Check if the start time is a valid future time (within today)
-            if (startTime.isValid && startTime < DateTime.now()) {
+            if (startTime.isValid && startTime < DateTime.now().plus({ minutes: 15 })) {
                 isScheduledTimePassed = true;
                 scheduledMessage = "Starting soon or delayed...";
+                finalStatus = 'Starting Soon';
             }
         } catch (e) {
-            console.warn("Failed to parse live_start_time string:", match.live_start_time);
+            console.warn("Failed to parse match time:", match.live_start_time, match.live_start_datetime);
         }
     }
     
     // Determine the final link target
-    const playerLink = `/live-cricket/player/${match.link_slug}`;
+    const playerLink = match.status === 'ENDED'
+        ? `/highlights/${match.link_slug}` 
+        : `/live-cricket/player/${match.link_slug}`;
     
     // Determine if the card should be disabled visually
     const isDisabled = isScheduled && !isScheduledTimePassed;
@@ -72,7 +121,7 @@ const MatchCard = ({ match }) => {
     const handleClick = (e) => {
         if (isDisabled) {
             e.preventDefault();
-            toast.info(`Match is scheduled for ${match.live_start_time}. You cannot click until it's about to start.`);
+            toast.info(`Match is scheduled for ${match.live_start_time}. You cannot click until it starts.`);
         }
     };
 
@@ -97,7 +146,7 @@ const MatchCard = ({ match }) => {
             {/* Status Tag (Top Left) */}
             <div className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded text-white ${statusClass}`}>
                 {isLive || isScheduledTimePassed ? <Zap className="w-3 h-3 inline-block mr-1 fill-white" /> : <Clock className="w-3 h-3 inline-block mr-1" />}
-                {isScheduledTimePassed ? 'Starting Soon' : match.status}
+                {finalStatus}
             </div>
 
             {/* Match Info (Bottom Section - Overlaid) */}
@@ -106,10 +155,10 @@ const MatchCard = ({ match }) => {
                 <p className="text-xs font-semibold text-gray-300">{match.sport} • {match.league}</p>
                 
                 {/* Score or Time */}
-                {isScheduled ? (
+                {isScheduled && !isScheduledTimePassed ? (
                     <div className="flex items-center text-sm font-bold text-yellow-400 mt-1">
                         <Clock className="w-4 h-4 mr-1"/>
-                        {isDisabled ? match.live_start_time : scheduledMessage}
+                        {match.live_start_time}
                     </div>
                 ) : (
                     <>
@@ -154,10 +203,15 @@ const LiveHero = () => {
 
 
 const LiveCricket = () => {
-  // Use null initial state to indicate loading
+  // === Match State ===
   const [matches, setMatches] = useState(null); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // === Series State (NEW) ===
+  const [seriesList, setSeriesList] = useState(null);
+  const [seriesLoading, setSeriesLoading] = useState(true);
+
 
   useEffect(() => {
     const fetchLiveMatches = async () => {
@@ -167,25 +221,49 @@ const LiveCricket = () => {
       const { data, error } = await supabase
         .from('live_matches')
         .select('*')
-        .order('created_at', { ascending: false }); // Show newest first
+        // Order: LIVE first, then SCHEDULED (closest time first), then ENDED
+        .order('status', { ascending: false, nullsFirst: false }) // Assuming LIVE has a higher alphabetical value than SCHEDULED/ENDED
+        .order('live_start_datetime', { ascending: true }) 
+        .order('created_at', { ascending: false }); 
 
       if (error) {
         console.error("Supabase fetch error:", error);
-        setError("Failed to load live matches. Please check the network.");
+        setError("Failed to load live matches.");
         toast.error("Failed to load live matches.");
-        setMatches([]); // Set to empty array on error
+        setMatches([]);
       } else {
         setMatches(data);
       }
       setLoading(false);
     };
 
+    const fetchSeriesList = async () => {
+        setSeriesLoading(true);
+        const { data, error } = await supabase
+            .from('series')
+            .select('*')
+            // Order: ONGOING, then UPCOMING
+            .order('current_status', { ascending: false }) 
+            .order('start_date', { ascending: true });
+
+        if (error) {
+            console.error("Supabase fetch series error:", error);
+            setSeriesList([]); // Set to empty array on error
+        } else {
+            // Filter out CONCLUDED series for the main homepage display
+            const activeSeries = data.filter(s => s.current_status !== 'CONCLUDED');
+            setSeriesList(activeSeries);
+        }
+        setSeriesLoading(false);
+    };
+
     fetchLiveMatches();
+    fetchSeriesList();
   }, []); // Run only on mount
 
-  // Conditional Rendering Logic
+  // Conditional Rendering Logic for Matches
 
-  const renderContent = () => {
+  const renderMatchContent = () => {
     if (loading) {
       return <p className="text-xl text-gray-400 p-8 text-center">Loading live match schedule...</p>;
     }
@@ -211,6 +289,41 @@ const LiveCricket = () => {
         </div>
     );
   };
+  
+  // Conditional Rendering Logic for Series (NEW)
+
+  const renderSeriesContent = () => {
+    if (seriesLoading) {
+      return <p className="text-gray-500 p-4 text-center text-sm">Loading series...</p>;
+    }
+
+    if (!seriesList || seriesList.length === 0) {
+        // Don't show anything if no active series are found
+        return null; 
+    }
+
+    return (
+        <div className="pb-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Box className="w-6 h-6 text-yellow-500"/> Popular Tournaments
+                </h2>
+                {/* Optional: Link to a dedicated Series page */}
+                <Link 
+                    to="/series" 
+                    className="text-blue-400 font-semibold hover:text-blue-200 transition text-sm uppercase flex items-center gap-1"
+                >
+                    VIEW ALL SERIES <ArrowRight className="w-4 h-4"/>
+                </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {seriesList.map((series) => (
+                    <SeriesBlock key={series.id} series={series} />
+                ))}
+            </div>
+        </div>
+    );
+  };
 
 
   return (
@@ -221,25 +334,31 @@ const LiveCricket = () => {
         {/* 1. Static Live Match Hero Section (The Visual Banner) */}
         <LiveHero /> 
 
-        {/* 2. Live Match Listing Section */}
+        {/* 2. Content Section (Series and Matches) */}
         <section className="py-10 bg-gray-900 text-white"> 
             <div className="max-w-7xl mx-auto px-4 sm:px-8">
                 
-                {/* Section Header: "Watch Live" and "SEE ALL" link */}
+                {/* --- SERIES LISTING (NEW SECTION) --- */}
+                {renderSeriesContent()}
+                <hr className="border-t border-gray-700 my-8" />
+                
+                {/* --- MATCH LISTING --- */}
+                
+                {/* Match Header: "Watch Live" and "SEE ALL" link */}
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <MonitorPlay className="w-6 h-6 text-red-600"/> Watch Live
+                        <MonitorPlay className="w-6 h-6 text-red-600"/> Live & Scheduled Matches
                     </h2>
                     <Link 
                         to="/schedule" 
                         className="text-blue-400 font-semibold hover:text-blue-200 transition text-sm uppercase flex items-center gap-1"
                     >
-                        SEE ALL <ArrowRight className="w-4 h-4"/>
+                        SEE FULL SCHEDULE <ArrowRight className="w-4 h-4"/>
                     </Link>
                 </div>
 
                 {/* Conditional Content Rendering */}
-                {renderContent()}
+                {renderMatchContent()}
                 
             </div>
         </section>
