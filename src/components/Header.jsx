@@ -1,10 +1,11 @@
-import React, { useContext, useState, useEffect, useRef } from "react";
+import React, { useContext, useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 // Icons
 import { EyeIcon } from "@heroicons/react/24/outline";
-import { FaWhatsapp, FaInstagram } from "react-icons/fa";
-import { Copy, CornerRightDown, Zap, ArrowUp, ArrowDown } from "lucide-react"; 
+import { FaWhatsapp } from "react-icons/fa";
+// Removed: ArrowUp, ArrowDown
+import { Copy, CornerRightDown, Zap, Film, MonitorPlay } from "lucide-react"; 
 import { FaTelegramPlane } from "react-icons/fa"; 
 // Context
 import { AppContext } from "../context/AppContext";
@@ -25,9 +26,11 @@ const Header = () => {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [showMemberPopup, setShowMemberPopup] = useState(false);
 
-  // State for reordering
-  const [isUpdatingPosition, setIsUpdatingPosition] = useState(false); // To prevent multiple rapid clicks
+  // STATE FOR MOBILE TAP-TO-SHOW BEHAVIOR
+  const [mobileFocusId, setMobileFocusId] = useState(null); 
+  const movieGridRef = useRef(null);
 
+  const [showBettingPopup, setShowBettingPopup] = useState(false);
   const navigate = useNavigate();
 
   const adminEmail = "sanjusanjay0444@gmail.com";
@@ -35,71 +38,58 @@ const Header = () => {
   const siteUrl = "https://www.1anchormovies.live";
 
   // --- Movie Logic ---
-  // Ensure we sort and slice to get the list we want to display/reorder
   const latestMovies = [...movies]
     .filter((m) => m.showOnHomepage)
     .sort(
+      // Sort by homepage_added_at (most recent first)
       (a, b) =>
         new Date(b.homepage_added_at || 0) - new Date(a.homepage_added_at || 0)
     )
-    .slice(0, 60);
-
-  // Helper function to update position in Supabase
-  const updateMoviePosition = async (movieId, newTimestamp) => {
-    setIsUpdatingPosition(true);
-    const { error } = await supabase
-      .from("movies")
-      .update({ homepage_added_at: newTimestamp })
-      .eq("id", movieId);
-
-    if (error) {
-      console.error("Error updating movie position:", error);
-    }
-    setIsUpdatingPosition(false);
-    // Optionally, re-fetch all movies here if the context refresh isn't automatic
-    // You should probably re-fetch all movies into the context to ensure all components see the updated list
-    const { data: updatedMovies, error: fetchError } = await supabase
-        .from("movies")
-        .select("*");
-    if (!fetchError) {
-        setMovies(updatedMovies);
-    } else {
-        console.error("Error re-fetching movies:", fetchError);
-    }
-  };
-
-
-  // Helper function for admin reorder
-  const moveMovie = (index, direction) => {
-    if (isUpdatingPosition) return;
-    
-    // Create a mutable copy of the latestMovies array
-    const currentList = [...latestMovies];
-    const targetIndex = index + direction;
-    
-    // *** MODIFICATION 1: Check against the full list length ***
-    if (targetIndex < 0 || targetIndex >= currentList.length) return;
-
-    // Swap the elements in the local list
-    [currentList[index], currentList[targetIndex]] = [
-      currentList[targetIndex],
-      currentList[index],
-    ];
-
-    // --- Core Logic: Update Timestamps for Fixed Positioning ---
-    // Give the movie that moved to the highest priority (lowest index) a fresh timestamp
-    
-    const now = new Date().toISOString();
-    
-    // This is the movie that needs the newest timestamp to jump ahead in the sort
-    const highestPriorityMovie = currentList[Math.min(index, targetIndex)];
-    
-    // Perform the API update
-    updateMoviePosition(highestPriorityMovie.id, now);
-    // Note: The global context `setMovies` is updated inside `updateMoviePosition` after a fetch.
-  };
+    // Updated to show the top 100 movies
+    .slice(0, 100);
   
-  // --- Popups Logic ---
+  // --- Mobile Focus Logic ---
+  
+  const isMobileView = () => window.innerWidth < 640; // Assuming Tailwind's 'sm' breakpoint
+
+  // Handler to close overlay when tapping outside the grid (for mobile)
+  const handleClickOutside = useCallback((event) => {
+    // Only execute if a card is currently focused AND we are in a mobile view
+    if (mobileFocusId !== null && isMobileView()) {
+        if (movieGridRef.current && !movieGridRef.current.contains(event.target)) {
+            setMobileFocusId(null);
+        }
+    }
+  }, [mobileFocusId]);
+
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside); 
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [handleClickOutside]);
+
+  // Handler for tapping a movie card
+  const handleCardClick = (movieId, event) => {
+    event.stopPropagation();
+    
+    // Only apply toggle logic if it's a mobile/touch view
+    if (isMobileView()) {
+        if (mobileFocusId === movieId) {
+            // Tapping the focused card: Unfocus/Hide options
+            setMobileFocusId(null); 
+        } else {
+            // Tapping a new card: Focus/Show options for the new card
+            setMobileFocusId(movieId);
+        }
+    }
+    // Desktop hover handles itself via CSS, so we do nothing here for desktop
+  };
+
+  // --- Popups Logic (Unchanged) ---
   useEffect(() => {
     if (isAdmin) return;
 
@@ -118,11 +108,9 @@ const Header = () => {
     return () => clearTimeout(initialTimer);
   }, [isAdmin]);
 
-  // Handler to smoothly transition from share to member popup
   const handleShareComplete = () => {
     localStorage.setItem("hasShared", "true");
     setShowSharePopup(false);
-    // Use a small delay for better UX before showing the next popup
     setTimeout(() => {
         const hasSeenMemberPopup = localStorage.getItem("hasSeenMemberPopup");
         if (!hasSeenMemberPopup) {
@@ -132,7 +120,7 @@ const Header = () => {
     }, 500); 
   };
     
-  // --- Stories Logic ---
+  // --- Stories Logic (Unchanged) ---
   useEffect(() => {
     const fetchStories = async () => {
       const { data, error } = await supabase
@@ -170,12 +158,9 @@ const Header = () => {
     setProgress(0);
     const duration = 30000;
     const intervalTime = 100;
-    const steps = duration / intervalTime;
-    let currentStep = 0;
-
+    
     const progressInterval = setInterval(() => {
-        currentStep++;
-        setProgress(Math.min((currentStep / steps) * 100, 100));
+        setProgress(prev => Math.min(prev + (100 / (duration / intervalTime)), 100));
     }, intervalTime);
 
 
@@ -198,7 +183,7 @@ const Header = () => {
     };
   }, [activeStory, activeStoryIndex, stories.length]);
 
-  // Keyboard navigation for stories
+  // Keyboard navigation for stories (Unchanged)
   useEffect(() => {
     const handleKey = (e) => {
       if (!activeStory) return;
@@ -217,7 +202,7 @@ const Header = () => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [activeStory, activeStoryIndex, stories]);
 
-  // --- Utility Functions ---
+  // --- Utility Functions (Unchanged) ---
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(siteUrl);
@@ -241,7 +226,6 @@ const Header = () => {
     return "Just now";
   };
   
-  // Destructure activeStory for cleaner JSX
   const { 
     title = '', 
     poster_url = '', 
@@ -256,12 +240,12 @@ const Header = () => {
 
 
   return (
-    <div className="flex flex-col items-center mt-1 px-5 w-full">
-      {/* ... (Stories Section - Unchanged) ... */}
+    <div className="flex flex-col items-center mt-1 px-5 w-full bg-gray-950 min-h-screen"> 
+      {/* ... (Stories Section & Active Story Viewer - Unchanged) ... */}
       {stories.length > 0 && (
         <div className="w-full max-w-7xl px-2 sm:px-4 mt-2">
-          <div className="bg-white rounded-xl shadow-lg p-4">
-            <h3 className="text-xl font-bold text-gray-800 mb-3 border-b pb-2">🔥 Stories</h3>
+          <div className="bg-gray-900 rounded-xl shadow-lg p-4 border border-gray-800">
+            <h3 className="text-xl font-bold text-white mb-3 border-b border-gray-700 pb-2">🔥 Stories</h3>
             <div className="overflow-x-auto flex gap-4 py-2 scrollbar-hide">
               {stories.map((story, idx) => (
                 <div
@@ -274,10 +258,10 @@ const Header = () => {
                 >
                   <div className={`w-20 h-20 rounded-full p-[3px] shadow-lg ${
                     JSON.parse(localStorage.getItem("viewedStories") || "[]").includes(story.id)
-                      ? "bg-gray-400"
+                      ? "bg-gray-600" 
                       : "bg-gradient-to-tr from-red-500 to-yellow-500"
                   }`}>
-                    <div className="bg-white rounded-full w-full h-full overflow-hidden">
+                    <div className="bg-gray-950 rounded-full w-full h-full overflow-hidden">
                       <img
                         loading="lazy"
                         src={story.poster_url}
@@ -286,7 +270,7 @@ const Header = () => {
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-800 mt-1 truncate w-[80px] font-medium">{story.title}</p>
+                  <p className="text-xs text-gray-300 mt-1 truncate w-[80px] font-medium">{story.title}</p>
                 </div>
               ))}
             </div>
@@ -295,12 +279,10 @@ const Header = () => {
       )}
       
 
-      {/* ... (Active Story Viewer - Unchanged) ... */}
       {activeStory && (
         <div
           className="fixed inset-0 bg-black/95 flex flex-col items-center justify-center z-50 transition-opacity duration-300"
           onClick={(e) => {
-            // Tap/Click to advance logic
             const x = e.clientX || e.touches?.[0]?.clientX || 0;
             const screenWidth = window.innerWidth;
 
@@ -313,13 +295,11 @@ const Header = () => {
               setActiveStoryIndex(newIndex);
               setActiveStory(stories[newIndex]);
             } else {
-              // Tap center to close
               setActiveStory(null);
               setActiveStoryIndex(null);
             }
           }}
         >
-          {/* Close Button */}
           <button
             className="absolute top-4 right-4 text-white text-3xl font-light z-50 p-2 opacity-80 hover:opacity-100"
             onClick={(e) => {
@@ -331,7 +311,6 @@ const Header = () => {
             &times;
           </button>
 
-          {/* Navigation Arrows (for desktop) */}
           <div className="hidden sm:block">
             {activeStoryIndex > 0 && (
               <button
@@ -359,9 +338,7 @@ const Header = () => {
             )}
           </div>
 
-          {/* Content Container */}
           <div className="max-w-xs w-full relative bg-gray-900 rounded-xl shadow-2xl overflow-hidden animate-fadeIn" onClick={(e) => e.stopPropagation()}>
-            {/* Progress Bar */}
             <div className="absolute top-0 left-0 w-full h-1 bg-white/30 rounded overflow-hidden">
                 <div
                 className="bg-blue-500 h-full origin-left transition-all duration-100"
@@ -400,45 +377,46 @@ const Header = () => {
         </div>
       )}
 
-{/* Unified Block: Recently Uploaded + Telegram + Admin + Movie List */}
+{/* Unified Block: Movie List + Telegram + Admin */}
 {latestMovies.length > 0 && (
-  <div className="w-full max-w-7xl px-4 py-5 bg-white rounded-xl shadow-2xl border border-gray-200 my-6 space-y-6">
+  <div className="w-full max-w-7xl px-4 py-5 bg-gray-900 rounded-xl shadow-2xl border border-gray-800 my-6 space-y-6">
 
-    {/* Recently Uploaded Header + Share */}
-    <div className="flex justify-between items-center text-sm text-black border-b pb-3">
+    {/* HEADER SECTION (MODIFIED) - Replaced "Fresh Arrivals" with a simple header and share button */}
+    <div className="flex justify-between items-center text-sm text-white border-b border-gray-700 pb-3">
       <div className="flex flex-col">
-        <strong className="text-xl font-extrabold text-gray-900 mb-1 flex items-center gap-2">
-            <CornerRightDown className="w-6 h-6 text-red-600"/> Fresh Arrivals! Don't Miss Out
+        {/* NEW TITLE: More generic and less verbose, keeping the accent color */}
+        <strong className="text-xl font-extrabold text-white mb-1 flex items-center gap-2">
+            <CornerRightDown className="w-6 h-6 text-red-500"/> Latest Releases
         </strong>
-        <p className="text-gray-700 text-sm mt-1 font-medium">
-          **Grab the newest HD downloads here.** Can't find an older title? Check out the <span className="text-blue-600 font-bold">Search</span> or <span className="text-blue-600 font-bold">Categories</span> to explore our full library!
+        <p className="text-gray-400 text-sm mt-1 font-medium">
+          Check out the newest HD downloads here.
         </p>
       </div>
-      {/* Share Button (Cleaned up hover menu) */}
+      {/* Share Button (Unchanged) */}
       <div className="relative group ml-2 mt-1">
-        <button className="flex items-center gap-1 bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md hover:bg-blue-600 transition">
+        <button className="flex items-center gap-1 bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md hover:bg-blue-700 transition">
             Share <Copy className="w-3 h-3"/>
         </button>
-        <div className="absolute right-0 top-full mt-2 w-40 bg-white shadow-xl rounded-lg p-1 text-sm text-gray-800 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition duration-200 z-50">
+        <div className="absolute right-0 top-full mt-2 w-40 bg-gray-800 shadow-xl rounded-lg p-1 text-sm text-gray-300 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition duration-200 z-50 border border-gray-700">
           <a
             href={`https://wa.me/?text=${encodeURIComponent("Check out this site: " + siteUrl)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded"
+            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-700 rounded"
           >
-            <FaWhatsapp className="text-green-500"/> WhatsApp
+            <FaWhatsapp className="text-green-400"/> WhatsApp
           </a>
           <button
             onClick={handleCopy}
-            className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded"
+            className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-gray-700 rounded"
           >
-            <Copy className="w-4 h-4 text-gray-600"/> {copied ? "✅ Copied!" : "Copy Link"}
+            <Copy className="w-4 h-4 text-gray-400"/> {copied ? "✅ Copied!" : "Copy Link"}
           </button>
         </div>
       </div>
     </div>
 
-    {/* Telegram Box Inside */}
+    {/* Telegram Box Inside (Unchanged) */}
     <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-xl shadow-inner p-4 sm:p-6 text-center">
       <div className="flex flex-col items-center gap-4">
         <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" alt="Telegram" className="w-12 h-12" />
@@ -454,113 +432,116 @@ const Header = () => {
       </div>
     </div>
 
-    {/* Admin Link */}
+    {/* Admin Link (Unchanged) */}
     {isAdmin && (
       <div className="text-center pt-2">
         <Link 
           to="/admin" 
-          className="text-red-500 hover:text-red-600 font-bold underline transition"
+          className="text-red-400 hover:text-red-500 font-bold underline transition"
           target="_blank" 
           rel="noopener noreferrer" 
         >
-          <span className="inline-block px-3 py-1 bg-red-50 rounded-lg shadow-sm">
+          <span className="inline-block px-3 py-1 bg-gray-800 rounded-lg shadow-sm border border-red-500/50">
             🔧 Go to Admin Panel
           </span>
         </Link>
-        <p className="text-xs text-red-500 mt-1">
-            (Arrows visible below only to admin: click to reorder any movie)
-        </p>
       </div>
     )}
 
-    {/* Movie List */}
-    <div className="flex flex-col gap-1 mt-4 border border-gray-200 rounded-lg overflow-hidden">
-      {latestMovies.map((movie, index) => (
-        <div
-          key={movie.id}
-          className="flex items-center justify-between text-black text-sm bg-white hover:bg-gray-50 transition p-3 border-b border-gray-100 last:border-b-0"
-        >
-          <div className="flex-1 min-w-0">
-            <Link
-              to={`/movie/${movie.slug}`}
-              className="font-medium break-words whitespace-normal text-base hover:underline"
-              style={{ color: movie.linkColor || "#1d4ed8" }}
-              title={movie.title}
-            >
-              {movie.title}
-            </Link>
+    {/* POSTER GRID: Mobile Tap-to-Show Implemented */}
+    <div 
+      ref={movieGridRef}
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mt-4 max-w-7xl mx-auto p-4 bg-gray-800/80 rounded-xl shadow-inner border border-gray-700"
+    >
+      {latestMovies.map((movie) => {
+        const isFocused = mobileFocusId === movie.id;
+        
+        return (
+          <div
+            key={movie.id}
+            className="group bg-gray-900 rounded-xl shadow-lg hover:shadow-blue-500/30 transition duration-300 overflow-hidden relative border border-gray-700 cursor-pointer"
+            onClick={(e) => handleCardClick(movie.id, e)} 
+            tabIndex="0" 
+            data-focused={isFocused} 
+          >
+            {/* Poster */}
+            <div className="relative w-full aspect-[2/3] overflow-hidden">
+              <img
+                src={movie.poster || movie.poster_url || "/default-poster.jpg"}
+                alt={movie.title}
+                className={`w-full h-full object-cover transition duration-500 ${isFocused ? 'scale-105' : 'group-hover:scale-105'}`}
+              />
+              <div className="absolute top-0 left-0 p-2 space-y-1">
+                  {movie.directLinksOnly && (
+                      <span className="text-xs font-bold whitespace-nowrap bg-pink-700 text-white px-2 py-0.5 rounded shadow-md">
+                      DIRECT
+                      </span>
+                  )}
+                  {movie.note && (
+                      <span className="text-xs font-bold whitespace-nowrap bg-red-700 text-white px-2 py-0.5 rounded shadow-md">
+                      {movie.note}
+                      </span>
+                  )}
+              </div>
+            </div>
+            
+            {/* Info */}
+            <div className="p-3 text-center">
+              <h2 
+                  className="text-sm font-semibold truncate mb-1 text-gray-200" 
+                  style={{ color: movie.linkColor || "#3b82f6" }}
+                  title={movie.title}
+              >
+                {movie.title}
+              </h2>
+            </div>
 
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs">
-              {movie.directLinksOnly && (
-                <span className="text-pink-600 font-bold whitespace-nowrap bg-pink-50 px-2 py-0.5 rounded">
-                  [Direct Links]
-                </span>
-              )}
-              {movie.watchUrl && (
-                <a
-                  href={movie.watchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-700 font-bold whitespace-nowrap hover:text-blue-500 transition"
-                >
-                  - [WATCH]
-                </a>
-              )}
-              {movie.note ? (
-                <span className="text-red-600 font-bold whitespace-nowrap bg-red-50 px-2 py-0.5 rounded">
-                  - {movie.note}
-                </span>
-              ) : null}
+            {/* Action Overlay: Uses isFocused state for visibility on mobile */}
+            <div 
+              className={`absolute inset-0 flex items-center justify-center bg-black/70 transition-opacity duration-300
+                          ${isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+            >
+              <div className="flex flex-col gap-2 w-3/4">
+                  
+                  {/* Details Button */}
+                  <Link
+                      to={`/movie/${movie.slug}`}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-full font-medium transition flex items-center justify-center gap-2 w-full"
+                      onClick={(e) => { e.stopPropagation(); setMobileFocusId(null); }} 
+                  >
+                      <Film className="w-4 h-4" /> Download
+                  </Link>
+                  
+                  {/* Watch Now Button (if link exists) */}
+                  {movie.watchUrl && (
+                      <a
+                          href={movie.watchUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-full font-medium transition flex items-center justify-center gap-2 w-full"
+                          onClick={(e) => { e.stopPropagation(); setMobileFocusId(null); }} 
+                      >
+                          <MonitorPlay className="w-4 h-4" /> Watch Now
+                      </a>
+                  )}
+              </div>
             </div>
           </div>
-          
-          {/* Navigation Arrow for ALL users */}
-          <Link 
-            to={`/movie/${movie.slug}`}
-            className="ml-4 p-2 rounded-full text-blue-500 hover:bg-blue-100 transition flex-shrink-0"
-            title="View Details"
-          >
-            <CornerRightDown className="w-5 h-5"/>
-          </Link>
-
-          {/* *** MODIFICATION 2: Admin Reorder Arrows - Removed index < 5 restriction *** */}
-          {isAdmin && (
-            <div className="flex flex-col ml-3 gap-1 flex-shrink-0">
-              <button
-                onClick={() => moveMovie(index, -1)}
-                disabled={index === 0 || isUpdatingPosition}
-                className={`p-1 rounded ${index === 0 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
-                title="Move Up"
-              >
-                <ArrowUp className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => moveMovie(index, 1)}
-                disabled={index === latestMovies.length - 1 || isUpdatingPosition}
-                className={`p-1 rounded ${index === latestMovies.length - 1 || isUpdatingPosition ? 'text-gray-300' : 'text-blue-500 hover:bg-blue-50'}`}
-                title="Move Down"
-              >
-                <ArrowDown className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   </div>
 )}
 
-      {/* ... (Footer - Unchanged) ... */}
-<div className="w-full py-6 mt-12 text-center border-t border-gray-200 text-sm">
+      {/* Footer (Dark themed, Unchanged) */}
+<div className="w-full py-6 mt-12 text-center border-t border-gray-800 text-sm bg-gray-950">
   <p className="flex justify-center items-center gap-2 text-gray-500">
-    <span className="text-gray-800 text-lg font-bold">©</span>
-    <span className="text-gray-800 font-medium">AnchorMovies 2025</span>
+    <span className="text-white text-lg font-bold">©</span>
+    <span className="text-gray-300 font-medium">AnchorMovies 2025</span>
   </p>
 </div>
 
-{/* --- Popups --- */}
-
-{/* Share Popup (Modified for Mandatory Telegram Join) */}
+{/* Popups (Unchanged) */}
 {showSharePopup && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-blue-600/50">
@@ -571,14 +552,12 @@ const Header = () => {
 
       <div className="flex justify-center gap-4 mb-6">
         <a
-          // Link updated to your specified Telegram channel
           href="https://t.me/AnchorMovies" 
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 text-sm font-semibold transition transform hover:scale-[1.05]"
-          onClick={handleShareComplete} // Closes the popup and continues
+          onClick={handleShareComplete}
         >
-          {/* FaTelegramPlane is assumed to be imported from 'react-icons/fa' or similar */}
           <FaTelegramPlane className="text-xl" /> Must Click & Join Our Channel
         </a>
       </div>
@@ -593,11 +572,10 @@ const Header = () => {
   </div>
 )}
 
-{/* Membership Popup (Unchanged) */}
 {showMemberPopup && (
   <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
     <div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-yellow-500/50">
-      <h2 className="text-2xl font-extrabold mb-2 text-yellow-400">🎉 Become a Free Member!</h2>
+      <h2 className="2xl font-extrabold mb-2 text-yellow-400">🎉 Become a Free Member!</h2>
       <p className="text-sm text-gray-300 mb-6">
         Apply now to enjoy **ad-free viewing** and **exclusive download links**. Login is mandatory.
       </p>
@@ -619,12 +597,61 @@ const Header = () => {
       <button
         onClick={() => {
             setShowMemberPopup(false);
-            localStorage.setItem("hasSeenMemberPopup", "true"); // Re-set to prevent showing on next load
+            localStorage.setItem("hasSeenMemberPopup", "true");
         }}
         className="w-full bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 text-sm font-medium"
       >
         No, thanks
       </button>
+    </div>
+  </div>
+)}
+
+
+{showBettingPopup && (
+  <div className="fixed inset-0 bg-black/80 z-[999] flex items-center justify-center px-4">
+    <div className="text-white text-center animate-fadeIn relative w-full max-w-sm sm:max-w-md bg-gray-950 p-4 rounded-xl shadow-2xl border border-yellow-400/50">
+      
+      {/* Close Button */}
+      <button
+        onClick={() => setShowBettingPopup(false)}
+        className="absolute top-2 right-4 text-gray-400 text-3xl font-light hover:text-white transition"
+      >
+        &times;
+      </button>
+
+      {/* Banner Image */}
+      {/* Ensure 'banner.jpg' is in your public directory */}
+      <img
+        src="/banner.jpg" 
+        alt="Promotional Banner"
+        className="w-full object-cover rounded-lg mb-4 border border-gray-700"
+      />
+
+      {/* Promotional Title */}
+      <h2 className="text-xl sm:text-2xl font-extrabold text-yellow-300 mb-4">
+        CLAIM YOUR BONUS NOW!
+      </h2>
+
+      {/* Call to Action Button with Affiliate Link */}
+      <a
+        href="https://winfix.fun/register?campaignId=anchormovies-2407" 
+        target="_blank"
+        rel="noopener noreferrer"
+        // Using standard Tailwind classes for a pulsating (blinking) effect
+        className="w-full block bg-red-600 text-white py-3 rounded-xl shadow-lg hover:bg-red-700 text-base sm:text-lg font-bold transition transform hover:scale-[1.02] animate-pulse duration-700"
+        onClick={() => {
+          // Close the popup after clicking the button
+          setShowBettingPopup(false); 
+        }}
+      >
+        CREATE NEW ID & GET 600% BONUS ON 1ST DEPOSIT! HURRY!
+      </a>
+      
+      <p className="text-xs text-gray-400 mt-3">
+        *Terms and conditions apply.
+      </p>
+
     </div>
   </div>
 )}
