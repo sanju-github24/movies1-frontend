@@ -6,6 +6,11 @@ import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient'; 
 import VideoPlayer from "./VideoPlayer"; 
 
+// --- AD CONSTANTS ---
+const WINFIX_AFFILIATE_LINK = "https://winfix.fun/register?campaignId=anchormovies-2407";
+const BLINKING_CTA_CLASS = "animate-pulse duration-700";
+// --------------------
+
 // NOTE: This component is optimized for fetching Live Match data (HLS/iFrame URLs) 
 
 const LiveStreamPlayer = () => {
@@ -150,21 +155,24 @@ const LiveStreamPlayer = () => {
     const isLiveStream = matchData.status === 'LIVE'; 
     const currentSource = activeHighlightSource;
 
+    // We need to define isPlayingLive here based on the current active source matching the live sources
+    const hasLiveSource = matchData && (matchData.hls_url || matchData.iframe_html);
+    const isPlayingLiveSource = activeHighlightSource === matchData?.hls_url || activeHighlightSource === matchData?.iframe_html;
+    const isPlayingLive = isLiveStream && isPlayingLiveSource;
 
     // Priority 1: HLS/Raw URL Stream (VOD or Live)
     if (isHLS || (!isIFrame && currentSource)) { 
       return (
         <div className="w-full h-full relative bg-black">
           <VideoPlayer 
-            // ⬅️ CRITICAL FIX: Use the 'key' prop to force component destruction/reset 
             key={currentSource} 
             src={currentSource} 
             title={playerOverlayData.title}
             playerOverlayData={playerOverlayData}
-            isLive={isLiveStream && isPlayingLive} // Only LIVE if status is LIVE AND we're playing the live source
+            isLive={isPlayingLive} 
           />
           {/* Status Indicator */}
-          {isLiveStream && isPlayingLive && (
+          {isPlayingLive && (
               <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg">
                 <Zap className="w-3 h-3 fill-white" /> LIVE
               </div>
@@ -176,7 +184,6 @@ const LiveStreamPlayer = () => {
     // Priority 2: iFrame Embed (VOD or Live)
     if (isIFrame) {
       return (
-        // ⬅️ CRITICAL FIX: Use the 'key' prop on the container to force DOM replacement
         <div 
           key={currentSource} 
           className="w-full h-full"
@@ -205,8 +212,6 @@ const LiveStreamPlayer = () => {
   const hasLiveSource = matchData && (matchData.hls_url || matchData.iframe_html);
   // Check if current source is the active live source
   const isPlayingLiveSource = activeHighlightSource === matchData?.hls_url || activeHighlightSource === matchData?.iframe_html;
-  // Check if current source is one of the highlight sources
-  const isPlayingHighlight = highlightList.some(h => h.highlight_source === activeHighlightSource);
   // Check if the current source is the live stream (useful for button state)
   const isPlayingLive = hasLiveSource && isPlayingLiveSource;
 
@@ -233,6 +238,41 @@ const LiveStreamPlayer = () => {
       <div className="w-full max-w-7xl mx-auto aspect-video sm:aspect-auto sm:h-[80vh] bg-black">
         {renderPlayer()}
       </div>
+
+      {/* --- AFFILIATE BANNER PLACEMENT --- */}
+      <div className="w-full max-w-7xl mx-auto p-4 bg-gray-950 text-center border-b border-gray-700">
+          <div className="relative bg-gray-800 p-4 rounded-xl shadow-lg border border-yellow-500/50">
+              
+              {/* Banner Image */}
+              {/* Ensure 'banner.jpg' is in your public directory */}
+              <img
+                src="/banner.jpg" 
+                alt="Claim your bonus"
+                className="w-full object-cover rounded-lg mb-4 border border-gray-700"
+              />
+
+              {/* Promotional Title */}
+              <h2 className="text-lg sm:text-xl font-extrabold text-yellow-300 mb-3">
+                600% BONUS ON 1ST DEPOSIT!
+              </h2>
+
+              {/* Blinking CTA Button with Affiliate Link */}
+              <a
+                href={WINFIX_AFFILIATE_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`w-full max-w-sm mx-auto block bg-red-600 text-white py-3 rounded-xl shadow-lg hover:bg-red-700 text-base font-bold transition transform hover:scale-[1.02] ${BLINKING_CTA_CLASS}`}
+              >
+                CREATE NEW ID & GET BONUS! HURRY!
+              </a>
+              
+              <p className="text-xs text-gray-400 mt-3">
+                *Limited time offer. Terms and conditions apply.
+              </p>
+          </div>
+      </div>
+      {/* --- END AFFILIATE BANNER --- */}
+
 
       {/* Match Details Section */}
       {matchData && (
