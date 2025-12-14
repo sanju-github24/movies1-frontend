@@ -6,8 +6,9 @@ import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient'; 
 import VideoPlayer from "./VideoPlayer"; 
 
-// --- AD CONSTANTS ---
+// --- AD CONSTANTS (UPDATED) ---
 const WINFIX_AFFILIATE_LINK = "https://winfix.fun/register?campaignId=anchormovies-2407";
+const BANNER_IMAGE_URL = "https://i.postimg.cc/NfKD2cjX/banner.jpg"; // NEW EXTERNAL URL
 const BLINKING_CTA_CLASS = "animate-pulse duration-700";
 // --------------------
 
@@ -234,37 +235,44 @@ const LiveStreamPlayer = () => {
         </div>
       </header>
 
-      {/* Video Player Area */}
+{/* Video Player Area */}
       <div className="w-full max-w-7xl mx-auto aspect-video sm:aspect-auto sm:h-[80vh] bg-black">
         {renderPlayer()}
       </div>
 
-      {/* --- AFFILIATE BANNER PLACEMENT --- */}
+      {/* --- AFFILIATE BANNER PLACEMENT (MAKING ENTIRE BLOCK CLICKABLE) --- */}
       <div className="w-full max-w-7xl mx-auto p-4 bg-gray-950 text-center border-b border-gray-700">
           <div className="relative bg-gray-800 p-4 rounded-xl shadow-lg border border-yellow-500/50">
               
-              {/* Banner Image */}
-              {/* Ensure 'banner.jpg' is in your public directory */}
-              <img
-                src="/banner.jpg" 
-                alt="Claim your bonus"
-                className="w-full object-cover rounded-lg mb-4 border border-gray-700"
-              />
-
-              {/* Promotional Title */}
-              <h2 className="text-lg sm:text-xl font-extrabold text-yellow-300 mb-3">
-                600% BONUS ON 1ST DEPOSIT!
-              </h2>
-
-              {/* Blinking CTA Button with Affiliate Link */}
+              {/* WRAPPER: Entire promotional block is now wrapped in the affiliate anchor tag */}
               <a
                 href={WINFIX_AFFILIATE_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`w-full max-w-sm mx-auto block bg-red-600 text-white py-3 rounded-xl shadow-lg hover:bg-red-700 text-base font-bold transition transform hover:scale-[1.02] ${BLINKING_CTA_CLASS}`}
+                className="block w-full text-center" // Ensure the anchor takes up the full width
               >
-                CREATE NEW ID & GET BONUS! HURRY!
+                  {/* Banner Image (Now clickable) */}
+                  <img
+                    src={BANNER_IMAGE_URL} 
+                    alt="Claim your bonus"
+                    className="w-full object-cover rounded-lg mb-4 border border-gray-700 hover:opacity-90 transition duration-200"
+                  />
+
+                  {/* Promotional Title (Still clickable as it's inside the anchor) */}
+                  <h2 className="text-lg sm:text-xl font-extrabold text-yellow-300 mb-3">
+                    600% BONUS ON 1ST DEPOSIT!
+                  </h2>
+
+                  {/* CTA Button (Still clickable, but now relies on the parent anchor tag) */}
+                  <div
+                    // The button style is now a plain div/span inside the anchor. 
+                    // We remove the 'a' tag here as it's redundant and potentially buggy inside another 'a' tag.
+                    className={`w-full max-w-sm mx-auto block bg-red-600 text-white py-3 rounded-xl shadow-lg text-base font-bold transition transform hover:scale-[1.02] ${BLINKING_CTA_CLASS}`}
+                  >
+                    CREATE NEW ID & GET BONUS! HURRY!
+                  </div>
               </a>
+              {/* END WRAPPER */}
               
               <p className="text-xs text-gray-400 mt-3">
                 *Limited time offer. Terms and conditions apply.
