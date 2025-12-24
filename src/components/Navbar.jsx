@@ -2,597 +2,280 @@
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { Link, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
-import axios from "axios";
-import { toast } from "react-toastify";
-// import { backendUrl } from "../utils/api"; // ❌ REMOVED: No longer needed for relative path calls
-import { supabase } from "../utils/supabaseClient";
-import CategoryBar from "./CategoryBar";
-
-import {
-  X,
-  Search,
-  Home,
-  Clock3,
-  MonitorPlay, // Used for Live Cricket
-  Tv, // Used for 'Watch' (general videos)
-  User,
-  Globe, // Used for Blogs
-  LogIn,
-  Menu // Correct Lucide icon for the hamburger menu
+import { 
+  X, Search, Home, Clock3, MonitorPlay, 
+  Tv, User, Globe, Menu, ChevronRight, ChevronDown, ArrowLeft
 } from "lucide-react";
 
-// --- NEW COMPONENT: Floating Watch Menu ---
+// --- Sub-Component: Floating Watch Menu ---
 const WatchOptionsPopup = ({ onClose, onNavigate }) => (
-  <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 bg-white text-black rounded-lg shadow-2xl p-2 z-50 border border-gray-200 animate-slide-up-fade">
-    <div className="flex justify-between items-center mb-1">
-        <h4 className="text-sm font-bold text-blue-700">Choose Stream</h4>
-        <button onClick={onClose} className="text-gray-500 hover:text-red-500">
+  <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 w-56 bg-white text-black rounded-2xl shadow-2xl p-2 z-[110] border border-gray-100 animate-slide-up-fade">
+    <div className="flex justify-between items-center px-3 py-2 border-b border-gray-50 mb-1">
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600">Streaming Options</h4>
+        <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition">
             <X className="w-4 h-4" />
         </button>
     </div>
-    <ul className="text-sm py-1 space-y-1">
+    <ul className="space-y-1">
       <li>
         <button
-          onClick={() => {
-            onNavigate("/watch");
-            onClose();
-          }}
-          className="w-full text-left px-3 py-2 hover:bg-blue-50 rounded-md flex items-center gap-2 text-gray-800"
+          onClick={() => { onNavigate("/watch"); onClose(); }}
+          className="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-xl flex items-center gap-3 text-gray-800 transition"
         >
-          <Tv className="w-4 h-4 text-blue-600" /> Watch Movies/Shows
+          <Tv className="w-5 h-5 text-blue-500" /> 
+          <span className="text-sm font-bold">Movies & Shows</span>
         </button>
       </li>
       <li>
         <button
-          onClick={() => {
-            onNavigate("/live-cricket");
-            onClose();
-          }}
-          className="w-full text-left px-3 py-2 hover:bg-red-50 rounded-md flex items-center gap-2 font-semibold text-red-600"
+          onClick={() => { onNavigate("/live-cricket"); onClose(); }}
+          className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
         >
-          <MonitorPlay className="w-4 h-4 text-red-600" /> Live Cricket Streaming
+          <div className="relative">
+            <MonitorPlay className="w-5 h-5 text-red-500" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+          </div>
+          <span className="text-sm font-black">Live Cricket</span>
         </button>
       </li>
     </ul>
+    <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white"></div>
   </div>
 );
-// --- END NEW COMPONENT ---
-
 
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  // Destructure logout from AppContext to use its centralized logic
-  const { userData, setUserData, setIsLoggedIn, onNavigate, logout: contextLogout } = useContext(AppContext);
+  const { userData, logout: contextLogout } = useContext(AppContext);
 
-  // State
   const [searchTerm, setSearchTerm] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // New state for mobile search
   const [profileOpen, setProfileOpen] = useState(false);
-  // NEW STATE for Bottom Bar Popup
+  const [langOpen, setLangOpen] = useState(false);
   const [showWatchOptions, setShowWatchOptions] = useState(false);
-  // ... (other states)
-  const [editingName, setEditingName] = useState(false);
-  const [newName, setNewName] = useState(userData?.name || "");
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [membershipStatus, setMembershipStatus] = useState(
-    userData?.membershipStatus || "none"
-  );
-  const [notification, setNotification] = useState(null);
-  
+
   const profileRef = useRef(null);
-  const mobileSearchRef = useRef(null);
-  const watchButtonRef = useRef(null); // Ref for the Watch button
-  const membershipChannelRef = useRef(null);
+  const langRef = useRef(null);
+  const watchButtonRef = useRef(null);
+  const mobileInputRef = useRef(null);
 
-  // CSS for the slide up animation (Usually in index.css, added here for completeness)
-  /*
-  @keyframes slideUpFade {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-slide-up-fade {
-    animation: slideUpFade 0.2s ease-out forwards;
-  }
-  */
+  const languages = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
-  // Close dropdowns/popups on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
-      // Profile Dropdown
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setProfileOpen(false);
-        setEditingName(false);
-        setShowNotifications(false);
-      }
-      // Watch Options Popup
-      if (watchButtonRef.current && !watchButtonRef.current.contains(e.target)) {
-        setShowWatchOptions(false);
-      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+      if (langRef.current && !langRef.current.contains(e.target)) setLangOpen(false);
+      if (watchButtonRef.current && !watchButtonRef.current.contains(e.target)) setShowWatchOptions(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handler to navigate and close the mobile drawer/popup
-  const handlePopupNavigate = (path) => {
-    navigate(path);
-    setMobileOpen(false); // Close the full drawer if open
-  }
-  
-  // (Your existing handlers remain the same)
-  /* Save Name Handler (Centralized) */
-  const saveNameHandler = async () => {
-    if (!newName.trim()) return toast.error("Name cannot be empty");
-
-    // Check if name actually changed
-    if (newName.trim() === userData?.name) {
-        setEditingName(false);
-        return;
+  // Focus input when mobile search opens
+  useEffect(() => {
+    if (mobileSearchOpen && mobileInputRef.current) {
+      mobileInputRef.current.focus();
     }
+  }, [mobileSearchOpen]);
 
-    try {
-      axios.defaults.withCredentials = true;
-      // 🚀 CRITICAL FIX: Use RELATIVE PATH for API call
-      const { data } = await axios.put(
-        `/api/user/update-name`,
-        { newName: newName.trim() }
-      );
-
-      if (data.success) {
-        toast.success("Name updated successfully!");
-        // Update local storage and state
-        setUserData((prev) => {
-            const updatedUser = { ...prev, name: newName.trim() };
-            localStorage.setItem("userData", JSON.stringify(updatedUser));
-            return updatedUser;
-        });
-        setEditingName(false);
-      } else {
-        toast.error(data.message || "Failed to update name");
-      }
-    } catch (err) {
-      console.error("Save Name Error:", err.response?.data || err.message);
-      toast.error(err.response?.data?.message || "Server error updating name");
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      navigate(`/search?query=${encodeURIComponent(searchTerm)}`);
+      setMobileSearchOpen(false);
+      setSearchTerm("");
     }
-  };
-
-  /* Logout Handler (Using AppContext's robust logout) */
-  const handleLogout = () => {
-    setProfileOpen(false); // Close dropdown
-    contextLogout(); // Use the centralized, fixed logout from AppContext
-  };
-
-  const userInitial =
-    userData?.name?.[0]?.toUpperCase() ??
-    userData?.email?.[0]?.toUpperCase() ??
-    "U";
-
-  const NotificationPopup = ({ notification, show, onClose }) => {
-    if (!show || !notification) return null;
-    return (
-      <div className="absolute top-10 right-0 bg-white text-black rounded shadow-md z-50 w-64 p-2">
-        <div className="flex justify-between items-center mb-2 border-b pb-1">
-          <h3 className="text-sm font-semibold">Notifications</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 font-bold"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-sm px-2 py-1">{notification}</p>
-      </div>
-    );
   };
 
   const handleNavigateCategory = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
-    setMobileOpen(false); // close mobile drawer
+    setMobileOpen(false);
+    setLangOpen(false);
   };
-
-  const handleMobileSearch = () => {
-    setMobileOpen(true);
-  };
-
 
   return (
-    <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow">
-      {/* Desktop Navbar (No changes here, keeping both links separate) */}
-      <div className="hidden sm:flex flex-col">
-        <div className="flex items-center justify-between px-10 h-16">
-          <Link to="/" className="shrink-0">
-            <img src="/logo_3.png" alt="logo" className="w-28 md:w-32 object-contain" />
-          </Link>
-
-          <div className="flex items-center gap-6 flex-grow justify-center">
-            <ul className="flex gap-6 text-sm font-medium">
-              <li>
-                <Link to="/latest" className="hover:text-blue-200 transition">
-                  Latest Uploads
-                </Link>
-              </li>
-              {/* Desktop Live Cricket Link */}
-              <li>
-                <Link to="/live-cricket" className="hover:text-blue-200 transition font-bold text-red-300 hover:text-red-100">
-                  Live Cricket
-                </Link>
-              </li>
-              <li>
-                <Link to="/blogs" className="hover:text-blue-200 transition">
-                  Blogs
-                </Link>
-              </li>
-              <li>
-                <Link to="/watch" className="hover:text-blue-200 transition">
-                  Watch
-                </Link>
-              </li>
-            </ul>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                navigate(`/search?query=${encodeURIComponent(searchTerm)}`);
-                setSearchTerm("");
-              }}
-              role="search"
-              className="ml-6 relative bg-white text-black rounded-full px-4 py-1 w-64 flex items-center shadow-inner"
-            >
-              <input
-                type="text"
-                placeholder="Search movies…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent w-full text-sm focus:outline-none pr-6"
-              />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-700 transition">
-                <Search className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
-
-          {/* User Section (No changes) */}
-          <div className="flex items-center gap-4 relative" ref={profileRef}>
-            {userData ? (
-              <>
-                {/* Notifications */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowNotifications((v) => !v)}
-                    className="p-1 rounded-full hover:bg-white/10 transition"
-                  >
-                    <img src="/bell.png" alt="Notifications" className="w-6 h-6 filter invert" />
-                    {notification && (
-                      <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-blue-700"></span>
-                    )}
-                  </button>
-                  <NotificationPopup
-                    notification={notification}
-                    show={showNotifications}
-                    onClose={() => setShowNotifications(false)}
-                  />
-                </div>
-
-                {/* Profile Icon */}
-                <div
-                  onClick={() => setProfileOpen((v) => !v)}
-                  className="w-9 h-9 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer ring-2 ring-white hover:ring-blue-300 transition"
-                >
-                  {userInitial}
-                </div>
-
-                {/* Profile Dropdown */}
-                {profileOpen && (
-                  <div className="absolute top-12 right-0 bg-white text-black rounded-lg shadow-2xl z-50 w-48 p-2 border border-gray-200">
-                    {editingName ? (
-                      <div className="flex flex-col gap-2">
-                        <input
-                          type="text"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          className="border p-1 rounded text-sm focus:border-blue-500 outline-none text-gray-900"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={saveNameHandler}
-                            className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700 transition"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
-                                setEditingName(false);
-                                setNewName(userData?.name || ""); // Reset on Cancel
-                            }}
-                            className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300 transition text-gray-800"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <ul className="text-sm py-1">
-                        <li className="px-4 py-2 border-b text-gray-700 font-semibold truncate">{userData.name}</li>
-                        <li>
-                          <button
-                            onClick={() => setEditingName(true)}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                          >
-                            <span role="img" aria-label="edit">✏️</span> Edit Name
-                          </button>
-                        </li>
-                        <li>
-                          <Link
-                            to="/profile"
-                            onClick={() => setProfileOpen(false)}
-                            className="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                          >
-                            <User className="w-4 h-4 text-gray-500" /> View Profile
-                          </Link>
-                        </li>
-                        <li>
-                          <button
-                            onClick={handleLogout} // Use the centralized handler
-                            className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"
-                          >
-                            <LogIn className="w-4 h-4" /> Logout
-                          </button>
-                        </li>
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <button
-                onClick={() => navigate("/login")}
-                className="flex items-center gap-2 bg-white text-blue-700 font-semibold px-4 py-1.5 rounded-full hover:bg-gray-100 transition shadow"
-              >
-                Login
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Optional Category Bar */}
-        <CategoryBar onNavigate={handleNavigateCategory} />
-      </div>
-
-    {/* Mobile Navbar (Top - No changes) */}
-    <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-blue-700 relative">
-        <button onClick={() => setMobileOpen(true)} className="text-white p-2 rounded-lg hover:bg-blue-600 transition">
-            <Menu className="w-6 h-6" />
-        </button>
-
-        <Link to="/" className="flex items-center justify-center">
-            <img src="/logo_39.png" alt="Anchor" className="h-9 w-auto object-contain" />
+    <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow-lg">
+      {/* Desktop Header */}
+      <div className="hidden sm:flex items-center justify-between px-10 h-16 max-w-7xl mx-auto">
+        <Link to="/" className="shrink-0">
+          <img src="/logo_3.png" alt="logo" className="h-35 object-contain" />
         </Link>
 
-        {/* Mobile Profile Icon/Dropdown (No changes) */}
-        {userData ? (
-            <div className="relative" ref={profileRef}>
-                <div
-                    onClick={() => setProfileOpen((v) => !v)}
-                    className="w-8 h-8 rounded-full bg-black flex items-center justify-center font-bold cursor-pointer ring-2 ring-white hover:ring-blue-300 transition"
-                >
-                    {userInitial}
-                </div>
-                {profileOpen && (
-                    <div className="absolute top-10 right-0 bg-white text-black rounded-lg shadow-2xl z-50 w-48 p-2 border border-gray-200">
-                        {editingName ? (
-                            <div className="flex flex-col gap-2">
-                                <input
-                                    type="text"
-                                    value={newName}
-                                    onChange={(e) => setNewName(e.target.value)}
-                                    className="border p-1 rounded text-sm focus:border-blue-500 outline-none text-gray-900"
-                                />
-                                <div className="flex gap-2">
-                                    <button onClick={saveNameHandler} className="flex-1 bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700 transition">
-                                        Save
-                                    </button>
-                                    <button onClick={() => { setEditingName(false); setNewName(userData?.name || ""); }} className="flex-1 bg-gray-200 text-sm px-2 py-1 rounded hover:bg-gray-300 transition text-gray-800">
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <ul className="text-sm py-1">
-                                <li className="px-4 py-2 border-b text-gray-700 font-semibold truncate">{userData.name}</li>
-                                <li><button onClick={() => setEditingName(true)} className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"><span role="img" aria-label="edit">✏️</span> Edit Name</button></li>
-                                <li><Link to="/profile" onClick={() => setProfileOpen(false)} className="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2"><User className="w-4 h-4 text-gray-500" /> View Profile</Link></li>
-                                <li><button onClick={handleLogout} className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><LogIn className="w-4 h-4" /> Logout</button></li>
-                            </ul>
-                        )}
-                    </div>
-                )}
-            </div>
-        ) : (
-            <button onClick={() => navigate("/login")} className="text-white font-semibold px-2 py-1.5 rounded-full hover:bg-blue-600 transition">
-                Login
-            </button>
-        )}
-    </div>
-
-      {/* Mobile Drawer (No changes) */}
-      {mobileOpen && (
-        <div className="sm:hidden fixed inset-0 z-[100] transition-all duration-300">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          {/* Drawer Panel */}
-          <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-2xl p-4 flex flex-col overflow-y-auto rounded-l-xl transition-transform duration-300 transform translate-x-0">
-
-            <div className="flex justify-between items-center border-b pb-3 mb-4">
-              <h3 className="text-lg font-bold text-blue-700">Anchor Movies</h3>
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="text-gray-500 hover:text-red-500 p-1 rounded-full hover:bg-gray-100 transition"
-              >
-                <X className="w-6 h-6" />
+        <div className="flex items-center gap-8">
+          <ul className="flex items-center gap-6 text-sm font-bold uppercase tracking-tight">
+            <li><Link to="/latest" className="hover:text-blue-200 transition">Latest</Link></li>
+            
+            <li className="relative" ref={langRef}>
+              <button onClick={() => setLangOpen(!langOpen)} className="flex items-center gap-1 hover:text-blue-200 transition">
+                Languages <ChevronDown size={14} className={`transition-transform ${langOpen ? 'rotate-180' : ''}`} />
               </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                navigate(`/search?query=${encodeURIComponent(searchTerm)}`);
-                setSearchTerm("");
-                setMobileOpen(false);
-              }}
-              role="search"
-              className="relative bg-gray-100 text-black rounded-full px-4 py-2 w-full flex items-center mb-6 shadow-inner"
-            >
-              <input
-                ref={mobileSearchRef}
-                type="text"
-                placeholder="Search movies…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent w-full text-sm focus:outline-none pr-6"
-              />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                <Search className="w-4 h-4" />
-              </button>
-            </form>
-
-            {!userData && (
-              <Link
-                to="/login"
-                onClick={() => setMobileOpen(false)}
-                className="bg-blue-600 text-white text-center py-2.5 rounded-lg mb-6 font-semibold shadow hover:bg-blue-700 transition"
-              >
-                <LogIn className="w-5 h-5 inline mr-2"/> Login to Anchor
-              </Link>
-            )}
-
-            {/* Main Nav Links */}
-            <ul className="flex flex-col gap-2 mb-6">
-                <Link to="/" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Home className="w-5 h-5 text-blue-600"/> Home</Link>
-                <Link to="/latest" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Clock3 className="w-5 h-5 text-blue-600"/> Latest Uploads</Link>
-                {/* Watch Link (Movies/Shows) */}
-                <Link to="/watch" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Tv className="w-5 h-5 text-blue-600"/> Watch Movies/Shows</Link>
-                {/* Live Cricket Streaming Link in Drawer */}
-                <Link to="/live-cricket" onClick={() => setMobileOpen(false)} className="px-3 py-2 font-bold text-red-600 hover:bg-red-50 rounded-lg transition flex items-center gap-3"><MonitorPlay className="w-5 h-5 text-red-600"/> Live Cricket Streaming</Link>
-                <Link to="/blogs" onClick={() => setMobileOpen(false)} className="px-3 py-2 text-gray-700 font-medium hover:bg-blue-50 rounded-lg transition flex items-center gap-3"><Globe className="w-5 h-5 text-blue-600"/> Blogs</Link>
-            </ul>
-
-
-            {/* Languages (Mobile) */}
-            <details open className="w-full mt-4">
-              <summary className="cursor-pointer font-bold text-blue-700 py-3 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 flex items-center gap-3">
-                <Globe className="w-5 h-5"/> Popular Languages
-              </summary>
-              <div className="mt-3 pl-2 flex flex-col gap-2">
-                {["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"].map(
-                  (lang) => (
-                    <button
-                      key={lang}
-                      onClick={() => {
-                        handleNavigateCategory(lang);
-                      }}
-                      className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-left text-sm hover:bg-blue-600 hover:text-white transition shadow-sm"
-                    >
+              {langOpen && (
+                <div className="absolute top-full mt-2 left-0 w-48 bg-white text-black rounded-xl shadow-2xl py-2 z-50 border border-gray-100 animate-slide-up-fade">
+                  {languages.map(lang => (
+                    <button key={lang} onClick={() => handleNavigateCategory(lang)} className="w-full text-left px-4 py-2 hover:bg-blue-50 hover:text-blue-700 transition font-bold text-xs">
                       {lang}
                     </button>
-                  )
-                )}
-              </div>
-            </details>
+                  ))}
+                </div>
+              )}
+            </li>
 
+            <li className="flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              <Link to="/live-cricket" className="text-red-300 hover:text-white transition">Live Cricket</Link>
+            </li>
+            <li><Link to="/blogs" className="hover:text-blue-200 transition">Blogs</Link></li>
+            <li><Link to="/watch" className="hover:text-blue-200 transition">Watch</Link></li>
+          </ul>
+
+          <form onSubmit={handleSearchSubmit} className="relative bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-full px-4 py-1.5 w-64 flex items-center group focus-within:bg-white focus-within:text-black transition-all">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-transparent w-full text-sm outline-none placeholder:text-white/50 group-focus-within:placeholder:text-gray-400"
+            />
+            <Search className="w-4 h-4 opacity-50 group-focus-within:opacity-100" />
+          </form>
+        </div>
+
+        <div className="relative" ref={profileRef}>
+          {userData ? (
+            <button onClick={() => setProfileOpen(!profileOpen)} className="w-10 h-10 rounded-full bg-black border-2 border-white flex items-center justify-center font-black shadow-lg hover:scale-105 transition">
+              {userData?.name?.[0]?.toUpperCase() || "U"}
+            </button>
+          ) : (
+            <button onClick={() => navigate("/login")} className="bg-white text-blue-700 font-bold px-6 py-2 rounded-full hover:bg-blue-50 transition shadow-md">Login</button>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile Top Bar */}
+      <div className="sm:hidden flex items-center justify-between px-4 h-14 border-b border-white/10">
+        <button onClick={() => setMobileOpen(true)} className="p-2"><Menu /></button>
+        <Link to="/"><img src="/logo_39.png" alt="logo" className="h-8" /></Link>
+        <button onClick={() => setMobileSearchOpen(true)} className="p-2"><Search /></button>
+      </div>
+
+      {/* MOBILE SEARCH OVERLAY */}
+      {mobileSearchOpen && (
+        <div className="fixed inset-0 z-[200] bg-blue-800 animate-fade-in sm:hidden">
+          <div className="flex items-center px-4 h-16 border-b border-white/10 gap-3">
+            <button onClick={() => setMobileSearchOpen(false)} className="p-2">
+              <ArrowLeft size={24} />
+            </button>
+            <form onSubmit={handleSearchSubmit} className="flex-1">
+              <input
+                ref={mobileInputRef}
+                type="text"
+                placeholder="Search movies, series..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent w-full text-lg outline-none placeholder:text-white/50 text-white"
+              />
+            </form>
+            {searchTerm && (
+              <button onClick={() => setSearchTerm("")} className="p-2">
+                <X size={20} />
+              </button>
+            )}
+          </div>
+          <div className="p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-white/40 mb-4">Popular Searches</p>
+            <div className="flex flex-wrap gap-2">
+               {["Action", "Tamil", "Horror", "Latest 2025"].map(tag => (
+                 <button 
+                  key={tag} 
+                  onClick={() => {setSearchTerm(tag); navigate(`/search?query=${tag}`); setMobileSearchOpen(false);}}
+                  className="px-4 py-2 bg-white/10 rounded-full text-sm font-bold border border-white/10"
+                 >
+                   {tag}
+                 </button>
+               ))}
+            </div>
           </div>
         </div>
       )}
 
-    {/* Mobile Bottom Navbar - CRITICAL CHANGE HERE */}
-    <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-900 border-t-2 border-blue-600 shadow-2xl flex justify-around py-2 z-50 text-xs">
-
-        {/* Home */}
-        <NavLink
-            to="/"
-            end
-            className={({ isActive }) =>
-            `flex flex-col items-center p-1 rounded-lg transition ${
-                isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
-            }`
-            }
-        >
-            <Home className="w-5 h-5" />
-            <span className="mt-1">Home</span>
-        </NavLink>
-
-        {/* Latest */}
-        <NavLink
-            to="/latest"
-            className={({ isActive }) =>
-            `flex flex-col items-center p-1 rounded-lg transition ${
-                isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
-            }`
-            }
-        >
-            <Clock3 className="w-5 h-5" />
-            <span className="mt-1">Latest</span>
-        </NavLink>
-
-        {/* Center Button - Search */}
-        <button
-            onClick={handleMobileSearch}
-            className="flex flex-col items-center -mt-4 p-3 rounded-full bg-white text-blue-700 shadow-xl ring-4 ring-blue-500/50 hover:bg-gray-100 transition transform hover:scale-105"
-        >
-            <Search className="w-6 h-6" />
-            <span className="text-xs mt-1 font-bold">Search</span>
-        </button>
-
-        {/* Watch (Options Trigger) */}
-        <div className="relative flex items-center justify-center" ref={watchButtonRef}>
-            {/* The button that triggers the popup */}
-            <button
-                onClick={() => setShowWatchOptions(v => !v)}
-                className={`flex flex-col items-center p-1 rounded-lg transition ${
-                    showWatchOptions ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
-                }`}
-            >
-                <Tv className="w-5 h-5" />
-                <span className="mt-1">Watch</span>
-            </button>
+      {/* Mobile Drawer (Sidebar) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[120] sm:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <div className="absolute top-0 left-0 w-80 h-full bg-white text-black p-6 animate-slide-right shadow-2xl flex flex-col overflow-y-auto">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="font-black text-xl text-blue-700 italic tracking-tighter">AnchorMovies</h3>
+              <button onClick={() => setMobileOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition"><X /></button>
+            </div>
             
-            {/* Conditional Popup Render */}
-            {showWatchOptions && (
-                <WatchOptionsPopup 
-                    onClose={() => setShowWatchOptions(false)} 
-                    onNavigate={handlePopupNavigate} 
-                />
-            )}
-        </div>
+            <ul className="space-y-2 font-bold text-gray-700 mb-8">
+              <li><Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Home size={20} className="text-blue-600"/> Home</Link></li>
+              <li><Link to="/latest" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Clock3 size={20} className="text-blue-600"/> Latest Uploads</Link></li>
+              <li><Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Tv size={20} className="text-blue-600"/> Watch Movies</Link></li>
+              <li>
+                <Link to="/live-cricket" onClick={() => setMobileOpen(false)} className="flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition">
+                  <div className="flex items-center gap-4"><MonitorPlay size={20}/> Live Cricket</div>
+                  <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+                </Link>
+              </li>
+            </ul>
 
-        {/* Profile/Login */}
-        {userData ? (
-            <button
-                onClick={() => {
-                    setProfileOpen((v) => !v);
-                }}
-                className={`flex flex-col items-center p-1 rounded-lg transition ${
-                    profileOpen ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
-                }`}
-            >
-                <User className="w-5 h-5" />
-                <span className="mt-1">Profile</span>
-            </button>
-        ) : (
-            <NavLink
-                to="/login"
-                className={({ isActive }) =>
-                `flex flex-col items-center p-1 rounded-lg transition ${
-                    isActive ? "text-white font-bold bg-blue-700" : "text-gray-300 hover:text-white"
-                }`
-                }
-            >
-                <LogIn className="w-5 h-5" />
-                <span className="mt-1">Login</span>
-            </NavLink>
-        )}
-    </div>
+            <div className="space-y-4 mb-8">
+              <h4 className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Globe size={14} /> Popular Languages
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {languages.map((lang) => (
+                  <button key={lang} onClick={() => handleNavigateCategory(lang)} className="flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-blue-600 hover:text-white rounded-xl text-sm font-bold transition group">
+                    {lang} <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-auto pt-6 border-t border-gray-100">
+              {!userData ? (
+                <button onClick={() => {navigate("/login"); setMobileOpen(false);}} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-600/20 active:scale-95 transition">Login to Anchor</button>
+              ) : (
+                <div className="flex items-center gap-4 p-2">
+                    <div className="w-12 h-12 rounded-full bg-blue-700 flex items-center justify-center text-white font-black text-xl">{userData?.name?.[0]}</div>
+                    <div>
+                        <p className="font-black text-sm">{userData?.name}</p>
+                        <button onClick={() => contextLogout()} className="text-xs font-bold text-red-500 uppercase tracking-widest">Logout</button>
+                    </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-800 border-t border-white/10 flex justify-around items-center h-16 pb-1 z-[100] shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
+        <NavLink to="/" end className={({isActive}) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
+          <Home size={22} /> <span className="text-[10px] font-bold">Home</span>
+        </NavLink>
+        <NavLink to="/latest" className={({isActive}) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
+          <Clock3 size={22} /> <span className="text-[10px] font-bold">Latest</span>
+        </NavLink>
+        <div className="relative -mt-8 flex items-center justify-center">
+          <button onClick={() => setMobileSearchOpen(true)} className="w-14 h-14 bg-white text-blue-700 rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-800 active:scale-90 transition">
+            <Search size={24} />
+          </button>
+        </div>
+        <div className="relative" ref={watchButtonRef}>
+          <button onClick={() => setShowWatchOptions(!showWatchOptions)} className={`flex flex-col items-center gap-1 transition ${showWatchOptions || location.pathname.includes('watch') ? 'text-white' : 'text-white/50'}`}>
+            <Tv size={22} /> <span className="text-[10px] font-bold">Watch</span>
+          </button>
+          {showWatchOptions && <WatchOptionsPopup onClose={() => setShowWatchOptions(false)} onNavigate={(path) => { navigate(path); setShowWatchOptions(false); }} />}
+        </div>
+        <button onClick={() => { userData ? navigate("/profile") : navigate("/login"); }} className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}>
+          <User size={22} /> <span className="text-[10px] font-bold">Account</span>
+        </button>
+      </div>
     </nav>
-  )
+  );
 };
 
 export default Navbar;

@@ -1,119 +1,65 @@
 // src/pages/WatchHtmlPage.jsx
-
 import React, { useEffect, useState, useContext, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
-// ⭐️ Import Play icon for the trailer & Watch Now button
-import { Loader2, Star, User, Download, ChevronDown, ChevronUp, Play } from "lucide-react";
+import { 
+  Loader2, Star, User, Play, Info, ShieldCheck, 
+  ArrowLeft, Youtube, CheckCircle2, List, MonitorPlay, Server, ChevronRight,
+  ExternalLink, Video, Zap
+} from "lucide-react";
 
-/**
- * Groups episodes into seasons for organized display.
- */
+/* ===== Safety Helper: Grouping Logic ===== */
 const groupEpisodesBySeason = (episodes) => {
-  const grouped = episodes.reduce((acc, episode, globalIndex) => {
-    const seasonNumber = episode?.season && !isNaN(Number(episode.season)) ? Number(episode.season) : 1;
+  if (!episodes || !Array.isArray(episodes) || episodes.length === 0) return {};
+  return episodes.reduce((acc, episode, globalIndex) => {
+    const seasonNumber = episode?.season ? Number(episode.season) : 1;
     const seasonKey = `S${seasonNumber}`;
-    const seasonName = `Season ${seasonNumber}`;
-
     if (!acc[seasonKey]) {
-      acc[seasonKey] = {
-        name: seasonName,
-        episodes: [],
-        episodeCounter: 0,
-      };
+      acc[seasonKey] = { name: `Season ${seasonNumber}`, episodes: [], counter: 0 };
     }
-
-    acc[seasonKey].episodeCounter += 1;
-
+    acc[seasonKey].counter += 1;
     acc[seasonKey].episodes.push({
       ...episode,
+      season: seasonNumber,
       globalIndex,
-      seasonNumber,
-      episodeNumberInSeason: acc[seasonKey].episodeCounter,
+      episodeNumberInSeason: acc[seasonKey].counter,
     });
-
     return acc;
   }, {});
-
-  return grouped;
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return null;
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  } catch (e) {
-    return dateString;
-  }
-};
-
+/* ===== Sub-Component: Cast Section ===== */
 const CastSection = React.memo(({ tmdbMeta }) => {
-  const [showFullCast, setShowFullCast] = useState(false);
-  const CAST_LIMIT = 7;
-
+  const CAST_LIMIT = 6;
   if (!tmdbMeta?.cast?.length) return null;
-  const allCast = tmdbMeta.cast;
-  const displayedCast = showFullCast ? allCast : allCast.slice(0, CAST_LIMIT);
-  const needsToggle = allCast.length > CAST_LIMIT;
+  const displayedCast = tmdbMeta.cast.slice(0, CAST_LIMIT);
 
   return (
-    <>
-      <h2 className="text-2xl font-bold mb-4 text-purple-400 border-b border-gray-800 pb-2">Top Cast</h2>
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-4 mb-4">
+    <div className="mb-10 animate-in fade-in duration-700">
+      <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
+        <User className="w-5 h-5 text-blue-400" /> Top Cast
+      </h2>
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6">
         {displayedCast.map((actor, index) => (
-          <div key={index} className="flex flex-col items-center text-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-800 rounded-full overflow-hidden mb-2 border-2 border-gray-700">
+          <div key={index} className="flex flex-col items-center">
+            <div className="w-16 h-16 sm:w-20 bg-gray-800 rounded-full overflow-hidden border-2 border-gray-700 mb-2 shadow-lg">
               {actor.profile_url ? (
                 <img src={actor.profile_url} alt={actor.name} className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-full h-full p-2 text-gray-500" />
-              )}
+              ) : ( <User className="w-full h-full p-4 text-gray-500" /> )}
             </div>
-            <p className="text-xs font-semibold truncate w-full text-gray-200">{actor.name}</p>
-            <p className="text-[10px] text-gray-400 italic truncate w-full">as {actor.character}</p>
+            <p className="text-[10px] font-bold text-center text-gray-200 line-clamp-1 uppercase tracking-tighter">{actor.name}</p>
           </div>
         ))}
       </div>
-
-      {needsToggle && (
-        <div className="text-center mb-8">
-          <button
-            onClick={() => setShowFullCast((prev) => !prev)}
-            className="inline-flex items-center text-sm font-medium text-purple-400 hover:text-purple-300 transition focus:outline-none"
-          >
-            {showFullCast ? (
-              <>
-                Show Less <ChevronUp className="w-4 h-4 ml-1" />
-              </>
-            ) : (
-              <>
-                Show All {allCast.length} Cast Members <ChevronDown className="w-4 h-4 ml-1" />
-              </>
-            )}
-          </button>
-        </div>
-      )}
-    </>
-  );
-});
-
-const OverviewSection = React.memo(({ tmdbMeta }) => {
-  if (!tmdbMeta?.description) return null;
-  return (
-    <div className="mb-8">
-      <h2 className="text-2xl font-bold mb-4 text-green-400 border-b border-gray-800 pb-2">Overview</h2>
-      <p className="text-gray-300 leading-relaxed text-base">{tmdbMeta.description}</p>
     </div>
   );
 });
 
-// Main Page
 const WatchHtmlPage = () => {
-  const { slug } = useParams();
+  const { slug: routeSlug } = useParams();
   const navigate = useNavigate();
   const { backendUrl } = useContext(AppContext);
 
@@ -121,396 +67,269 @@ const WatchHtmlPage = () => {
   const [movieMeta, setMovieMeta] = useState(null);
   const [tmdbMeta, setTmdbMeta] = useState(null);
   const [episodes, setEpisodes] = useState([]);
-  const [servers, setServers] = useState([]);
-  const [activeSrc, setActiveSrc] = useState(null);
-  const [activeEpisode, setActiveEpisode] = useState(null);
-  const [downloadUrl, setDownloadUrl] = useState("");
-  const [showEpisodes, setShowEpisodes] = useState(false);
-  const [playerKey, setPlayerKey] = useState(0);
+  const [availableServers, setAvailableServers] = useState([]);
+  const [activeServer, setActiveServer] = useState(null);
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
 
-  const allPlayableSources = useMemo(() => {
-    const displayServers = servers.map((s) => ({
-      ...s,
-      display: s.name,
-      isEpisode: false,
-    }));
+  const fetchTmdbMetadata = useCallback(async (id) => {
+    if (!backendUrl || !id) return null;
+    try {
+      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: id } });
+      return res.data?.success ? res.data.data : null;
+    } catch (err) { return null; }
+  }, [backendUrl]);
 
-    const episodeServers = episodes
-      .map((ep, index) => {
-        const seasonNumber = ep?.season && !isNaN(Number(ep.season)) ? Number(ep.season) : 1;
-        const epTitle = `E${(index + 1).toString().padStart(2, "0")}`;
+  const handlePlayAction = (manualEpisode = null, forceSourceType = null) => {
+    if (!movieMeta) return; 
 
-        if (ep.direct_url || ep.html) {
-          return {
-            name: epTitle,
-            type: ep.direct_url ? "video" : "html",
-            src: ep.direct_url || ep.html,
-            isEpisode: true,
-            episode: ep,
-            index,
-          };
+    let finalSrc = null;
+    let title = movieMeta?.title;
+    const sourceType = forceSourceType || activeServer?.id || availableServers[0]?.id;
+
+    if (sourceType === 'tmdb' && movieMeta.tmdb_id) {
+        if (manualEpisode) {
+            const s = manualEpisode.season || 1;
+            const e = manualEpisode.episodeNumberInSeason || 1;
+            const embedUrl = `https://vidlink.pro/tv/${movieMeta.tmdb_id}/${s}/${e}`;
+            finalSrc = {
+                src: embedUrl,
+                type: 'html',
+                html: `<iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%;height:100%;"></iframe>`,
+                name: `S${s} E${e} (Auto)`
+            };
+        } else {
+            const embedUrl = `https://vidlink.pro/movie/${movieMeta.tmdb_id}`;
+            finalSrc = {
+                src: embedUrl,
+                type: 'html',
+                html: `<iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%;height:100%;"></iframe>`,
+                name: "Full Movie (Auto)"
+            };
         }
-        return null;
-      })
-      .filter(Boolean);
+    } 
+    else if (sourceType === 'hls') {
+        const url = manualEpisode ? manualEpisode.direct_url : movieMeta.video_url;
+        if (url) {
+            finalSrc = { src: url, type: 'video', name: manualEpisode ? `Episode ${manualEpisode.episodeNumberInSeason}` : "Direct Link" };
+        }
+    }
+    else if (sourceType === 'embed') {
+        const code = manualEpisode ? manualEpisode.html : movieMeta.html_code;
+        if (code) {
+            finalSrc = { src: code, type: 'html', html: code, name: manualEpisode ? `Episode ${manualEpisode.episodeNumberInSeason}` : "Mirror Link" };
+        }
+    }
 
-    return [...displayServers, ...episodeServers];
-  }, [servers, episodes]);
-
-  const playerOverlayData = useMemo(
-    () => ({
-      logoUrl: movieMeta?.titleLogoUrl,
-      title: movieMeta?.title,
-      imdbRating: movieMeta?.imdbRating,
-      year: movieMeta?.year,
-      overview: tmdbMeta?.description,
-      genres: tmdbMeta?.genres?.join(", ") || null,
-      slug: movieMeta?.slug,
-      language: tmdbMeta?.original_language || null,
-      certification: tmdbMeta?.certification || null, // Added certification
-    }),
-    [movieMeta, tmdbMeta]
-  );
-
-  const fetchTmdbMetadata = useCallback(
-    async (id) => {
-      if (!backendUrl || !id) return null;
-      try {
-        const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: id } });
-        if (res.data.success && res.data.data) return res.data.data;
-      } catch (err) {
-        console.error("TMDB metadata fetch error:", err.message);
-      }
-      return null;
-    },
-    [backendUrl]
-  );
-
-  const handleEpisodeSelect = (episode, allEpisodes = episodes) => {
-    const seasonNumber = episode?.season && !isNaN(Number(episode.season)) ? Number(episode.season) : 1;
-    const globalIndex = allEpisodes.findIndex((ep) => ep === episode);
-    const episodeTitle = `S${seasonNumber.toString().padStart(2, "0")}E${globalIndex !== -1 ? (globalIndex + 1).toString().padStart(2, "0") : "01"} - ${episode.title || "Untitled"}`;
-
-    let newActiveSrc = null;
-
-    if (episode.direct_url) newActiveSrc = { name: episodeTitle, type: "video", src: episode.direct_url, isEpisode: true };
-    else if (episode.html) newActiveSrc = { name: episodeTitle, type: "html", src: episode.html, isEpisode: true };
-    else newActiveSrc = null;
-
-    setActiveSrc(newActiveSrc);
-    setActiveEpisode(episode);
-    setPlayerKey((prev) => prev + 1);
+    if (finalSrc) {
+        navigate(`/player/${movieMeta.slug}`, { 
+          state: { src: finalSrc, movieMeta, tmdbMeta, title } 
+        });
+    } else {
+        alert("Streaming link unavailable.");
+    }
   };
-
-  const handleBackToPreviousPage = useCallback(() => navigate(-1), [navigate]);
-
-  const handleWatchNow = useCallback(() => {
-    if (!activeSrc) return;
-    navigate("/player", { state: { src: activeSrc, movieMeta, tmdbMeta } });
-  }, [navigate, activeSrc, movieMeta, tmdbMeta]);
 
   useEffect(() => {
     let isMounted = true;
-
     const fetchData = async () => {
       setLoading(true);
+      try {
+        const { data, error } = await supabase.from("watch_html").select("*").eq("slug", routeSlug).single();
+        if (error || !data) throw new Error("Data not found");
 
-      const { data: watchData, error } = await supabase
-        .from("watch_html")
-        .select("id, slug, title, poster, cover_poster, video_url, html_code, direct_url, episodes, imdb_rating, html_code2, imdb_id, title_logo")
-        .eq("slug", slug)
-        .single();
+        const tmdb = data.imdb_id ? await fetchTmdbMetadata(data.imdb_id) : null;
+        const parsedEp = Array.isArray(data.episodes) ? data.episodes : [];
 
-      // 1. Handle case where slug is completely missing from watch_html
-      if (error || !watchData) {
-        if (isMounted) setMovieMeta({ title: "Not Found 🚫" });
-        setLoading(false);
-        return;
-      }
+        if (isMounted) {
+            setTmdbMeta(tmdb);
+            const meta = {
+                slug: data.slug,
+                title: data.title || data.slug,
+                poster: tmdb?.poster_url || data.poster || "/poster.png",
+                background: tmdb?.cover_poster_url || data.cover_poster || data.poster,
+                imdbRating: tmdb?.imdb_rating ? tmdb.imdb_rating.toFixed(1) : (data.imdb_rating || "N/A"),
+                year: tmdb?.year || data.year,
+                trailer: data.trailer_url || tmdb?.trailer_url,
+                tmdb_id: data.tmdb_id,
+                video_url: data.video_url,
+                html_code: data.html_code,
+                // Restoring description from backend/tmdb
+                description: tmdb?.overview || tmdb?.description || data.description || "No description available for this title."
+            };
+            setMovieMeta(meta);
 
-      // 2. Attempt to fetch TMDB data only if imdb_id is present
-      const primaryImdbId = watchData.imdb_id;
-      let tmdbResult = null;
-      if (primaryImdbId) {
-        tmdbResult = await fetchTmdbMetadata(primaryImdbId);
-      }
-      if (isMounted) setTmdbMeta(tmdbResult);
-
-      // 3. Consolidate metadata, prioritizing TMDB but falling back to watchData
-      const finalPoster = tmdbResult?.poster_url || watchData.poster || "/poster.png";
-      const finalBackground = tmdbResult?.cover_poster_url || watchData.cover_poster || watchData.poster || "/poster.png";
-      const finalImdbRating = tmdbResult?.imdb_rating ? `${tmdbResult.imdb_rating.toFixed(1)}/10` : watchData.imdb_rating || null;
-      
-      // We explicitly set a valid object here, even if TMDB failed
-      if (isMounted) {
-        setMovieMeta({
-          slug: watchData.slug,
-          title: watchData.title || watchData.slug || "Untitled Movie",
-          poster: finalPoster,
-          background: finalBackground,
-          imdbRating: finalImdbRating,
-          year: tmdbResult?.year || null,
-          releaseDate: tmdbResult?.release_date || null,
-          titleLogoUrl: watchData.title_logo || null,
-        });
-      }
-
-      // ---- Build servers with explicit Watch 1 / Watch 2 / Watch 3 naming ----
-      const availableServers = [];
-      let freshDirectUrl = null;
-
-      // Priority: video_url -> Watch 1
-      if (watchData.video_url) {
-        availableServers.push({ name: "Watch 1", type: "video", src: watchData.video_url, isMain: true });
-      }
-
-      // If direct_url exists and backend resolves a direct download URL, add it as Watch 1 (Direct/HLS) after video_url (still Watch 1 variant)
-      if (watchData.direct_url && backendUrl) {
-        try {
-          const res = await axios.get(`${backendUrl}/api/videos/${watchData.direct_url}/download`);
-          if (res.data?.directDownloadUrl) {
-            freshDirectUrl = res.data.directDownloadUrl;
-            // If we already added Watch 1 (video_url), keep both but mark this as "Watch 1 (Direct/HLS)" to distinguish
-            availableServers.push({ name: "Watch 1 (Direct/HLS)", type: "video", src: freshDirectUrl, isMain: true });
-          }
-        } catch (err) {
-          console.error("❌ Failed to fetch direct video URL:", err);
+            const servers = [];
+            if (data.tmdb_id) servers.push({ id: 'tmdb', name: "Server Alpha", label: "Auto-Stream" });
+            if (data.video_url || (parsedEp.length > 0 && parsedEp[0].direct_url)) {
+              servers.push({ id: 'hls', name: servers.length > 0 ? "Server Beta" : "Server Alpha", label: "High Speed Direct" });
+            }
+            if (data.html_code || (parsedEp.length > 0 && parsedEp[0].html)) {
+              servers.push({ id: 'embed', name: "Mirror Server", label: "External Cloud" });
+            }
+            
+            setAvailableServers(servers);
+            if (servers.length > 0) setActiveServer(servers[0]);
+            setEpisodes(parsedEp);
         }
-      }
-
-      // html_code -> Watch 2
-      if (watchData.html_code) {
-        availableServers.push({ name: "Watch 2", type: "html", src: watchData.html_code, isMain: true });
-      }
-
-      // html_code2 -> Watch 3
-      if (watchData.html_code2) {
-        availableServers.push({ name: "Watch 3", type: "html", src: watchData.html_code2, isMain: true });
-      }
-
-      const parsedEpisodes = Array.isArray(watchData.episodes) ? watchData.episodes : [];
-
-      if (isMounted) {
-        setServers(availableServers);
-
-        if (availableServers.length > 0) {
-          setActiveSrc(availableServers[0]);
-          setActiveEpisode(null);
-        } else if (parsedEpisodes.length > 0) {
-          handleEpisodeSelect(parsedEpisodes[0], parsedEpisodes);
-        }
-
-        setDownloadUrl(freshDirectUrl || "");
-        setEpisodes(parsedEpisodes);
-        setLoading(false);
+      } catch (err) {
+          console.error(err);
+      } finally {
+          if (isMounted) setLoading(false);
       }
     };
-
     fetchData();
-    setPlayerKey((prev) => prev + 1);
+    return () => { isMounted = false; };
+  }, [routeSlug, backendUrl, fetchTmdbMetadata]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [slug, backendUrl, fetchTmdbMetadata]); // Removed the old dependency check that was causing the return
-
-  useEffect(() => {
-    if (movieMeta?.title && movieMeta.title !== "Not Found 🚫") {
-      document.title = `Watch ${movieMeta.title} | MovieStream`;
-      let meta = document.querySelector("meta[name='description']");
-      if (!meta) {
-        meta = document.createElement("meta");
-        meta.name = "description";
-        document.head.appendChild(meta);
-      }
-      meta.content = `Watch ${movieMeta.title} online in HD. Stream or download easily.`;
-    }
-  }, [movieMeta]);
-
-  if (loading)
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
-      </div>
-    );
-
-  if (movieMeta?.title === "Not Found 🚫")
-    return (
-      <div className="min-h-screen bg-gray-950 text-white pt-20 text-center">
-        <h1 className="text-3xl text-red-500">404 - Movie Not Found</h1>
-        <p className="text-gray-400 mt-2">The movie slug "{slug}" does not match any entry in the database.</p>
-        <Link to="/" className="text-blue-400 hover:text-blue-300 mt-4 block">
-          Go to Homepage
-        </Link>
-      </div>
-    );
-
-  const currentSourceKey = activeSrc?.src;
-  const formattedReleaseDate = formatDate(movieMeta?.releaseDate);
-  const trailerUrl = tmdbMeta?.trailer_url;
-  // ⭐️ Extract certification from tmdbMeta
-  const certification = tmdbMeta?.certification;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center">
+      <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
+      <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Initialising Stream</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
-      <header className="hidden sm:block sticky top-0 z-50 bg-black/90 border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="flex items-center">
-            <img src="/logo_39.png" alt="Logo" className="h-10" />
-          </Link>
-          <nav className="flex gap-6 text-sm font-medium">
-            <Link to="/" className="hover:text-blue-400 transition">Home</Link>
-            <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
-            <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
-            <Link to="/watchlist" className="hover:text-blue-400 transition">My Watchlist</Link>
-          </nav>
+    <div className="min-h-screen bg-gray-950 text-white pb-24 font-sans">
+      <header className="fixed top-0 inset-x-0 z-50 bg-gray-950/80 backdrop-blur-xl border-b border-white/5 h-16 flex items-center px-4">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate("/watch")} className="p-2 hover:bg-white/5 rounded-full transition-colors"><ArrowLeft size={22} /></button>
+            <Link to="/"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
+          </div>
+          <div className="flex items-center gap-2 text-blue-400 text-[10px] font-black tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+            <ShieldCheck size={12} /> SECURE GATEWAY
+          </div>
         </div>
       </header>
-      <div className="sm:hidden sticky top-0 z-50">
-        <Navbar />
-      </div>
 
-      {/* Hero */}
-      {movieMeta && (
-        <div className="relative w-full bg-black">
-          {movieMeta.background && (
-            <div className="hidden sm:block absolute inset-0 bg-cover bg-center transition-opacity duration-500" style={{ backgroundImage: `url(${movieMeta.background})`, filter: "brightness(0.35)", backgroundPosition: "top" }} />
-          )}
-          <div className="hidden sm:block absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent" />
+      {/* Hero Section */}
+      <div className="relative pt-16 w-full overflow-hidden">
+        {movieMeta?.background && (
+          <div className="absolute inset-0 h-[80vh]">
+            <img src={movieMeta.background} className="w-full h-full object-cover opacity-25 blur-2xl scale-110" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+          </div>
+        )}
 
-          <div className="relative max-w-6xl mx-auto px-4 py-8 sm:py-16 flex flex-col sm:flex-row gap-8 items-center sm:items-start">
-            <img src={movieMeta.poster} alt={movieMeta.slug} className="w-44 sm:w-64 rounded-xl shadow-2xl border-4 border-gray-800 z-10 object-cover" style={{ aspectRatio: "2/3" }} onError={(e) => (e.currentTarget.src = "/poster.png")} />
+        <div className="relative max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-12 items-center md:items-start">
+          <div className="relative group max-w-xs aspect-[2/3] w-full rounded-[2rem] overflow-hidden shadow-2xl ring-1 ring-white/10">
+            <img src={movieMeta?.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt="" />
+            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all duration-500">
+               <button onClick={() => handlePlayAction()} className="w-20 h-20 bg-white text-black rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-transform">
+                 <Play size={36} fill="currentColor" />
+               </button>
+            </div>
+          </div>
 
-            <div className="text-center sm:text-left z-10 pt-4">
-              <h1 className="text-4xl sm:text-6xl font-extrabold mb-2 drop-shadow-lg text-blue-400">{movieMeta.slug}</h1>
+          <div className="flex-1 text-center md:text-left space-y-8">
+            <h1 className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none italic drop-shadow-2xl">
+                {movieMeta?.slug}
+            </h1>
+            
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+               <div className="flex items-center gap-2 bg-gray-900/80 border border-white/10 rounded-xl px-3 py-1.5">
+                  <span className="bg-[#f5c518] text-black font-black text-[10px] px-1.5 py-0.5 rounded-md">IMDb</span>
+                  <span className="text-sm font-black">{movieMeta?.imdbRating}</span>
+               </div>
+               <span className="text-gray-400 font-bold bg-white/5 border border-white/5 px-4 py-1.5 rounded-xl text-sm">{movieMeta?.year}</span>
+            </div>
 
-              {movieMeta.year && <p className="text-xl sm:text-2xl font-semibold text-gray-300 mb-4">{formattedReleaseDate ? formattedReleaseDate : `(${movieMeta.year})`}</p>}
+            {/* Synopsis Display */}
+            <p className="text-gray-300 text-sm md:text-lg leading-relaxed max-w-2xl font-medium italic drop-shadow-md">
+                {movieMeta?.description}
+            </p>
 
-              {/* ⭐️ UPDATED: Display IMDb Rating AND Certification Badge */}
-              <div className="flex items-center justify-center sm:justify-start gap-6 mb-4">
-                
-                {/* IMDb Rating Display */}
-                {movieMeta.imdbRating && (
-                    <p className="text-xl font-bold text-yellow-400 flex items-center">
-                    <Star className="w-6 h-6 fill-yellow-400 mr-2" />
-                    <span className="text-white">{movieMeta.imdbRating}</span>
-                    </p>
+            <div className="flex flex-wrap gap-5 justify-center md:justify-start pt-4">
+                <button onClick={() => handlePlayAction()} className="px-10 py-5 bg-white text-black font-black rounded-2xl flex items-center gap-3 hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-xl text-xs uppercase tracking-widest">
+                    <Play size={20} fill="currentColor" /> {activeServer ? `Play on ${activeServer.name}` : "Start Playback"}
+                </button>
+                {movieMeta?.trailer && (
+                    <a href={movieMeta.trailer} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white font-black px-10 py-5 rounded-2xl transition-all active:scale-95 text-xs uppercase tracking-widest">
+                        <Youtube size={22} /> Watch Trailer
+                    </a>
                 )}
-                
-                {/* Certification Badge Display */}
-                {certification && (
-                    <span className="px-3 py-1 bg-red-600/90 text-white text-sm font-bold rounded-md shadow-md border border-red-500">
-                        {certification}
-                    </span>
-                )}
-              </div>
-              
-              {trailerUrl && (
-                <a href={trailerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-xl transition transform hover:scale-[1.02] active:scale-95 mb-6">
-                  <Play className="w-5 h-5 mr-2 fill-white" />
-                  Watch Trailer
-                </a>
-              )}
-
-              {tmdbMeta?.genres?.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6 justify-center sm:justify-start">
-                  {tmdbMeta.genres.map((genre, index) => (
-                    <span key={index} className="px-3 py-1 text-xs font-medium text-gray-200 bg-gray-700/70 rounded-full border border-gray-600/50 shadow-md">{genre}</span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Main */}
-      <div className="max-w-6xl mx-auto px-4 py-8 pb-24">
-        <CastSection tmdbMeta={tmdbMeta} />
-        <OverviewSection tmdbMeta={tmdbMeta} />
-
-        <h2 className="text-2xl font-bold mt-8 mb-4 text-blue-400">
-          {episodes.length > 0 && activeSrc?.isEpisode ? `Now Playing: ${activeSrc.name}` : `Select Source for: ${movieMeta?.title || "Movie"}`}
-        </h2>
-
-        {allPlayableSources.length > 0 && (
-          <div className="mt-4">
-            <div className="flex items-center gap-3 mb-5 p-3 bg-gray-800 rounded-lg shadow-inner">
-              <div className="flex flex-wrap gap-3">
-                {allPlayableSources.map((source, index) => (
-                  <button
-                    key={index}
-                    onClick={() => (source.isEpisode ? handleEpisodeSelect(source.episode) : setActiveSrc(source))}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                      currentSourceKey === source.src ? "bg-blue-600 text-white shadow-md shadow-blue-500/50" : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    }`}
+      <main className="max-w-7xl mx-auto px-6 py-16 space-y-24">
+        {/* Server Selection Area */}
+        {availableServers.length > 0 && (
+          <div className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl">
+             <div className="flex items-center gap-4 mb-8 text-white">
+                <Server className="text-blue-500" size={24} />
+                <h2 className="text-xl font-black uppercase tracking-[0.2em]">Select Deployment Server</h2>
+             </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {availableServers.map((server) => (
+                  <button 
+                    key={server.id} 
+                    onClick={() => setActiveServer(server)} 
+                    className={`p-6 rounded-3xl flex flex-col items-center gap-2 transition-all border relative overflow-hidden ${activeServer?.id === server.id ? "bg-blue-600 border-blue-400 shadow-lg scale-[1.03] text-white" : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"}`}
                   >
-                    {source.name}
+                    <MonitorPlay className={`mb-1 ${activeServer?.id === server.id ? "text-white" : "text-gray-500"}`} size={20} />
+                    <span className={`text-sm font-black uppercase tracking-widest`}>{server.name}</span>
+                    <span className={`text-[10px] font-bold uppercase ${activeServer?.id === server.id ? 'text-blue-100' : 'text-gray-600'}`}>{server.label}</span>
+                    {activeServer?.id === server.id && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full animate-pulse" />}
                   </button>
                 ))}
-              </div>
+             </div>
+          </div>
+        )}
 
-              <div className="ml-auto">
-                <button
-                  onClick={handleWatchNow}
-                  disabled={!activeSrc}
-                  className={`inline-flex items-center px-5 py-2 rounded-lg font-semibold transition ${
-                    !activeSrc ? "bg-gray-700 text-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                  }`}
-                  title={!activeSrc ? "Select a source first" : "Open player"}
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Watch Now
-                </button>
-              </div>
+        {/* Episode List */}
+        {episodes.length > 0 && (
+          <div className="relative">
+            <div className="flex items-center gap-4 mb-12 text-white">
+                <List className="text-blue-500" size={24} />
+                <h2 className="text-2xl font-black uppercase tracking-[0.2em]">Episodes</h2>
+            </div>
+
+            <div className="space-y-16 relative">
+              {Object.entries(groupedEpisodes).map(([key, season]) => (
+                <div key={key} className="relative">
+                  <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.4em] mb-8 bg-gray-900 w-fit px-4 py-1.5 rounded-full border border-blue-500/20 ml-10">{season.name}</h3>
+                  <div className="absolute left-[31px] top-16 bottom-0 w-[2px] bg-gradient-to-b from-blue-600 via-blue-600/20 to-transparent group-last:bottom-12"></div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 ml-10">
+                    {season.episodes.map((ep, i) => (
+                      <div key={i} className="p-6 rounded-[2rem] bg-gray-900/50 border border-white/5 backdrop-blur-sm shadow-xl hover:border-white/20 transition-all">
+                        <div className="flex flex-col gap-6">
+                            <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 rounded-2xl bg-gray-950 flex items-center justify-center shrink-0"><Video size={20} className="text-gray-600" /></div>
+                                <div className="flex-1 overflow-hidden">
+                                    <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Episode {ep.episodeNumberInSeason}</p>
+                                    <p className="text-sm font-bold truncate text-white">{ep.title || `Segment ${ep.episodeNumberInSeason}`}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {movieMeta?.tmdb_id && (
+                                    <button onClick={() => handlePlayAction(ep, 'tmdb')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600 text-[9px] font-black uppercase text-blue-400 hover:text-white transition-all"><Zap size={12} /> Auto</button>
+                                )}
+                                {ep.direct_url && (
+                                    <button onClick={() => handlePlayAction(ep, 'hls')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-green-600/10 border border-green-600/30 hover:bg-green-600 text-[9px] font-black uppercase text-green-400 hover:text-white transition-all"><Video size={12} /> Direct</button>
+                                )}
+                                {ep.html && (
+                                    <button onClick={() => handlePlayAction(ep, 'embed')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-600/10 border border-purple-600/30 hover:bg-purple-600 text-[9px] font-black uppercase text-purple-400 hover:text-white transition-all"><ExternalLink size={12} /> Mirror</button>
+                                )}
+                            </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Episodes */}
-        {episodes.length > 0 && (
-          <div className="mt-8 bg-gray-800 p-4 rounded-xl">
-            <button onClick={() => setShowEpisodes((prev) => !prev)} className="flex items-center gap-2 text-xl font-semibold text-yellow-400 focus:outline-none w-full pb-2 border-b border-gray-700/50">
-              📺 Full Episode List
-              <span className={`ml-auto inline-block transition-transform duration-200`}>{showEpisodes ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</span>
-            </button>
+        <CastSection tmdbMeta={tmdbMeta} />
+      </main>
 
-            {showEpisodes && (
-              <div className="mt-4 max-h-96 overflow-y-auto pr-2 custom-scroll space-y-4">
-                {Object.entries(groupedEpisodes).map(([seasonKey, seasonData]) => (
-                  <div key={seasonKey} className="border border-gray-700 rounded-lg p-3 bg-gray-700/50">
-                    <h3 className="text-lg font-bold text-green-300 mb-3">{seasonData.name}</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                      {seasonData.episodes.map((episode) => {
-                        const titleText = `E${episode.episodeNumberInSeason.toString().padStart(2, "0")}`;
-                        const fullTitle = episode.title ? `${titleText}: ${episode.title}` : titleText;
-                        const episodeSource = episode.direct_url || episode.html;
-                        const isCurrent = currentSourceKey === episodeSource;
-                        const episodeToPass = episode;
-
-                        return (
-                          <button
-                            key={episode.globalIndex}
-                            onClick={() => handleEpisodeSelect(episodeToPass, episodes)}
-                            disabled={!episode.direct_url && !episode.html}
-                            className={`p-3 rounded-lg text-center text-xs sm:text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              isCurrent ? "bg-red-600 text-white shadow-lg shadow-red-500/50 scale-105" : "bg-gray-800 hover:bg-gray-600 text-gray-300"
-                            }`}
-                          >
-                            {fullTitle}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-[60]">
+        <Navbar />
       </div>
     </div>
   );

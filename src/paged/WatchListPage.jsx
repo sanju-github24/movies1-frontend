@@ -1,55 +1,133 @@
-// src/pages/WatchListPage.jsx
 import React, { useEffect, useState, useRef, useMemo, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
-import { Loader2 } from "lucide-react";
+import { Loader2, Play, Share2, Plus, Heart, X, Clock3, TrendingUp, Star } from "lucide-react";
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
 
-/* ===== Helper: Save Recently Watched (UNCHANGED) ===== */
+/* ===== Helper: Save Recently Watched ===== */
 const saveRecentlyWatched = (movie) => {
-  const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-  const filtered = existing.filter((m) => m.slug !== movie.slug);
-  const updated = [movie, ...filtered].slice(0, 10);
-  localStorage.setItem("recently_watched", JSON.stringify(updated));
+  if (!movie || !movie.slug) return;
+  try {
+    const existing = JSON.parse(localStorage.getItem("recently_watched") || "[]");
+    const filtered = existing.filter((m) => m.slug !== movie.slug);
+    const updated = [movie, ...filtered].slice(0, 10);
+    localStorage.setItem("recently_watched", JSON.stringify(updated));
+  } catch (e) { console.error(e); }
 };
 
-/* ===== STORAGE helpers for resume times (match VideoPlayer key) ===== */
+/* ===== STORAGE helpers for resume times ===== */
 const STORAGE_PREFIX = "video_last_time_v1:";
-
 const readAllResumeTimes = () => {
-  const resumeMap = {}; // slugOrSrc -> { time, updatedAt }
+  const resumeMap = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (!key) continue;
-      if (key.startsWith(STORAGE_PREFIX)) {
+      if (key?.startsWith(STORAGE_PREFIX)) {
         const raw = localStorage.getItem(key);
         try {
           const parsed = JSON.parse(raw);
           const id = key.replace(STORAGE_PREFIX, "");
           resumeMap[id] = parsed;
-        } catch (e) {
-          // ignore parse errors
-        }
+        } catch (e) {}
       }
     }
-  } catch (e) {
-    console.warn("Failed reading resume times:", e);
-  }
+  } catch (e) { console.warn("Resume read error:", e); }
   return resumeMap;
 };
 
-/* ====== Language Row Component (uses poster now) ====== */
-const LanguageRow = ({ language, movies }) => {
+/* ====== Helper: Format Language Display ====== */
+const formatLanguageCount = (langs) => {
+  const langArray = Array.isArray(langs) ? langs : [langs];
+  if (langArray.length <= 1) return langArray[0] || "Unknown";
+  return `${langArray.length} Languages`;
+};
+
+/* ====== Component: Netflix-Style Trending Numbers Row ====== */
+const TrendingNumbersRow = ({ movies, onSelect }) => {
+  const rowRef = useRef(null);
+  const navigate = useNavigate();
+
+  return (
+    <div className="mb-16 w-full max-w-7xl px-4 mx-auto overflow-visible">
+      <h2 className="text-xl font-bold text-gray-200 mb-8 px-2 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
+        <TrendingUp className="w-5 h-5 text-blue-500" /> Top 10 Today
+      </h2>
+      
+      <div className="relative group/row">
+        <div ref={rowRef} className="flex gap-24 overflow-x-auto scrollbar-hide scroll-smooth pb-14 pt-4 px-16">
+          {movies.slice(0, 10).map((movie, index) => (
+            <div
+              key={movie.id}
+              className="group relative flex-none w-64 sm:w-80 h-40 sm:h-48 cursor-pointer transition-all duration-500 ease-out sm:hover:scale-110 z-10"
+              onClick={() => {
+                if (window.innerWidth < 640) onSelect(movie);
+                else { saveRecentlyWatched(movie); navigate(`/watch/${movie.slug}`); }
+              }}
+            >
+              {/* Large Rank Number */}
+              <div className="absolute -left-16 bottom-[-20px] z-0 select-none pointer-events-none">
+                <span className="text-[180px] sm:text-[240px] font-black leading-none text-black transition-all duration-500 group-hover:text-blue-600/10" 
+                      style={{ WebkitTextStroke: "3px rgba(255,255,255,0.5)", fontFamily: 'sans-serif' }}>
+                  {index + 1}
+                </span>
+              </div>
+
+              {/* Cover Poster Image Container */}
+              <div className="relative w-full h-full rounded-xl overflow-hidden bg-gray-900 border border-white/5 shadow-2xl transition-all duration-500 group-hover:border-blue-500">
+                <img 
+                  src={movie.cover_poster || movie.poster || "/default-cover.jpg"} 
+                  alt={movie.title} 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                />
+                
+                {/* Info Badges - Visible on Mobile, Hover on Desktop */}
+                <div className="absolute top-2 right-2 flex flex-col gap-1 items-end sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                    <div className="flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/10">
+                        <div className="bg-[#f5c518] text-black px-1 rounded-[2px] font-black text-[7px] leading-none">IMDb</div>
+                        <span className="text-[9px] font-black text-white">{movie.imdbRating || "7.2"}</span>
+                    </div>
+                    <div className="bg-blue-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
+                        {formatLanguageCount(movie.language)}
+                    </div>
+                </div>
+
+                {/* Hover UI Overlay */}
+                <div className="absolute inset-0 sm:opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent flex flex-col justify-end p-4">
+                    {movie.title_logo ? (
+                        <img src={movie.title_logo} className="h-8 w-auto object-contain mb-2 self-start drop-shadow-2xl" alt="" />
+                    ) : (
+                        <div className="text-sm font-black text-white mb-1 truncate uppercase italic drop-shadow-md">{movie.title || movie.slug}</div>
+                    )}
+                    
+                    <div className="flex flex-wrap gap-1 mb-3">
+                        {(movie.tmdb_genres || movie.categories || []).slice(0, 2).map((g, i) => (
+                           <span key={i} className="text-[8px] font-black text-gray-300 uppercase bg-white/10 px-1.5 rounded">{g}</span>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                       <Play className="w-4 h-4 text-white fill-current" />
+                       <span className="text-[10px] font-black text-white uppercase tracking-tighter">Watch Now</span>
+                    </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ====== Dynamic Genre Row Component ====== */
+const GenreRow = ({ title, movies, onSelect }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
   const navigate = useNavigate();
-  const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
 
   const checkScroll = () => {
     if (!rowRef.current) return;
@@ -59,713 +137,389 @@ const LanguageRow = ({ language, movies }) => {
   };
 
   const scroll = (dir) => {
-    if (!rowRef.current) return;
-    rowRef.current.scrollBy({
-      left: dir === "left" ? -300 : 300,
-      behavior: "smooth",
-    });
-  };
-
-  const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
-  const handleTouchMove = (e) => (touchEndX.current = e.touches[0].clientX);
-  const handleTouchEnd = () => {
-    const distance = touchStartX.current - touchEndX.current;
-    if (Math.abs(distance) > 50) scroll(distance > 0 ? "right" : "left");
+    rowRef.current?.scrollBy({ left: dir === "left" ? -350 : 350, behavior: "smooth" });
   };
 
   useEffect(() => {
     checkScroll();
-    rowRef.current?.addEventListener("scroll", checkScroll);
+    const el = rowRef.current;
+    el?.addEventListener("scroll", checkScroll);
     window.addEventListener("resize", checkScroll);
     return () => {
-      rowRef.current?.removeEventListener("scroll", checkScroll);
+      el?.removeEventListener("scroll", checkScroll);
       window.removeEventListener("resize", checkScroll);
     };
   }, [movies]);
 
   return (
-    <div className="mb-10 w-full">
-      <h2 className="text-xl font-semibold text-blue-300 mb-4 border-b border-gray-700 pb-2">
-        {language}
+    <div className="mb-12 w-full max-w-7xl px-4 mx-auto overflow-visible">
+      <h2 className="text-xl font-bold text-gray-200 mb-4 px-2 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
+        {title} <span className="text-[10px] text-gray-500 font-normal">({movies?.length || 0})</span>
       </h2>
-      <div className="relative group">
+      <div className="relative group/row">
         {showLeft && (
-          <button
-            onClick={() => scroll("left")}
-            className="hidden sm:flex absolute left-0 top-0 bottom-0 z-20 items-center justify-center w-10 bg-gradient-to-r from-black/80 to-transparent hover:from-black/90 transition"
-          >
-            ◀
-          </button>
+          <button onClick={() => scroll("left")} className="absolute left-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-r-xl opacity-0 group-hover/row:opacity-100">◀</button>
         )}
-
-        {showLeft && (
-          <button
-            onClick={() => scroll("left")}
-            className="sm:hidden absolute left-0 top-0 bottom-0 z-10 items-center justify-center w-8 text-white text-xl bg-black/40 hover:bg-black/60 transition rounded-l-lg ml-1 h-56 my-auto"
-            style={{ height: "224px" }}
-          >
-            ◀
-          </button>
-        )}
-
-        <div
-          ref={rowRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-3"
-          style={{ WebkitOverflowScrolling: "touch" }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+        <div ref={rowRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-14 pt-4 px-2">
           {movies.map((movie) => (
             <div
               key={movie.id}
-              className="relative flex-none w-40 sm:w-48 md:w-56 border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg bg-gray-900 hover:bg-gray-800 cursor-pointer transform transition-transform duration-300 hover:scale-110 hover:z-20"
+              className="group relative flex-none w-36 sm:w-52 h-52 sm:h-72 border border-white/5 rounded-xl cursor-pointer transition-all duration-500 ease-out hover:z-[70] sm:hover:scale-110 sm:hover:w-80 sm:hover:shadow-[0_20px_50px_rgba(0,0,0,1)] bg-gray-900"
               onClick={() => {
-                saveRecentlyWatched(movie);
-                navigate(`/watch/${movie.slug}`);
+                if (window.innerWidth < 640) onSelect(movie);
+                else { saveRecentlyWatched(movie); navigate(`/watch/${movie.slug}`); }
               }}
             >
-              {movie.subCategory?.length > 0 && (
-                <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                  {Array.isArray(movie.subCategory) ? movie.subCategory[0] : movie.subCategory}
-                </span>
-              )}
-
-              {/* <-- poster */}
-              <img
-                src={movie.poster || "/default-poster.jpg"}
-                alt={movie.title}
-                loading="lazy"
-                className="w-full h-56 object-cover"
-                onError={(e) => (e.currentTarget.src = "/default-poster.jpg")}
-              />
-              <div className="p-2 text-center font-medium">
-                <div className="text-sm text-white truncate">{movie.title}</div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveRecentlyWatched(movie);
-                    navigate(`/watch/${movie.slug}`);
-                  }}
-                  className="inline-block mt-2 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
-                >
-                  ▶ Watch
-                </button>
+              <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} className="absolute inset-0 w-full h-full object-cover rounded-xl sm:group-hover:opacity-0 transition-opacity duration-300" />
+              <img src={movie.cover_poster || movie.poster} alt={movie.title} className="hidden sm:block absolute inset-0 w-full h-full object-cover rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="hidden sm:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent flex-col justify-end p-5 rounded-xl pointer-events-none group-hover:pointer-events-auto">
+                  {movie.title_logo ? (
+                    <img src={movie.title_logo} className="h-10 w-auto object-contain mb-2 self-start" alt="" />
+                  ) : (
+                    <div className="text-sm font-black text-white mb-2 truncate uppercase">{movie.title || movie.slug}</div>
+                  )}
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-gray-300 mb-2">
+                    <span className="text-blue-400 uppercase">{formatLanguageCount(movie.language)}</span>
+                    {movie.certification && <span className="px-1.5 border border-gray-600 rounded text-gray-400">{movie.certification}</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-400 line-clamp-2 mb-4 leading-relaxed font-medium">{movie.description}</p>
+                  <button className="w-full py-2 bg-white text-black text-[10px] font-extrabold rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
+                    <Play className="w-3.5 h-3.5 fill-current" /> WATCH NOW
+                  </button>
               </div>
             </div>
           ))}
         </div>
-
         {showRight && (
-          <button
-            onClick={() => scroll("right")}
-            className="hidden sm:flex absolute right-0 top-0 bottom-0 z-20 items-center justify-center w-10 bg-gradient-to-l from-black/80 to-transparent hover:from-black/90 transition"
-          >
-            ▶
-          </button>
-        )}
-
-        {showRight && (
-          <button
-            onClick={() => scroll("right")}
-            className="sm:hidden absolute right-0 top-0 bottom-0 z-10 items-center justify-center w-8 text-white text-xl bg-black/40 hover:bg-black/60 transition rounded-r-lg mr-1 h-56 my-auto"
-            style={{ height: "224px" }}
-          >
-            ▶
-          </button>
+          <button onClick={() => scroll("right")} className="absolute right-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-l-xl opacity-0 group-hover/row:opacity-100">▶</button>
         )}
       </div>
     </div>
   );
 };
 
-/* ====== Watch List Page Component ====== */
+/* ====== Main Page Component ====== */
 const WatchListPage = () => {
   const { backendUrl } = useContext(AppContext);
-
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [recommended, setRecommended] = useState([]);
-  const latestMovieTimer = useRef(null);
-  const [lastWatchedTitle, setLastWatchedTitle] = useState("");
   const [heroMovies, setHeroMovies] = useState([]);
+  const [selectedMovie, setSelectedMovie] = useState(null);
   const [scrolled, setScrolled] = useState(false);
-
-  // refresh toggle to re-read resume times (instead of page reload)
   const [resumeRefresh, setResumeRefresh] = useState(0);
-
   const navigate = useNavigate();
 
-  /* ===== Helper: fetch TMDB details from backend (mirrors WatchHtmlPage) ===== */
-  const fetchTmdbDetails = async (imdbId) => {
-    if (!backendUrl || !imdbId) return null;
-    try {
-      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId } });
-      if (res.data?.success && res.data.data) return res.data.data;
-    } catch (err) {
-      console.error("tmdb fetch error:", err?.message || err);
-    }
-    return null;
-  };
-
-  /* ===== Fetch Movies ===== */
   useEffect(() => {
     const fetchMovies = async () => {
       setLoading(true);
       try {
         const [watchRes, moviesRes] = await Promise.all([
-          supabase
-            .from("watch_html")
-            // included imdb_id so we can enrich hero slides later
-            .select("id, title, slug, poster, cover_poster, video_url, created_at, title_logo, imdb_id")
-            .order("created_at", { ascending: false })
-            .limit(200),
+          supabase.from("watch_html").select("*").order("created_at", { ascending: false }).limit(400),
           supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
         ]);
-
-        if (watchRes.error) throw new Error(watchRes.error.message);
-        if (moviesRes.error) throw new Error(moviesRes.error.message);
-
-        const moviesData = moviesRes.data || [];
-        const merged = watchRes.data.map((item) => {
-          const match =
-            moviesData.find((m) => m.slug === item.slug) ||
-            moviesData.find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
-
+        const merged = (watchRes.data || []).map((item) => {
+          const match = (moviesRes.data || []).find((m) => m.slug === item.slug) ||
+                        (moviesRes.data || []).find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
           return {
-            id: item.id,
-            slug: item.slug,
-            title: item.title,
+            ...item,
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || item.poster || "/default-cover.jpg",
-            table_cover_poster: item.cover_poster || null,
-            video_url: item.video_url || "",
-            created_at: item.created_at,
-            title_logo: item.title_logo || "",
-            imdb_id: item.imdb_id || null,
-            language: match?.language?.length ? match.language : ["Unknown"],
+            language: match?.language?.length ? (Array.isArray(match.language) ? match.language : [match.language]) : ["Unknown"],
             categories: match?.categories || [],
-            subCategory: match?.subCategory || [],
-            description: match?.description || "",
+            subCategory: match?.subCategory || null,
+            description: match?.description || item.description || "",
           };
         });
-
         setMovies(merged);
-      } catch (err) {
-        console.error("Fetch error:", err.message || err);
-      } finally {
-        setLoading(false);
-      }
+        enrichList(merged.slice(0, 100));
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchMovies();
   }, [backendUrl]);
 
-  /* ===== Hero / latest selection logic (initial selection from movies) ===== */
+  const enrichList = async (list) => {
+    const enriched = await Promise.all(list.map(async (m) => {
+      if (!m.imdb_id) return m;
+      try {
+        const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: m.imdb_id } });
+        if (res.data?.success) {
+          const tmdb = res.data.data;
+          return { 
+            ...m, 
+            certification: tmdb.certification || "", 
+            year: tmdb.year || "", 
+            tmdb_genres: tmdb.genres || null, 
+            imdbRating: tmdb.imdb_rating?.toFixed(1) 
+          };
+        }
+      } catch (e) {}
+      return m;
+    }));
+    setMovies(prev => {
+      const map = new Map(prev.map(o => [o.slug, o]));
+      enriched.forEach(e => map.set(e.slug, e));
+      return Array.from(map.values());
+    });
+  };
+
   useEffect(() => {
     if (movies.length === 0) return;
-
-    const today = new Date().toISOString().split("T")[0];
-    const lastVisit = localStorage.getItem("last_visit_date");
-
-    let heroSelection = [...movies].slice(0, 5);
-
-    if (lastVisit === today) {
-      const olderMovies = [...movies].slice(5, 50);
-      const randomPicks = olderMovies.sort(() => 0.5 - Math.random()).slice(0, 2);
-      heroSelection = [...heroSelection.slice(0, 3), ...randomPicks];
-    } else {
-      localStorage.setItem("last_visit_date", today);
-    }
-
-    setHeroMovies(heroSelection);
+    const recent = [...movies].slice(0, 5);
+    setHeroMovies(recent);
   }, [movies]);
 
-  /* ===== Enrich heroMovies with TMDB details (cert, year, genres, poster/cover) =====
-     This runs when heroMovies change or backendUrl changes. It fetches TMDB details only for the
-     first few hero candidates (keeps network calls small). */
-  useEffect(() => {
-    if (!heroMovies || heroMovies.length === 0 || !backendUrl) return;
+  const filtered = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (!query) return movies;
+    return movies.filter((m) => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
+  }, [movies, search]);
 
-    let cancelled = false;
-
-    const enrich = async () => {
-      const candidates = heroMovies.slice(0, 8); // keep small
-      const promises = candidates.map(async (m) => {
-        if (!m.imdb_id) return m;
-        const tmdb = await fetchTmdbDetails(m.imdb_id);
-        if (!tmdb) return m;
-
-        return {
-          ...m,
-          poster: tmdb.poster_url || m.poster,
-          cover_poster: tmdb.cover_poster_url || m.cover_poster || m.poster,
-          certification: tmdb.certification || m.certification || "",
-          year: tmdb.year || m.year || (tmdb.release_date ? new Date(tmdb.release_date).getFullYear() : null),
-          tmdb_genres: tmdb.genres || null,
-          trailer_url: tmdb.trailer_url || null,
-        };
-      });
-
-      try {
-        const enriched = await Promise.all(promises);
-        if (cancelled) return;
-
-        // Replace matching entries in heroMovies by slug (preserve order)
-        setHeroMovies((prev) => {
-          const bySlug = Object.fromEntries(prev.map((p) => [p.slug, p]));
-          enriched.forEach((e) => {
-            if (e.slug) bySlug[e.slug] = e;
-          });
-          // maintain previous ordering
-          return prev.map((p) => bySlug[p.slug] || p);
-        });
-      } catch (err) {
-        console.error("hero enrich error:", err);
-      }
-    };
-
-    enrich();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [heroMovies, backendUrl]);
-
-  /* ===== Load Recommendations (based on recently watched) ===== */
-  useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-
-    if (stored.length > 0) {
-      const last = stored[0];
-      setLastWatchedTitle(last.slug || "a movie");
-
-      const related = movies.filter(
-        (m) => m.language?.[0] === last.language?.[0] || m.categories?.[0] === last.categories?.[0]
-      );
-      setRecommended(related.filter((m) => m.slug !== last.slug).slice(0, 10));
-    }
-  }, [movies]);
-
-  /* ===== Filter & Group Movies ===== */
-  const filtered = useMemo(() => movies.filter((m) => m.title.toLowerCase().includes(search.toLowerCase())), [movies, search]);
-
-  const groupedByLanguage = useMemo(() => {
+  /* Logic to group by Backend Genres (extracted from API/DB) */
+  const groupedByBackendGenre = useMemo(() => {
     return filtered.reduce((acc, movie) => {
-      const langs = Array.isArray(movie.language)
-        ? movie.language
-        : typeof movie.language === "string"
-        ? movie.language.split(/[,|]/).map((l) => l.trim())
-        : ["Unknown"];
-      langs.forEach((lang) => {
-        const cleanLang = lang || "Unknown";
-        if (!acc[cleanLang]) acc[cleanLang] = [];
-        acc[cleanLang].push(movie);
+      // Prioritize API genres, fallback to categories
+      const genres = movie.tmdb_genres && movie.tmdb_genres.length > 0 
+        ? movie.tmdb_genres 
+        : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]);
+
+      genres.forEach((genre) => {
+        if (!acc[genre]) acc[genre] = [];
+        acc[genre].push(movie);
       });
       return acc;
     }, {});
   }, [filtered]);
 
-  const latestMovies = heroMovies;
-
-  /* ===== Auto-Slide Effect ===== */
   useEffect(() => {
-  if (!latestMovies || latestMovies.length === 0) return;
-
-  const interval = setInterval(() => {
-    setCurrentSlide((prev) => (prev + 1) % latestMovies.length);
-  }, 5000); // <-- 5 seconds now
-
-  return () => clearInterval(interval);
-}, [latestMovies]);
-
-
-  // Handle Scroll to toggle navbar background
-  useEffect(() => {
-    const handleScroll = () => {
-      const isScrolled = window.scrollY > 50;
-      if (isScrolled !== scrolled) {
-        setScrolled(isScrolled);
-      }
-    };
-
+    const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [scrolled]);
+  }, []);
 
-  // ===== CONTINUE WATCHING: read resume times and map to movies =====
   const resumeMap = useMemo(() => {
-    const raw = readAllResumeTimes(); // id -> {time, updatedAt}
+    const raw = readAllResumeTimes();
     const mapped = {};
     Object.entries(raw).forEach(([id, value]) => {
-      const found = movies.find((m) => m.slug === id);
-      if (found) {
-        mapped[found.slug] = { movie: found, time: value.time || 0, updatedAt: value.updatedAt || 0 };
-      } else {
-        const bySrc = movies.find((m) => m.video_url && id === m.video_url);
-        if (bySrc) mapped[bySrc.slug] = { movie: bySrc, time: value.time || 0, updatedAt: value.updatedAt || 0 };
-      }
+      const found = movies.find(m => m.slug === id || m.video_url === id);
+      if (found) mapped[found.slug] = { movie: found, time: value.time, updatedAt: value.updatedAt };
     });
-    return mapped; // keyed by slug
+    return mapped;
   }, [movies, resumeRefresh]);
 
-  // Create sorted continue list (most recent first) and filter out very short times (under 5s)
-  const continueList = useMemo(() => {
-    const arr = Object.values(resumeMap).filter((r) => r.time && r.time > 5).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    return arr;
-  }, [resumeMap]);
+  const continueList = useMemo(() =>
+    Object.values(resumeMap).filter((r) => (r.time || 0) > 10).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  , [resumeMap]);
 
-  // Quick resume handler: navigate to /player with state containing src & metadata
-  const handleResume = (movie, time) => {
-    const activeSrc = {
-      name: movie.title,
-      type: movie.video_url && movie.video_url.includes(".m3u8") ? "video" : "video",
-      src: movie.video_url || movie.direct_url || null,
-      isEpisode: false,
-    };
+  const relatedMovies = useMemo(() => {
+    if (!selectedMovie) return [];
+    const targetGenres = selectedMovie.tmdb_genres || selectedMovie.categories || [];
+    return movies
+      .filter(m => m.slug !== selectedMovie.slug)
+      .filter(m => {
+        const movieGenres = m.tmdb_genres || m.categories || [];
+        return movieGenres.some(genre => targetGenres.includes(genre));
+      })
+      .slice(0, 10);
+  }, [selectedMovie, movies]);
 
-    const movieMeta = {
-      slug: movie.slug,
-      title: movie.title,
-      titleLogoUrl: movie.title_logo || null,
-      video_url: movie.video_url || null,
-    };
+  useEffect(() => {
+    if (heroMovies.length === 0) return;
+    const interval = setInterval(() => setCurrentSlide((prev) => (prev + 1) % heroMovies.length), 8000);
+    return () => clearInterval(interval);
+  }, [heroMovies]);
 
-    navigate("/player", { state: { src: activeSrc, movieMeta, tmdbMeta: null } });
-  };
-
-  // remove stored resume time & refresh continue list reactively
-  const handleRemoveProgress = (slug) => {
-    try {
-      localStorage.removeItem(`${STORAGE_PREFIX}${slug}`);
-      // also remove from recently_watched if present
-      try {
-        const rw = JSON.parse(localStorage.getItem("recently_watched") || "[]");
-        localStorage.setItem("recently_watched", JSON.stringify(rw.filter((m) => m.slug !== slug)));
-      } catch (e) {}
-      setResumeRefresh((r) => r + 1);
-    } catch (err) {
-      console.error("Failed to remove progress:", err);
-    }
-  };
-
-  // LOADING UI
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center transition-all duration-500">
-        <div className="flex flex-col items-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-400" />
-          <p className="mt-4 text-lg text-gray-300">Fetching latest movies...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-black flex flex-col items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" /><p className="text-gray-400 font-mono tracking-widest uppercase">Initializing</p></div>;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <Helmet>
-        <title>Watch Movies Online | 1TamilMV - Latest & Trending</title>
-        <meta name="description" content="Watch the latest movies online in HD. Explore trending movies in Tamil, Telugu, Kannada, Malayalam, and Hindi on 1TamilMV. Fast streaming and download." />
-        <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://www.1anchormovies.live/watchlist" />
-      </Helmet>
+    <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie ? 'h-screen overflow-hidden' : ''}`}>
+      <Helmet><title>Watchlist | 1Anchormovies</title></Helmet>
 
-      {/* Header */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? "bg-gray-950 shadow-lg" : "bg-transparent"}`}>
+      <header className={`fixed top-0 inset-x-0 z-[100] transition-all duration-300 ${scrolled || showSearch ? "bg-black/95 backdrop-blur-md shadow-2xl" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="flex items-center">
-            <img src="/logo_39.png" alt="Logo" className="h-10" />
-          </Link>
-
-          <nav className="hidden sm:flex gap-6 text-sm font-medium text-white drop-shadow-lg">
+          <Link to="/"><img src="/logo_39.png" alt="Logo" className="h-9 sm:h-10" /></Link>
+          <nav className="hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest">
             <Link to="/" className="hover:text-blue-400 transition">Home</Link>
             <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
-            <Link to="/blogs" className="hover:text-blue-400 transition">Blogs</Link>
-            <Link to="/watchlist" className="hover:text-blue-400 transition text-blue-400">My Watchlist</Link>
+            <Link to="/watchlist" className="text-blue-500 border-b-2 border-blue-500 pb-1">My Watchlist</Link>
           </nav>
-
-          <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-full bg-transparent">
-            {showSearch ? <XMarkIcon className="w-6 h-6 text-white" /> : <MagnifyingGlassIcon className="w-6 h-6 text-white" />}
+          <button onClick={() => setShowSearch(!showSearch)} className="p-2 hover:bg-white/10 rounded-full transition">
+            {showSearch ? <XMarkIcon className="w-6 h-6" /> : <MagnifyingGlassIcon className="w-6 h-6" />}
           </button>
         </div>
-
         {showSearch && (
-          <div className={`px-4 pb-3 max-w-3xl mx-auto transition-all duration-300 ${scrolled ? "bg-gray-950" : "bg-transparent"}`}>
-            <input type="text" placeholder="🔍 Search movies..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full px-0 py-2 border-b border-gray-500 focus:border-blue-500 bg-transparent text-white placeholder-gray-300 outline-none" />
+          <div className="px-4 pb-4 max-w-4xl mx-auto animate-in slide-in-from-top duration-300">
+            <input autoFocus type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
+              className="w-full p-4 bg-gray-900 border border-blue-500/30 rounded-xl outline-none focus:border-blue-500" />
           </div>
         )}
       </header>
 
-      {/* Hero Slider (uses poster/cover and enriched fields when available) */}
-      {/* Hero Slider (uses poster/cover and enriched fields when available)
-    — unified layout: same info on mobile & desktop
-*/}
-{/* Hero Slider */}
-{!loading && latestMovies.length > 0 && search === "" && (
-  <div className="relative w-full overflow-hidden mt-[-60px] sm:mt-[-64px]">
-    <div className="relative w-full h-[60vh] sm:h-[75vh] flex justify-center items-center">
-      {latestMovies.map((movie, idx) => {
-        const isActive = idx === currentSlide;
-
-        const title = movie.slug;
-        const titleLogo = movie.title_logo || null;
-        const cert = movie.certification || movie.cert || "";
-        const year = movie.year || (movie.created_at ? new Date(movie.created_at).getFullYear() : "");
-        const genres = movie.tmdb_genres || movie.categories || [];
-        const cover = movie.table_cover_poster || movie.cover_poster || movie.poster || "/default-cover.jpg";
-
-        return (
-          <div
-            key={movie.id || movie.slug || idx}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              isActive ? "opacity-100 z-20" : "opacity-0 z-10"
-            }`}
-          >
-            <img
-              src={cover}
-              alt={title}
-              className="w-full h-full object-cover brightness-75"
-              draggable={false}
-              onError={(e) => (e.currentTarget.src = "/default-cover.jpg")}
-            />
-
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-transparent flex items-end sm:items-center p-6 sm:p-10 pointer-events-none">
-              <div className="max-w-3xl md:max-w-2xl flex flex-col gap-4 w-full pointer-events-auto">
-
-                {/* Title */}
-                {titleLogo ? (
-                  <img
-                    src={titleLogo}
-                    alt={`${title} Logo`}
-                    className="w-52 sm:w-[420px] object-contain drop-shadow-lg"
-                    onError={(e) => (e.target.style.display = "none")}
-                  />
-                ) : (
-                  <h2 className="text-white text-3xl sm:text-5xl font-extrabold drop-shadow-lg">
-                    {title}
-                  </h2>
-                )}
-
-                {/* MOBILE META ROW (Genres + Languages) */}
-                <div className="sm:hidden flex flex-wrap gap-2">
-                  {movie.language?.slice(0, 3).map((l, i) => (
-                    <span key={i} className="px-3 py-1 bg-black/70 text-white text-xs rounded-md">
-                      {l}
-                    </span>
-                  ))}
-
-                  {genres?.slice(0, 3).map((g, i) => (
-                    <span key={i} className="px-3 py-1 bg-gray-800/70 text-gray-200 text-xs rounded-md">
-                      {g}
-                    </span>
-                  ))}
-                </div>
-
-                {/* DESKTOP META ROW */}
-                <div className="hidden sm:flex flex-wrap items-center gap-3">
-                  {year && <span className="px-3 py-1.5 bg-gray-800/70 rounded text-base">{year}</span>}
-                  {cert && <span className="px-3 py-1.5 bg-red-600/90 rounded text-base text-white">{cert}</span>}
-                  {genres.length > 0 && (
-                    <span className="px-3 py-1.5 bg-black/50 rounded text-base text-gray-200">
-                      {genres.slice(0, 3).join(" • ")}
-                    </span>
+      {/* Hero Section */}
+      {search === "" && heroMovies.length > 0 && (
+        <div className="relative h-[65vh] sm:h-[85vh] w-full overflow-hidden bg-black">
+          {heroMovies.map((movie, idx) => (
+            <div 
+              key={movie.slug} 
+              className={`absolute inset-0 transition-all duration-[1500ms] ease-in-out transform ${
+                idx === currentSlide 
+                  ? "opacity-100 scale-100 z-10" 
+                  : "opacity-0 scale-110 z-0"
+              }`}
+            >
+              <img src={movie.cover_poster} className="w-full h-full object-cover brightness-[0.5] sm:brightness-[0.4]" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20">
+                <div className="max-w-4xl space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+                  {movie.title_logo ? (
+                      <img src={movie.title_logo} className="h-12 sm:h-39 md:h-36 object-contain drop-shadow-2xl" alt="" />
+                  ) : (
+                      <h1 className="text-3xl sm:text-7xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none">
+                        {movie.slug || movie.slug}
+                      </h1>
                   )}
-                </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[10px] sm:text-sm font-black">
+                    <div className="flex items-center gap-1.5">
+                        <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] leading-none shadow-lg">IMDb</div>
+                        <span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span>
+                    </div>
+                    <span className="text-gray-300 drop-shadow-md">{movie.year || "2024"}</span>
+                    <span className="text-blue-400 uppercase tracking-widest drop-shadow-md">{formatLanguageCount(movie.language)}</span>
+                    <span className="hidden xs:inline text-gray-600">|</span>
+                    <div className="flex flex-wrap gap-2">
+                       {(movie.tmdb_genres || movie.categories || []).slice(0, 3).map((genre, i) => (
+                          <span key={i} className="text-gray-200 uppercase tracking-tighter bg-white/5 px-2 py-0.5 rounded border border-white/5">{genre}</span>
+                       ))}
+                    </div>
+                  </div>
 
-                {/* DESCRIPTION (Desktop only) */}
-                {movie.description && (
-                  <p className="hidden sm:block text-gray-300 text-base max-w-xl line-clamp-4">
-                    {movie.description}
-                  </p>
-                )}
+                  <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 sm:line-clamp-3 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
 
-                {/* ACTIONS */}
-                <div className="flex items-center gap-3 mt-2">
-                  <Link
-                    to={`/watch/${movie.slug}`}
-                    className="inline-flex items-center gap-3 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-md shadow-md"
-                  >
-                    ▶ Watch
+                  <Link to={`/watch/${movie.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-3 transition-all transform hover:scale-105 active:scale-95 shadow-2xl">
+                    <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current transition-colors" /> 
+                    <span className="text-[11px] sm:text-base uppercase tracking-widest font-black">PLAY NOW</span>
                   </Link>
                 </div>
-
               </div>
             </div>
+          ))}
+          <div className="hidden sm:flex absolute bottom-10 left-0 right-0 z-20 justify-center items-center gap-2">
+            {heroMovies.map((_, idx) => (
+              <button key={idx} onClick={() => setCurrentSlide(idx)} className={`transition-all duration-500 rounded-full h-2 ${idx === currentSlide ? "w-12 bg-blue-500 shadow-[0_0_12px_#3b82f6]" : "w-3 bg-white/30 hover:bg-white/50"}`} />
+            ))}
           </div>
-        );
-      })}
-    </div>
+        </div>
+      )}
 
-    {/* Dots */}
-    <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-      {latestMovies.map((_, idx) => (
-        <button
-          key={idx}
-          onClick={() => setCurrentSlide(idx)}
-          className={`h-1.5 rounded-full transition-all ${
-            idx === currentSlide ? "w-6 bg-white" : "w-2 bg-gray-500 hover:bg-gray-400"
-          }`}
-        />
-      ))}
-    </div>
-  </div>
-)}
+      <main className={`relative z-20 pb-32 ${search === "" ? "mt-4" : "pt-40"}`}>
+        
+        {/* ROW 1: Continue Watching */}
+        {continueList.length > 0 && search === "" && (
+          <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
+            <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest px-2">
+              <Clock3 className="w-5 h-5" /> CONTINUE WATCHING
+            </h2>
+            <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide px-2">
+              {continueList.map(({ movie, time }) => {
+                const progressPercent = Math.min(100, (time / 7200) * 100);
+                return (
+                  <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => navigate(`/watch/${movie.slug}`)}>
+                    <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl transition-all duration-500 group-hover/continue:border-blue-500 sm:group-hover:scale-105">
+                      <img src={movie.cover_poster || movie.poster || "/default-cover.jpg"} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={movie.title} />
+                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
+                        <div className="h-full bg-blue-600 shadow-[0_0_10px_#2563eb]" style={{ width: `${progressPercent}%` }} />
+                      </div>
+                    </div>
+                    <div className="mt-3 px-1">
+                      <h3 className="text-sm font-bold text-gray-200 truncate">{movie.title || movie.slug}</h3>
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-900/80 px-2 py-1 rounded-md border border-white/5 mt-1 w-fit">
+                        <Clock3 className="w-3 h-3" /> {Math.floor(time / 60)}m watched
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
+        {/* Dynamic Row Placement: TMDB Genres from API */}
+        {search === "" && Object.entries(groupedByBackendGenre).map(([genreName, list], index) => (
+          <React.Fragment key={genreName}>
+            <GenreRow title={genreName} movies={list} onSelect={(m) => setSelectedMovie(m)} />
+            {index === 0 && <TrendingNumbersRow movies={movies} onSelect={(m) => setSelectedMovie(m)} />}
+          </React.Fragment>
+        ))}
 
+        {search !== "" && Object.entries(groupedByBackendGenre).map(([genreName, list]) => (
+            <GenreRow title={genreName} movies={list} onSelect={(m) => setSelectedMovie(m)} />
+        ))}
+      </main>
 
-      {/* ===== CONTINUE WATCHING SECTION (CLEAN + DESKTOP HOVER OVERLAY + MOBILE TAP) ===== */}
-      {continueList.length > 0 && (
-        <div className="max-w-10xl mx-auto px-4 py-6">
-          <h2 className="text-2xl font-bold text-blue-400 mb-4">Continue Watching For You</h2>
+      {/* MOBILE DETAIL OVERLAY */}
+      {selectedMovie && (
+        <div className="fixed inset-0 z-[200] bg-gray-950/98 backdrop-blur-xl flex flex-col animate-in fade-in slide-in-from-bottom duration-500" onClick={(e) => e.target === e.currentTarget && setSelectedMovie(null)}>
+          <button onClick={() => setSelectedMovie(null)} className="absolute top-6 right-6 z-[210] p-3 bg-black/50 rounded-full text-white backdrop-blur-md active:scale-90 transition-transform"><X size={24} /></button>
+          <div className="flex-1 overflow-y-auto pb-20 scrollbar-hide">
+            <div className="relative aspect-video w-full shadow-2xl">
+              <img src={selectedMovie.cover_poster || selectedMovie.poster} className="w-full h-full object-cover" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+            </div>
+            <div className="px-6 flex flex-col items-center text-center space-y-6 -mt-12 relative z-10">
+              {selectedMovie.title_logo ? <img src={selectedMovie.title_logo} className="h-20 w-auto object-contain drop-shadow-2xl mb-2" alt="" /> : <h3 className="text-4xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl">{selectedMovie.title || selectedMovie.slug}</h3>}
+              
+              <div className="flex items-center gap-4 text-xs font-black text-gray-400">
+                <div className="flex items-center gap-1.5">
+                  <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] leading-none shadow-md">IMDb</div>
+                  <span className="text-white">{selectedMovie.imdbRating || "7.5"}</span>
+                </div>
+                <span>{selectedMovie.year || "2024"}</span>
+                <span className="px-1.5 py-0.5 border border-gray-600 rounded text-[10px] uppercase font-black text-gray-300">{selectedMovie.certification || "A"}</span>
+                <span className="text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
+              </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-1 px-1">
-            {continueList.map(({ movie, time }) => {
-              const resumeText = `${Math.floor(time / 60)}m ${Math.floor(time % 60)}s`;
-              const percent = Math.round(Math.min(100, (time / 7200) * 100)); // approx max 2hr
+              <button onClick={() => { saveRecentlyWatched(selectedMovie); navigate(`/watch/${selectedMovie.slug}`); }} className="w-full bg-white text-black py-5 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] uppercase tracking-widest">
+                <Play className="w-5 h-5 fill-current" /> WATCH NOW
+              </button>
 
-              // metadata fallbacks
-              const titleLogo = movie.title_logo || null;
-              const cert = movie.certification || movie.certificate || "";
-              const year = movie.year || (movie.created_at ? new Date(movie.created_at).getFullYear() : null);
-              const shortDesc = movie.description ? (movie.description.length > 160 ? movie.description.slice(0, 157) + "…" : movie.description) : "";
+              <div className="flex flex-wrap justify-center gap-2">
+                {(selectedMovie.tmdb_genres || selectedMovie.categories || []).map((g) => (
+                  <span key={g} className="px-3 py-1 bg-gray-900 border border-white/5 rounded-full text-[9px] font-black uppercase text-gray-400 tracking-wider">{g}</span>
+                ))}
+              </div>
 
-              return (
-                <div
-                  key={movie.slug}
-                  onClick={() => handleResume(movie, time)} // mobile: tap whole card
-                  className="
-                    relative flex-none rounded-lg overflow-hidden bg-gray-900 
-                    border border-gray-800 shadow-sm cursor-pointer
-                    w-[280px] sm:w-[320px] md:w-[380px]
-                    group
-                  "
-                >
-                  {/* Poster */}
-                  <div className="relative">
-                    <img
-                      src={movie.cover_poster || movie.poster}
-                      alt={movie.title}
-                      className="w-full h-36 sm:h-44 md:h-52 object-cover"
-                      onError={(e) => (e.currentTarget.src = '/default-cover.jpg')}
-                    />
+              <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80">{selectedMovie.description}</p>
 
-                    {/* DESKTOP HOVER OVERLAY (shows logo, cert, year, desc, Resume) */}
-                    <div
-                      className="
-                        hidden sm:flex
-                        absolute inset-0 bg-gradient-to-t from-black/85 via-black/60 to-transparent
-                        flex-col justify-end p-4 gap-3
-                        opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                      "
-                      onClick={(e) => e.stopPropagation()} // prevent parent click when clicking overlay controls
-                    >
-                      {/* Title logo or fallback title */}
-                      <div className="flex items-center gap-3">
-                        {titleLogo ? (
-                          <img src={titleLogo} alt={movie.title} className="h-12 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                        ) : (
-                          <div className="text-lg font-bold text-white truncate">{movie.title}</div>
-                        )}
+              <div className="grid grid-cols-4 gap-6 w-full max-w-sm pt-4 border-b border-white/5 pb-8">
+                <div className="flex flex-col items-center gap-2"><Plus className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Watchlist</span></div>
+                <div className="flex flex-col items-center gap-2"><Share2 className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Share</span></div>
+                <div className="flex flex-col items-center gap-2"><Loader2 className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Download</span></div>
+                <div className="flex flex-col items-center gap-2"><Heart className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Rate</span></div>
+              </div>
 
-                        {/* badges */}
-                        <div className="ml-auto flex items-center gap-2">
-                          {cert && <span className="text-xs font-bold px-2 py-1 bg-red-600/90 text-white rounded">{cert}</span>}
-                          {year && <span className="text-xs text-gray-200 px-2 py-1 bg-black/30 rounded">{year}</span>}
+              {relatedMovies.length > 0 && (
+                <div className="w-full pt-6 text-left">
+                  <h4 className="text-lg font-bold text-gray-200 mb-4 px-2 uppercase tracking-widest border-l-4 border-blue-600 pl-3">More Like This</h4>
+                  <div className="grid grid-cols-2 gap-4 px-2">
+                    {relatedMovies.map(m => (
+                      <div key={m.slug} onClick={() => { setSelectedMovie(m); document.querySelector('.overflow-y-auto').scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex flex-col gap-2 group active:scale-95 transition-transform">
+                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-white/5 shadow-lg bg-gray-900">
+                           <img src={m.poster} className="w-full h-full object-cover" alt="" />
                         </div>
+                        <span className="text-[10px] font-bold text-gray-400 truncate uppercase tracking-tighter">{m.title || m.slug}</span>
                       </div>
-
-                      {/* Description (single paragraph) */}
-                      {shortDesc && <p className="text-sm text-gray-200 leading-tight max-h-20 overflow-hidden line-clamp-3">{shortDesc}</p>}
-
-                      {/* Actions row */}
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleResume(movie, time)}
-                          className="inline-flex items-center px-4 py-2 bg-white text-black font-semibold rounded shadow hover:bg-gray-100"
-                        >
-                          ▶ Resume
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleRemoveProgress(movie.slug); }}
-                          className="px-3 py-2 bg-gray-800 text-gray-200 rounded hover:bg-gray-700 ml-2"
-                          title="Remove Progress"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Desktop-only subtle overlay to indicate hover area (keeps poster readable) */}
-                    <div className="hidden sm:block absolute inset-0 pointer-events-none bg-gradient-to-t from-black/0 to-black/20 opacity-0 group-hover:opacity-60 transition-opacity duration-200" />
-                  </div>
-
-                  {/* Text & Progress (visible always) */}
-                  <div className="px-3 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-300 truncate max-w-[72%]">
-                        {movie.slug}
-                      </div>
-                      <div className="text-xs text-gray-400 ml-2">{resumeText}</div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="mt-2 h-1.5 w-full bg-gray-700 rounded overflow-hidden">
-                      <div
-                        className="h-1.5 bg-red-600"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* MOBILE: small inline resume button shown under the image for easier accessibility (visible only on small screens) */}
-                  <div className="sm:hidden px-3 pb-3">
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleResume(movie, time); }}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded"
-                      >
-                        ▶ Resume
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveProgress(movie.slug);
-                        }}
-                        className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 rounded"
-                        title="Remove progress"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Recommended */}
-      {recommended.length > 0 && search === "" && (
-        <div className="p-6 flex flex-col items-center">
-          <LanguageRow language={`🎬 Because you watched: ${lastWatchedTitle}`} movies={recommended} />
-        </div>
-      )}
-
-      {/* Movies grouped by language / search results */}
-      <div className={`p-6 flex flex-col items-center transition-opacity duration-500 ${!loading ? "opacity-100" : "opacity-0"}`}>
-        {search !== "" && <h2 className="text-2xl font-bold text-blue-400 mb-6 w-full max-w-7xl px-4 text-left">Search Results for: "{search}"</h2>}
-
-        {Object.keys(groupedByLanguage).length === 0 ? (
-          <p className="text-center text-gray-400">{search === "" ? "No movies found." : `No movies found matching "${search}".`}</p>
-        ) : (
-          Object.entries(groupedByLanguage).map(([language, movies]) => <LanguageRow key={language} language={language} movies={movies} />)
-        )}
-      </div>
+      <footer className="py-16 text-center border-t border-white/5 bg-black mt-20 opacity-40"><p className="text-[10px] font-mono tracking-[0.5em] uppercase">© 1ANCHORMOVIES 2025</p></footer>
     </div>
   );
 };

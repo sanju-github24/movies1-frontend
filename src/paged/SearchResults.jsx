@@ -1,123 +1,83 @@
+// src/pages/SearchResults.jsx
 import React, { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../utils/supabaseClient";
+import { Loader2, Search, PlayCircle, Download, Film, MonitorPlay, ChevronRight } from "lucide-react";
 
 const capitalizeWords = (str) =>
-  str
-    ?.split(" ")
+  str?.split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ") || "";
 
 const SearchResults = () => {
   const location = useLocation();
-  const query =
-    new URLSearchParams(location.search).get("query")?.toLowerCase() || "";
+  const query = new URLSearchParams(location.search).get("query")?.toLowerCase() || "";
   const prettyQuery = capitalizeWords(query);
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchResults = async () => {
+    if (!query) return;
     setLoading(true);
 
-    // fetch movies
-    const { data: movies, error: moviesError } = await supabase
-      .from("movies")
-      .select("*");
+    try {
+      const [moviesRes, watchRes] = await Promise.all([
+        supabase.from("movies").select("*"),
+        supabase.from("watch_html").select("*"),
+      ]);
 
-    if (moviesError) {
-      console.error("Error fetching movies:", moviesError.message);
-    }
+      const movies = moviesRes.data || [];
+      const watchHtml = watchRes.data || [];
 
-    // fetch watch html
-    const { data: watchHtml, error: watchError } = await supabase
-      .from("watch_html")
-      .select("*");
-
-    if (watchError) {
-      console.error("Error fetching watch_html:", watchError.message);
-    }
-
-    // filter movies
-    const filteredMovies =
-      movies?.filter((movie) => {
+      const filteredMovies = movies.filter((movie) => {
         const titleMatch = movie.title?.toLowerCase().includes(query);
-        const languageMatch = movie.language?.some((lang) =>
-          lang.toLowerCase().includes(query)
-        );
-        const categoryMatch = movie.categories?.some((cat) =>
-          cat.toLowerCase().includes(query)
-        );
+        const langMatch = movie.language?.some((l) => l.toLowerCase().includes(query));
+        return titleMatch || langMatch;
+      });
 
-        const subCategoryArray = Array.isArray(movie.subCategory)
-          ? movie.subCategory
-          : [movie.subCategory];
-
-        const subCategoryMatch = subCategoryArray?.some((sub) =>
-          sub?.toLowerCase().includes(query)
-        );
-
-        const combinedMatch = movie.categories?.some((cat) =>
-          subCategoryArray?.some(
-            (sub) => `${cat.toLowerCase()} ${sub?.toLowerCase()}` === query
-          )
-        );
-
-        return (
-          titleMatch ||
-          languageMatch ||
-          categoryMatch ||
-          subCategoryMatch ||
-          combinedMatch
-        );
-      }) || [];
-
-    // filter watch html entries
-    const filteredWatch =
-      watchHtml?.filter((item) =>
+      const filteredWatch = watchHtml.filter((item) =>
         item.title?.toLowerCase().includes(query)
-      ) || [];
+      );
 
-    // attach posters to watch pages
-    const mergedWatch = filteredWatch.map((watch) => {
-      let matchingMovie =
-        movies?.find(
-          (m) => m.title?.toLowerCase() === watch.title?.toLowerCase()
-        ) ||
-        movies?.find((m) =>
-          m.title?.toLowerCase().includes(watch.title?.toLowerCase())
-        ) ||
-        movies?.find((m) =>
-          watch.title?.toLowerCase().includes(m.title?.toLowerCase())
-        );
+      const resultsMap = new Map();
 
-      return {
-        id: watch.id,
-        title: watch.title,
-        slug: watch.slug,
-        type: "watch",
-        poster: matchingMovie?.poster || "/default-poster.jpg",
-        watchUrl: `/watch/${watch.slug}`,
-      };
-    });
+      // Downloadable Movies (Vertical)
+      filteredMovies.forEach((m) => {
+        resultsMap.set(m.title.toLowerCase().trim(), {
+          id: m.id,
+          title: m.title,
+          slug: m.slug,
+          type: "download",
+          image: m.poster || "/default-poster.jpg",
+          link: `/movie/${m.slug}`,
+          meta: m.language?.[0] || "HD Rip",
+        });
+      });
 
-    // normalize movies
-    const normalizedMovies = filteredMovies.map((m) => ({
-      id: m.id,
-      title: m.title,
-      slug: m.slug || m._id,
-      type: "movie",
-      poster: m.poster || "/default-poster.jpg",
-      watchUrl: m.watchUrl || null,
-      language: m.language,
-      categories: m.categories,
-      subCategory: m.subCategory,
-    }));
+      // Streaming Movies (Horizontal/Wide)
+      filteredWatch.forEach((w) => {
+        const titleKey = w.title.toLowerCase().trim();
+        resultsMap.set(titleKey, {
+          id: w.id,
+          title: w.title,
+          slug: w.slug,
+          type: "streaming",
+          // Prioritize Wide Cover Poster for Streaming
+          image: w.cover_poster || w.poster || "/default-cover.jpg",
+          link: `/watch/${w.slug}`,
+          meta: "Direct Stream",
+          year: w.year || "2025"
+        });
+      });
 
-    // merge both
-    setResults([...normalizedMovies, ...mergedWatch]);
-    setLoading(false);
+      setResults(Array.from(resultsMap.values()));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -125,90 +85,104 @@ const SearchResults = () => {
   }, [query]);
 
   return (
-    <div className="px-4 sm:px-10 py-8 min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white pb-20">
       <Helmet>
-  {/* Page Title */}
-  <title>Download {prettyQuery} Movie - Search Results | 1AnchorMovies | 1TamilMV</title>
+        <title>Search: {prettyQuery} | AnchorMovies</title>
+      </Helmet>
 
-  {/* Meta Description */}
-  <meta
-    name="description"
-    content={`Download and watch the latest ${prettyQuery} movies in HD (480p, 720p, 1080p) on 1AnchorMovies 1Tamilmv . Fast and secure downloads.`}
-  />
-
-  {/* Canonical URL */}
-  <link
-    rel="canonical"
-    href={`https://www.1anchormovies.live/search?query=${encodeURIComponent(query)}`}
-  />
-</Helmet>
-
-
-      <h2 className="text-2xl font-bold mb-6 text-blue-400">
-        🔍 Results for: <span className="italic">{prettyQuery}</span>
-      </h2>
-
-      {loading ? (
-        <p className="text-gray-400 text-lg">Searching...</p>
-      ) : results.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {results.map((item) => (
-            <div
-              key={item.id}
-              className="border border-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition duration-200 bg-gray-900 hover:bg-gray-800"
-            >
-              <Link
-                to={item.type === "movie" ? `/movie/${item.slug}` : item.watchUrl}
-              >
-                <img
-                  src={item.poster}
-                  alt={item.title}
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "/default-poster.jpg";
-                  }}
-                />
-              </Link>
-
-              <div className="p-3 text-center font-medium">
-                <div className="text-white truncate">{item.title}</div>
-                {item.type === "movie" && (
-                  <>
-                    <div className="text-xs text-gray-400">
-                      {item.language?.join(", ") || "Unknown"}
-                    </div>
-                    <div className="text-xs text-gray-500 italic mt-1">
-                      {item.categories?.join(", ")}
-                      {item.subCategory && (
-                        <>
-                          {" • "}
-                          {(Array.isArray(item.subCategory)
-                            ? item.subCategory
-                            : [item.subCategory]
-                          ).join(", ")}
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {item.watchUrl && (
-                  <Link
-                    to={item.watchUrl}
-                    className="inline-block mt-2 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
-                  >
-                    Watch
-                  </Link>
-                )}
-              </div>
-            </div>
-          ))}
+      {/* Header */}
+      <div className="py-12 px-6 sm:px-10 bg-gradient-to-b from-blue-900/10 to-transparent border-b border-white/5">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-2 text-blue-500 mb-2">
+            <Search size={18} />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em]">Discovery Engine</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter italic">
+            Results for <span className="text-blue-500">"{prettyQuery}"</span>
+          </h1>
         </div>
-      ) : (
-        <p className="text-gray-400 text-lg mt-6">
-          No movies found matching your search.
-        </p>
-      )}
+      </div>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-10 py-10">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">Searching Database...</p>
+          </div>
+        ) : results.length > 0 ? (
+          <div className="space-y-12">
+            
+            {/* STREAMING SECTION (Wide Cards) */}
+            {results.some(r => r.type === 'streaming') && (
+              <section>
+                <h2 className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <MonitorPlay size={16} className="text-blue-500" /> Watch Online
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {results.filter(r => r.type === 'streaming').map((item) => (
+                    <Link 
+                      key={item.id} 
+                      to={item.link}
+                      className="group flex flex-col sm:flex-row bg-gray-900 rounded-3xl overflow-hidden border border-white/5 hover:border-blue-500/40 transition-all shadow-2xl"
+                    >
+                      <div className="relative w-full sm:w-56 aspect-video sm:aspect-square overflow-hidden shrink-0">
+                        <img src={item.image} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <PlayCircle size={40} className="text-white fill-blue-600" />
+                        </div>
+                      </div>
+                      <div className="p-6 flex flex-col justify-center flex-1">
+                        <span className="text-blue-500 text-[10px] font-black uppercase tracking-widest mb-2 block">Premium Streaming</span>
+                        <h3 className="text-xl font-black uppercase tracking-tighter text-white group-hover:text-blue-400 transition-colors line-clamp-1 italic">
+                          {item.slug}
+                        </h3>
+                        <p className="text-gray-500 text-xs mt-2 font-bold uppercase tracking-widest">{item.year} • Multi-Audio</p>
+                        <div className="mt-6 flex items-center gap-2 text-white font-black text-[10px] uppercase tracking-widest">
+                            Watch Now <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* DOWNLOAD SECTION (Poster Cards) */}
+            {results.some(r => r.type === 'download') && (
+              <section>
+                <h2 className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <Download size={16} className="text-blue-500" /> Available Downloads
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                  {results.filter(r => r.type === 'download').map((item) => (
+                    <Link key={item.id} to={item.link} className="group flex flex-col">
+                      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-white/5 bg-gray-900 group-hover:border-blue-500/50 transition-all shadow-xl">
+                        <img src={item.image} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="" />
+                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md p-1.5 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Download size={14} className="text-white" />
+                        </div>
+                      </div>
+                      <h3 className="mt-3 text-xs font-black uppercase tracking-tighter truncate text-gray-300 group-hover:text-blue-400 transition-colors">
+                        {item.title}
+                      </h3>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase mt-1 flex items-center gap-1">
+                        <Film size={10} /> {item.meta}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+          </div>
+        ) : (
+          <div className="py-20 text-center bg-gray-900/20 rounded-3xl border border-dashed border-gray-800">
+             <Search className="w-16 h-16 mx-auto mb-4 text-gray-800" />
+             <h2 className="text-xl font-black text-gray-400 uppercase tracking-widest">No Matches Found</h2>
+             <p className="text-gray-600 text-sm mt-2 font-medium">Try searching for keywords like "Tamil", "2025", or a specific title.</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 };

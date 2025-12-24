@@ -1,8 +1,10 @@
-import React, { useEffect, useContext, useState } from "react";
-import { formatDistanceToNow, subDays } from "date-fns";
+// src/pages/LatestUploads.jsx
+import React, { useEffect, useContext, useState, useMemo } from "react";
+import { formatDistanceToNow, subDays, isAfter } from "date-fns";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { AppContext } from "../context/AppContext";
+import { Clock, Play, Sparkles, LayoutGrid, Calendar, Globe } from "lucide-react";
 
 const LatestUploads = () => {
   const { movies, fetchMovies } = useContext(AppContext);
@@ -10,117 +12,110 @@ const LatestUploads = () => {
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    fetchMovies();
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    fetchMovies();
-  }, []);
-
-  // Filter movies uploaded within last 7 days
-  const recentMovies = movies.filter((movie) => {
-    const created = new Date(movie.createdAt || movie.created_at);
-    const oneWeekAgo = subDays(new Date(), 7);
-    return created > oneWeekAgo;
-  });
-
-  // Map posters by title (re-use first found)
-  const posterCache = {};
-  recentMovies.forEach((m) => {
-    const t = (m.title || "").toLowerCase().trim();
-    if (t && !posterCache[t]) {
-      posterCache[t] = m.poster || "/default-poster.jpg";
-    }
-  });
+  const recentMovies = useMemo(() => {
+    return [...movies]
+      .filter((movie) => {
+        const created = new Date(movie.createdAt || movie.created_at);
+        const oneWeekAgo = subDays(new Date(), 7);
+        return created > oneWeekAgo;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.created_at);
+        const dateB = new Date(b.createdAt || b.created_at);
+        return dateB - dateA;
+      });
+  }, [movies]);
 
   return (
-    <section className="px-4 sm:px-10 py-8" aria-labelledby="weekly-releases">
+    <section className="max-w-7xl mx-auto px-4 sm:px-10 py-10 bg-gray-950 min-h-screen" aria-labelledby="weekly-releases">
       <Helmet>
-        <title>Weekly Tamil Telugu Kannada Movie Uploads | AnchorMovies</title>
-        <meta
-          name="description"
-          content="Browse weekly uploaded South Indian movies including Tamil, Telugu, and Kannada films. Updated every day on AnchorMovies."
-        />
-        <meta name="robots" content="index, follow" />
-        <meta property="og:title" content="AnchorMovies Weekly Uploads" />
-        <meta
-          property="og:description"
-          content="New Tamil, Telugu, Kannada movie uploads from this week. Stay updated daily!"
-        />
-        <meta
-          property="og:url"
-          content="https://www.1anchormovies.live/latest"
-        />
-        <meta property="og:type" content="website" />
-        <link rel="canonical" href="https://www.1anchormovies.live/latest" />
+        <title>New Movie Releases This Week | AnchorMovies</title>
       </Helmet>
 
-      <h2
-  id="weekly-releases"
-  className="text-lg font-semibold mb-3 text-white bg-blue-600 inline-block px-4 py-2 rounded-md shadow hover:bg-blue-700 transition"
->
-  Week Releases
-</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-gray-900 pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="relative">
+              <Calendar className="w-6 h-6 text-blue-500" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full animate-ping"></span>
+            </div>
+            <h2 id="weekly-releases" className="text-2xl font-black text-white uppercase tracking-tighter">
+              Weekly Releases
+            </h2>
+          </div>
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">
+            Freshly added in the last 7 days
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 bg-gray-900 px-4 py-2 rounded-xl border border-white/5">
+          <Clock className="w-4 h-4 text-gray-400" />
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">
+            Auto-Updated
+          </span>
+        </div>
+      </div>
 
       {recentMovies.length === 0 ? (
-        <p className="text-gray-400">
-          No movies uploaded in the last 7 days.
-        </p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <LayoutGrid className="w-16 h-16 text-gray-800 mb-4" />
+          <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">
+            No new uploads this week.
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" role="list">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
           {recentMovies.map((movie) => {
             const created = new Date(movie.createdAt || movie.created_at);
-            const timeAgo = isNaN(created)
-              ? "Unknown date"
-              : formatDistanceToNow(created, { addSuffix: true });
+            const isBrandNew = isAfter(created, subDays(new Date(), 1));
+            const timeAgo = isNaN(created) ? "Recently" : formatDistanceToNow(created, { addSuffix: true });
 
-            const languages = Array.isArray(movie.language)
-              ? movie.language.join(", ")
-              : movie.language || "Unknown Language";
-
-            const title = movie.title || "Untitled Movie";
-            const poster =
-              posterCache[(title || "").toLowerCase().trim()] ||
-              "/default-poster.jpg";
+            // LANGUAGE LOGIC: Count languages instead of listing them
+            const langArray = Array.isArray(movie.language) 
+              ? movie.language 
+              : movie.language?.split(',').filter(Boolean) || [];
+            
+            const langCount = langArray.length;
+            const langDisplay = langCount > 1 ? `${langCount} Languages` : (langArray[0] || "Multi Audio");
 
             return (
-              <article
-                key={movie.id || movie.slug}
-                className="border border-gray-300 rounded-lg overflow-hidden hover:shadow-lg transition bg-gray-800"
-                aria-label={`Movie: ${title}`}
-              >
-                <Link to={`/movie/${movie.slug}`} title={`View ${title}`}>
-                  <img
-                    src={poster}
-                    alt={`${title} Poster`}
-                    onError={(e) => {
-                      e.currentTarget.src = "/default-poster.jpg";
-                    }}
-                    className="w-full h-40 sm:h-56 object-cover"
-                  />
-                  <div className="p-2 text-center font-medium text-white">
-                    <div
-                      className="text-sm line-clamp-1 sm:line-clamp-2"
-                      title={title}
-                    >
-                      {title}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {languages} • {timeAgo}
-                    </div>
-
-                    {movie.watchUrl && (
-                      <a
-                        href={movie.watchUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-2 px-3 py-1 text-xs font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition"
-                      >
-                        Watch
-                      </a>
+              <article key={movie.id || movie.slug} className="group relative bg-gray-900 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/50 transition-all duration-300 shadow-xl">
+                <Link to={`/movie/${movie.slug}`} className="block">
+                  <div className="relative aspect-[2/3] overflow-hidden">
+                    <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    
+                    {isBrandNew && (
+                      <div className="absolute top-2 left-2">
+                        <span className="flex items-center gap-1 bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg">
+                          <Sparkles className="w-3 h-3 fill-white" /> NEW
+                        </span>
+                      </div>
                     )}
                   </div>
+
+                  <div className="p-3">
+                    <h3 className="text-sm font-bold text-gray-100 group-hover:text-blue-400 transition-colors line-clamp-1 mb-1">
+                      {movie.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
+                      {/* Displays "X Languages" or specific name if only one */}
+                      <span className="flex items-center gap-1 text-blue-400/80">
+                        <Globe className="w-2.5 h-2.5" /> {langDisplay}
+                      </span>
+                      <span className="text-gray-600">{timeAgo}</span>
+                    </div>
+                  </div>
                 </Link>
+
+                {movie.watchUrl && (
+                  <a href={movie.watchUrl} target="_blank" rel="noopener noreferrer" className="absolute top-2 right-2 bg-white/10 backdrop-blur-md p-1.5 rounded-lg border border-white/20 hover:bg-green-600 transition-colors">
+                    <Play className="w-3 h-3 text-white fill-current" />
+                  </a>
+                )}
               </article>
             );
           })}
