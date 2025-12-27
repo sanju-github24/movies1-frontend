@@ -67,7 +67,6 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                 else { saveRecentlyWatched(movie); navigate(`/watch/${movie.slug}`); }
               }}
             >
-              {/* Large Rank Number */}
               <div className="absolute -left-16 bottom-[-20px] z-0 select-none pointer-events-none">
                 <span className="text-[180px] sm:text-[240px] font-black leading-none text-black transition-all duration-500 group-hover:text-blue-600/10" 
                       style={{ WebkitTextStroke: "3px rgba(255,255,255,0.5)", fontFamily: 'sans-serif' }}>
@@ -75,7 +74,6 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                 </span>
               </div>
 
-              {/* Cover Poster Image Container */}
               <div className="relative w-full h-full rounded-xl overflow-hidden bg-gray-900 border border-white/5 shadow-2xl transition-all duration-500 group-hover:border-blue-500">
                 <img 
                   src={movie.cover_poster || movie.poster || "/default-cover.jpg"} 
@@ -83,7 +81,6 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                 />
                 
-                {/* Info Badges - Visible on Mobile, Hover on Desktop */}
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                     <div className="flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/10">
                         <div className="bg-[#f5c518] text-black px-1 rounded-[2px] font-black text-[7px] leading-none">IMDb</div>
@@ -94,7 +91,6 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                     </div>
                 </div>
 
-                {/* Hover UI Overlay */}
                 <div className="absolute inset-0 sm:opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent flex flex-col justify-end p-4">
                     {movie.title_logo ? (
                         <img src={movie.title_logo} className="h-8 w-auto object-contain mb-2 self-start drop-shadow-2xl" alt="" />
@@ -103,7 +99,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                     )}
                     
                     <div className="flex flex-wrap gap-1 mb-3">
-                        {(movie.tmdb_genres || movie.categories || []).slice(0, 2).map((g, i) => (
+                        {(movie.tmdb_genres || movie.genres || movie.categories || []).slice(0, 2).map((g, i) => (
                            <span key={i} className="text-[8px] font-black text-gray-300 uppercase bg-white/10 px-1.5 rounded">{g}</span>
                         ))}
                     </div>
@@ -172,7 +168,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
             >
               <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} className="absolute inset-0 w-full h-full object-cover rounded-xl sm:group-hover:opacity-0 transition-opacity duration-300" />
               <img src={movie.cover_poster || movie.poster} alt={movie.title} className="hidden sm:block absolute inset-0 w-full h-full object-cover rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="hidden sm:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent flex-col justify-end p-5 rounded-xl pointer-events-none group-hover:pointer-events-auto">
+              <div className="hidden sm:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent flex flex-col justify-end p-5 rounded-xl pointer-events-none group-hover:pointer-events-auto">
                   {movie.title_logo ? (
                     <img src={movie.title_logo} className="h-10 w-auto object-contain mb-2 self-start" alt="" />
                   ) : (
@@ -207,6 +203,7 @@ const WatchListPage = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroMovies, setHeroMovies] = useState([]);
+  const [trendingMovies, setTrendingMovies] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [resumeRefresh, setResumeRefresh] = useState(0);
@@ -220,6 +217,7 @@ const WatchListPage = () => {
           supabase.from("watch_html").select("*").order("created_at", { ascending: false }).limit(400),
           supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
         ]);
+        
         const merged = (watchRes.data || []).map((item) => {
           const match = (moviesRes.data || []).find((m) => m.slug === item.slug) ||
                         (moviesRes.data || []).find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
@@ -231,10 +229,27 @@ const WatchListPage = () => {
             categories: match?.categories || [],
             subCategory: match?.subCategory || null,
             description: match?.description || item.description || "",
+            show_on_hero: item.show_on_hero || false,
+            is_trending: item.is_trending || false,
+            genres: item.genres || [] 
           };
         });
+
         setMovies(merged);
-        enrichList(merged.slice(0, 100));
+
+        // 1. HERO LOGIC (3 Featured + 4 Mixed)
+        const featuredHero = merged.filter(m => m.show_on_hero === true).slice(0, 3);
+        const othersHero = merged.filter(m => !featuredHero.find(f => f.id === m.id));
+        const mixedHero = othersHero.sort(() => 0.5 - Math.random()).slice(0, 4);
+        setHeroMovies([...featuredHero, ...mixedHero]);
+
+        // 2. TRENDING OVERRIDE LOGIC
+        const manualTrending = merged.filter(m => m.is_trending === true).slice(0, 10);
+        const autoTrending = merged.filter(m => !manualTrending.some(t => t.id === m.id)).slice(0, 10 - manualTrending.length);
+        setTrendingMovies([...manualTrending, ...autoTrending]);
+
+        // 🚀 SYNC START: Entire database backfill
+        enrichList(merged);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchMovies();
@@ -242,34 +257,56 @@ const WatchListPage = () => {
 
   const enrichList = async (list) => {
     const enriched = await Promise.all(list.map(async (m) => {
+      // ⚡ DB HIT: If genres column already has data in Supabase, skip API call
+      if (m.genres && m.genres.length > 0) {
+        return { ...m, tmdb_genres: m.genres };
+      }
+
+      // 🌐 API SYNC: Fetch missing metadata
       if (!m.imdb_id) return m;
       try {
         const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: m.imdb_id } });
         if (res.data?.success) {
           const tmdb = res.data.data;
+          const fetchedGenres = tmdb.genres || [];
+
+          // 💾 PERMANENT SYNC: Backfill Supabase column 'genres'
+          await supabase
+            .from("watch_html")
+            .update({ 
+              genres: fetchedGenres,
+              imdb_rating: tmdb.imdb_rating 
+            })
+            .eq("slug", m.slug);
+
           return { 
             ...m, 
             certification: tmdb.certification || "", 
             year: tmdb.year || "", 
-            tmdb_genres: tmdb.genres || null, 
-            imdbRating: tmdb.imdb_rating?.toFixed(1) 
+            tmdb_genres: fetchedGenres, 
+            imdbRating: tmdb.imdb_rating?.toFixed(1),
+            runtime: tmdb.runtime
           };
         }
-      } catch (e) {}
+      } catch (e) { console.warn("Sync failed for", m.title); }
       return m;
     }));
+
+    // Update global state
     setMovies(prev => {
       const map = new Map(prev.map(o => [o.slug, o]));
       enriched.forEach(e => map.set(e.slug, e));
       return Array.from(map.values());
     });
-  };
 
-  useEffect(() => {
-    if (movies.length === 0) return;
-    const recent = [...movies].slice(0, 5);
-    setHeroMovies(recent);
-  }, [movies]);
+    const updateSpecialList = (prev) => prev.map(item => {
+        const match = enriched.find(e => e.slug === item.slug);
+        return match ? { ...item, ...match } : item;
+    });
+
+    setHeroMovies(updateSpecialList);
+    setTrendingMovies(updateSpecialList);
+  };
 
   const filtered = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -277,13 +314,11 @@ const WatchListPage = () => {
     return movies.filter((m) => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
   }, [movies, search]);
 
-  /* Logic to group by Backend Genres (extracted from API/DB) */
   const groupedByBackendGenre = useMemo(() => {
     return filtered.reduce((acc, movie) => {
-      // Prioritize API genres, fallback to categories
       const genres = movie.tmdb_genres && movie.tmdb_genres.length > 0 
         ? movie.tmdb_genres 
-        : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]);
+        : (movie.genres && movie.genres.length > 0 ? movie.genres : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]));
 
       genres.forEach((genre) => {
         if (!acc[genre]) acc[genre] = [];
@@ -292,6 +327,23 @@ const WatchListPage = () => {
       return acc;
     }, {});
   }, [filtered]);
+
+  const relatedMovies = useMemo(() => {
+    if (!selectedMovie) return [];
+    const targetGenres = selectedMovie.tmdb_genres || selectedMovie.genres || selectedMovie.categories || [];
+    const targetLangs = Array.isArray(selectedMovie.language) ? selectedMovie.language : [selectedMovie.language];
+
+    return movies
+      .filter(m => m.slug !== selectedMovie.slug)
+      .filter(m => {
+        const movieGenres = m.tmdb_genres || m.genres || m.categories || [];
+        const movieLangs = Array.isArray(m.language) ? m.language : [m.language];
+        const hasGenreMatch = movieGenres.some(g => targetGenres.includes(g));
+        const hasLangMatch = movieLangs.some(l => targetLangs.includes(l));
+        return hasGenreMatch && hasLangMatch;
+      })
+      .slice(0, 12);
+  }, [selectedMovie, movies]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -313,25 +365,13 @@ const WatchListPage = () => {
     Object.values(resumeMap).filter((r) => (r.time || 0) > 10).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
   , [resumeMap]);
 
-  const relatedMovies = useMemo(() => {
-    if (!selectedMovie) return [];
-    const targetGenres = selectedMovie.tmdb_genres || selectedMovie.categories || [];
-    return movies
-      .filter(m => m.slug !== selectedMovie.slug)
-      .filter(m => {
-        const movieGenres = m.tmdb_genres || m.categories || [];
-        return movieGenres.some(genre => targetGenres.includes(genre));
-      })
-      .slice(0, 10);
-  }, [selectedMovie, movies]);
-
   useEffect(() => {
     if (heroMovies.length === 0) return;
     const interval = setInterval(() => setCurrentSlide((prev) => (prev + 1) % heroMovies.length), 8000);
     return () => clearInterval(interval);
   }, [heroMovies]);
 
-  if (loading) return <div className="min-h-screen bg-black flex flex-col items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" /><p className="text-gray-400 font-mono tracking-widest uppercase">Initializing</p></div>;
+  if (loading) return <div className="min-h-screen bg-black flex flex-col items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" /><p className="text-gray-400 font-mono tracking-widest uppercase">Global Database Sync</p></div>;
 
   return (
     <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie ? 'h-screen overflow-hidden' : ''}`}>
@@ -361,16 +401,9 @@ const WatchListPage = () => {
       {search === "" && heroMovies.length > 0 && (
         <div className="relative h-[65vh] sm:h-[85vh] w-full overflow-hidden bg-black">
           {heroMovies.map((movie, idx) => (
-            <div 
-              key={movie.slug} 
-              className={`absolute inset-0 transition-all duration-[1500ms] ease-in-out transform ${
-                idx === currentSlide 
-                  ? "opacity-100 scale-100 z-10" 
-                  : "opacity-0 scale-110 z-0"
-              }`}
-            >
+            <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-all duration-[1500ms] ease-in-out transform ${idx === currentSlide ? "opacity-100 scale-100 z-10" : "opacity-0 scale-110 z-0"}`}>
               <img src={movie.cover_poster} className="w-full h-full object-cover brightness-[0.5] sm:brightness-[0.4]" alt="" />
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20">
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent flex flex-col justify-end p-6 sm:p-20">
                 <div className="max-w-4xl space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-1000">
                   {movie.title_logo ? (
                       <img src={movie.title_logo} className="h-12 sm:h-39 md:h-36 object-contain drop-shadow-2xl" alt="" />
@@ -387,16 +420,18 @@ const WatchListPage = () => {
                     </div>
                     <span className="text-gray-300 drop-shadow-md">{movie.year || "2024"}</span>
                     <span className="text-blue-400 uppercase tracking-widest drop-shadow-md">{formatLanguageCount(movie.language)}</span>
-                    <span className="hidden xs:inline text-gray-600">|</span>
+                    
+                    {/* 📂 GENRES DISPLAY: Database priority */}
                     <div className="flex flex-wrap gap-2">
-                       {(movie.tmdb_genres || movie.categories || []).slice(0, 3).map((genre, i) => (
-                          <span key={i} className="text-gray-200 uppercase tracking-tighter bg-white/5 px-2 py-0.5 rounded border border-white/5">{genre}</span>
+                       {(movie.tmdb_genres || movie.genres || []).slice(0, 3).map((genre, i) => (
+                          <span key={i} className="text-gray-200 uppercase tracking-tighter bg-white/10 px-2 py-0.5 rounded border border-white/5 backdrop-blur-md">
+                            {genre}
+                          </span>
                        ))}
                     </div>
                   </div>
 
                   <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 sm:line-clamp-3 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
-
                   <Link to={`/watch/${movie.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-3 transition-all transform hover:scale-105 active:scale-95 shadow-2xl">
                     <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current transition-colors" /> 
                     <span className="text-[11px] sm:text-base uppercase tracking-widest font-black">PLAY NOW</span>
@@ -414,7 +449,6 @@ const WatchListPage = () => {
       )}
 
       <main className={`relative z-20 pb-32 ${search === "" ? "mt-4" : "pt-40"}`}>
-        
         {/* ROW 1: Continue Watching */}
         {continueList.length > 0 && search === "" && (
           <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
@@ -423,7 +457,7 @@ const WatchListPage = () => {
             </h2>
             <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide px-2">
               {continueList.map(({ movie, time }) => {
-                const progressPercent = Math.min(100, (time / 7200) * 100);
+                const progressPercent = Math.min(100, (time / (movie.runtime ? movie.runtime * 60 : 7200)) * 100);
                 return (
                   <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => navigate(`/watch/${movie.slug}`)}>
                     <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl transition-all duration-500 group-hover/continue:border-blue-500 sm:group-hover:scale-105">
@@ -445,11 +479,10 @@ const WatchListPage = () => {
           </div>
         )}
 
-        {/* Dynamic Row Placement: TMDB Genres from API */}
         {search === "" && Object.entries(groupedByBackendGenre).map(([genreName, list], index) => (
           <React.Fragment key={genreName}>
             <GenreRow title={genreName} movies={list} onSelect={(m) => setSelectedMovie(m)} />
-            {index === 0 && <TrendingNumbersRow movies={movies} onSelect={(m) => setSelectedMovie(m)} />}
+            {index === 0 && <TrendingNumbersRow movies={trendingMovies} onSelect={(m) => setSelectedMovie(m)} />}
           </React.Fragment>
         ))}
 
@@ -458,7 +491,7 @@ const WatchListPage = () => {
         ))}
       </main>
 
-      {/* MOBILE DETAIL OVERLAY */}
+      {/* Detail Overlay */}
       {selectedMovie && (
         <div className="fixed inset-0 z-[200] bg-gray-950/98 backdrop-blur-xl flex flex-col animate-in fade-in slide-in-from-bottom duration-500" onClick={(e) => e.target === e.currentTarget && setSelectedMovie(null)}>
           <button onClick={() => setSelectedMovie(null)} className="absolute top-6 right-6 z-[210] p-3 bg-black/50 rounded-full text-white backdrop-blur-md active:scale-90 transition-transform"><X size={24} /></button>
@@ -471,10 +504,7 @@ const WatchListPage = () => {
               {selectedMovie.title_logo ? <img src={selectedMovie.title_logo} className="h-20 w-auto object-contain drop-shadow-2xl mb-2" alt="" /> : <h3 className="text-4xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl">{selectedMovie.title || selectedMovie.slug}</h3>}
               
               <div className="flex items-center gap-4 text-xs font-black text-gray-400">
-                <div className="flex items-center gap-1.5">
-                  <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] leading-none shadow-md">IMDb</div>
-                  <span className="text-white">{selectedMovie.imdbRating || "7.5"}</span>
-                </div>
+                <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] leading-none shadow-md">IMDb</div><span className="text-white">{selectedMovie.imdbRating || "7.5"}</span></div>
                 <span>{selectedMovie.year || "2024"}</span>
                 <span className="px-1.5 py-0.5 border border-gray-600 rounded text-[10px] uppercase font-black text-gray-300">{selectedMovie.certification || "A"}</span>
                 <span className="text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
@@ -485,30 +515,24 @@ const WatchListPage = () => {
               </button>
 
               <div className="flex flex-wrap justify-center gap-2">
-                {(selectedMovie.tmdb_genres || selectedMovie.categories || []).map((g) => (
+                {(selectedMovie.tmdb_genres || selectedMovie.genres || selectedMovie.categories || []).map((g) => (
                   <span key={g} className="px-3 py-1 bg-gray-900 border border-white/5 rounded-full text-[9px] font-black uppercase text-gray-400 tracking-wider">{g}</span>
                 ))}
               </div>
 
               <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80">{selectedMovie.description}</p>
 
-              <div className="grid grid-cols-4 gap-6 w-full max-w-sm pt-4 border-b border-white/5 pb-8">
-                <div className="flex flex-col items-center gap-2"><Plus className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Watchlist</span></div>
-                <div className="flex flex-col items-center gap-2"><Share2 className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Share</span></div>
-                <div className="flex flex-col items-center gap-2"><Loader2 className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Download</span></div>
-                <div className="flex flex-col items-center gap-2"><Heart className="w-5 h-5 text-gray-300" /><span className="text-[9px] uppercase font-bold text-gray-500">Rate</span></div>
-              </div>
-
+              {/* RELATED MOVIES SECTION */}
               {relatedMovies.length > 0 && (
-                <div className="w-full pt-6 text-left">
-                  <h4 className="text-lg font-bold text-gray-200 mb-4 px-2 uppercase tracking-widest border-l-4 border-blue-600 pl-3">More Like This</h4>
-                  <div className="grid grid-cols-2 gap-4 px-2">
-                    {relatedMovies.map(m => (
-                      <div key={m.slug} onClick={() => { setSelectedMovie(m); document.querySelector('.overflow-y-auto').scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex flex-col gap-2 group active:scale-95 transition-transform">
-                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-white/5 shadow-lg bg-gray-900">
-                           <img src={m.poster} className="w-full h-full object-cover" alt="" />
+                <div className="w-full pt-10 text-left">
+                  <h4 className="text-lg font-black text-white uppercase tracking-widest mb-6 border-l-4 border-blue-600 pl-3">More Like This</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {relatedMovies.map((m) => (
+                      <div key={m.id} className="flex flex-col gap-2 group active:scale-95 transition-transform" onClick={() => { setSelectedMovie(m); document.querySelector('.overflow-y-auto').scrollTo({ top: 0, behavior: 'smooth' }); }}>
+                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-white/5 bg-gray-900 shadow-lg">
+                          <img src={m.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt="" />
                         </div>
-                        <span className="text-[10px] font-bold text-gray-400 truncate uppercase tracking-tighter">{m.title || m.slug}</span>
+                        <span className="text-[10px] font-bold text-gray-400 truncate uppercase">{m.title || m.slug}</span>
                       </div>
                     ))}
                   </div>

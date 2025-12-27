@@ -211,7 +211,7 @@ const WatchHtmlPage = () => {
 
             const servers = [];
             if (watchData.imdb_id) {
-                servers.push({ id: 'imdb_reader', name: "IMDb Reader", label: "Direct Source" });
+                servers.push({ id: 'imdb_reader', name: "Server Omega", label: "Direct Source" });
             }
             if (watchData.tmdb_id || watchData.imdb_id) {
                 servers.push({ id: '2embed', name: "Server Prime", label: "2Embed Global" });

@@ -191,7 +191,7 @@ const Header = () => {
                         <p className="text-blue-300/60 text-sm">Join 50,000+ members for instant HD links.</p>
                     </div>
                 </div>
-                <a href="https://t.me/AnchorMovies" className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 py-3 rounded-2xl font-black text-sm tracking-widest shadow-xl shadow-cyan-500/20 transition-all flex items-center gap-2">
+                <a href="https://t.me/anchor2025" className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 py-3 rounded-2xl font-black text-sm tracking-widest shadow-xl shadow-cyan-500/20 transition-all flex items-center gap-2">
                     <Zap className="w-4 h-4 fill-white"/> JOIN TELEGRAM
                 </a>
              </div>
@@ -210,6 +210,7 @@ const Header = () => {
     </Link>
   </div>
 )}
+
 
           {/* GRID */}
           <div 
@@ -234,7 +235,7 @@ const Header = () => {
                       className={`w-full h-full object-cover transition-transform duration-700 ${isFocused ? 'scale-110' : 'group-hover:scale-110'}`}
                     />
                     
-                    {/* Badge */}
+                    {/* TOP LEFT BADGES (Time/Note) */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1">
                         {movie.note && (
                             <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xl uppercase">
@@ -245,6 +246,15 @@ const Header = () => {
                             {formatTimeAgo(movie.homepage_added_at || movie.created_at)}
                         </span>
                     </div>
+
+                    {/* NEW: TOP RIGHT BADGE (SubCategory / Quality) */}
+                    {movie.subCategory && (
+                      <div className="absolute top-2 right-2">
+                        <span className="text-[9px] font-black bg-red-500 backdrop-blur-md text-white px-2 py-0.5 rounded border border-white/20 shadow-lg uppercase tracking-tighter">
+                          {movie.subCategory}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Quality/IMDb bottom tag */}
                     <div className="absolute bottom-2 right-2 flex gap-1">

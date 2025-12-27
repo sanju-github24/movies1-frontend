@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
   Search, Loader2, Star, Settings, Trash2, Edit3, Plus, ArrowLeft, 
-  Layers, Database, Tv, Layout, Monitor, Film, RotateCcw, Save, X
+  Layers, Database, Tv, Layout, Monitor, Film, RotateCcw, Save, X, Eye, EyeOff, TrendingUp
 } from "lucide-react";
 
 /* ================= EDITABLE ITEM COMPONENT (STUDIO EDITOR) ================= */
@@ -30,7 +30,6 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
     try {
       const validEps = editEpisodes.filter(e => e.title || e.tmdb_id || e.direct_url || e.html);
       
-      // Update logic: Updating every single field from the main form
       const { error } = await supabase
         .from("watch_html")
         .update({ 
@@ -46,6 +45,8 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
           direct_url: editData.direct_url,
           html_code: editData.html_code,
           html_code2: editData.html_code2,
+          show_on_hero: editData.show_on_hero, 
+          is_trending: editData.is_trending, // Sync trending flag
           episodes: validEps
         })
         .eq("id", item.id);
@@ -71,6 +72,39 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
                 <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Full Content Editor</h4>
             </div>
             <button onClick={() => setIsEditing(false)} className="text-slate-500 hover:text-white transition-colors"><X size={20}/></button>
+        </div>
+
+        {/* Feature Toggles in Editor */}
+        <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-800/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    {editData.show_on_hero ? <Eye size={18} className="text-green-500"/> : <EyeOff size={18} className="text-red-500"/>}
+                    <div>
+                        <p className="text-[10px] font-black text-white uppercase">Hero</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setEditData({...editData, show_on_hero: !editData.show_on_hero})}
+                    className={`w-10 h-5 rounded-full transition-all relative ${editData.show_on_hero ? 'bg-green-600' : 'bg-slate-700'}`}
+                >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${editData.show_on_hero ? 'right-1' : 'left-1'}`} />
+                </button>
+            </div>
+
+            <div className="bg-slate-800/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <TrendingUp size={18} className={editData.is_trending ? "text-blue-400" : "text-slate-500"}/>
+                    <div>
+                        <p className="text-[10px] font-black text-white uppercase">Trending</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setEditData({...editData, is_trending: !editData.is_trending})}
+                    className={`w-10 h-5 rounded-full transition-all relative ${editData.is_trending ? 'bg-blue-600' : 'bg-slate-700'}`}
+                >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${editData.is_trending ? 'right-1' : 'left-1'}`} />
+                </button>
+            </div>
         </div>
 
         {/* 1. Identity & Config */}
@@ -165,14 +199,18 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
   return (
     <div className="group relative bg-slate-900/50 border border-white/5 p-4 rounded-2xl hover:border-blue-500/30 transition-all flex items-center justify-between">
       <div className="flex items-center gap-4 overflow-hidden">
-         <div className="w-10 h-14 bg-slate-800 rounded-lg overflow-hidden border border-white/5 shadow-lg">
+         <div className="w-10 h-14 bg-slate-800 rounded-lg overflow-hidden border border-white/5 shadow-lg relative">
             <img src={item.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt="" />
+            <div className="absolute top-0 right-0 flex flex-col gap-0.5">
+                {item.show_on_hero && <div className="bg-green-500 w-2 h-2 rounded-bl-sm animate-pulse" />}
+                {item.is_trending && <div className="bg-blue-500 w-2 h-2 rounded-bl-sm" />}
+            </div>
          </div>
          <div className="overflow-hidden">
             <p className="font-bold text-gray-100 truncate text-sm uppercase italic leading-none">{item.title || "Untitled"}</p>
-            <div className="flex gap-3 text-[9px] font-black uppercase text-gray-500 mt-2">
-                <span className="text-blue-500">ID: {item.tmdb_id || 'N/A'}</span>
-                <span className="text-purple-500">EPS: {item.episodes?.length || 0}</span>
+            <div className="flex gap-2 text-[8px] font-black uppercase mt-2">
+                <span className={item.show_on_hero ? "text-green-500" : "text-gray-600"}>HERO:{item.show_on_hero ? "Y" : "N"}</span>
+                <span className={item.is_trending ? "text-blue-500" : "text-gray-600"}>TREND:{item.is_trending ? "Y" : "N"}</span>
             </div>
          </div>
       </div>
@@ -192,7 +230,9 @@ const UploadWatchHtml = () => {
   const initialForm = {
     title: "", slug: "", tmdb_id: "", poster: "", cover_poster: "",
     video_url: "", direct_url: "", title_logo: "", imdb_rating: "", imdb_id: "",
-    html_code: "", html_code2: ""
+    html_code: "", html_code2: "",
+    show_on_hero: false,
+    is_trending: false // Initial state for Trending
   };
 
   const [formData, setFormData] = useState(initialForm);
@@ -304,6 +344,46 @@ const UploadWatchHtml = () => {
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-7 space-y-8">
+            
+            {/* HERO & TRENDING DUAL TOGGLE SECTION */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <section className="bg-slate-900/80 border border-blue-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-2xl">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-4 rounded-3xl ${formData.show_on_hero ? 'bg-green-600/20 text-green-500' : 'bg-red-600/20 text-red-500'}`}>
+                            {formData.show_on_hero ? <Eye size={24}/> : <EyeOff size={24}/>}
+                        </div>
+                        <div>
+                            <h3 className="font-black uppercase tracking-widest text-[11px] text-white leading-none">Hero Slide</h3>
+                            <p className="text-[10px] text-slate-500 uppercase mt-1">{formData.show_on_hero ? 'Visible' : 'Hidden'}</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setFormData({...formData, show_on_hero: !formData.show_on_hero})}
+                        className={`w-16 h-8 rounded-full transition-all relative ${formData.show_on_hero ? 'bg-green-600' : 'bg-slate-800'}`}
+                    >
+                        <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full shadow-lg transition-all ${formData.show_on_hero ? 'right-1.5' : 'left-1.5'}`} />
+                    </button>
+                </section>
+
+                <section className="bg-slate-900/80 border border-blue-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-2xl">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-4 rounded-3xl ${formData.is_trending ? 'bg-blue-600/20 text-blue-500' : 'bg-slate-800 text-slate-500'}`}>
+                            <TrendingUp size={24}/>
+                        </div>
+                        <div>
+                            <h3 className="font-black uppercase tracking-widest text-[11px] text-white leading-none">Trending 10</h3>
+                            <p className="text-[10px] text-slate-500 uppercase mt-1">{formData.is_trending ? 'Enabled' : 'Disabled'}</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setFormData({...formData, is_trending: !formData.is_trending})}
+                        className={`w-16 h-8 rounded-full transition-all relative ${formData.is_trending ? 'bg-blue-600' : 'bg-slate-800'}`}
+                    >
+                        <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full shadow-lg transition-all ${formData.is_trending ? 'right-1.5' : 'left-1.5'}`} />
+                    </button>
+                </section>
+            </div>
+
             <section className="bg-slate-900/80 border border-white/5 p-8 rounded-[2.5rem] space-y-6 shadow-xl relative overflow-hidden">
                 <div className="flex items-center gap-2 border-b border-white/5 pb-4">
                     <Layout size={18} className="text-blue-500"/>
@@ -361,7 +441,7 @@ const UploadWatchHtml = () => {
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setEpisodes([...episodes, { title: "", html: "", direct_url: "", season: episodes[episodes.length-1].season, tmdb_id: "" }])} className="px-3 py-1.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase hover:bg-blue-600 transition-all">+ Ep</button>
-                        <button onClick={() => setEpisodes([...episodes, { title: "", html: "", direct_url: "", season: episodes[episodes.length-1].season + 1, tmdb_id: "" }])} className="px-3 py-1.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase hover:bg-purple-600 transition-all">+ Ssn</button>
+                        <button onClick={() => setEpisodes([...episodes, { title: "", html: "", direct_url: "", season: Number(episodes[episodes.length-1].season) + 1, tmdb_id: "" }])} className="px-3 py-1.5 bg-slate-800 rounded-lg text-[9px] font-black uppercase hover:bg-purple-600 transition-all">+ Ssn</button>
                     </div>
                 </div>
                 <div className="max-h-[450px] overflow-y-auto pr-3 custom-scroll space-y-4">
@@ -393,7 +473,7 @@ const UploadWatchHtml = () => {
             </section>
 
             <button onClick={handleUpload} disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2.5rem] font-black uppercase tracking-[0.3em] shadow-xl hover:bg-blue-500 active:scale-[0.98] transition-all text-white flex items-center justify-center gap-4">
-                {loading ? <Loader2 className="animate-spin" /> : <><Database size={22}/> Deploy</>}
+                {loading ? <Loader2 className="animate-spin" /> : <><Database size={22}/> Deploy Content</>}
             </button>
         </div>
 
