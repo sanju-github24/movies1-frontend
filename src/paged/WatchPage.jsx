@@ -8,7 +8,7 @@ import axios from "axios";
 import { 
   Loader2, Star, User, Play, Info, ShieldCheck, 
   ArrowLeft, Youtube, CheckCircle2, List, MonitorPlay, Server, ChevronRight,
-  ExternalLink, Video, Zap, Database, Clock, Globe, Calendar, Tags
+  ExternalLink, Video, Zap, Database, Clock, Globe, Calendar, Tags, Tv
 } from "lucide-react";
 
 /* ===== Safety Helper: Grouping Logic ===== */
@@ -96,12 +96,21 @@ const WatchHtmlPage = () => {
     let title = movieMeta?.title;
     const sourceType = forceSourceType || activeServer?.id || availableServers[0]?.id;
 
-    // Cleaning and selecting IDs based on 2embed documentation
     const imdb = movieMeta.imdb_id?.trim();
     const tmdb = movieMeta.tmdb_id;
-    const identifier = tmdb || imdb; // Prefer TMDB for 2embed if available
+    const identifier = tmdb || imdb;
 
-    if (sourceType === 'tmdb' && tmdb) {
+    // 1. IMDb Reader (Constant ID logic)
+    if (sourceType === 'imdb_reader' && imdb) {
+        const embedUrl = `https://kinej395aoo.com/play/${imdb}`;
+        finalSrc = {
+            src: embedUrl, type: 'html',
+            html: `<iframe src="${embedUrl}" frameborder="0" scrolling="no" allowfullscreen allow="autoplay; encrypted-media" style="width:100%;height:100%;"></iframe>`,
+            name: "IMDb Reader (Direct)"
+        };
+    }
+    // 2. Vidlink Logic
+    else if (sourceType === 'tmdb' && tmdb) {
         if (manualEpisode) {
             const s = manualEpisode.season || 1;
             const e = manualEpisode.episodeNumberInSeason || 1;
@@ -120,11 +129,11 @@ const WatchHtmlPage = () => {
             };
         }
     } 
+    // 3. 2Embed Logic
     else if (sourceType === '2embed' && identifier) {
         if (manualEpisode) {
             const s = manualEpisode.season || 1;
             const e = manualEpisode.episodeNumberInSeason || 1;
-            // Updated 2embed TV syntax
             const embedUrl = `https://www.2embed.cc/embedtv/${identifier}&s=${s}&e=${e}`;
             finalSrc = {
                 src: embedUrl, type: 'html',
@@ -132,7 +141,6 @@ const WatchHtmlPage = () => {
                 name: `S${s} E${e} (2Embed)`
             };
         } else {
-            // Updated 2embed Movie syntax from your screenshot
             const embedUrl = `https://www.2embed.cc/embed/${identifier}`;
             finalSrc = {
                 src: embedUrl, type: 'html',
@@ -141,10 +149,10 @@ const WatchHtmlPage = () => {
             };
         }
     }
+    // 4. Anime Logic
     else if (sourceType === 'anime') {
         const cleanTitle = movieMeta.title.toLowerCase().trim().replace(/\s+/g, '-');
         const epNum = manualEpisode ? manualEpisode.episodeNumberInSeason : 1;
-        // Anime API syntax
         const embedUrl = `https://2anime.xyz/embed/${cleanTitle}-episode-${epNum}`;
         finalSrc = {
             src: embedUrl, type: 'html',
@@ -152,12 +160,14 @@ const WatchHtmlPage = () => {
             name: `Ep ${epNum} (Anime)`
         };
     }
+    // 5. Direct Video Link (HLS)
     else if (sourceType === 'hls') {
         const url = manualEpisode ? manualEpisode.direct_url : movieMeta.video_url;
         if (url) {
             finalSrc = { src: url, type: 'video', name: manualEpisode ? `S${manualEpisode.season} E${manualEpisode.episodeNumberInSeason}` : "Direct" };
         }
     }
+    // 6. Manual Iframe HTML Mirror (Logic for both Movie and Episodes)
     else if (sourceType === 'embed') {
         const code = manualEpisode ? manualEpisode.html : movieMeta.html_code;
         if (code) {
@@ -200,6 +210,9 @@ const WatchHtmlPage = () => {
             setMovieMeta(meta);
 
             const servers = [];
+            if (watchData.imdb_id) {
+                servers.push({ id: 'imdb_reader', name: "IMDb Reader", label: "Direct Source" });
+            }
             if (watchData.tmdb_id || watchData.imdb_id) {
                 servers.push({ id: '2embed', name: "Server Prime", label: "2Embed Global" });
                 servers.push({ id: 'tmdb', name: "Server Alpha", label: "VidLink Auto" });
@@ -255,7 +268,6 @@ const WatchHtmlPage = () => {
         )}
 
         <div className="relative max-w-7xl mx-auto px-6 py-12 flex flex-col lg:flex-row gap-12">
-          {/* Left: Poster */}
           <div className="relative group max-w-[280px] aspect-[2/3] w-full rounded-[2rem] overflow-hidden shadow-2xl ring-1 ring-white/10 bg-gray-900 mx-auto lg:mx-0">
             <img src={movieMeta?.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt="" />
             <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all duration-500">
@@ -265,7 +277,6 @@ const WatchHtmlPage = () => {
             </div>
           </div>
 
-          {/* Right: Info Block */}
           <div className="flex-1 space-y-6">
             <div className="space-y-2">
                 <h1 className="text-3xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter italic leading-tight">
@@ -273,7 +284,10 @@ const WatchHtmlPage = () => {
                 </h1>
                 <div className="flex flex-wrap items-center gap-3 text-[10px] font-black tracking-widest uppercase">
                     <span className="bg-blue-600 px-2 py-0.5 rounded text-white shadow-lg">{movieMeta?.subCategory || "HD"}</span>
-                    <span className="text-gray-400 flex items-center gap-1"><Clock size={12}/> {tmdbMeta?.runtime || "144"} min</span>
+                    <span className="text-gray-400 flex items-center gap-1">
+                      <Clock size={12}/> 
+                      {tmdbMeta?.runtime ? `${tmdbMeta.runtime} min` : "144 min"}
+                    </span>
                     <span className="text-gray-400">{movieMeta?.year}</span>
                     <span className="text-blue-400">Published {movieMeta?.created_at ? new Date(movieMeta.created_at).toLocaleDateString() : "Recently"}</span>
                 </div>
@@ -360,14 +374,26 @@ const WatchHtmlPage = () => {
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {/* IMDb Reader - Oneshot */}
+                                {movieMeta?.imdb_id && (
+                                    <button onClick={() => handlePlayAction(ep, 'imdb_reader')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-yellow-600/10 border border-yellow-600/30 hover:bg-yellow-600 text-[8px] font-black uppercase text-yellow-400 hover:text-white transition-all tracking-tighter"><Zap size={12}/> Oneshot</button>
+                                )}
+                                {/* Global */}
                                 {(movieMeta?.imdb_id || movieMeta?.tmdb_id) && (
                                     <button onClick={() => handlePlayAction(ep, '2embed')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-orange-600/10 border border-orange-600/30 hover:bg-orange-600 text-[8px] font-black uppercase text-orange-400 hover:text-white transition-all tracking-tighter">Global S{ep.season}E{ep.episodeNumberInSeason}</button>
                                 )}
+                                {/* Vidlink */}
                                 {movieMeta?.tmdb_id && (
                                     <button onClick={() => handlePlayAction(ep, 'tmdb')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600 text-[8px] font-black uppercase text-blue-400 hover:text-white transition-all tracking-tighter">Vidlink S{ep.season}E{ep.episodeNumberInSeason}</button>
                                 )}
-                                {ep.direct_url && <button onClick={() => handlePlayAction(ep, 'hls')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-green-600/10 border border-green-600/30 hover:bg-green-600 text-[8px] font-black uppercase text-green-400 hover:text-white transition-all tracking-tighter">Direct S{ep.season}E{ep.episodeNumberInSeason}</button>}
-                                {ep.html && <button onClick={() => handlePlayAction(ep, 'embed')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-600/10 border border-purple-600/30 hover:bg-purple-600 text-[8px] font-black uppercase text-purple-400 hover:text-white transition-all tracking-tighter">Mirror S{ep.season}E{ep.episodeNumberInSeason}</button>}
+                                {/* Direct Video */}
+                                {ep.direct_url && (
+                                    <button onClick={() => handlePlayAction(ep, 'hls')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-green-600/10 border border-green-600/30 hover:bg-green-600 text-[8px] font-black uppercase text-green-400 hover:text-white transition-all tracking-tighter">Direct</button>
+                                )}
+                                {/* Manual Mirror HTML - ONLY SHOWS IF ep.html EXISTS */}
+                                {ep.html && (
+                                    <button onClick={() => handlePlayAction(ep, 'embed')} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-600/10 border border-purple-600/30 hover:bg-purple-600 text-[8px] font-black uppercase text-purple-400 hover:text-white transition-all tracking-tighter"><MonitorPlay size={12}/> Mirror</button>
+                                )}
                             </div>
                         </div>
                       </div>
