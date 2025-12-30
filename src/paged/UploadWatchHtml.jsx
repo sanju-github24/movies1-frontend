@@ -16,14 +16,18 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({ ...item });
   const [editEpisodes, setEditEpisodes] = useState(item.episodes || []);
+  // DOWNLOADS (EDIT MODE)
+const [editDownloads, setEditDownloads] = useState(item.download_links || []);
+
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (isEditing) {
-      setEditData({ ...item });
-      setEditEpisodes(item.episodes || []);
-    }
-  }, [isEditing, item]);
+  if (isEditing) {
+    setEditData({ ...item });
+    setEditEpisodes(item.episodes || []);
+    setEditDownloads(item.download_links || []);
+  }
+}, [isEditing, item]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -33,22 +37,24 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
       const { error } = await supabase
         .from("watch_html")
         .update({ 
-          title: editData.title,
-          slug: editData.slug,
-          tmdb_id: editData.tmdb_id,
-          imdb_id: editData.imdb_id,
-          imdb_rating: editData.imdb_rating,
-          poster: editData.poster,
-          cover_poster: editData.cover_poster,
-          title_logo: editData.title_logo,
-          video_url: editData.video_url,
-          direct_url: editData.direct_url,
-          html_code: editData.html_code,
-          html_code2: editData.html_code2,
-          show_on_hero: editData.show_on_hero, 
-          is_trending: editData.is_trending, // Sync trending flag
-          episodes: validEps
-        })
+  title: editData.title,
+  slug: editData.slug,
+  tmdb_id: editData.tmdb_id,
+  imdb_id: editData.imdb_id,
+  imdb_rating: editData.imdb_rating,
+  poster: editData.poster,
+  cover_poster: editData.cover_poster,
+  title_logo: editData.title_logo,
+  video_url: editData.video_url,
+  direct_url: editData.direct_url,
+  html_code: editData.html_code,
+  html_code2: editData.html_code2,
+  show_on_hero: editData.show_on_hero,
+  is_trending: editData.is_trending,
+  episodes: validEps,
+  download_links: editDownloads.filter(d => d.quality)
+})
+
         .eq("id", item.id);
 
       if (!error) {
@@ -186,6 +192,106 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
             </div>
         </div>
 
+        {/* ================= DOWNLOADS EDITOR ================= */}
+<div className="space-y-4">
+  <div className="flex justify-between items-center">
+    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+      Downloads ({editDownloads.length})
+    </p>
+    <button
+      onClick={() =>
+        setEditDownloads([
+          ...editDownloads,
+          { quality: "", size: "", links: [{ label: "", url: "" }] }
+        ])
+      }
+      className="text-blue-400 text-[9px] font-black uppercase"
+    >
+      + Quality
+    </button>
+  </div>
+
+  <div className="space-y-6 max-h-[300px] overflow-y-auto pr-1 custom-scroll">
+    {editDownloads.map((q, qIdx) => (
+      <div
+        key={qIdx}
+        className="p-4 bg-slate-950 rounded-2xl border border-white/5 space-y-4"
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-xs"
+            placeholder="Quality (720p)"
+            value={q.quality}
+            onChange={(e) => {
+              const u = [...editDownloads];
+              u[qIdx].quality = e.target.value;
+              setEditDownloads(u);
+            }}
+          />
+          <input
+            className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-xs"
+            placeholder="Size (1.2GB)"
+            value={q.size}
+            onChange={(e) => {
+              const u = [...editDownloads];
+              u[qIdx].size = e.target.value;
+              setEditDownloads(u);
+            }}
+          />
+        </div>
+
+        {q.links.map((l, lIdx) => (
+          <div key={lIdx} className="grid grid-cols-2 gap-3">
+            <input
+              className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-[10px]"
+              placeholder="Label"
+              value={l.label}
+              onChange={(e) => {
+                const u = [...editDownloads];
+                u[qIdx].links[lIdx].label = e.target.value;
+                setEditDownloads(u);
+              }}
+            />
+            <input
+              className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-[10px] font-mono"
+              placeholder="URL"
+              value={l.url}
+              onChange={(e) => {
+                const u = [...editDownloads];
+                u[qIdx].links[lIdx].url = e.target.value;
+                setEditDownloads(u);
+              }}
+            />
+          </div>
+        ))}
+
+        <div className="flex justify-between">
+          <button
+            onClick={() => {
+              const u = [...editDownloads];
+              u[qIdx].links.push({ label: "", url: "" });
+              setEditDownloads(u);
+            }}
+            className="text-green-400 text-[9px] font-black uppercase"
+          >
+            + Link
+          </button>
+
+          <button
+            onClick={() =>
+              setEditDownloads(editDownloads.filter((_, i) => i !== qIdx))
+            }
+            className="text-red-500 text-[9px] font-black uppercase"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
+
         <div className="flex gap-3 pt-4 border-t border-white/5">
             <button onClick={handleSave} disabled={isSaving} className="flex-1 bg-blue-600 p-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white hover:bg-blue-500 transition-all flex items-center justify-center gap-2">
                 {isSaving ? <Loader2 size={16} className="animate-spin"/> : <><Save size={16}/> Sync Studio</>}
@@ -246,6 +352,22 @@ const UploadWatchHtml = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  // TELEGRAM FILES
+const [telegramFiles, setTelegramFiles] = useState([]);
+const [tgLoading, setTgLoading] = useState(true);
+const [tgSearch, setTgSearch] = useState("");
+
+
+// DOWNLOADS (NEW FEATURE)
+const [downloads, setDownloads] = useState([
+  {
+    quality: "",
+    size: "",
+    links: [{ label: "", url: "" }]
+  }
+]);
+
+
 
   const fetchWatchPages = useCallback(async () => {
     try {
@@ -254,7 +376,24 @@ const UploadWatchHtml = () => {
     } catch (e) { console.error("Database fetch failed"); }
   }, []);
 
-  useEffect(() => { fetchWatchPages(); }, [fetchWatchPages]);
+  const fetchTelegramFiles = useCallback(async () => {
+  const { data, error } = await supabase
+    .from("telegram_files")
+    .select("file_name, file_code, created_at")
+    .order("created_at", { ascending: false });
+
+  if (!error && data) setTelegramFiles(data);
+  setTgLoading(false);
+}, []);
+
+
+ useEffect(() => {
+  fetchWatchPages();
+  fetchTelegramFiles();
+}, [fetchWatchPages, fetchTelegramFiles]);
+
+
+  
 
   const handleTMDBSearch = async () => {
     if (!tmdbSearchQuery.trim()) return;
@@ -300,11 +439,13 @@ const UploadWatchHtml = () => {
     try {
       const validEps = episodes.filter(e => e.title || e.tmdb_id || e.direct_url || e.html);
       const { error } = await supabase.from("watch_html").insert([{ 
-          ...formData, 
-          episodes: validEps, 
-          id: uuidv4(), 
-          created_at: new Date().toISOString() 
-      }]);
+  ...formData,
+  episodes: validEps,
+  download_links: downloads.filter(d => d.quality),
+  id: uuidv4(),
+  created_at: new Date().toISOString()
+}]);
+
       
       if (!error) {
         toast.success("Deployed!");
@@ -472,6 +613,100 @@ const UploadWatchHtml = () => {
                 </div>
             </section>
 
+            {/* ================= DOWNLOAD LINKS (NEW) ================= */}
+<section className="bg-slate-900/80 border border-white/5 p-8 rounded-[2.5rem] space-y-6 shadow-xl text-white">
+  <div className="flex items-center justify-between border-b border-white/5 pb-4">
+    <div className="flex items-center gap-2">
+      <Database size={18} className="text-green-500" />
+      <h3 className="font-black uppercase tracking-widest text-[11px]">
+        Downloads
+      </h3>
+    </div>
+    <button
+      onClick={() =>
+        setDownloads([
+          ...downloads,
+          { quality: "", size: "", links: [{ label: "", url: "" }] }
+        ])
+      }
+      className="text-[9px] font-black uppercase text-blue-400"
+    >
+      + Quality
+    </button>
+  </div>
+
+  <div className="space-y-6">
+    {downloads.map((q, qIdx) => (
+      <div
+        key={qIdx}
+        className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4"
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <input
+            placeholder="Quality (e.g. 720p)"
+            className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-xs"
+            value={q.quality}
+            onChange={(e) => {
+              const u = [...downloads];
+              u[qIdx].quality = e.target.value;
+              setDownloads(u);
+            }}
+          />
+
+          <input
+            placeholder="Size (e.g. 1.2GB)"
+            className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-xs"
+            value={q.size}
+            onChange={(e) => {
+              const u = [...downloads];
+              u[qIdx].size = e.target.value;
+              setDownloads(u);
+            }}
+          />
+        </div>
+
+        {q.links.map((l, lIdx) => (
+          <div key={lIdx} className="grid grid-cols-2 gap-3">
+            <input
+              placeholder="Label (Telegram / Direct)"
+              className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-[10px]"
+              value={l.label}
+              onChange={(e) => {
+                const u = [...downloads];
+                u[qIdx].links[lIdx].label = e.target.value;
+                setDownloads(u);
+              }}
+            />
+
+            <input
+              placeholder="Download URL"
+              className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-[10px] font-mono"
+              value={l.url}
+              onChange={(e) => {
+                const u = [...downloads];
+                u[qIdx].links[lIdx].url = e.target.value;
+                setDownloads(u);
+              }}
+            />
+          </div>
+        ))}
+
+        <button
+          onClick={() => {
+            const u = [...downloads];
+            u[qIdx].links.push({ label: "", url: "" });
+            setDownloads(u);
+          }}
+          className="text-[9px] uppercase font-black text-green-400"
+        >
+          + Link
+        </button>
+      </div>
+    ))}
+  </div>
+</section>
+
+
             <button onClick={handleUpload} disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2.5rem] font-black uppercase tracking-[0.3em] shadow-xl hover:bg-blue-500 active:scale-[0.98] transition-all text-white flex items-center justify-center gap-4">
                 {loading ? <Loader2 className="animate-spin" /> : <><Database size={22}/> Deploy Content</>}
             </button>
@@ -483,6 +718,85 @@ const UploadWatchHtml = () => {
                     <Layers size={18} className="text-yellow-500"/>
                     <h3 className="font-black uppercase tracking-widest text-[11px] text-white">Live Content Cloud</h3>
                 </div>
+               {/* TELEGRAM CLOUD FILES */}
+<div className="mt-10 bg-slate-900/50 border border-white/5 p-6 rounded-[2.5rem] space-y-6 shadow-2xl">
+  <div className="flex items-center gap-2 border-b border-white/5 pb-4">
+    <Database size={18} className="text-blue-500" />
+    <h3 className="font-black uppercase tracking-widest text-[11px] text-white">
+      Telegram Cloud Files
+    </h3>
+  </div>
+
+  {/* SEARCH INPUT */}
+  <div className="relative">
+    <Search
+      size={14}
+      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+    />
+    <input
+      value={tgSearch}
+      onChange={(e) => setTgSearch(e.target.value)}
+      placeholder="Search file name or code..."
+      className="w-full bg-slate-950 border border-slate-800 pl-9 p-2 rounded-xl text-[10px] text-white outline-none focus:border-blue-500/40"
+    />
+  </div>
+
+  {tgLoading && (
+    <div className="flex items-center gap-2 text-slate-400 text-xs">
+      <Loader2 className="animate-spin" size={14} />
+      Loading telegram files...
+    </div>
+  )}
+
+  {!tgLoading && telegramFiles.length === 0 && (
+    <p className="text-[10px] uppercase text-slate-500">
+      No telegram files uploaded
+    </p>
+  )}
+
+  <div className="space-y-4 max-h-[45vh] overflow-y-auto custom-scroll pr-2">
+    {telegramFiles
+      .filter((file) =>
+        `${file.file_name} ${file.file_code}`
+          .toLowerCase()
+          .includes(tgSearch.toLowerCase())
+      )
+      .map((file, index) => {
+        const url = `https://t.me/anchormovies_bot?start=${file.file_code}`;
+
+        return (
+          <div
+            key={index}
+            className="bg-slate-950 border border-slate-800 p-4 rounded-2xl hover:border-blue-500/40 transition-all space-y-2"
+          >
+            <p className="text-xs font-bold text-white truncate">
+              {file.file_name}
+            </p>
+
+            <div className="flex justify-between items-center text-[10px] font-mono">
+              <span className="text-blue-400">
+                Code: {file.file_code}
+              </span>
+              <button
+                onClick={() => navigator.clipboard.writeText(url)}
+                className="text-green-400 hover:text-green-300 transition"
+              >
+                Copy URL
+              </button>
+            </div>
+
+            <input
+              readOnly
+              value={url}
+              className="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-[9px] text-slate-300"
+            />
+          </div>
+        );
+      })}
+  </div>
+</div>
+
+
                 <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
                     <input className="w-full bg-slate-950 border border-slate-800 p-4 pl-12 rounded-[1.5rem] outline-none text-xs text-white" placeholder="Filter stream titles..." onChange={e => setSearch(e.target.value)} />

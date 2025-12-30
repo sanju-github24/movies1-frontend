@@ -197,16 +197,29 @@ const WatchHtmlPage = () => {
         if (isMounted) {
             setTmdbMeta(tmdb);
             const meta = {
-                ...watchData,
-                title: watchData.title || watchData.slug,
-                subCategory: movieData?.subCategory || "HD",
-                poster: tmdb?.poster_url || watchData.poster || "/default-poster.jpg",
-                background: tmdb?.cover_poster_url || watchData.cover_poster || watchData.poster,
-                imdbRating: tmdb?.imdb_rating ? tmdb.imdb_rating.toFixed(1) : (watchData.imdb_rating || "N/A"),
-                year: tmdb?.year || watchData.year,
-                release_date: tmdb?.release_date || null,
-                description: tmdb?.overview || tmdb?.description || watchData.description || "No description available."
-            };
+  ...watchData,
+
+  // 🔥 FORCE DOWNLOAD LINKS
+  download_links: Array.isArray(watchData.download_links)
+    ? watchData.download_links
+    : [],
+
+  title: watchData.title || watchData.slug,
+  subCategory: movieData?.subCategory || "HD",
+  poster: tmdb?.poster_url || watchData.poster || "/default-poster.jpg",
+  background: tmdb?.cover_poster_url || watchData.cover_poster || watchData.poster,
+  imdbRating: tmdb?.imdb_rating
+    ? tmdb.imdb_rating.toFixed(1)
+    : (watchData.imdb_rating || "N/A"),
+  year: tmdb?.year || watchData.year,
+  release_date: tmdb?.release_date || null,
+  description:
+    tmdb?.overview ||
+    tmdb?.description ||
+    watchData.description ||
+    "No description available.",
+};
+
             setMovieMeta(meta);
 
             const servers = [];
@@ -315,17 +328,29 @@ const WatchHtmlPage = () => {
             </div>
 
             <div className="flex flex-wrap gap-4 pt-4">
-                <button 
-                  onClick={() => handlePlayAction(currentEpInfo?.data)} 
-                  className="px-8 py-4 bg-white text-black font-black rounded-2xl flex items-center gap-3 hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-xl text-xs uppercase tracking-widest"
-                >
-                    <Play size={18} fill="currentColor" /> 
-                    {episodes.length > 0 
-                      ? `Stream on ${activeServer?.name} S${currentEpInfo.s}E${currentEpInfo.e}` 
-                      : `Stream on ${activeServer?.name || "Server"}`
-                    }
-                </button>
-            </div>
+  {/* STREAM BUTTON */}
+  <button 
+    onClick={() => handlePlayAction(currentEpInfo?.data)} 
+    className="px-8 py-4 bg-white text-black font-black rounded-2xl flex items-center gap-3 hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-xl text-xs uppercase tracking-widest"
+  >
+    <Play size={18} fill="currentColor" /> 
+    {episodes.length > 0 
+      ? `Stream on ${activeServer?.name} S${currentEpInfo.s}E${currentEpInfo.e}` 
+      : `Stream on ${activeServer?.name || "Server"}`
+    }
+  </button>
+
+  {/* DOWNLOAD BUTTON */}
+  {movieMeta?.download_links?.length > 0 && (
+    <button
+      onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior: "smooth" })}
+      className="px-8 py-4 bg-green-600 text-white font-black rounded-2xl flex items-center gap-3 hover:bg-green-500 transition-all active:scale-95 shadow-xl text-xs uppercase tracking-widest"
+    >
+      <Database size={18} /> Download
+    </button>
+  )}
+</div>
+
           </div>
         </div>
       </div>
@@ -349,6 +374,8 @@ const WatchHtmlPage = () => {
              </div>
           </div>
         )}
+
+        
 
         {/* Episode List Section */}
         {episodes.length > 0 && (
@@ -404,6 +431,63 @@ const WatchHtmlPage = () => {
             </div>
           </div>
         )}
+
+        {/* DOWNLOAD SERVERS */}
+{movieMeta?.download_links?.length > 0 && (
+  <div
+    id="download-section"
+    className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl"
+  >
+    <div className="flex items-center gap-4 mb-8 text-white border-b border-white/5 pb-4">
+      <Database className="text-green-500" size={24} />
+      <h2 className="text-xl font-black uppercase tracking-[0.2em]">
+        Download Servers
+      </h2>
+    </div>
+
+    <div className="space-y-10">
+      {movieMeta.download_links.map((block, idx) => (
+        <div key={idx} className="space-y-4">
+          {/* QUALITY HEADER */}
+          <div className="flex items-center justify-between bg-gray-900/60 border border-white/5 rounded-xl px-5 py-3">
+            <span className="text-sm font-black uppercase tracking-widest text-green-400">
+              {block.quality}
+            </span>
+            {block.size && (
+              <span className="text-[11px] font-bold text-gray-400">
+                {block.size}
+              </span>
+            )}
+          </div>
+
+          {/* LINKS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {block.links?.map((link, i) => (
+              <button
+  key={i}
+  onClick={() => {
+    window.open(link.url, "_blank", "noopener,noreferrer");
+  }}
+  className="p-5 rounded-2xl bg-gray-800/40 border border-white/5 hover:border-green-400 hover:bg-green-600/20 transition-all flex items-center gap-3"
+>
+  <Video size={18} className="text-green-400" />
+  <div className="text-left">
+    <p className="text-xs font-black uppercase text-white">
+      {link.label}
+    </p>
+   
+  </div>
+</button>
+
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+
         <CastSection tmdbMeta={tmdbMeta} />
       </main>
 
