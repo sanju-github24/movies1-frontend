@@ -8,7 +8,7 @@ import axios from "axios";
 import { 
   Loader2, Star, User, Play, Info, ShieldCheck, 
   ArrowLeft, Youtube, CheckCircle2, List, MonitorPlay, Server, ChevronRight,
-  ExternalLink, Video, Zap, Database, Clock, Globe, Calendar, Tags, Tv
+  ExternalLink, Video, Zap, Database, Clock, Globe, Calendar, AlertCircle, Tags, Tv
 } from "lucide-react";
 
 /* ===== Safety Helper: Grouping Logic ===== */
@@ -356,24 +356,73 @@ const WatchHtmlPage = () => {
       </div>
 
       <main className="max-w-7xl mx-auto px-6 py-16 space-y-24">
-        {/* Server Selection */}
-        {availableServers.length > 0 && (
-          <div className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl">
-             <div className="flex items-center gap-4 mb-8 text-white border-b border-white/5 pb-4">
-                <Server className="text-blue-500" size={24} />
-                <h2 className="text-xl font-black uppercase tracking-[0.2em]">Deployment Servers</h2>
-             </div>
-             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                {availableServers.map((server) => (
-                  <button key={server.id} onClick={() => setActiveServer(server)} className={`p-6 rounded-3xl flex flex-col items-center gap-2 transition-all border relative overflow-hidden ${activeServer?.id === server.id ? "bg-blue-600 border-blue-400 shadow-lg scale-[1.03] text-white" : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"}`}>
-                    <MonitorPlay className={`mb-1 ${activeServer?.id === server.id ? "text-white" : "text-gray-500"}`} size={20} />
-                    <span className={`text-sm font-black uppercase tracking-widest text-center`}>{server.name}</span>
-                    <span className={`text-[10px] font-bold uppercase text-center ${activeServer?.id === server.id ? 'text-blue-100' : 'text-gray-600'}`}>{server.label}</span>
-                  </button>
-                ))}
-             </div>
-          </div>
-        )}
+        {/* ================= SERVER SELECTION ================= */}
+{availableServers.length > 0 && (
+  <div className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl">
+    
+    {/* HEADER */}
+    <div className="flex items-center gap-4 mb-3 text-white border-b border-white/5 pb-4">
+      <Server className="text-blue-500" size={24} />
+      <h2 className="text-xl font-black uppercase tracking-[0.2em]">
+        Deployment Servers
+      </h2>
+    </div>
+
+    {/* NOTE */}
+<div className="mb-6 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-200">
+  <AlertCircle size={16} className="mt-[2px] shrink-0 text-red-400" />
+  <p className="text-xs leading-relaxed">
+    If the video shows a <span className="font-bold text-red-300">black screen</span> or
+    is <span className="font-bold text-red-300">not playing</span>, please try switching
+    to another server.
+  </p>
+</div>
+
+
+    {/* SERVERS GRID */}
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6">
+      {availableServers.map((server) => (
+        <button
+          key={server.id}
+          type="button"
+          onClick={() => setActiveServer(server)}
+          className={`
+            p-6 rounded-3xl flex flex-col items-center gap-2
+            transition-all border relative overflow-hidden
+            ${
+              activeServer?.id === server.id
+                ? "bg-blue-600 border-blue-400 shadow-lg scale-[1.03] text-white"
+                : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"
+            }
+          `}
+        >
+          <MonitorPlay
+            className={`mb-1 ${
+              activeServer?.id === server.id
+                ? "text-white"
+                : "text-gray-500"
+            }`}
+            size={20}
+          />
+
+          <span className="text-sm font-black uppercase tracking-widest text-center">
+            {server.name}
+          </span>
+
+          <span
+            className={`text-[10px] font-bold uppercase text-center ${
+              activeServer?.id === server.id
+                ? "text-blue-100"
+                : "text-gray-600"
+            }`}
+          >
+            {server.label}
+          </span>
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
         
 
