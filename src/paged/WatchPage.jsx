@@ -432,12 +432,13 @@ const WatchHtmlPage = () => {
           </div>
         )}
 
-        {/* DOWNLOAD SERVERS */}
+        {/* ================= DOWNLOAD SERVERS ================= */}
 {movieMeta?.download_links?.length > 0 && (
   <div
     id="download-section"
     className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl"
   >
+    {/* HEADER */}
     <div className="flex items-center gap-4 mb-8 text-white border-b border-white/5 pb-4">
       <Database className="text-green-500" size={24} />
       <h2 className="text-xl font-black uppercase tracking-[0.2em]">
@@ -445,6 +446,7 @@ const WatchHtmlPage = () => {
       </h2>
     </div>
 
+    {/* BLOCKS */}
     <div className="space-y-10">
       {movieMeta.download_links.map((block, idx) => (
         <div key={idx} className="space-y-4">
@@ -453,6 +455,7 @@ const WatchHtmlPage = () => {
             <span className="text-sm font-black uppercase tracking-widest text-green-400">
               {block.quality}
             </span>
+
             {block.size && (
               <span className="text-[11px] font-bold text-gray-400">
                 {block.size}
@@ -463,22 +466,28 @@ const WatchHtmlPage = () => {
           {/* LINKS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {block.links?.map((link, i) => (
-              <button
-  key={i}
-  onClick={() => {
-    window.open(link.url, "_blank", "noopener,noreferrer");
-  }}
-  className="p-5 rounded-2xl bg-gray-800/40 border border-white/5 hover:border-green-400 hover:bg-green-600/20 transition-all flex items-center gap-3"
->
-  <Video size={18} className="text-green-400" />
-  <div className="text-left">
-    <p className="text-xs font-black uppercase text-white">
-      {link.label}
-    </p>
-   
-  </div>
-</button>
+              <a
+                key={i}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="
+                  relative z-10 cursor-pointer
+                  p-5 rounded-2xl
+                  bg-gray-800/40 border border-white/5
+                  hover:border-green-400 hover:bg-green-600/20
+                  transition-all duration-300
+                  flex items-center gap-3
+                "
+              >
+                <Video size={18} className="text-green-400 shrink-0" />
 
+                <div className="text-left">
+                  <p className="text-xs font-black uppercase text-white">
+                    {link.label}
+                  </p>
+                </div>
+              </a>
             ))}
           </div>
         </div>
