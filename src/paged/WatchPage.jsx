@@ -9,7 +9,7 @@ import {
   Loader2, Star, User, Play, Info, ShieldCheck, 
   ArrowLeft, List, MonitorPlay, Server, 
   Video, Zap, Database, Clock, Globe, Calendar, AlertCircle, Tags,
-  CheckCircle2
+  CheckCircle2, Volume2
 } from "lucide-react";
 
 /* ===== Safety Helper: Grouping Logic ===== */
@@ -176,7 +176,7 @@ const WatchHtmlPage = () => {
                 servers.push({ id: 'tmdb', name: "Server Alpha", label: "VidLink Auto" });
             }
             if (watchData.video_url || (parsedEp.length > 0 && parsedEp.some(e => e.direct_url))) servers.push({ id: 'hls', name: "Server Direct", label: "Direct HLS" });
-            if (watchData.html_code || (parsedEp.length > 0 && parsedEp.some(e => e.html))) servers.push({ id: 'embed', name: "Server Backup", label: "Manual Mirror" });
+            if (watchData.html_code || (parsedEp.length > 0 && parsedEp.some(e => e.html))) servers.push({ id: 'embed', name: "Server Backup", label: "Manual Mirror", badge: "Multi-Audios" });
             
             setAvailableServers(servers);
             if (servers.length > 0) setActiveServer(servers[0]);
@@ -217,7 +217,7 @@ const WatchHtmlPage = () => {
       {/* Hero Section */}
       <div className="relative pt-16 w-full overflow-hidden bg-gray-950">
         
-        {/* 🎬 CINEMATIC BACKDROP LAYER - FILL BACKGROUND */}
+        {/* 🎬 CINEMATIC BACKDROP LAYER */}
         {movieMeta?.background && (
           <div className="absolute inset-0 h-[100vh] w-full pointer-events-none z-0">
             <img 
@@ -225,7 +225,6 @@ const WatchHtmlPage = () => {
                className="w-full h-full object-cover opacity-30 transition-opacity duration-1000 scale-105" 
                alt="" 
             />
-            {/* High-End Design Gradients */}
             <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-transparent to-gray-950/40" />
             <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-gray-950 to-transparent" />
@@ -274,11 +273,12 @@ const WatchHtmlPage = () => {
                 </div>
             </div>
 
+            
             <p className="text-gray-400 text-sm md:text-base leading-relaxed max-w-3xl font-medium italic border-l-4 border-blue-600 pl-5 py-3 text-center lg:text-left mx-auto lg:mx-0">
                 {movieMeta?.description}
             </p>
 
-            {/* INTEGRATED CAST LIST SLIDER */}
+            {/* Cast List Slider */}
             {tmdbMeta?.cast?.length > 0 && (
               <div className="space-y-4 pt-2">
                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] flex items-center justify-center lg:justify-start gap-2">
@@ -303,7 +303,7 @@ const WatchHtmlPage = () => {
                 <div className="flex items-center gap-3 justify-center lg:justify-start group"><Calendar size={16} className="text-blue-500/50"/><span className="text-gray-500">Date:</span><span className="text-gray-200">{movieMeta?.release_date ? new Date(movieMeta.release_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "Recently"}</span></div>
             </div>
 
-            {/* ACTION BUTTONS - VERTICAL ON MOBILE */}
+            {/* ACTION BUTTONS */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 max-w-md lg:max-w-none mx-auto lg:mx-0">
               <button 
                   onClick={() => handlePlayAction(currentEpInfo?.data)} 
@@ -325,13 +325,22 @@ const WatchHtmlPage = () => {
         </div>
       </div>
 
+      {/* Troubleshooting Note - Movies Context */}
+            {episodes.length === 0 && (
+              <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 max-w-2xl mx-auto lg:mx-0">
+                <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] font-bold text-red-100 uppercase tracking-wide leading-relaxed">
+                  <span className="text-white">Player Issue?</span> If the video shows a black screen or "Not Found", please click "Play Now" and switch to different servers from the list below.
+                </p>
+              </div>
+            )}
+
+
       <main className="relative max-w-7xl mx-auto px-6 py-16 space-y-24 z-10">
         
-        {/* 🎬 EPISODE LIST SECTION */}
+        {/* EPISODE LIST SECTION */}
         {episodes.length > 0 && (
           <div className="relative max-w-5xl mx-auto">
-            
-            {/* 🚀 STICKY LEVEL 1: Episodes Header */}
             <div className="sticky top-16 z-[105] bg-gray-950/95 backdrop-blur-2xl border-b border-white/5 py-4 -mx-6 px-6">
                <div className="flex items-center gap-4 text-white">
                   <List className="text-blue-500" size={24} />
@@ -339,8 +348,7 @@ const WatchHtmlPage = () => {
                </div>
             </div>
 
-            {/* 🚀 STICKY LEVEL 2: Season Navigation Selector */}
-            <div className="sticky top-[124px] z-[100] bg-gray-950/95 backdrop-blur-2xl py-6 -mx-6 px-6 shadow-2xl border-b border-white/5">
+            <div className="sticky top-[124px] z-[100] bg-gray-950/95 backdrop-blur-xl py-6 -mx-6 px-6 shadow-2xl border-b border-white/5">
               <div className="flex gap-4 overflow-x-auto scrollbar-hide">
                 {Object.keys(groupedEpisodes).map((seasonKey) => (
                   <button
@@ -361,19 +369,21 @@ const WatchHtmlPage = () => {
               </div>
             </div>
 
-            {/* Troubleshooting & Episode Content Area */}
             <div id="ep-list-top" className="pt-8">
+              {/* Troubleshooting Note - Episodes Context */}
               <div className="mb-8 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-200">
-                <AlertCircle size={16} className="mt-[2px] shrink-0 text-red-400" />
-                <p className="text-[11px] font-bold uppercase tracking-tight leading-relaxed">
-                  If the video shows a <span className="text-white underline decoration-red-500">black screen</span> or <span className="text-white underline decoration-red-500"> loading issues</span>, please try switching to <span className="text-blue-400">different servers</span> within the row.
-                </p>
+                <AlertCircle size={18} className="shrink-0 text-red-400 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-white">Playback Guide:</p>
+                  <p className="text-[10px] font-bold uppercase tracking-tight leading-relaxed text-red-100">
+                    If an episode shows a <span className="underline decoration-red-500">black screen</span> or fails to load, please try the <span className="text-blue-400">Global</span> or <span className="text-purple-400">Mirror</span> servers provided in the row.
+                  </p>
+                </div>
               </div>
               
               <div className="space-y-4">
                 {groupedEpisodes[activeSeason]?.episodes?.map((ep, i) => (
                   <div key={i} className="group relative flex flex-col md:flex-row gap-6 p-3 rounded-2xl bg-gray-900/40 border border-white/5 hover:bg-gray-900/80 hover:border-blue-500/30 transition-all duration-300 items-center shadow-xl">
-                    {/* Horizontal Card Thumbnail */}
                     <div className="relative shrink-0 w-full md:w-56 aspect-video rounded-xl overflow-hidden bg-gray-800 border border-white/5">
                       <img src={movieMeta?.poster} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" alt="" />
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -392,7 +402,12 @@ const WatchHtmlPage = () => {
                           {(movieMeta?.imdb_id || movieMeta?.tmdb_id) && <button onClick={() => handlePlayAction(ep, '2embed')} className="px-3 py-1.5 rounded-lg bg-orange-600/10 border border-orange-600/30 hover:bg-orange-600 text-[9px] font-black uppercase text-orange-500 hover:text-white transition-all">Global</button>}
                           {movieMeta?.tmdb_id && <button onClick={() => handlePlayAction(ep, 'tmdb')} className="px-3 py-1.5 rounded-lg bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600 text-[9px] font-black uppercase text-blue-400 hover:text-white transition-all">Vidlink</button>}
                           {ep.direct_url && <button onClick={() => handlePlayAction(ep, 'hls')} className="px-3 py-1.5 rounded-lg bg-green-600/10 border border-green-600/30 hover:bg-green-600 text-[9px] font-black uppercase text-green-400 hover:text-white transition-all">Direct</button>}
-                          {ep.html && <button onClick={() => handlePlayAction(ep, 'embed')} className="px-3 py-1.5 rounded-lg bg-purple-600/10 border border-purple-600/30 hover:bg-purple-600 text-[9px] font-black uppercase text-purple-400 hover:text-white transition-all">Mirror</button>}
+                          {ep.html && (
+                            <button onClick={() => handlePlayAction(ep, 'embed')} className="relative px-3 py-1.5 rounded-lg bg-purple-600/10 border border-purple-600/30 hover:bg-purple-600 text-[9px] font-black uppercase text-purple-400 hover:text-white transition-all">
+                              Mirror
+                              <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-[7px] px-1 py-0.5 rounded font-black border border-white/20 shadow-lg animate-pulse">AUDIO+</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -403,19 +418,35 @@ const WatchHtmlPage = () => {
           </div>
         )}
 
-        {/* Deployment Servers CONDITIONAL (Only if no episodes) */}
+        {/* Deployment Servers Section (For Movies) */}
         {availableServers.length > 0 && episodes.length === 0 && (
           <div className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl">
-            <div className="flex items-center gap-4 mb-3 text-white border-b border-white/5 pb-4"><Server className="text-blue-500" size={24} /><h2 className="text-xl font-black uppercase tracking-[0.2em]">Deployment Servers</h2></div>
+            <div className="flex items-center gap-4 mb-3 text-white border-b border-white/5 pb-4">
+              <Server className="text-blue-500" size={24} />
+              <h2 className="text-xl font-black uppercase tracking-[0.2em]">Deployment Servers</h2>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {availableServers.map((server) => (
-                <button key={server.id} type="button" onClick={() => setActiveServer(server)} className={`p-6 rounded-3xl flex flex-col items-center gap-2 transition-all border relative overflow-hidden ${activeServer?.id === server.id ? "bg-blue-600 border-blue-400 shadow-lg scale-[1.03] text-white" : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"}`}><MonitorPlay size={20} /><span className="text-sm font-black uppercase tracking-widest text-center">{server.name}</span></button>
+                <button 
+                  key={server.id} 
+                  type="button" 
+                  onClick={() => setActiveServer(server)} 
+                  className={`relative p-6 rounded-3xl flex flex-col items-center gap-2 transition-all border overflow-hidden ${activeServer?.id === server.id ? "bg-blue-600 border-blue-400 shadow-lg scale-[1.03] text-white" : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"}`}
+                >
+                  <MonitorPlay size={20} />
+                  <span className="text-sm font-black uppercase tracking-widest text-center">{server.name}</span>
+                  {server.badge && (
+                    <span className="absolute top-2 right-2 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-1 shadow-md">
+                      <Volume2 size={8} /> {server.badge}
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* DOWNLOAD SERVERS SECTION */}
+        {/* Download Servers Section */}
         {movieMeta?.download_links?.length > 0 && (
           <div id="download-section" className="bg-slate-900/40 rounded-[2.5rem] p-8 border border-white/5 backdrop-blur-xl shadow-2xl scroll-mt-24">
             <div className="flex items-center gap-4 mb-8 text-white border-b border-white/5 pb-4"><Database className="text-green-500" size={24} /><h2 className="text-xl font-black uppercase tracking-[0.2em]">Download Servers</h2></div>
