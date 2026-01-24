@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef, useMemo, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, XMarkIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
-import { Loader2, Play, Share2, Plus, Heart, X, Clock3, TrendingUp, Star, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Play, Share2, Plus, Heart, X, Clock3, TrendingUp, Star, Volume2, VolumeX, UserCircle, CheckCircle2 } from "lucide-react";
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
@@ -55,6 +55,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
   const timerRef = useRef(null);
 
   const handleMouseEnter = (id) => {
+    if (window.innerWidth < 640) return;
     setHoveredId(id);
     timerRef.current = setTimeout(() => setShowTrailer(true), 2000);
   };
@@ -98,8 +99,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   className={`w-full h-full object-cover transition-opacity duration-1000 ${hoveredId === movie.id && showTrailer && movie.trailer_key ? "opacity-0" : "opacity-100"}`} 
                 />
                 
-                {/* 🚀 TRENDING HOVER TRAILER */}
-                {hoveredId === movie.id && showTrailer && movie.trailer_key && (
+                {hoveredId === movie.id && showTrailer && movie.trailer_key && window.innerWidth >= 640 && (
                   <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
                     <div className="w-full h-full scale-[1.5] pointer-events-none">
                       <iframe
@@ -156,6 +156,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
   const navigate = useNavigate();
 
   const handleMouseEnter = (id) => {
+    if (window.innerWidth < 640) return;
     setHoveredId(id);
     timerRef.current = setTimeout(() => setShowTrailer(true), 2000);
   };
@@ -212,8 +213,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
               <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} className={`absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-300 ${hoveredId === movie.id ? 'opacity-0' : 'opacity-100'}`} />
               <img src={movie.cover_poster || movie.poster} alt={movie.title} className={`hidden sm:block absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-500 ${hoveredId === movie.id && !showTrailer ? 'opacity-100' : 'opacity-0'}`} />
 
-              {/* 🚀 FITTED HOVER TRAILER */}
-              {hoveredId === movie.id && showTrailer && movie.trailer_key && (
+              {hoveredId === movie.id && showTrailer && movie.trailer_key && window.innerWidth >= 640 && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-xl">
                     <div className="w-full h-full scale-[1.6] pointer-events-none">
                       <iframe
@@ -247,7 +247,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
           ))}
         </div>
         {showRight && (
-          <button onClick={() => scroll("right")} className="absolute right-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-l-xl opacity-0 group-hover/row:opacity-100">▶</button>
+          <button onClick={() => scroll("right")} className="absolute right-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-l-xl opacity-0 group-hover/row:opacity-100">◀</button>
         )}
       </div>
     </div>
@@ -259,6 +259,9 @@ const WatchListPage = () => {
   const { backendUrl } = useContext(AppContext);
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null); 
+  const [userLangs, setUserLangs] = useState([]); 
+  const [showLangPopup, setShowLangPopup] = useState(false);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -269,15 +272,63 @@ const WatchListPage = () => {
   const [resumeRefresh, setResumeRefresh] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(true); 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   const navigate = useNavigate();
+
+  const langAssets = [
+    { name: "Hindi", img: "/Hindi.webp" },
+    { name: "English", img: "/English.webp" },
+    { name: "Kannada", img: "/Kannada.webp" },
+    { name: "Malayalam", img: "/Malayalam.webp" },
+    { name: "Telugu", img: "/Telugu.webp" },
+    { name: "Tamil", img: "/Tamil.webp" }
+  ];
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      setSession(initialSession);
+      const langs = initialSession?.user?.user_metadata?.languages || [];
+      setUserLangs(langs);
+      
+      if (initialSession?.user && !initialSession.user.user_metadata?.hasSelectedLanguage) {
+        setShowLangPopup(true);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLangSelect = (name) => {
+    setUserLangs(prev => 
+      prev.includes(name) ? prev.filter(l => l !== name) : [...prev, name]
+    );
+  };
+
+  const saveLanguages = async () => {
+    if (userLangs.length === 0) return;
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { 
+          languages: userLangs,
+          hasSelectedLanguage: true 
+        }
+      });
+      if (error) throw error;
+      setShowLangPopup(false);
+    } catch (e) { console.error(e); }
+  };
 
   useEffect(() => {
     const fetchMovies = async () => {
@@ -291,17 +342,20 @@ const WatchListPage = () => {
         const merged = (watchRes.data || []).map((item) => {
           const match = (moviesRes.data || []).find((m) => m.slug === item.slug) ||
                         (moviesRes.data || []).find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
+          
+          const movieLangs = match?.language?.length ? (Array.isArray(match.language) ? match.language : [match.language]) : ["Unknown"];
+
           return {
             ...item,
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || item.poster || "/default-cover.jpg",
-            language: match?.language?.length ? (Array.isArray(match.language) ? match.language : [match.language]) : ["Unknown"],
+            language: movieLangs,
             categories: match?.categories || [],
             subCategory: match?.subCategory || null,
             description: match?.description || item.description || "",
             show_on_hero: item.show_on_hero || false,
             is_trending: item.is_trending || false,
-            genres: item.genres || [],
+            genres: item.genres || match?.categories || [], // 🚀 Ensuring genres are available
             trailer_key: item.trailer_codes || null
           };
         });
@@ -381,31 +435,38 @@ const WatchListPage = () => {
 
   const groupedByBackendGenre = useMemo(() => {
     const query = search.toLowerCase().trim();
-    const filteredMovies = !query ? movies : movies.filter((m) => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
-    return filteredMovies.reduce((acc, movie) => {
+    let filteredList = !query ? movies : movies.filter((m) => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
+    if (userLangs.length > 0) {
+      filteredList = filteredList.filter(movie => movie.language.some(lang => userLangs.includes(lang)));
+    }
+    return filteredList.reduce((acc, movie) => {
       const genres = movie.tmdb_genres && movie.tmdb_genres.length > 0 ? movie.tmdb_genres : (movie.genres && movie.genres.length > 0 ? movie.genres : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]));
       genres.forEach((genre) => { if (!acc[genre]) acc[genre] = []; acc[genre].push(movie); });
       return acc;
     }, {});
-  }, [movies, search]);
+  }, [movies, search, userLangs]); 
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollPos = window.scrollY;
       setScrolled(scrollPos > 50);
-      if (scrollPos > 400) setHeroTrailerActive(false);
+      if (scrollPos > 400) {
+        setHeroTrailerActive(false);
+        setInfoVisible(true);
+      }
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // 🚀 SMART HERO SLIDE LOGIC
   useEffect(() => {
     if (heroMovies.length === 0) return;
     setHeroTrailerActive(false);
+    setInfoVisible(true);
 
     let slideTimer;
-    let delayTimer;
+    let trailerTimer;
+    let fadeTimer;
     const currentHero = heroMovies[currentSlide];
 
     if (isMobile) {
@@ -418,9 +479,14 @@ const WatchListPage = () => {
           setCurrentSlide((prev) => (prev + 1) % heroMovies.length);
         }, 5000);
       } else {
-        delayTimer = setTimeout(() => {
+        trailerTimer = setTimeout(() => {
           if (window.scrollY < 400) setHeroTrailerActive(true);
         }, 2000);
+
+        fadeTimer = setTimeout(() => {
+          if (window.scrollY < 400) setInfoVisible(false);
+        }, 7000); 
+
         slideTimer = setTimeout(() => {
           setCurrentSlide((prev) => (prev + 1) % heroMovies.length);
         }, 50000);
@@ -429,27 +495,99 @@ const WatchListPage = () => {
 
     return () => {
       clearTimeout(slideTimer);
-      clearTimeout(delayTimer);
+      clearTimeout(trailerTimer);
+      clearTimeout(fadeTimer);
     };
   }, [currentSlide, heroMovies, isMobile]);
+
+  const getProfileInitial = () => {
+    if (!session?.user) return "";
+    const metaName = session.user.user_metadata?.full_name;
+    if (metaName && metaName.trim() !== "") {
+      return metaName.trim().charAt(0).toUpperCase();
+    }
+    return session.user.email.charAt(0).toUpperCase();
+  };
 
   if (loading) return <div className="min-h-screen bg-black flex flex-col items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" /><p className="text-gray-400 font-mono tracking-widest uppercase text-[10px]">Global Database Sync</p></div>;
 
   return (
-    <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie ? 'h-screen overflow-hidden' : ''}`}>
+    <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie || showLangPopup ? 'h-screen overflow-hidden' : ''}`}>
       <Helmet><title>Watchlist | 1Anchormovies</title></Helmet>
+
+      {showLangPopup && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-3xl animate-in fade-in duration-500">
+           <div className="w-full max-w-4xl p-8 animate-in zoom-in duration-500">
+              <div className="text-center mb-12">
+                 <h2 className="text-4xl font-black uppercase tracking-tighter italic mb-4">Choose Your Languages</h2>
+                 <p className="text-gray-400 text-sm font-bold tracking-widest">PERSONALIZING YOUR CINEMATIC EXPERIENCE</p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-12">
+                 {langAssets.map(lang => {
+                    const isSelected = userLangs.includes(lang.name);
+                    return (
+                      <div 
+                        key={lang.name}
+                        onClick={() => handleLangSelect(lang.name)}
+                        className={`relative aspect-[16/9] rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 transform active:scale-95 group shadow-2xl ${isSelected ? 'ring-4 ring-blue-600 scale-105' : 'grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:scale-105'}`}
+                      >
+                         <img src={lang.img} className="w-full h-full object-cover" alt={lang.name} />
+                         <div className={`absolute inset-0 transition-opacity duration-300 ${isSelected ? 'bg-blue-600/20' : 'bg-black/40'}`} />
+                         
+                         {isSelected && (
+                           <div className="absolute top-3 right-3 bg-blue-600 p-1.5 rounded-full shadow-lg animate-in zoom-in">
+                              <CheckCircle2 size={18} className="text-white" />
+                           </div>
+                         )}
+
+                         <div className="absolute bottom-4 left-4">
+                            <span className="text-lg font-black italic uppercase tracking-tighter drop-shadow-xl">{lang.name}</span>
+                         </div>
+                      </div>
+                    );
+                 })}
+              </div>
+
+              <div className="flex justify-center">
+                 <button 
+                  onClick={saveLanguages}
+                  disabled={userLangs.length === 0}
+                  className="px-16 py-4 bg-white text-black hover:bg-blue-600 hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-black rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_0_50px_rgba(255,255,255,0.2)]"
+                 >
+                   Get Started
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       <header className={`fixed top-0 inset-x-0 z-[100] transition-all duration-300 ${scrolled || showSearch ? "bg-black/95 backdrop-blur-md shadow-2xl" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link to="/"><img src="/logo_39.png" alt="Logo" className="h-9 sm:h-10" /></Link>
-          <nav className="hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest">
+          
+          <nav className={`hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
             <Link to="/" className="hover:text-blue-400 transition">Home</Link>
             <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
             <Link to="/watchlist" className="text-blue-500 border-b-2 border-blue-500 pb-1">My Watchlist</Link>
           </nav>
-          <button onClick={() => { setShowSearch(!showSearch); if(showSearch) setSearch(""); }} className="p-2 hover:bg-white/10 rounded-full transition">
-            {showSearch ? <XMarkIcon className="w-6 h-6" /> : <MagnifyingGlassIcon className="w-6 h-6" />}
-          </button>
+          
+          <div className="flex items-center gap-4">
+            <button onClick={() => { setShowSearch(!showSearch); if(showSearch) setSearch(""); }} className="p-2 hover:bg-white/10 rounded-full transition">
+              {showSearch ? <XMarkIcon className="w-6 h-6" /> : <MagnifyingGlassIcon className="w-6 h-6" />}
+            </button>
+            <Link to={session ? "/profile" : "/auth"} className={`group relative flex items-center justify-center transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
+              {session ? (
+                <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white/20 overflow-hidden shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all group-hover:border-blue-400 group-hover:scale-105">
+                   <span className="text-sm font-black text-white">{getProfileInitial()}</span>
+                </div>
+              ) : (
+                <div className="p-2 text-gray-400 hover:text-white transition-all hover:scale-110">
+                  <UserCircle className="w-7 h-7" />
+                </div>
+              )}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -488,20 +626,32 @@ const WatchListPage = () => {
                   )}
 
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">
-                    <div className="max-w-4xl space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-1000 pointer-events-auto">
-                      {movie.title_logo ? (
-                          <img src={movie.title_logo} className="h-12 sm:h-39 md:h-36 object-contain drop-shadow-2xl" alt="" />
-                      ) : (
-                          <h1 className="text-3xl sm:text-7xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none">{movie.slug}</h1>
-                      )}
+                    <div className="max-w-4xl space-y-4 sm:space-y-6 pointer-events-auto">
                       
-                      <div className="flex items-center gap-4 text-[10px] sm:text-sm font-black">
-                        <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div><span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span></div>
-                        <span className="text-gray-300 drop-shadow-md">{movie.year || "2024"}</span>
-                        <span className="text-blue-400 uppercase tracking-widest drop-shadow-md">{formatLanguageCount(movie.language)}</span>
+                      {/* Info Stack - becomes transparent when trailer plays after 5s */}
+                      <div className={`space-y-4 sm:space-y-6 transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
+                        {movie.title_logo ? (
+                            <img src={movie.title_logo} className="h-12 sm:h-39 md:h-36 object-contain drop-shadow-2xl" alt="" />
+                        ) : (
+                            <h1 className="text-3xl sm:text-7xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none">{movie.slug}</h1>
+                        )}
+                        
+                        <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
+                          <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div><span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span></div>
+                          <span className="text-gray-300 drop-shadow-md font-black">{movie.year || "2024"}</span>
+                          <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(movie.language)}</span>
+                          {/* 🚀 NEW: Genres Display Section */}
+                          {movie.genres && movie.genres.length > 0 && (
+                            <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
+                              {movie.genres.join(" | ")}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 sm:line-clamp-3 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
                       </div>
-                      <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 sm:line-clamp-3 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
-                      <Link to={`/watch/${movie.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-3 transition-all transform hover:scale-105 active:scale-95 shadow-2xl">
+
+                      {/* Play Button - Remains solid and stays at the bottom */}
+                      <Link to={`/watch/${movie.slug}`} className={`group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest`}>
                         <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" /> 
                         <span className="text-[11px] sm:text-base uppercase tracking-widest font-black">PLAY NOW</span>
                       </Link>
@@ -521,20 +671,20 @@ const WatchListPage = () => {
             {/* CONTINUE WATCHING */}
             {continueList.length > 0 && (
               <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
-                <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest px-2"><Clock3 className="w-5 h-5" /> CONTINUE WATCHING</h2>
+                <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest px-2 font-black"><Clock3 className="w-5 h-5" /> CONTINUE WATCHING</h2>
                 <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide px-2">
                   {continueList.map(({ movie, time }) => {
                     const progressPercent = Math.min(100, (time / (movie.runtime ? movie.runtime * 60 : 7200)) * 100);
                     return (
                       <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => navigate(`/watch/${movie.slug}`)}>
-                        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl transition-all duration-500 group-hover/continue:border-blue-500 sm:group-hover:scale-105">
+                        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl group-hover:scale-105 transition-all">
                           <img src={movie.cover_poster || movie.poster || "/default-cover.jpg"} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={movie.title} />
                           <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
                             <div className="h-full bg-blue-600 shadow-[0_0_10px_#2563eb]" style={{ width: `${progressPercent}%` }} />
                           </div>
                         </div>
                         <div className="mt-3 px-1">
-                          <h3 className="text-sm font-bold text-gray-200 truncate">{movie.title || movie.slug}</h3>
+                          <h3 className="text-sm font-bold text-gray-200 truncate font-black">{movie.title || movie.slug}</h3>
                           <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-900/80 px-2 py-1 rounded-md border border-white/5 mt-1 w-fit">
                             <Clock3 className="w-3 h-3" /> {Math.floor(time / 60)}m watched
                           </div>
@@ -597,16 +747,16 @@ const WatchListPage = () => {
               {selectedMovie.title_logo ? (
                 <img src={selectedMovie.title_logo} className="h-16 w-auto object-contain drop-shadow-2xl mb-2" alt="" />
               ) : (
-                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl">{selectedMovie.title || selectedMovie.slug}</h3>
+                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl leading-none">{selectedMovie.title || selectedMovie.slug}</h3>
               )}
 
               <div className="flex items-center gap-4 text-xs font-black text-gray-400">
                 <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] shadow-md">IMDb</div><span className="text-white">{selectedMovie.imdbRating || "7.5"}</span></div>
                 <span>{selectedMovie.year || "2024"}</span>
-                <span className="text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
+                <span className="font-black text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
               </div>
 
-              <button onClick={() => { saveRecentlyWatched(selectedMovie); navigate(`/watch/${selectedMovie.slug}`); }} className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] uppercase tracking-widest">
+              <button onClick={() => { saveRecentlyWatched(selectedMovie); navigate(`/watch/${selectedMovie.slug}`); }} className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg uppercase tracking-widest font-black">
                 <Play className="w-5 h-5 fill-current" /> WATCH NOW
               </button>
 
@@ -615,7 +765,7 @@ const WatchListPage = () => {
                   <span key={g} className="px-3 py-1 bg-gray-900 border border-white/5 rounded-full text-[9px] font-black uppercase text-gray-400 tracking-wider">{g}</span>
                 ))}
               </div>
-              <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80">{selectedMovie.description}</p>
+              <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80 font-medium">{selectedMovie.description}</p>
 
               {/* RELATED MOVIES SECTION */}
               {relatedMovies.length > 0 && (
@@ -642,7 +792,7 @@ const WatchListPage = () => {
         </div>
       )}
 
-      <footer className="py-16 text-center border-t border-white/5 bg-black mt-20 opacity-40"><p className="text-[10px] font-mono tracking-[0.5em] uppercase">© 1ANCHORMOVIES 2025</p></footer>
+      <footer className="py-16 text-center border-t border-white/5 bg-black mt-20 opacity-40"><p className="text-[10px] font-mono tracking-[0.5em] uppercase font-black">© 1ANCHORMOVIES 2025</p></footer>
     </div>
   );
 };

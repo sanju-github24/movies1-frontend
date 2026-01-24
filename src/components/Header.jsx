@@ -11,13 +11,13 @@ import { AppContext } from "../context/AppContext";
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
   const [copied, setCopied] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState(""); // 🚀 Robust email tracking
   
   // Stories state
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [progress, setProgress] = useState(0);
-  const storyTimeoutRef = useRef(null);
 
   // Popup state
   const [showSharePopup, setShowSharePopup] = useState(false);
@@ -29,23 +29,37 @@ const Header = () => {
   const movieGridRef = useRef(null);
   const navigate = useNavigate();
 
+  // 🔐 Updated Admin Logic
   const adminEmail = "sanjusanjay0444@gmail.com";
-  const isAdmin = userData?.email?.toLowerCase() === adminEmail.toLowerCase();
+  // We check both the context data and the direct session email for safety
+  const isAdmin = (userData?.email?.toLowerCase() === adminEmail) || (currentUserEmail?.toLowerCase() === adminEmail);
+  
   const siteUrl = "https://www.1anchormovies.live";
 
-  // --- RECENTLY ADDED LOGIC (Fixes the "Stuck" rows) ---
+  // --- RECENTLY ADDED LOGIC ---
   const latestMovies = useMemo(() => {
     return [...movies]
       .filter((m) => m.showOnHomepage)
       .sort((a, b) => {
         const dateA = new Date(a.homepage_added_at || a.created_at || 0);
         const dateB = new Date(b.homepage_added_at || b.created_at || 0);
-        return dateB - dateA; // Sort strictly by most recent date
+        return dateB - dateA;
       })
       .slice(0, 100);
   }, [movies]);
   
   const isMobileView = () => window.innerWidth < 640;
+
+  // Sync session email for admin check
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUserEmail(session.user.email);
+      }
+    };
+    checkUser();
+  }, []);
 
   const handleClickOutside = useCallback((event) => {
     if (mobileFocusId !== null && isMobileView()) {
@@ -84,28 +98,6 @@ const Header = () => {
     fetchStories();
   }, []);
 
-  // --- Stories Autoplay logic ---
-  useEffect(() => {
-    if (!activeStory) return;
-    setProgress(0);
-    const duration = 15000; // 15 seconds per story
-    const interval = 100;
-    const timer = setInterval(() => {
-      setProgress(old => Math.min(old + (100 / (duration / interval)), 100));
-    }, interval);
-
-    const timeout = setTimeout(() => {
-      if (activeStoryIndex < stories.length - 1) {
-        setActiveStory(stories[activeStoryIndex + 1]);
-        setActiveStoryIndex(activeStoryIndex + 1);
-      } else {
-        setActiveStory(null);
-      }
-    }, duration);
-
-    return () => { clearInterval(timer); clearTimeout(timeout); };
-  }, [activeStory, activeStoryIndex, stories]);
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(siteUrl);
@@ -120,6 +112,11 @@ const Header = () => {
     if (hours < 1) return "Just now";
     if (hours < 24) return `${hours}h ago`;
     return `${Math.floor(hours / 24)}d ago`;
+  };
+
+  const handleShareComplete = () => {
+      setShowSharePopup(false);
+      localStorage.setItem("hasJoinedTelegram", "true");
   };
 
   return (
@@ -179,6 +176,21 @@ const Header = () => {
             </button>
           </div>
 
+          {/* 🔐 PROTECTED ADMIN PANEL LINK - Moved here for high visibility */}
+          {isAdmin && (
+            <div className="w-full p-4 bg-red-950/20 border border-red-500/30 rounded-2xl text-center">
+              <Link 
+                to="/admin" 
+                className="flex items-center justify-center gap-2 text-red-400 hover:text-red-300 font-black uppercase italic tracking-tighter transition-all"
+                target="_blank" 
+                rel="noopener noreferrer" 
+              >
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+                ACCESS SECURE ADMIN PANEL
+              </Link>
+            </div>
+          )}
+
           {/* Telegram Banner */}
           <div className="relative overflow-hidden bg-gradient-to-r from-blue-900/20 to-cyan-900/20 rounded-2xl p-6 border border-blue-500/10 group">
              <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -188,7 +200,7 @@ const Header = () => {
                     </div>
                     <div className="text-center sm:text-left">
                         <h3 className="text-white font-bold text-lg">Never miss a movie!</h3>
-                        <p className="text-blue-300/60 text-sm">Join 50,000+ members for instant HD links.</p>
+                        <p className="text-blue-300/60 text-sm">Join our updates for instant HD links.</p>
                     </div>
                 </div>
                 <a href="https://t.me/anchor2025" className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 py-3 rounded-2xl font-black text-sm tracking-widest shadow-xl shadow-cyan-500/20 transition-all flex items-center gap-2">
@@ -196,21 +208,6 @@ const Header = () => {
                 </a>
              </div>
           </div>
-          {isAdmin && (
-  <div className="text-center pt-2">
-    <Link 
-      to="/admin" 
-      className="text-red-400 hover:text-red-500 font-bold underline transition"
-      target="_blank" 
-      rel="noopener noreferrer" 
-    >
-      <span className="inline-block px-3 py-1 bg-gray-800 rounded-lg shadow-sm border border-red-500/50">
-        🔧 Go to Admin Panel
-      </span>
-    </Link>
-  </div>
-)}
-
 
           {/* GRID */}
           <div 
@@ -235,7 +232,6 @@ const Header = () => {
                       className={`w-full h-full object-cover transition-transform duration-700 ${isFocused ? 'scale-110' : 'group-hover:scale-110'}`}
                     />
                     
-                    {/* TOP LEFT BADGES (Time/Note) */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1">
                         {movie.note && (
                             <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xl uppercase">
@@ -247,7 +243,6 @@ const Header = () => {
                         </span>
                     </div>
 
-                    {/* NEW: TOP RIGHT BADGE (SubCategory / Quality) */}
                     {movie.subCategory && (
                       <div className="absolute top-2 right-2">
                         <span className="text-[9px] font-black bg-red-500 backdrop-blur-md text-white px-2 py-0.5 rounded border border-white/20 shadow-lg uppercase tracking-tighter">
@@ -256,7 +251,6 @@ const Header = () => {
                       </div>
                     )}
 
-                    {/* Quality/IMDb bottom tag */}
                     <div className="absolute bottom-2 right-2 flex gap-1">
                          {movie.imdb && (
                              <span className="bg-yellow-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg">
@@ -266,7 +260,6 @@ const Header = () => {
                     </div>
                   </div>
 
-                  {/* Title Section */}
                   <div className="p-3 text-center">
                     <h2 className="text-xs sm:text-sm font-bold text-gray-200 truncate group-hover:text-blue-400 transition-colors" 
                         style={{ color: movie.linkColor || "" }}>
@@ -304,237 +297,9 @@ const Header = () => {
       <footer className="w-full py-12 text-center border-t border-gray-900 mt-12 bg-gray-950/50">
         <div className="flex flex-col items-center gap-4">
           <Link to="/"><img src="/logo_39.png" className="h-8 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all" alt="Logo" /></Link>
-          <p className="text-gray-600 text-[10px] tracking-[0.3em] font-bold uppercase">Premium Quality Content • 2025</p>
+          <p className="text-gray-600 text-[10px] tracking-[0.3em] font-bold uppercase">© 1TamilMV & AnchorMovies 2026</p>
         </div>
       </footer>
-
-      {/* Popups (Unchanged) */}
-
-{showSharePopup && (
-
-<div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
-
-<div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-blue-600/50">
-
-<h2 className="text-2xl font-extrabold mb-2 text-blue-400">🚨 Important Step!</h2>
-
-<p className="text-sm text-gray-300 mb-6">
-
-To continue and access the site, you **must join our Telegram Channel** for updates and support.
-
-</p>
-
-
-
-<div className="flex justify-center gap-4 mb-6">
-
-<a
-
-href="https://t.me/AnchorMovies"
-
-target="_blank"
-
-rel="noopener noreferrer"
-
-className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 text-sm font-semibold transition transform hover:scale-[1.05]"
-
-onClick={handleShareComplete}
-
->
-
-<FaTelegramPlane className="text-xl" /> Must Click & Join Our Channel
-
-</a>
-
-</div>
-
-
-
-<button
-
-onClick={handleShareComplete}
-
-className="w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-800 text-sm font-semibold"
-
->
-
-I have successfully joined the Channel
-
-</button>
-
-</div>
-
-</div>
-
-)}
-
-
-
-{showMemberPopup && (
-
-<div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center px-4">
-
-<div className="text-white text-center animate-fadeIn relative w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-yellow-500/50">
-
-<h2 className="2xl font-extrabold mb-2 text-yellow-400">🎉 Become a Free Member!</h2>
-
-<p className="text-sm text-gray-300 mb-6">
-
-Apply now to enjoy **ad-free viewing** and **exclusive download links**. Login is mandatory.
-
-</p>
-
-
-
-<button
-
-onClick={() => {
-
-setShowMemberPopup(false);
-
-if (userData) {
-
-navigate("/profile");
-
-} else {
-
-navigate("/login");
-
-}
-
-}}
-
-className="w-full bg-yellow-600 text-black px-5 py-2 rounded-lg hover:bg-yellow-500 text-sm font-bold mb-3 transition transform hover:scale-[1.02]"
-
->
-
-Apply Now
-
-</button>
-
-
-
-<button
-
-onClick={() => {
-
-setShowMemberPopup(false);
-
-localStorage.setItem("hasSeenMemberPopup", "true");
-
-}}
-
-className="w-full bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 text-sm font-medium"
-
->
-
-No, thanks
-
-</button>
-
-</div>
-
-</div>
-
-)}
-
-
-
-
-
-{showBettingPopup && (
-
-<div className="fixed inset-0 bg-black/80 z-[999] flex items-center justify-center px-4">
-
-<div className="text-white text-center animate-fadeIn relative w-full max-w-sm sm:max-w-md bg-gray-950 p-4 rounded-xl shadow-2xl border border-yellow-400/50">
-
-
-{/* Close Button */}
-
-<button
-
-onClick={() => setShowBettingPopup(false)}
-
-className="absolute top-2 right-4 text-gray-400 text-3xl font-light hover:text-white transition"
-
->
-
-&times;
-
-</button>
-
-
-
-{/* Banner Image */}
-
-{/* Ensure 'banner.jpg' is in your public directory */}
-
-<img
-
-src="/banner.jpg"
-
-alt="Promotional Banner"
-
-className="w-full object-cover rounded-lg mb-4 border border-gray-700"
-
-/>
-
-
-
-{/* Promotional Title */}
-
-<h2 className="text-xl sm:text-2xl font-extrabold text-yellow-300 mb-4">
-
-CLAIM YOUR BONUS NOW!
-
-</h2>
-
-
-
-{/* Call to Action Button with Affiliate Link */}
-
-<a
-
-href="https://winfix.fun/register?campaignId=anchormovies-2407"
-
-target="_blank"
-
-rel="noopener noreferrer"
-
-// Using standard Tailwind classes for a pulsating (blinking) effect
-
-className="w-full block bg-red-600 text-white py-3 rounded-xl shadow-lg hover:bg-red-700 text-base sm:text-lg font-bold transition transform hover:scale-[1.02] animate-pulse duration-700"
-
-onClick={() => {
-
-// Close the popup after clicking the button
-
-setShowBettingPopup(false);
-
-}}
-
->
-
-CREATE NEW ID & GET 600% BONUS ON 1ST DEPOSIT! HURRY!
-
-</a>
-
-
-<p className="text-xs text-gray-400 mt-3">
-
-*Terms and conditions apply.
-
-</p>
-
-
-
-</div>
-
-</div>
-
-)}
-
-
     </div>
   );
 };

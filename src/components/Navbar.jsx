@@ -2,9 +2,10 @@
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { Link, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
+import { supabase } from "../utils/supabaseClient";
 import { 
   X, Search, Home, Clock3, MonitorPlay, 
-  Tv, User, Globe, Menu, ChevronRight, ChevronDown, ArrowLeft
+  Tv, User, Globe, Menu, ChevronRight, ChevronDown, ArrowLeft, LogOut, Settings
 } from "lucide-react";
 
 // --- Sub-Component: Floating Watch Menu ---
@@ -46,11 +47,12 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userData, logout: contextLogout } = useContext(AppContext);
+  const { setIsLoggedIn, setUserData } = useContext(AppContext);
 
+  const [session, setSession] = useState(null); // Supabase Session State
   const [searchTerm, setSearchTerm] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // New state for mobile search
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [showWatchOptions, setShowWatchOptions] = useState(false);
@@ -62,6 +64,13 @@ const Navbar = () => {
 
   const languages = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
+  // 🔐 SUPABASE AUTH SYNC
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
@@ -72,12 +81,18 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Focus input when mobile search opens
   useEffect(() => {
-    if (mobileSearchOpen && mobileInputRef.current) {
-      mobileInputRef.current.focus();
-    }
+    if (mobileSearchOpen && mobileInputRef.current) mobileInputRef.current.focus();
   }, [mobileSearchOpen]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.clear();
+    setIsLoggedIn(false);
+    setUserData(null);
+    setProfileOpen(false);
+    navigate("/login1");
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -94,8 +109,15 @@ const Navbar = () => {
     setLangOpen(false);
   };
 
+  // Helper to get letter for icon
+  const getInitial = () => {
+    if (!session?.user) return "";
+    const name = session.user.user_metadata?.full_name;
+    return (name ? name[0] : session.user.email[0]).toUpperCase();
+  };
+
   return (
-    <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow-lg">
+    <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow-lg font-sans">
       {/* Desktop Header */}
       <div className="hidden sm:flex items-center justify-between px-10 h-16 max-w-7xl mx-auto">
         <Link to="/" className="shrink-0">
@@ -141,13 +163,30 @@ const Navbar = () => {
           </form>
         </div>
 
+        {/* PROFILE SECTION DESKTOP */}
         <div className="relative" ref={profileRef}>
-          {userData ? (
-            <button onClick={() => setProfileOpen(!profileOpen)} className="w-10 h-10 rounded-full bg-black border-2 border-white flex items-center justify-center font-black shadow-lg hover:scale-105 transition">
-              {userData?.name?.[0]?.toUpperCase() || "U"}
-            </button>
+          {session ? (
+            <>
+              <button onClick={() => setProfileOpen(!profileOpen)} className="w-10 h-10 rounded-full bg-black border-2 border-white flex items-center justify-center font-black shadow-lg hover:scale-105 transition-all">
+                {getInitial()}
+              </button>
+              {profileOpen && (
+                <div className="absolute top-full right-0 mt-3 w-64 bg-white text-black rounded-2xl shadow-2xl py-3 z-[60] border border-gray-100 animate-slide-up-fade">
+                  <div className="px-5 py-3 border-b border-gray-50 mb-2">
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Logged in as</p>
+                    <p className="font-bold text-sm truncate">{session.user.user_metadata?.full_name || session.user.email}</p>
+                  </div>
+                  <button onClick={() => {navigate("/profile"); setProfileOpen(false);}} className="w-full text-left px-5 py-3 hover:bg-blue-50 flex items-center gap-3 transition font-bold text-sm">
+                    <Settings size={18} className="text-gray-400" /> Profile Settings
+                  </button>
+                  <button onClick={handleLogout} className="w-full text-left px-5 py-3 hover:bg-red-50 text-red-600 flex items-center gap-3 transition font-bold text-sm">
+                    <LogOut size={18} /> Logout Session
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
-            <button onClick={() => navigate("/login")} className="bg-white text-blue-700 font-bold px-6 py-2 rounded-full hover:bg-blue-50 transition shadow-md">Login</button>
+            <button onClick={() => navigate("/auth")} className="bg-white text-blue-700 font-bold px-6 py-2 rounded-full hover:bg-blue-50 transition shadow-md">Login</button>
           )}
         </div>
       </div>
@@ -159,47 +198,7 @@ const Navbar = () => {
         <button onClick={() => setMobileSearchOpen(true)} className="p-2"><Search /></button>
       </div>
 
-      {/* MOBILE SEARCH OVERLAY */}
-      {mobileSearchOpen && (
-        <div className="fixed inset-0 z-[200] bg-blue-800 animate-fade-in sm:hidden">
-          <div className="flex items-center px-4 h-16 border-b border-white/10 gap-3">
-            <button onClick={() => setMobileSearchOpen(false)} className="p-2">
-              <ArrowLeft size={24} />
-            </button>
-            <form onSubmit={handleSearchSubmit} className="flex-1">
-              <input
-                ref={mobileInputRef}
-                type="text"
-                placeholder="Search movies, series..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent w-full text-lg outline-none placeholder:text-white/50 text-white"
-              />
-            </form>
-            {searchTerm && (
-              <button onClick={() => setSearchTerm("")} className="p-2">
-                <X size={20} />
-              </button>
-            )}
-          </div>
-          <div className="p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-white/40 mb-4">Popular Searches</p>
-            <div className="flex flex-wrap gap-2">
-               {["Action", "Tamil", "Horror", "Latest 2025"].map(tag => (
-                 <button 
-                  key={tag} 
-                  onClick={() => {setSearchTerm(tag); navigate(`/search?query=${tag}`); setMobileSearchOpen(false);}}
-                  className="px-4 py-2 bg-white/10 rounded-full text-sm font-bold border border-white/10"
-                 >
-                   {tag}
-                 </button>
-               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Drawer (Sidebar) */}
+      {/* Mobile Sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[120] sm:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
@@ -221,28 +220,15 @@ const Navbar = () => {
               </li>
             </ul>
 
-            <div className="space-y-4 mb-8">
-              <h4 className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Globe size={14} /> Popular Languages
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                {languages.map((lang) => (
-                  <button key={lang} onClick={() => handleNavigateCategory(lang)} className="flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-blue-600 hover:text-white rounded-xl text-sm font-bold transition group">
-                    {lang} <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="mt-auto pt-6 border-t border-gray-100">
-              {!userData ? (
-                <button onClick={() => {navigate("/login"); setMobileOpen(false);}} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-600/20 active:scale-95 transition">Login to Anchor</button>
+              {!session ? (
+                <button onClick={() => {navigate("/auth"); setMobileOpen(false);}} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl">Login to Anchor</button>
               ) : (
                 <div className="flex items-center gap-4 p-2">
-                    <div className="w-12 h-12 rounded-full bg-blue-700 flex items-center justify-center text-white font-black text-xl">{userData?.name?.[0]}</div>
+                    <div className="w-12 h-12 rounded-full bg-blue-700 flex items-center justify-center text-white font-black text-xl">{getInitial()}</div>
                     <div>
-                        <p className="font-black text-sm">{userData?.name}</p>
-                        <button onClick={() => contextLogout()} className="text-xs font-bold text-red-500 uppercase tracking-widest">Logout</button>
+                        <p className="font-black text-sm">{session.user.user_metadata?.full_name || "Explorer"}</p>
+                        <button onClick={handleLogout} className="text-xs font-bold text-red-500 uppercase tracking-widest">Logout</button>
                     </div>
                 </div>
               )}
@@ -270,7 +256,7 @@ const Navbar = () => {
           </button>
           {showWatchOptions && <WatchOptionsPopup onClose={() => setShowWatchOptions(false)} onNavigate={(path) => { navigate(path); setShowWatchOptions(false); }} />}
         </div>
-        <button onClick={() => { userData ? navigate("/profile") : navigate("/login"); }} className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}>
+        <button onClick={() => { session ? navigate("/profile") : navigate("/login1"); }} className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}>
           <User size={22} /> <span className="text-[10px] font-bold">Account</span>
         </button>
       </div>
