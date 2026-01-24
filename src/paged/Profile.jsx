@@ -1,338 +1,251 @@
-import React, { useContext, useState, useEffect, useCallback } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
-import axios from "axios";
-// import { backendUrl } from "../utils/api"; // ⬅️ You may remove this import now
-
-// Assuming Lucide React is installed
 import { 
   User, 
   Mail, 
   Edit3, 
-  CheckCircle, 
-  AlertTriangle, 
   LogOut, 
   Loader2, 
-  Award,
-  Clock 
+  ShieldCheck,
+  Calendar,
+  ArrowLeft,
+  Save,
+  X,
+  UserCircle,
+  CheckCircle2,
+  Languages,
+  Check,
+  Sun,
+  Moon
 } from "lucide-react"; 
 
-// --- Helper Components for Status Display (No changes needed here) ---
-
-const StatusBadge = ({ type, text, Icon }) => (
-  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
-    type === 'verified' ? 'bg-green-600/20 text-green-400 border border-green-600' :
-    type === 'warning' ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600' :
-    'bg-gray-600/20 text-gray-300 border border-gray-600'
-  }`}>
-    <Icon className="w-3.5 h-3.5" />
-    {text}
-  </span>
-);
-
-const MembershipBadge = ({ status }) => {
-  const statusMap = {
-    approved: { text: "Approved", color: "bg-blue-600", Icon: Award },
-    pending: { text: "Pending", color: "bg-yellow-600", Icon: Clock },
-    none: { text: "None", color: "bg-gray-600", Icon: Award },
-    // Add 'rejected' if applicable
-  };
-  const { text, color, Icon } = statusMap[status] || statusMap.none;
-
-  return (
-    <div className={`flex items-center gap-2 p-3 rounded-lg ${color} text-white font-medium`}>
-      <Icon className="w-5 h-5" />
-      <span>Status: {text}</span>
-    </div>
-  );
-};
-
-
-// --- Main Profile Component ---
-
 const Profile = () => {
-  const { userData, setUserData, setIsLoggedIn, backendUrl } = useContext(AppContext);
-  const [newName, setNewName] = useState(userData?.name || "");
+  const { setUserData, setIsLoggedIn } = useContext(AppContext); 
+  const [session, setSession] = useState(null);
+  const [newName, setNewName] = useState("");
+  const [selectedLangs, setSelectedLangs] = useState([]);
   const [editing, setEditing] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
-  const [membershipStatus, setMembershipStatus] = useState(userData?.membershipStatus || "none");
+  const [loading, setLoading] = useState(false);
+  
+  // 🌓 Theme State (Defaults to Dark)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem("theme") !== "light";
+  });
+
+  // Updated language list (Bengali and Marathi removed)
+  const availableLanguages = [
+    "Hindi", "English", "Kannada", "Tamil", "Telugu", "Malayalam"
+  ];
+
+  // 🔐 Initial Auth Fetch
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      
+      if (currentSession?.user?.user_metadata) {
+        const metadata = currentSession.user.user_metadata;
+        setNewName(metadata.full_name || currentSession.user.email.split('@')[0]);
+        setSelectedLangs(metadata.languages || []);
+      }
+    };
+    getSession();
+  }, []);
+
   const navigate = useNavigate();
 
-  // Helper variables for JSX readability
-  const isVerified = userData?.isAccountVerified;
-  const userEmail = userData?.email;
+  // 🌓 Toggle Theme Logic
+  const toggleTheme = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem("theme", newMode ? "dark" : "light");
+    if (newMode) document.body.classList.add('dark');
+    else document.body.classList.remove('dark');
+  };
 
-  /* Save Name */
-  const saveName = async () => {
+  const toggleLanguage = (lang) => {
+    setSelectedLangs(prev => 
+      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
+    );
+  };
+
+  /* Save Name & Languages to Supabase Metadata */
+  const saveProfile = async () => {
     if (!newName.trim()) return toast.error("Name cannot be empty");
+    
+    setLoading(true);
     try {
-      axios.defaults.withCredentials = true;
-      // 🎯 Using backendUrl for the absolute path
-      const { data } = await axios.put(`${backendUrl}/api/user/update-name`, {
-        newName: newName.trim(),
+      const { data, error } = await supabase.auth.updateUser({
+        data: { 
+          full_name: newName.trim(),
+          languages: selectedLangs
+        }
       });
 
-      if (data.success) {
-        toast.success("Name updated successfully!");
-        setUserData((prev) => ({ ...prev, name: newName.trim() }));
-        setEditing(false);
-      } else {
-        toast.error(data.message || "Failed to update name");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Server error");
-    }
-  };
-
-  /* Logout */
-  const handleLogout = async () => {
-    try {
-      axios.defaults.withCredentials = true;
-      
-      // 🎯 Using backendUrl for the absolute path
-      await axios.post(`${backendUrl}/api/auth/logout`);
-      toast.info("Backend session cleared.");
-      
-    } catch (error) {
-      // This is where the CORS block happens on the successful 200 response.
-      console.error("Backend logout failed (CORS/Cookie likely):", error.response?.data || error.message);
-      toast.warn("Server logout failed, but clearing local session.");
-    }
-
-    try {
-      // 2. Attempt Logout from Supabase
-      await supabase.auth.signOut(); 
-    } catch (error) {
-       console.error("Supabase logout failed:", error.message);
-    }
-    
-    // 3. Client-side cleanup and navigation (MUST run)
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userData");
-    localStorage.removeItem("token"); 
-    setIsLoggedIn(false);
-    setUserData(null);
-    
-    toast.success("You have been logged out.");
-    navigate("/login");
-  };
-
-  /* Resend Verification Email */
-  const resendEmailVerification = async () => {
-    try {
-      axios.defaults.withCredentials = true;
-      // 🎯 Using backendUrl for the absolute path
-      const { data } = await axios.post(
-        `${backendUrl}/api/auth/send-verify-otp`,
-        { email: userEmail }
-      );
-      if (data.success) {
-        toast.success("Verification email sent! Check your inbox.");
-        navigate("/verify-account");
-      } else {
-        toast.error(data.message || "Failed to send verification email");
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || error.message);
-    }
-  };
-
-  /* Apply for Membership */
-  const applyForMembership = async () => {
-    if (membershipStatus !== "none") return;
-
-    // 🚫 Restriction for a specific email
-    if (userEmail === "sanjusanjay0444@gmail.com") {
-      return toast.error("❌ You are not allowed to apply for membership.");
-    }
-
-    setIsApplying(true);
-    try {
-      const { error } = await supabase.from("membership_applications").insert([
-        {
-          email: userEmail,
-          name: userData?.name,
-          status: "pending",
-        },
-      ]);
-
       if (error) throw error;
 
-      toast.success("🎉 Your membership request has been sent! Await admin approval.");
-      setMembershipStatus("pending");
-      setUserData((prev) => ({ ...prev, membershipStatus: "pending" }));
-    } catch (error) {
-      toast.error(error.message || "Failed to apply");
+      toast.success("Profile updated successfully!");
+      setSession(prev => ({ ...prev, user: data.user }));
+      setEditing(false);
+    } catch (err) {
+      toast.error(err.message || "Failed to update profile");
     } finally {
-      setIsApplying(false);
+      setLoading(false);
     }
   };
 
-  /* Fetch latest membership status on mount (using useCallback for optimization) */
-  const fetchMembershipStatus = useCallback(async () => {
-    if (!userEmail) return;
+  /* Logout Flow */
+  const handleLogout = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("membership_applications")
-        .select("status")
-        .eq("email", userEmail)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-  
-      if (error) throw error;
-  
-      if (data?.status) {
-        setMembershipStatus(data.status);
-        setUserData((prev) => ({ ...prev, membershipStatus: data.status }));
-      }
-    } catch (err) {
-      console.error("Failed to fetch membership status:", err.message);
+      await supabase.auth.signOut();
+      localStorage.clear(); 
+      setIsLoggedIn(false);
+      setUserData(null);
+      toast.success("Logged out from secure session");
+      navigate("/login1");
+    } catch (error) {
+      toast.error("Logout failed");
+    } finally {
+      setLoading(false);
     }
-  }, [userEmail, setUserData]);
-  
-  useEffect(() => {
-    fetchMembershipStatus();
-  }, [fetchMembershipStatus]);
-  
+  };
+
+  if (!session) return (
+    <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-950' : 'bg-gray-50'}`}>
+      <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white py-12 px-4 sm:px-6">
-      <div className="max-w-xl mx-auto bg-gray-800 shadow-2xl p-6 sm:p-10 rounded-xl border border-gray-700">
-        <h1 className="text-3xl font-extrabold mb-8 text-center text-blue-400 border-b border-gray-700 pb-4">
-          Personal Profile
-        </h1>
-  
-        {/* Email Section */}
-        <section className="mb-6 p-4 rounded-lg bg-gray-700/50">
-          <label className="text-sm font-semibold flex items-center gap-2 mb-2 text-gray-400">
-            <Mail className="w-5 h-5 text-blue-400" />
-            Email Address
-          </label>
-          <div className="flex items-center justify-between gap-4 border-b border-gray-600 pb-2">
-            <span className="truncate text-gray-100 font-medium">{userEmail}</span>
-            {isVerified ? (
-              <StatusBadge type="verified" text="Verified" Icon={CheckCircle} />
-            ) : (
-              <StatusBadge type="warning" text="Unverified" Icon={AlertTriangle} />
-            )}
-          </div>
+    <div className={`min-h-screen font-sans selection:bg-blue-500/30 flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-500 ${isDarkMode ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-900'}`}>
+      
+      {/* 🎬 CINEMATIC BACKDROP */}
+      <div className="absolute inset-0 z-0">
+        <div className={`absolute inset-0 bg-[url('https://images.unsplash.com/photo-1478720568477-152d9b164e26?q=80&w=2070')] bg-cover bg-center transition-opacity duration-700 ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} />
+        <div className={`absolute inset-0 transition-colors duration-700 ${isDarkMode ? 'bg-gradient-to-b from-blue-600/10 via-transparent to-gray-950' : 'bg-gradient-to-b from-blue-400/10 via-transparent to-gray-100'}`} />
+        <div className="absolute inset-0 backdrop-blur-3xl" />
+      </div>
 
-          {/* Verification Call to Action */}
-          {!isVerified && (
-            <div className="mt-3 flex justify-between items-center text-sm p-3 rounded-lg bg-yellow-900/40 border border-yellow-500/50">
-              <p className="text-yellow-300">
-                Please verify your email to ensure account security.
-              </p>
-              <button
-                onClick={resendEmailVerification}
-                className="text-yellow-400 hover:text-yellow-200 font-medium whitespace-nowrap"
-              >
-                Resend Link
-              </button>
-            </div>
-          )}
-        </section>
+      <div className="relative z-10 w-full max-w-[550px] animate-in fade-in slide-in-from-bottom-4 duration-700">
         
-        <hr className="border-gray-700 my-6" />
-
-        {/* Username Section */}
-        <section className="mb-6 p-4 rounded-lg bg-gray-700/50">
-          <label className="text-sm font-semibold flex items-center gap-2 mb-3 text-gray-400">
-            <User className="w-5 h-5 text-blue-400" />
-            Username
-          </label>
-          {editing ? (
-            <>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="border-2 border-blue-500 px-4 py-2 rounded-lg w-full mt-1 bg-white text-gray-900 text-base focus:ring-blue-500 focus:border-blue-500 transition"
-              />
-              <div className="flex gap-3 mt-3">
-                <button
-                  onClick={saveName}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex-1 font-semibold transition"
-                >
-                  Save Changes
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(false);
-                    setNewName(userData?.name || "");
-                  }}
-                  className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg flex-1 font-semibold transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-gray-700 border border-gray-600">
-              <span className="text-lg font-medium text-white truncate">{userData?.name}</span>
-              <button 
-                onClick={() => setEditing(true)} 
-                className="text-blue-400 hover:text-blue-300 transition flex items-center gap-1.5"
-                title="Edit Username"
-              >
-                <Edit3 className="w-4 h-4" /> Edit
-              </button>
-            </div>
-          )}
-        </section>
-        
-        <hr className="border-gray-700 my-6" />
-
-        {/* Membership Section */}
-        <section className="mb-8 p-4 rounded-lg bg-gray-700/50">
-          <h3 className="text-lg font-semibold flex items-center gap-2 mb-4 text-gray-400">
-            <Award className="w-5 h-5 text-blue-400" />
-            Membership Status
-          </h3>
+        {/* Navigation Bar */}
+        <div className="flex items-center justify-between mb-8">
+          <button onClick={() => navigate(-1)} className={`p-3 rounded-full transition-all ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400' : 'bg-black/5 hover:bg-black/10 text-gray-600'}`}>
+            <ArrowLeft size={20} />
+          </button>
           
-          <MembershipBadge status={membershipStatus} />
+          <img src="/logo_39.png" className="h-8" alt="logo" />
 
-          <div className="mt-4">
-            <button
-              onClick={applyForMembership}
-              disabled={membershipStatus !== "none" || isApplying}
-              className={`px-4 py-3 rounded-lg w-full font-semibold transition flex items-center justify-center gap-2 ${
-                membershipStatus === "approved"
-                  ? "bg-blue-600 cursor-not-allowed text-white"
-                  : membershipStatus === "pending"
-                  ? "bg-gray-600 cursor-not-allowed text-white"
-                  : "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/30"
-              }`}
-            >
-              {isApplying ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> 
-                  Submitting Application...
-                </>
-              ) : membershipStatus === "approved" ? (
-                <>✅ Membership Approved</>
-              ) : membershipStatus === "pending" ? (
-                <>⏳ Application Pending</>
-              ) : (
-                <>Apply for Membership</>
-              )}
-            </button>
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              Membership allows access to exclusive content and features.
-            </p>
+          {/* 🌓 THEME TOGGLE BUTTON */}
+          <button 
+            onClick={toggleTheme} 
+            className={`p-3 rounded-full transition-all shadow-xl flex items-center justify-center ${isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-white text-blue-600 hover:bg-gray-100 border border-gray-200'}`}
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
+
+        {/* Profile Card */}
+        <div className={`backdrop-blur-2xl border transition-all duration-500 rounded-[3rem] p-8 md:p-10 shadow-[0_30px_100px_-20px_rgba(0,0,0,0.3)] ${isDarkMode ? 'bg-gray-900/40 border-white/10' : 'bg-white/70 border-black/5'}`}>
+          
+          {/* User Avatar Section */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 p-1 shadow-2xl">
+              <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+                {newName ? (
+                  <span className={`text-3xl font-black italic ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {newName[0].toUpperCase()}
+                  </span>
+                ) : (
+                  <UserCircle size={50} className="text-gray-400" />
+                )}
+              </div>
+            </div>
+            <h2 className="mt-4 text-2xl font-black uppercase tracking-tighter italic">{newName || "Explorer"}</h2>
+            <div className="flex items-center gap-2 text-blue-500 text-[10px] font-black tracking-[0.2em] uppercase mt-1">
+              <ShieldCheck size={12} /> Verified Account
+            </div>
           </div>
-        </section>
-  
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg w-full font-semibold flex items-center justify-center gap-2 mt-6 shadow-xl shadow-red-500/30 transition"
-        >
-          <LogOut className="w-5 h-5" />
-          Logout
-        </button>
+
+          <div className="space-y-6">
+            
+            {/* Display Name Section */}
+            <div className="space-y-2">
+              <label className={`text-[10px] font-black uppercase tracking-[0.2em] ml-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Your Name</label>
+              <div className={`flex items-center gap-4 border p-4 rounded-2xl transition-all ${editing ? 'border-blue-500 ring-4 ring-blue-500/10' : (isDarkMode ? 'bg-black/40 border-white/5' : 'bg-gray-50 border-black/5')}`}>
+                <User size={18} className={editing ? 'text-blue-500' : 'text-gray-400'} />
+                <input 
+                  type="text" 
+                  value={newName}
+                  onFocus={() => setEditing(true)}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className={`bg-transparent border-none outline-none text-sm font-bold w-full ${isDarkMode ? 'text-white placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
+                  placeholder="Enter your name"
+                />
+              </div>
+            </div>
+
+            {/* Language Interests Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 ml-2">
+                <Languages size={14} className="text-blue-500" />
+                <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Preferred Languages</label>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {availableLanguages.map(lang => {
+                  const isActive = selectedLangs.includes(lang);
+                  return (
+                    <button
+                      key={lang}
+                      onClick={() => toggleLanguage(lang)}
+                      className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border flex items-center justify-center gap-2 ${
+                        isActive 
+                        ? "bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]" 
+                        : (isDarkMode ? "bg-black/20 border-white/5 text-gray-500 hover:border-white/20" : "bg-gray-50 border-black/5 text-gray-400 hover:bg-gray-100")
+                      }`}
+                    >
+                      {isActive && <Check size={10} />}
+                      {lang}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Email (Locked) */}
+            <div className="space-y-2 opacity-60">
+              <label className={`text-[10px] font-black uppercase tracking-[0.2em] ml-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Email Address</label>
+              <div className={`flex items-center gap-4 border p-4 rounded-2xl ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-50 border-black/5'}`}>
+                <Mail size={18} className="text-gray-400" />
+                <span className={`text-sm font-medium truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{session.user.email}</span>
+                <CheckCircle2 size={14} className="ml-auto text-green-600" />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-4 space-y-3">
+              <button 
+                onClick={saveProfile}
+                disabled={loading}
+                className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all transform active:scale-95 shadow-xl uppercase text-xs tracking-widest ${isDarkMode ? 'bg-white text-black hover:bg-blue-600 hover:text-white' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Save Preferences</>}
+              </button>
+
+              <button 
+                onClick={handleLogout}
+                className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-xs font-black uppercase tracking-widest border ${isDarkMode ? 'bg-red-600/10 hover:bg-red-600 text-red-500 border-red-500/10' : 'bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border-red-100'}`}
+              >
+                <LogOut size={18} /> Logout
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
