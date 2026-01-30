@@ -7,6 +7,7 @@ import { Loader2, Play, Share2, Plus, Heart, X, Clock3, TrendingUp, Star, Volume
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
+import DesktopDetailOverlay from "./DesktopDetailOverlay"; // 🚀 Import the new component
 
 /* ===== Helper: Save Recently Watched ===== */
 const saveRecentlyWatched = (movie) => {
@@ -80,10 +81,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
               className="group relative flex-none w-64 sm:w-80 h-40 sm:h-48 cursor-pointer transition-all duration-500 ease-out sm:hover:scale-110 z-10"
               onMouseEnter={() => handleMouseEnter(movie.id)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => {
-                if (window.innerWidth < 640) onSelect(movie);
-                else { saveRecentlyWatched(movie); navigate(`/watch/${movie.slug}`); }
-              }}
+              onClick={() => onSelect(movie)}
             >
               <div className="absolute -left-16 bottom-[-20px] z-0 select-none pointer-events-none">
                 <span className="text-[180px] sm:text-[240px] font-black leading-none text-black transition-all duration-500 group-hover:text-blue-600/10" 
@@ -205,10 +203,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
               className="group relative flex-none w-36 sm:w-52 h-52 sm:h-72 border border-white/5 rounded-xl cursor-pointer transition-all duration-500 ease-out hover:z-[70] sm:hover:scale-110 sm:hover:w-80 sm:hover:shadow-[0_20px_50px_rgba(0,0,0,1)] bg-gray-900"
               onMouseEnter={() => handleMouseEnter(movie.id)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => {
-                if (window.innerWidth < 640) onSelect(movie);
-                else { saveRecentlyWatched(movie); navigate(`/watch/${movie.slug}`); }
-              }}
+              onClick={() => onSelect(movie)}
             >
               <img src={movie.poster || "/default-poster.jpg"} alt={movie.title} className={`absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-300 ${hoveredId === movie.id ? 'opacity-0' : 'opacity-100'}`} />
               <img src={movie.cover_poster || movie.poster} alt={movie.title} className={`hidden sm:block absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-500 ${hoveredId === movie.id && !showTrailer ? 'opacity-100' : 'opacity-0'}`} />
@@ -273,7 +268,7 @@ const WatchListPage = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
   const [infoVisible, setInfoVisible] = useState(true); 
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
   const navigate = useNavigate();
 
@@ -287,7 +282,7 @@ const WatchListPage = () => {
   ];
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -439,11 +434,23 @@ const WatchListPage = () => {
     if (userLangs.length > 0) {
       filteredList = filteredList.filter(movie => movie.language.some(lang => userLangs.includes(lang)));
     }
-    return filteredList.reduce((acc, movie) => {
+    
+    // 🚀 NEW FEATURE: Shuffle movies within each genre on every load
+    const result = filteredList.reduce((acc, movie) => {
       const genres = movie.tmdb_genres && movie.tmdb_genres.length > 0 ? movie.tmdb_genres : (movie.genres && movie.genres.length > 0 ? movie.genres : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]));
-      genres.forEach((genre) => { if (!acc[genre]) acc[genre] = []; acc[genre].push(movie); });
+      genres.forEach((genre) => { 
+        if (!acc[genre]) acc[genre] = []; 
+        acc[genre].push(movie); 
+      });
       return acc;
     }, {});
+
+    // Shuffle implementation
+    Object.keys(result).forEach(key => {
+      result[key] = result[key].sort(() => 0.5 - Math.random());
+    });
+
+    return result;
   }, [movies, search, userLangs]); 
 
   useEffect(() => {
@@ -512,7 +519,7 @@ const WatchListPage = () => {
   if (loading) return <div className="min-h-screen bg-black flex flex-col items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" /><p className="text-gray-400 font-mono tracking-widest uppercase text-[10px]">Global Database Sync</p></div>;
 
   return (
-    <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie || showLangPopup ? 'h-screen overflow-hidden' : ''}`}>
+    <div className={`min-h-screen bg-gray-950 text-white font-sans overflow-x-hidden ${selectedMovie && isMobile ? 'h-screen overflow-hidden' : ''}`}>
       <Helmet><title>Watchlist | 1Anchormovies</title></Helmet>
 
       {showLangPopup && (
@@ -598,75 +605,86 @@ const WatchListPage = () => {
       ) : (
         <>
           {/* 🎬 HERO SECTION */}
-          {heroMovies.length > 0 && (
-            <div className="relative h-[65vh] sm:h-[90vh] w-full overflow-hidden bg-black">
-              {heroMovies.map((movie, idx) => (
-                <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-                  <img src={movie.cover_poster} className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
-                  
-                  {idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile && (
-                    <div className="absolute inset-0 bg-black overflow-hidden">
-                       <div className="relative w-full h-full scale-[1.35] pointer-events-none">
-                        <iframe
-                          src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-                          title="Hero Trailer"
-                          className="w-full h-full"
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        ></iframe>
-                      </div>
-                      
-                      <button 
-                        onClick={(e) => { e.preventDefault(); setIsMuted(!isMuted); }}
-                        className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90"
-                      >
-                        {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">
-                    <div className="max-w-4xl space-y-4 sm:space-y-6 pointer-events-auto">
-                      
-                      {/* Info Stack - becomes transparent when trailer plays after 5s */}
-                      <div className={`space-y-4 sm:space-y-6 transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
-                        {movie.title_logo ? (
-                            <img src={movie.title_logo} className="h-12 sm:h-39 md:h-36 object-contain drop-shadow-2xl" alt="" />
-                        ) : (
-                            <h1 className="text-3xl sm:text-7xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none">{movie.slug}</h1>
-                        )}
-                        
-                        <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
-                          <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div><span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span></div>
-                          <span className="text-gray-300 drop-shadow-md font-black">{movie.year || "2024"}</span>
-                          <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(movie.language)}</span>
-                          {/* 🚀 NEW: Genres Display Section */}
-                          {movie.genres && movie.genres.length > 0 && (
-                            <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
-                              {movie.genres.join(" | ")}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 sm:line-clamp-3 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
-                      </div>
-
-                      {/* Play Button - Remains solid and stays at the bottom */}
-                      <Link to={`/watch/${movie.slug}`} className={`group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest`}>
-                        <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" /> 
-                        <span className="text-[11px] sm:text-base uppercase tracking-widest font-black">PLAY NOW</span>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div className="hidden sm:flex absolute bottom-10 left-10 z-20 items-center gap-2">
-                {heroMovies.map((_, idx) => (
-                  <button key={idx} onClick={() => setCurrentSlide(idx)} className={`transition-all duration-500 rounded-full h-1.5 ${idx === currentSlide ? "w-10 bg-blue-500 shadow-[0_0_10px_#3b82f6]" : "w-2 bg-white/30"}`} />
-                ))}
-              </div>
+{heroMovies.length > 0 && (
+  <div className="relative h-[65vh] sm:h-[90vh] w-full overflow-hidden bg-black">
+    {heroMovies.map((movie, idx) => (
+      <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+        <img src={movie.cover_poster} className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
+        
+        {idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile && (
+          <div className="absolute inset-0 bg-black overflow-hidden">
+             <div className="relative w-full h-full scale-[1.35] pointer-events-none">
+              <iframe
+                src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
+                title="Hero Trailer"
+                className="w-full h-full"
+                frameBorder="0"
+                allow="autoplay"
+              ></iframe>
             </div>
-          )}
+            
+            <button 
+              onClick={(e) => { e.preventDefault(); setIsMuted(!isMuted); }}
+              className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90"
+            >
+              {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+            </button>
+          </div>
+        )}
 
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">
+          <div className="max-w-4xl space-y-4 sm:space-y-6 pointer-events-auto">
+            
+            {/* Info Stack - becomes transparent when trailer plays after 5s */}
+            <div className={`space-y-4 sm:space-y-6 transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
+              
+              {/* 🚀 FIXED LOGO CONTAINER: Restricts both width and height */}
+              <div className="h-16 sm:h-28 md:h-36 w-[280px] sm:w-[450px] flex items-end">
+                {movie.title_logo ? (
+                    <img 
+                      src={movie.title_logo} 
+                      className="max-h-full max-w-full object-contain object-left drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]" 
+                      alt="" 
+                    />
+                ) : (
+                    <h1 className="text-3xl sm:text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none text-white">
+                      {movie.slug}
+                    </h1>
+                )}
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
+                <div className="flex items-center gap-1.5">
+                  <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
+                  <span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span>
+                </div>
+                <span className="text-gray-300 drop-shadow-md font-black">{movie.year || "2024"}</span>
+                <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(movie.language)}</span>
+                {movie.genres && movie.genres.length > 0 && (
+                  <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
+                    {movie.genres.slice(0, 2).join(" | ")}
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
+            </div>
+
+            {/* Play Button */}
+            <Link to={`/watch/${movie.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest">
+              <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" /> 
+              <span className="text-[11px] sm:text-base tracking-widest font-black">PLAY NOW</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    ))}
+    <div className="hidden sm:flex absolute bottom-10 left-10 z-20 items-center gap-2">
+      {heroMovies.map((_, idx) => (
+        <button key={idx} onClick={() => setCurrentSlide(idx)} className={`transition-all duration-500 rounded-full h-1.5 ${idx === currentSlide ? "w-10 bg-blue-500 shadow-[0_0_100px_#3b82f6]" : "w-2 bg-white/30"}`} />
+      ))}
+    </div>
+  </div>
+)}
           <main className={`relative z-20 pb-32 mt-4`}>
             {/* CONTINUE WATCHING */}
             {continueList.length > 0 && (
@@ -706,8 +724,8 @@ const WatchListPage = () => {
         </>
       )}
 
-      {/* 🎬 CINEMATIC DETAIL OVERLAY */}
-      {selectedMovie && (
+      {/* 📱 MOBILE OVERLAY */}
+      {selectedMovie && isMobile && (
         <div className="fixed inset-0 z-[200] bg-gray-950/98 backdrop-blur-xl flex flex-col animate-in fade-in slide-in-from-bottom duration-500" onClick={(e) => e.target === e.currentTarget && setSelectedMovie(null)}>
           <button onClick={() => setSelectedMovie(null)} className="absolute top-6 right-6 z-[210] p-3 bg-black/50 rounded-full text-white backdrop-blur-md active:scale-90 transition-transform"><X size={24} /></button>
           
@@ -767,7 +785,6 @@ const WatchListPage = () => {
               </div>
               <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80 font-medium">{selectedMovie.description}</p>
 
-              {/* RELATED MOVIES SECTION */}
               {relatedMovies.length > 0 && (
                 <div className="w-full pt-10 text-left border-t border-white/10 mt-8">
                   <h4 className="text-lg font-black text-white uppercase tracking-widest border-l-4 border-blue-600 pl-3">More Like This</h4>
@@ -790,6 +807,22 @@ const WatchListPage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 🖥️ DESKTOP OVERLAY */}
+      {!isMobile && (
+        <DesktopDetailOverlay 
+          movie={selectedMovie} 
+          onClose={() => setSelectedMovie(null)} 
+          onNavigate={(m) => {
+            saveRecentlyWatched(m);
+            navigate(`/watch/${m.slug}`, { state: { movie: m } }); // 🚀 Passing state to prevent re-fetch
+            setSelectedMovie(null);
+          }}
+          relatedMovies={relatedMovies}
+          isMuted={isMuted}
+          setIsMuted={setIsMuted}
+        />
       )}
 
       <footer className="py-16 text-center border-t border-white/5 bg-black mt-20 opacity-40"><p className="text-[10px] font-mono tracking-[0.5em] uppercase font-black">© 1ANCHORMOVIES 2025</p></footer>
