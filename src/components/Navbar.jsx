@@ -143,10 +143,18 @@ const Navbar = () => {
                 </div>
               )}
             </li>
-            <li className="flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              <Link to="/live-cricket" className="text-red-300 hover:text-white transition">Live Cricket</Link>
-            </li>
+            <li>
+  <a
+    href="https://live-cricket-puce.vercel.app/"
+    className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
+  >
+    <div className="relative">
+      <MonitorPlay className="w-5 h-5 text-red-500" />
+      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+    </div>
+    <span className="text-sm font-black">Live Cricket</span>
+  </a>
+</li>
             <li><Link to="/blogs" className="hover:text-blue-200 transition">Blogs</Link></li>
             <li><Link to="/watch" className="hover:text-blue-200 transition">Watch</Link></li>
           </ul>
