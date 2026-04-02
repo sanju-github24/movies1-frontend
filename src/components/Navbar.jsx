@@ -244,11 +244,11 @@ const Navbar = () => {
               <li><Link to="/latest" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Clock3 size={20} className="text-blue-600"/> Latest Uploads</Link></li>
               <li><Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Tv size={20} className="text-blue-600"/> Watch Movies</Link></li>
               <li>
-                <Link to="/live-cricket" onClick={() => setMobileOpen(false)} className="flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition">
-                  <div className="flex items-center gap-4"><MonitorPlay size={20}/> Live Cricket</div>
-                  <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
-                </Link>
-              </li>
+  <a href="https://live-cricket-puce.vercel.app/" className="flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition">
+    <div className="flex items-center gap-4"><MonitorPlay size={20}/> Live Cricket</div>
+    <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+  </a>
+</li>
             </ul>
 
             <div className="mt-auto pt-6 border-t border-gray-100">
