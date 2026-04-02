@@ -350,7 +350,7 @@ const WatchListPage = () => {
             description: match?.description || item.description || "",
             show_on_hero: item.show_on_hero || false,
             is_trending: item.is_trending || false,
-            genres: item.genres || match?.categories || [], // 🚀 Ensuring genres are available
+            genres: item.genres || match?.categories || [], 
             trailer_key: item.trailer_codes || null
           };
         });
@@ -365,34 +365,55 @@ const WatchListPage = () => {
         const autoTrending = merged.filter(m => !manualTrending.some(t => t.id === m.id)).slice(0, 10 - manualTrending.length);
         setTrendingMovies([...manualTrending, ...autoTrending]);
 
-        enrichList(merged);
+        // 🚀 TRIGGER NEW ALGORITHM: Sync only movies uploaded ON THIS DAY
+        syncTodaysUploads(merged);
+
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchMovies();
   }, [backendUrl]);
 
-  const enrichList = async (list) => {
-    const enriched = await Promise.all(list.map(async (m) => {
-      if (m.genres?.length > 0 && m.trailer_codes) {
-        return { ...m, tmdb_genres: m.genres, trailer_key: m.trailer_codes };
-      }
-      if (!m.imdb_id) return m;
+  /* 🚀 NEW ALGORITHM: Fetch metadata ONLY for movies uploaded TODAY */
+  const syncTodaysUploads = async (list) => {
+    const todayStr = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+    const todaysNewUploads = list.filter(m => {
+      if (!m.created_at || !m.imdb_id) return false;
+      const uploadDate = new Date(m.created_at).toISOString().split('T')[0];
+      return uploadDate === todayStr;
+    });
+
+    if (todaysNewUploads.length === 0) return;
+
+    const enriched = await Promise.all(todaysNewUploads.map(async (m) => {
       try {
         const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: m.imdb_id } });
         if (res.data?.success) {
           const tmdb = res.data.data;
           const fetchedGenres = tmdb.genres || [];
           const fetchedTrailerCode = tmdb.trailer_key || null;
+          
+          // Background DB update
           await supabase.from("watch_html").update({ 
             genres: fetchedGenres, 
             imdb_rating: tmdb.imdb_rating,
             trailer_codes: fetchedTrailerCode 
           }).eq("slug", m.slug);
-          return { ...m, certification: tmdb.certification || "", year: tmdb.year || "", tmdb_genres: fetchedGenres, imdbRating: tmdb.imdb_rating?.toFixed(1), runtime: tmdb.runtime, trailer_key: fetchedTrailerCode };
+
+          return { 
+            ...m, 
+            certification: tmdb.certification || "", 
+            year: tmdb.year || "", 
+            tmdb_genres: fetchedGenres, 
+            imdbRating: tmdb.imdb_rating?.toFixed(1), 
+            runtime: tmdb.runtime, 
+            trailer_key: fetchedTrailerCode 
+          };
         }
-      } catch (e) { console.warn("Sync failed for", m.title); }
+      } catch (e) { console.warn("Daily Sync failed for", m.title); }
       return m;
     }));
+
     setMovies(prev => {
       const map = new Map(prev.map(o => [o.slug, o]));
       enriched.forEach(e => map.set(e.slug, e));
@@ -435,7 +456,6 @@ const WatchListPage = () => {
       filteredList = filteredList.filter(movie => movie.language.some(lang => userLangs.includes(lang)));
     }
     
-    // 🚀 NEW FEATURE: Shuffle movies within each genre on every load
     const result = filteredList.reduce((acc, movie) => {
       const genres = movie.tmdb_genres && movie.tmdb_genres.length > 0 ? movie.tmdb_genres : (movie.genres && movie.genres.length > 0 ? movie.genres : (movie.categories && movie.categories.length > 0 ? movie.categories : ["Others"]));
       genres.forEach((genre) => { 
@@ -445,7 +465,6 @@ const WatchListPage = () => {
       return acc;
     }, {});
 
-    // Shuffle implementation
     Object.keys(result).forEach(key => {
       result[key] = result[key].sort(() => 0.5 - Math.random());
     });
@@ -604,80 +623,93 @@ const WatchListPage = () => {
         </div>
       ) : (
         <>
-          {/* 🎬 HERO SECTION */}
+         {/* 🎬 HERO SECTION */}
 {heroMovies.length > 0 && (
   <div className="relative h-[65vh] sm:h-[90vh] w-full overflow-hidden bg-black">
-    {heroMovies.map((movie, idx) => (
-      <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-        <img src={movie.cover_poster} className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
-        
-        {idx === currentSlide && heroTrailerActive && movie.trailer_key && !isMobile && (
-          <div className="absolute inset-0 bg-black overflow-hidden">
-             <div className="relative w-full h-full scale-[1.35] pointer-events-none">
-              <iframe
-                src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-                title="Hero Trailer"
-                className="w-full h-full"
-                frameBorder="0"
-                allow="autoplay"
-              ></iframe>
-            </div>
-            
-            <button 
-              onClick={(e) => { e.preventDefault(); setIsMuted(!isMuted); }}
-              className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90"
-            >
-              {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-            </button>
-          </div>
-        )}
-
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">
-          <div className="max-w-4xl space-y-4 sm:space-y-6 pointer-events-auto">
-            
-            {/* Info Stack - becomes transparent when trailer plays after 5s */}
-            <div className={`space-y-4 sm:space-y-6 transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
-              
-              {/* 🚀 FIXED LOGO CONTAINER: Restricts both width and height */}
-              <div className="h-16 sm:h-28 md:h-36 w-[280px] sm:w-[450px] flex items-end">
-                {movie.title_logo ? (
-                    <img 
-                      src={movie.title_logo} 
-                      className="max-h-full max-w-full object-contain object-left drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]" 
-                      alt="" 
-                    />
-                ) : (
-                    <h1 className="text-3xl sm:text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none text-white">
-                      {movie.slug}
-                    </h1>
-                )}
+    {heroMovies.map((movie, idx) => {
+      // Find the most updated version of this movie from the main 'movies' state
+      // to ensure we have the newly fetched IMDb rating and Year
+      const liveMovieData = movies.find(m => m.slug === movie.slug) || movie;
+      
+      return (
+        <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+          <img 
+            src={liveMovieData.cover_poster} 
+            className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile ? "sm:opacity-0" : "opacity-100"}`} 
+            alt="" 
+          />
+          
+          {idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile && (
+            <div className="absolute inset-0 bg-black overflow-hidden">
+               <div className="relative w-full h-full scale-[1.35] pointer-events-none">
+                <iframe
+                  src={`https://www.youtube.com/embed/${liveMovieData.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${liveMovieData.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
+                  title="Hero Trailer"
+                  className="w-full h-full"
+                  frameBorder="0"
+                  allow="autoplay"
+                ></iframe>
               </div>
               
-              <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
-                <div className="flex items-center gap-1.5">
-                  <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
-                  <span className="text-white drop-shadow-md">{movie.imdbRating || "7.5"}</span>
+              <button 
+                onClick={(e) => { e.preventDefault(); setIsMuted(!isMuted); }}
+                className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90"
+              >
+                {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+              </button>
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">
+            <div className="max-w-4xl space-y-4 sm:space-y-6 pointer-events-auto">
+              
+              <div className={`space-y-4 sm:space-y-6 transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
+                
+                <div className="h-16 sm:h-28 md:h-36 w-[280px] sm:w-[450px] flex items-end">
+                  {liveMovieData.title_logo ? (
+                      <img 
+                        src={liveMovieData.title_logo} 
+                        className="max-h-full max-w-full object-contain object-left drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]" 
+                        alt="" 
+                      />
+                  ) : (
+                      <h1 className="text-3xl sm:text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none text-white">
+                        {liveMovieData.slug || liveMovieData.slug}
+                      </h1>
+                  )}
                 </div>
-                <span className="text-gray-300 drop-shadow-md font-black">{movie.year || "2024"}</span>
-                <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(movie.language)}</span>
-                {movie.genres && movie.genres.length > 0 && (
-                  <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
-                    {movie.genres.slice(0, 2).join(" | ")}
+                
+                <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
+                  <div className="flex items-center gap-1.5">
+                    <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
+                    {/* Correctly fetching the high-end IMDb Rating */}
+                    <span className="text-white drop-shadow-md">
+                        {liveMovieData.imdbRating || liveMovieData.imdb_rating || "7.5"}
+                    </span>
+                  </div>
+                  {/* Correctly fetching the Release Year */}
+                  <span className="text-gray-300 drop-shadow-md font-black">
+                      {liveMovieData.year || (liveMovieData.created_at ? new Date(liveMovieData.created_at).getFullYear() : "2024")}
                   </span>
-                )}
+                  <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(liveMovieData.language)}</span>
+                  {liveMovieData.genres && liveMovieData.genres.length > 0 && (
+                    <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
+                      {liveMovieData.genres.slice(0, 2).join(" | ")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{liveMovieData.description}</p>
               </div>
-              <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{movie.description}</p>
-            </div>
 
-            {/* Play Button */}
-            <Link to={`/watch/${movie.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest">
-              <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" /> 
-              <span className="text-[11px] sm:text-base tracking-widest font-black">PLAY NOW</span>
-            </Link>
+              <Link to={`/watch/${liveMovieData.slug}`} className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest">
+                <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" /> 
+                <span className="text-[11px] sm:text-base tracking-widest font-black">PLAY NOW</span>
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
-    ))}
+      );
+    })}
     <div className="hidden sm:flex absolute bottom-10 left-10 z-20 items-center gap-2">
       {heroMovies.map((_, idx) => (
         <button key={idx} onClick={() => setCurrentSlide(idx)} className={`transition-all duration-500 rounded-full h-1.5 ${idx === currentSlide ? "w-10 bg-blue-500 shadow-[0_0_100px_#3b82f6]" : "w-2 bg-white/30"}`} />
@@ -686,7 +718,6 @@ const WatchListPage = () => {
   </div>
 )}
           <main className={`relative z-20 pb-32 mt-4`}>
-            {/* CONTINUE WATCHING */}
             {continueList.length > 0 && (
               <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
                 <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest px-2 font-black"><Clock3 className="w-5 h-5" /> CONTINUE WATCHING</h2>
@@ -724,7 +755,6 @@ const WatchListPage = () => {
         </>
       )}
 
-      {/* 📱 MOBILE OVERLAY */}
       {selectedMovie && isMobile && (
         <div className="fixed inset-0 z-[200] bg-gray-950/98 backdrop-blur-xl flex flex-col animate-in fade-in slide-in-from-bottom duration-500" onClick={(e) => e.target === e.currentTarget && setSelectedMovie(null)}>
           <button onClick={() => setSelectedMovie(null)} className="absolute top-6 right-6 z-[210] p-3 bg-black/50 rounded-full text-white backdrop-blur-md active:scale-90 transition-transform"><X size={24} /></button>
@@ -809,14 +839,13 @@ const WatchListPage = () => {
         </div>
       )}
 
-      {/* 🖥️ DESKTOP OVERLAY */}
       {!isMobile && (
         <DesktopDetailOverlay 
           movie={selectedMovie} 
           onClose={() => setSelectedMovie(null)} 
           onNavigate={(m) => {
             saveRecentlyWatched(m);
-            navigate(`/watch/${m.slug}`, { state: { movie: m } }); // 🚀 Passing state to prevent re-fetch
+            navigate(`/watch/${m.slug}`, { state: { movie: m } }); 
             setSelectedMovie(null);
           }}
           relatedMovies={relatedMovies}

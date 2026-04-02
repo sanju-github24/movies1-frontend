@@ -106,7 +106,7 @@ const BlogViewer = () => {
       <main className="max-w-7xl mx-auto py-10 px-4 grid grid-cols-1 lg:grid-cols-4 gap-10">
         
         {/* Left content */}
-        <div className="lg:col-span-3 bg-white shadow-md rounded-md overflow-hidden">
+        <div className="lg:col-span-3 bg-gray-100 shadow-md rounded-md overflow-hidden">
           {/* Thumbnail */}
           {relatedMovies[0]?.cover_poster && (
             <div className="w-full h-[320px] sm:h-[400px] overflow-hidden">
@@ -124,8 +124,13 @@ const BlogViewer = () => {
               {blog.title}
             </h1>
 
+            {/*
+              CRITICAL: Render the AI-generated HTML content using dangerouslySetInnerHTML.
+              The 'max-w-none' class prevents tailwind's 'prose' styles from breaking custom
+              AI-generated styles (like dark backgrounds for embedded components).
+            */}
             <div
-              className="prose prose-lg max-w-none text-gray-700 leading-relaxed"
+              className="max-w-none" 
               dangerouslySetInnerHTML={{ __html: blog.content }}
             />
 
@@ -144,7 +149,7 @@ const BlogViewer = () => {
                     >
                       <div className="relative w-full h-60 overflow-hidden">
                         <img
-                          src={movie.cover_poster || movie.poster || "https://via.placeholder.com/300"}
+                          src={movie.cover_poster || movie.poster || "https://via.placeholder.com/300/333/fff?text=No+Cover"}
                           alt={movie.title}
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
@@ -158,7 +163,8 @@ const BlogViewer = () => {
                       </div>
                       <div className="p-4">
                         <h3 className="text-lg font-semibold text-[#333] group-hover:text-[#c5c107] transition">
-                          {movie.slug}
+                          {/* Corrected to display title */}
+                          {movie.title}
                         </h3>
                       </div>
                     </Link>
@@ -196,7 +202,7 @@ const BlogViewer = () => {
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <img
-                      src={nextBlog.thumbnail_url || "https://via.placeholder.com/300"}
+                      src={nextBlog.thumbnail_url || "https://via.placeholder.com/300/666/fff?text=Next+Blog"}
                       alt={nextBlog.title}
                       className="w-full h-48 object-cover"
                     />
@@ -222,24 +228,25 @@ const BlogViewer = () => {
               Trending Now
             </h3>
             <div className="space-y-5">
-              {recentBlogs.map((movie) => (
+              {recentBlogs.map((blogItem) => (
                 <Link
-                  key={movie.id}
-                  to={`/blogs/${movie.slug}`}
+                  key={blogItem.id}
+                  to={`/blogs/${blogItem.slug}`}
                   className="block group"
                 >
                   <div className="flex flex-col space-y-2 hover:scale-[1.02] transition">
                     <img
-                      src={movie.poster}
-                      alt={movie.title}
+                      // Using thumbnail_url for consistency with data fetched
+                      src={blogItem.thumbnail_url || "https://via.placeholder.com/300/666/fff?text=Blog+Thumb"}
+                      alt={blogItem.title}
                       className="rounded-md shadow-sm object-cover h-40 w-full"
                     />
                     <div>
-                      <h4 className="text-base font-semibold text-[#222] group-hover:text-[#479e47] transition leading-snug">
-                        {movie.slug}
+                      <h4 className="text-base font-semibold text-[#222] group-hover:text-[#c5c107] transition leading-snug">
+                        {blogItem.title}
                       </h4>
                       <p className="text-sm text-gray-500 mt-1">
-                        {new Date(movie.created_at).toLocaleDateString()}
+                        {new Date(blogItem.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

@@ -21,6 +21,36 @@ const Login = () => {
   // Define the specific admin email
   const ADMIN_EMAIL = 'sanjusanjay0444@gmail.com';
 
+  // --- Session Setup Helper Function ---
+  const setupUserSession = (data) => {
+    // 🌟 ADMIN BYPASS LOGIC 🌟
+    const isUserAdmin = data.user.email === ADMIN_EMAIL;
+    
+    // Check if the login/register is for admin
+    const isBypassingVerification = isUserAdmin && data.user.isAccountVerified === false;
+    
+    // Store user session data
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('userData', JSON.stringify(data.user));
+    localStorage.setItem('token', data.token); 
+  
+    setIsLoggedIn(true);
+    setUserData(data.user);
+    setIsAdmin(isUserAdmin);
+  
+    // Show appropriate toast message
+    if (isBypassingVerification) {
+       toast.warn(`🚨 Admin Override: Login successful for ${data.user.email} without verification.`);
+    } else {
+       toast.success(`✅ Login successful! Welcome, ${data.user.name || data.user.email}`);
+    }
+    
+    // Navigate to the home page
+    navigate('/');
+  };
+  // --- End Session Setup Helper ---
+
+
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -30,7 +60,6 @@ const Login = () => {
     try {
       const endpoint = mode === 'Sign Up' ? 'register' : 'login';
       
-      // 🚀 Use a relative path to enable the Vite proxy (if configured)
       const url = `/api/auth/${endpoint}`; 
       
       const payload = mode === 'Sign Up' ? { name, email, password } : { email, password };
@@ -41,52 +70,20 @@ const Login = () => {
         
         // --- Success Logic ---
         if (mode === 'Sign Up') {
-          toast.success(`🎉 Registration successful! Please check your email to verify your account.`);
+          // 🚀 CRITICAL CHANGE: Immediately log user in after successful registration
+          setupUserSession(data);
           
           // Clear form fields
           setName('');
           setEmail('');
           setPassword('');
           
-          // Switch to Login mode and optionally guide them to a verification page
-          setMode('Login');
-          navigate('/verify-account'); // Redirect to a page that tells them to verify
-          
         } else { // Login Success
-          
-          // 🌟 ADMIN BYPASS LOGIC 🌟
-          // This allows the admin email to proceed after a successful API call,
-          // regardless of the verification status returned by the backend (data.user.isVerified).
-          
-          // Check if this is the admin email
-          const isUserAdmin = data.user.email === ADMIN_EMAIL;
-          
-          // Check if the login is an admin logging in without verification (for specific warning)
-          const isBypassingVerification = isUserAdmin && data.user.isVerified === false;
-          
-          // Store user session data
-          localStorage.setItem('isLoggedIn', 'true');
-          localStorage.setItem('userData', JSON.stringify(data.user));
-          localStorage.setItem('token', data.token); 
-        
-          setIsLoggedIn(true);
-          setUserData(data.user);
-          
-          // Set isAdmin state
-          setIsAdmin(isUserAdmin);
-        
-          // Show appropriate toast message
-          if (isBypassingVerification) {
-             toast.warn(`🚨 Admin Override: Login successful for ${data.user.email} without verification.`);
-          } else {
-             toast.success(`✅ Login successful! Welcome back, ${data.user.name || data.user.email}`);
-          }
-        
-          navigate('/');
+          setupUserSession(data);
         }
         
       } else {
-        // Backend returns success: false with a message (e.g., 'Account not verified')
+        // Backend returns success: false with a message
         toast.error(data.message || 'Unknown error occurred.');
       }
       
@@ -94,7 +91,6 @@ const Login = () => {
       // Network/Server error
       console.error('Login/Register Error:', error.response?.data || error.message);
       
-      // Use the message from the backend response, or a generic error message
       const errorMessage = error.response?.data?.message || 'Something went wrong. Please check your connection.';
       toast.error(errorMessage);
       

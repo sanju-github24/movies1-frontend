@@ -7,13 +7,15 @@ import axios from "axios";
 import { Helmet } from "react-helmet";
 
 const EmailVerify = () => {
+  // CRITICAL: Ensure userData is destructured to access the email
   const { backendUrl, isLoggedin, userData, getUserData } = useContext(AppContext);
   const navigate = useNavigate();
   const inputRefs = useRef([]);
 
   useEffect(() => {
+    // Redirect if already verified
     isLoggedin && userData && userData.isAccountVerified && navigate("/");
-  }, [isLoggedin, userData]);
+  }, [isLoggedin, userData, navigate]);
 
   const handleInput = (e, index) => {
     if (e.target.value.length > 0 && index < inputRefs.current.length - 1) {
@@ -37,19 +39,34 @@ const EmailVerify = () => {
     });
   };
 
-  const onSumbitHandler = async (e) => {
+  // 1. Corrected typo from onSumbitHandler to onSubmitHandler
+  const onSubmitHandler = async (e) => {
     e.preventDefault();
+    
+    // Safety check: ensure userData and email exist before proceeding
+    if (!userData || !userData.email) {
+        toast.error("User email data is missing. Please try logging in again.");
+        return;
+    }
+
     try {
       const otpArray = inputRefs.current.map((e) => e.value);
       const otp = otpArray.join("");
+      const userEmail = userData.email; // Get the user's email
+
+      // 2. CRITICAL FIX: Send both email and token (aliased as 'otp')
       const { data } = await axios.post(
         backendUrl + "/api/auth/verify-account",
-        { otp },
+        { 
+          email: userEmail, // Send the email
+          token: otp       // Send the OTP code (named 'token' in the backend destructuring)
+        },
         { withCredentials: true }
       );
+      
       if (data.success) {
         toast.success(data.message);
-        getUserData();
+        getUserData(); // Refresh user data to update verification status
         navigate("/");
       } else {
         toast.error(data.message);
@@ -80,7 +97,8 @@ const EmailVerify = () => {
         <div className="absolute inset-0 backdrop-blur-[2px]" />
 
         <form
-          onSubmit={onSumbitHandler}
+          // 3. Updated function name here
+          onSubmit={onSubmitHandler}
           className="relative z-10 bg-blue-900/40 backdrop-blur-md p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-white/10 text-white"
         >
           <h1 className="text-3xl font-bold text-center mb-4">Email Verification</h1>

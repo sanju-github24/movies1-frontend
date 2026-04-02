@@ -1,18 +1,13 @@
 // src/pages/LiveStreamPlayer.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom"; 
-import { MonitorPlay, Zap, ArrowLeft, Loader2, Video, Clock } from "lucide-react"; 
+import { MonitorPlay, Zap, ArrowLeft, Loader2, Video, Clock, Trophy, Share2, Info, Play } from "lucide-react"; 
 import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient'; 
 import VideoPlayer from "./VideoPlayer"; 
 
-// --- AD CONSTANTS (UPDATED) ---
 const WINFIX_AFFILIATE_LINK = "https://winfix.fun/register?campaignId=anchormovies-2407";
-const BANNER_IMAGE_URL = "https://i.postimg.cc/NfKD2cjX/banner.jpg"; // NEW EXTERNAL URL
-const BLINKING_CTA_CLASS = "animate-pulse duration-700";
-// --------------------
-
-// NOTE: This component is optimized for fetching Live Match data (HLS/iFrame URLs) 
+const BANNER_IMAGE_URL = "https://i.postimg.cc/NfKD2cjX/banner.jpg";
 
 const LiveStreamPlayer = () => {
   const { slug } = useParams(); 
@@ -21,338 +16,283 @@ const LiveStreamPlayer = () => {
   const [matchData, setMatchData] = useState(null); 
   const [highlightList, setHighlightList] = useState([]); 
   const [activeHighlightSource, setActiveHighlightSource] = useState(null); 
+  const [isSwitching, setIsSwitching] = useState(false); // NEW: Transition guard
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- Primary Data Fetching ---
   useEffect(() => {
     if (!slug) {
-        setError("Invalid match link provided.");
+        setError("Invalid match link.");
         setLoading(false);
         return;
     }
 
     const fetchMatchAndHighlights = async () => {
         setLoading(true);
-        setError(null);
+        try {
+            const { data: match, error: matchError } = await supabase
+                .from('live_matches')
+                .select('*')
+                .eq('link_slug', slug)
+                .single();
 
-        // 1. Fetch Main Match Data
-        const { data: match, error: matchError } = await supabase
-            .from('live_matches')
-            .select('id, title, league, sport, status, result_summary, team_1, team_2, team_1_score, team_2_score, link_slug, hls_url, iframe_html')
-            .eq('link_slug', slug)
-            .single();
-
-        if (matchError || !match) {
-            console.error("Match Fetch Error:", matchError);
-            setError("Could not find the requested match or stream data.");
-            setLoading(false);
-            return;
-        }
-
-        setMatchData(match);
-        
-        // 2. Determine initial source
-        let initialSource = null;
-        if (match.status === 'LIVE' || match.status === 'SCHEDULED') {
-            initialSource = match.hls_url || match.iframe_html;
-        }
-        
-        // 3. ALWAYS fetch highlights if the match ID is available
-        const { data: highlights, error: highlightsError } = await supabase
-            .from('match_highlights')
-            .select('id, highlight_title, highlight_type, highlight_source')
-            .eq('match_id', match.id)
-            .order('created_at', { ascending: true });
-
-        if (highlightsError) {
-            console.error("Highlights Fetch Error:", highlightsError);
-            toast.warn("Could not load specific highlights for this match.");
-        } else {
-            setHighlightList(highlights);
-            
-            // If the match is ENDED AND we have highlights, set the first highlight as the default source
-            if (match.status === 'ENDED' && highlights.length > 0) {
-                 initialSource = highlights[0].highlight_source;
+            if (matchError || !match) {
+                setError("Stream currently unavailable.");
+                setLoading(false);
+                return;
             }
+
+            setMatchData(match);
+            let initialSource = match.hls_url || match.iframe_html;
+            
+            const { data: highlights } = await supabase
+                .from('match_highlights')
+                .select('*')
+                .eq('match_id', match.id)
+                .order('created_at', { ascending: true });
+
+            if (highlights) {
+                setHighlightList(highlights);
+                if (match.status === 'ENDED' && highlights.length > 0) {
+                     initialSource = highlights[0].highlight_source;
+                }
+            }
+            
+            setActiveHighlightSource(initialSource);
+        } catch (err) {
+            setError("Connection error.");
+        } finally {
+            setLoading(false);
         }
-        
-        setActiveHighlightSource(initialSource);
-        setLoading(false);
     };
 
     fetchMatchAndHighlights();
   }, [slug]);
 
-  // Handler to switch the active highlight source
-  const handleHighlightSelect = (source) => {
-      setActiveHighlightSource(source);
-      window.scrollTo({ top: 0, behavior: 'smooth' }); 
-  };
-  
-  // Handler to switch back to Live Stream
-  const handleLiveSelect = () => {
-      if (matchData) {
-          const liveSource = matchData.hls_url || matchData.iframe_html;
-          setActiveHighlightSource(liveSource);
-          window.scrollTo({ top: 0, behavior: 'smooth' }); 
-      }
-  };
+  // SAFE SWITCHER: Prevents white screens by cleaning up state before changing source
+  const handleSourceSelect = useCallback((source) => {
+    if (!source || source === activeHighlightSource) return;
+    
+    setIsSwitching(true);
+    setActiveHighlightSource(source);
+    
+    // Smooth transition to allow React to unmount old instance
+    setTimeout(() => {
+        setIsSwitching(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  }, [activeHighlightSource]);
 
-
-  // --- TRANSFORMATION: Create playerOverlayData structure ---
   const playerOverlayData = useMemo(() => {
-    if (!matchData) {
-        return { title: 'Stream Player', slug: slug };
-    }
-    
-    const isLive = matchData.status === 'LIVE';
-    const currentStatus = isLive ? 'LIVE' : matchData.status;
-    const streamTitle = `${matchData.title} (${currentStatus})`;
-
-    const overviewText = `${matchData.team_1} (${matchData.team_1_score || 'N/A'}) vs ${matchData.team_2} (${matchData.team_2_score || 'N/A'}). ${matchData.result_summary}`;
-    
+    if (!matchData) return { title: 'Stream Player', slug: slug };
     return {
-      title: streamTitle,
+      title: matchData.title,
       slug: matchData.link_slug,
-      overview: overviewText,
-      genres: [matchData.sport, matchData.league].filter(Boolean),
-      
-      isLiveStream: isLive,
-      liveStatus: currentStatus,
-      liveScore: isLive ? `${matchData.team_1_score} | ${matchData.team_2_score}` : null,
+      overview: matchData.result_summary,
+      genres: [matchData.sport, matchData.league],
     };
   }, [matchData, slug]);
 
-
-  // --- Player Rendering Logic ---
   const renderPlayer = () => {
-    
-    // ... (Loading/Error UI remains the same)
-    if (loading || error || !matchData) {
-        if (loading) {
-            return (
-                <div className="flex flex-col items-center justify-center h-full">
-                    <Loader2 className="w-10 h-10 animate-spin text-red-500" />
-                    <p className="mt-4 text-gray-400">Loading stream data...</p>
-                </div>
-            );
-        }
-        if (error || !matchData) {
-            return (
-                <div className="flex flex-col items-center justify-center h-full p-10 bg-gray-900">
-                    <p className="text-xl text-red-500 font-bold">{error || "No match data available."}</p>
-                    <button onClick={() => navigate('/live-cricket')} className="mt-4 text-blue-400 hover:text-blue-200">
-                        Go back to Live Match List
-                    </button>
-                </div>
-            );
-        }
-    }
+    if (loading || isSwitching) return (
+        <div className="flex flex-col items-center justify-center h-full bg-gray-950">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.3em]">
+                {isSwitching ? "Syncing Stream..." : "Connecting to Server"}
+            </p>
+        </div>
+    );
 
-    // Determine source properties
-    const isHLS = activeHighlightSource && activeHighlightSource.includes('.m3u8');
-    const isIFrame = activeHighlightSource && activeHighlightSource.startsWith('<iframe');
-    const isLiveStream = matchData.status === 'LIVE'; 
-    const currentSource = activeHighlightSource;
+    const isIFrame = activeHighlightSource?.trim().startsWith('<iframe');
+    const isPlayingLive = matchData?.status === 'LIVE' && (activeHighlightSource === matchData?.hls_url || activeHighlightSource === matchData?.iframe_html);
 
-    // We need to define isPlayingLive here based on the current active source matching the live sources
-    const hasLiveSource = matchData && (matchData.hls_url || matchData.iframe_html);
-    const isPlayingLiveSource = activeHighlightSource === matchData?.hls_url || activeHighlightSource === matchData?.iframe_html;
-    const isPlayingLive = isLiveStream && isPlayingLiveSource;
-
-    // Priority 1: HLS/Raw URL Stream (VOD or Live)
-    if (isHLS || (!isIFrame && currentSource)) { 
+    if (isIFrame) {
       return (
-        <div className="w-full h-full relative bg-black">
-          <VideoPlayer 
-            key={currentSource} 
-            src={currentSource} 
-            title={playerOverlayData.title}
-            playerOverlayData={playerOverlayData}
-            isLive={isPlayingLive} 
-          />
-          {/* Status Indicator */}
+        <div className="w-full h-full relative group bg-black" key={activeHighlightSource}>
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center" dangerouslySetInnerHTML={{ __html: activeHighlightSource }} />
           {isPlayingLive && (
-              <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg">
-                <Zap className="w-3 h-3 fill-white" /> LIVE
-              </div>
+             <div className="absolute top-4 left-4 pointer-events-none z-20">
+                <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-2xl animate-pulse">
+                    <Zap size={10} fill="white" /> LIVE
+                </span>
+             </div>
           )}
         </div>
       );
     }
     
-    // Priority 2: iFrame Embed (VOD or Live)
-    if (isIFrame) {
-      return (
-        <div 
-          key={currentSource} 
-          className="w-full h-full"
-          dangerouslySetInnerHTML={{ __html: currentSource }}
-        />
-      );
+    if (activeHighlightSource) {
+        return (
+            <div className="w-full h-full" key={activeHighlightSource}>
+                <VideoPlayer 
+                    src={activeHighlightSource} 
+                    title={playerOverlayData.title}
+                    playerOverlayData={playerOverlayData}
+                    isLive={isPlayingLive} 
+                />
+            </div>
+        );
     }
-    
-    // Last Fallback: No source available to play
+
     return (
-        <div className="flex flex-col items-center justify-center h-full p-10 bg-gray-900">
-            <p className="text-xl text-yellow-500">
-                {matchData.status === 'SCHEDULED' ? 'Match is scheduled, waiting for stream source.' : 'No active source selected or available.'}
-            </p>
-            {matchData.status === 'SCHEDULED' && (
-                <p className="text-gray-400 mt-2">Stream will start closer to the match time.</p>
-            )}
+        <div className="flex flex-col items-center justify-center h-full bg-gray-900 border-2 border-dashed border-gray-800 rounded-3xl m-4">
+            <Clock className="w-12 h-12 text-gray-700 mb-4" />
+            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Waiting for Broadcast</p>
         </div>
     );
   };
-  
-  const currentTitle = matchData?.title || 'Stream Player';
-  const currentStatus = matchData?.status || 'UNKNOWN';
-
-  // Check if live stream source exists for the button logic
-  const hasLiveSource = matchData && (matchData.hls_url || matchData.iframe_html);
-  // Check if current source is the active live source
-  const isPlayingLiveSource = activeHighlightSource === matchData?.hls_url || activeHighlightSource === matchData?.iframe_html;
-  // Check if the current source is the live stream (useful for button state)
-  const isPlayingLive = hasLiveSource && isPlayingLiveSource;
-
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-950 text-white selection:bg-blue-500/30">
       
-      {/* Header/Status Bar */}
-      <header className="bg-gray-800 p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center">
-            <button onClick={() => navigate('/live-cricket')} className="mr-3 p-1 rounded-full hover:bg-gray-700 transition">
-                <ArrowLeft className="w-5 h-5 text-red-500" />
-            </button>
-            <h1 className="text-xl font-bold text-white truncate max-w-[calc(100vw-200px)]">
-                {currentTitle} - {matchData?.league}
-            </h1>
-        </div>
-        <div className={`text-sm font-semibold px-3 py-1 rounded-full ${currentStatus === 'LIVE' ? 'bg-red-600' : 'bg-gray-600'}`}>
-            {currentStatus}
+      {/* Cinematic Header */}
+      <header className="bg-gray-950/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-[100]">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <button onClick={() => navigate('/live-cricket')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all">
+                    <ArrowLeft size={20} className="text-blue-500" />
+                </button>
+                <div>
+                    <h1 className="text-sm sm:text-lg font-black uppercase tracking-tighter leading-none">
+                        {matchData?.title || 'Live Stream'}
+                    </h1>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                        {matchData?.league || 'International'} • Stream 01
+                    </p>
+                </div>
+            </div>
+            <div className="flex items-center gap-3">
+                <button onClick={() => {navigator.clipboard.writeText(window.location.href); toast.success("Share link copied!");}} className="p-2 bg-white/5 rounded-full hover:text-blue-400 transition-colors">
+                    <Share2 size={18} />
+                </button>
+                <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${matchData?.status === 'LIVE' ? 'bg-red-600/10 border-red-500 text-red-500 animate-pulse' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
+                    {matchData?.status || 'Offline'}
+                </span>
+            </div>
         </div>
       </header>
 
-{/* Video Player Area */}
-      <div className="w-full max-w-7xl mx-auto aspect-video sm:aspect-auto sm:h-[80vh] bg-black">
-        {renderPlayer()}
-      </div>
-
-      {/* --- AFFILIATE BANNER PLACEMENT (MAKING ENTIRE BLOCK CLICKABLE) --- */}
-      <div className="w-full max-w-7xl mx-auto p-4 bg-gray-950 text-center border-b border-gray-700">
-          <div className="relative bg-gray-800 p-4 rounded-xl shadow-lg border border-yellow-500/50">
-              
-              {/* WRAPPER: Entire promotional block is now wrapped in the affiliate anchor tag */}
-              <a
-                href={WINFIX_AFFILIATE_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-center" // Ensure the anchor takes up the full width
-              >
-                  {/* Banner Image (Now clickable) */}
-                  <img
-                    src={BANNER_IMAGE_URL} 
-                    alt="Claim your bonus"
-                    className="w-full object-cover rounded-lg mb-4 border border-gray-700 hover:opacity-90 transition duration-200"
-                  />
-
-                  {/* Promotional Title (Still clickable as it's inside the anchor) */}
-                  <h2 className="text-lg sm:text-xl font-extrabold text-yellow-300 mb-3">
-                    600% BONUS ON 1ST DEPOSIT!
-                  </h2>
-
-                  {/* CTA Button (Still clickable, but now relies on the parent anchor tag) */}
-                  <div
-                    // The button style is now a plain div/span inside the anchor. 
-                    // We remove the 'a' tag here as it's redundant and potentially buggy inside another 'a' tag.
-                    className={`w-full max-w-sm mx-auto block bg-red-600 text-white py-3 rounded-xl shadow-lg text-base font-bold transition transform hover:scale-[1.02] ${BLINKING_CTA_CLASS}`}
-                  >
-                    CREATE NEW ID & GET BONUS! HURRY!
-                  </div>
-              </a>
-              {/* END WRAPPER */}
-              
-              <p className="text-xs text-gray-400 mt-3">
-                *Limited time offer. Terms and conditions apply.
-              </p>
-          </div>
-      </div>
-      {/* --- END AFFILIATE BANNER --- */}
-
-
-      {/* Match Details Section */}
-      {matchData && (
-        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-            
-            {/* --- PLAYER SELECTION BUTTONS (LIVE / HIGHLIGHTS) --- */}
-            {(matchData.status === 'LIVE' || matchData.status === 'SCHEDULED') && hasLiveSource && (
-                <div className="mb-4">
-                    <button
-                        onClick={handleLiveSelect}
-                        disabled={isPlayingLive}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 
-                            ${isPlayingLive
-                                ? 'bg-red-700 text-white cursor-default' 
-                                : 'bg-red-500 hover:bg-red-600 text-white'
-                            } ${!hasLiveSource ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        <MonitorPlay className="w-4 h-4"/> 
-                        {matchData.status === 'LIVE' ? 'Watch Live Now' : 'Stream/Countdown'}
-                    </button>
+      {/* Main Player Section */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 space-y-6">
+        
+        {/* Scoreboard Element */}
+        {matchData?.status === 'LIVE' && (
+            <div className="mx-4 bg-gray-900 border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-2xl">
+                <div className="flex-1 flex justify-center items-center gap-4">
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-tighter text-right w-1/3">{matchData.team_1}</span>
+                    <span className="text-xl sm:text-3xl font-black text-blue-500 bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-500/20">{matchData.team_1_score || '0'}</span>
                 </div>
-            )}
-            {/* --- END LIVE BUTTON --- */}
+                <div className="px-4 text-[10px] font-black text-gray-600 uppercase">VS</div>
+                <div className="flex-1 flex justify-center items-center gap-4">
+                    <span className="text-xl sm:text-3xl font-black text-red-500 bg-red-500/10 px-4 py-2 rounded-xl border border-red-500/20">{matchData.team_2_score || '0'}</span>
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-tighter text-left w-1/3">{matchData.team_2}</span>
+                </div>
+            </div>
+        )}
 
+        <div className="relative w-full aspect-video sm:rounded-3xl overflow-hidden bg-black shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5 ring-1 ring-white/10">
+          {renderPlayer()}
+        </div>
 
-            {/* --- HIGHLIGHT SEGMENTS SECTION (Available if list > 0) --- */}
-            {highlightList.length > 0 && (
-                <div className="mb-8">
-                    <h2 className="text-2xl font-bold mt-4 mb-3 flex items-center gap-2 border-b border-gray-700 pb-2">
-                        <Video className="w-6 h-6 text-green-500"/> Available Highlights
-                    </h2>
-                    <div className="flex flex-wrap gap-3">
-                        {highlightList.map((highlight, index) => (
-                            <button
-                                key={highlight.id}
-                                onClick={() => handleHighlightSelect(highlight.highlight_source)}
-                                // Button state is controlled by comparing against the full highlight source URL
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition 
-                                            ${activeHighlightSource === highlight.highlight_source
-                                                ? 'bg-green-600 text-white shadow-lg' 
-                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                            }`}
-                            >
-                                {highlight.highlight_title || `Segment ${index + 1}`}
-                                {highlight.highlight_type && highlight.highlight_type !== 'FULL' && (
-                                    <span className="ml-2 text-xs opacity-70">({highlight.highlight_type.replace('DAY', 'Day ').replace('INNINGS', 'Inn ')})</span>
-                                )}
-                            </button>
-                        ))}
+        {/* Affiliate Block */}
+        <div className="mx-4">
+            <a href={WINFIX_AFFILIATE_LINK} target="_blank" rel="noopener noreferrer" className="group block relative overflow-hidden bg-gray-900 border border-yellow-500/30 rounded-3xl p-6 shadow-2xl transition-all hover:border-yellow-500">
+                <div className="absolute top-0 left-0 bg-yellow-500 text-black text-[10px] font-black px-4 py-1 rounded-br-2xl uppercase tracking-widest z-10 shadow-lg">
+                    Premium Offer
+                </div>
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-full md:w-64 h-32 relative overflow-hidden rounded-2xl border border-white/10 shadow-lg">
+                        <img src={BANNER_IMAGE_URL} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Promo" />
+                    </div>
+                    <div className="flex-1 text-center md:text-left space-y-4">
+                        <h2 className="text-2xl font-black uppercase tracking-tighter text-yellow-400">
+                            Claim 600% Welcome Bonus
+                        </h2>
+                        <div className="bg-red-600 group-hover:bg-red-500 text-white font-black py-3 rounded-2xl text-center text-sm shadow-xl shadow-red-600/20 animate-pulse transition-all">
+                            CREATE NEW ID & GET BONUS NOW!
+                        </div>
                     </div>
                 </div>
-            )}
-            {/* --- END HIGHLIGHT SEGMENTS SECTION --- */}
+            </a>
+        </div>
 
+        {/* Controls & Summary */}
+        <div className="mx-4 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Highlights Column */}
+            <div className="lg:col-span-2 space-y-6">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                    <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                        <Video size={16} />
+                    </div>
+                    <h2 className="text-sm font-black uppercase tracking-widest">Match Highlights</h2>
+                </div>
 
-            <h2 className="text-2xl font-bold mt-4 mb-2 flex items-center gap-2">
-                <MonitorPlay className="w-5 h-5 text-red-500"/> Match Summary
-            </h2>
-            <div className="bg-gray-800 p-4 rounded-lg">
-                <p className="text-gray-300 font-semibold mb-1">
-                    Score: {matchData.team_1} ({matchData.team_1_score || 'N/A'}) vs {matchData.team_2} ({matchData.team_2_score || 'N/A'})
-                </p>
-                {matchData.status === 'SCHEDULED' && (
-                     <p className="text-yellow-400 font-medium flex items-center gap-1 mt-1">
-                        <Clock className="w-4 h-4"/> Match is scheduled. Stream will begin closer to start time.
-                    </p>
-                )}
-                <p className="text-gray-400 mt-2">{matchData.result_summary}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* BUTTON TO RETURN TO LIVE STREAM */}
+                    {(matchData?.hls_url || matchData?.iframe_html) && (
+                        <button
+                            onClick={() => handleSourceSelect(matchData.hls_url || matchData.iframe_html)}
+                            className={`p-4 rounded-2xl flex items-center justify-between text-left transition-all border ${activeHighlightSource === (matchData.hls_url || matchData.iframe_html) ? 'bg-red-600 border-red-400 shadow-xl' : 'bg-gray-900/50 border-white/5 hover:bg-gray-800'}`}
+                        >
+                            <div className="flex items-center gap-4">
+                                <Zap size={14} className={activeHighlightSource === (matchData.hls_url || matchData.iframe_html) ? 'text-white' : 'text-red-500'} />
+                                <span className="text-xs font-black uppercase">Live Feed</span>
+                            </div>
+                            <span className="text-[8px] font-black opacity-60 uppercase">Real-Time</span>
+                        </button>
+                    )}
+
+                    {highlightList.map((highlight, idx) => (
+                        <button
+                            key={highlight.id}
+                            onClick={() => handleSourceSelect(highlight.highlight_source)}
+                            className={`p-4 rounded-2xl flex items-center justify-between text-left transition-all border ${activeHighlightSource === highlight.highlight_source ? 'bg-blue-600 border-blue-400 shadow-xl' : 'bg-gray-900/50 border-white/5 hover:bg-gray-800'}`}
+                        >
+                            <div className="flex items-center gap-4 overflow-hidden">
+                                <Play size={14} className={activeHighlightSource === highlight.highlight_source ? 'text-white' : 'text-blue-500'} fill="currentColor" />
+                                <span className="text-xs font-bold truncate">{highlight.highlight_title || `Segment ${idx + 1}`}</span>
+                            </div>
+                            <span className="text-[9px] font-black opacity-40 uppercase tracking-tighter ml-2">
+                                {highlight.highlight_type || 'Clip'}
+                            </span>
+                        </button>
+                    ))}
+                    
+                    {highlightList.length === 0 && (
+                        <p className="text-gray-600 text-xs font-bold italic p-4 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800 col-span-full">
+                            Highlights will appear here during/after the match.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {/* Summary Column */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                    <div className="w-8 h-8 bg-gray-800 rounded-xl flex items-center justify-center">
+                        <Info size={16} />
+                    </div>
+                    <h2 className="text-sm font-black uppercase tracking-widest">Match Information</h2>
+                </div>
+                
+                <div className="bg-gray-900/50 rounded-3xl p-6 border border-white/5 space-y-4 shadow-xl">
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Current Summary</p>
+                        <p className="text-sm font-bold text-blue-400 leading-relaxed">{matchData?.result_summary || 'Toss coming soon...'}</p>
+                    </div>
+                    <div className="space-y-1 pt-4 border-t border-white/5">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Competition</p>
+                        <p className="text-sm font-bold">{matchData?.sport} • {matchData?.league}</p>
+                    </div>
+                </div>
             </div>
         </div>
-      )}
-      
+      </main>
+
+      <footer className="mt-20 py-10 border-t border-white/5 text-center bg-black/30">
+          <p className="text-[9px] font-black text-gray-700 uppercase tracking-[0.6em]">Premium Sports Streaming • AnchorMovies 2025</p>
+      </footer>
     </div>
   );
 };

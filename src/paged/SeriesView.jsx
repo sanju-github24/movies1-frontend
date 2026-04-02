@@ -1,426 +1,270 @@
-import React, { useState, useEffect } from "react";
-import { useParams, Link } from 'react-router-dom';
-import { MonitorPlay, ArrowLeft, Clock, Zap, Calendar, Box, Video } from "lucide-react"; 
+// src/pages/SeriesView.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { MonitorPlay, ArrowLeft, Zap, Calendar, Box, Video, PlayCircle, Loader2, Info } from "lucide-react"; 
 import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient';
 import { DateTime } from 'luxon';
 
-// --- Shared Helper: Formats highlight type for display ---
-const formatHighlightType = (type) => {
-    if (!type || type === 'FULL') return 'Full Highlight';
-    // Ensure capitalization for display consistency
-    return type.replace('DAY', 'Day ').replace('INNINGS', 'Inn ').toLowerCase().split(' ').map(s => s.charAt(0).toUpperCase() + s.substring(1)).join(' ');
-};
-
-// --- NEW: Highlight Card Component ---
+/* ================= COMPONENT: HIGHLIGHT CARD ================= */
 const HighlightCard = ({ highlight, matchPoster, matchSlug }) => {
-    // Note: The player component (LiveStreamPlayer) must read the ?segment= parameter
-    const highlightLink = `/live-cricket/player/${matchSlug}?highlightId=${highlight.id}`; 
+    if (!highlight) return null;
+    const highlightLink = `/live-cricket/player/${matchSlug || 'unknown'}?highlightId=${highlight.id}`; 
     
     return (
         <Link 
             to={highlightLink} 
-            className="group block w-full relative overflow-hidden rounded-lg shadow-xl cursor-pointer transform transition duration-300 hover:shadow-2xl hover:scale-[1.02] bg-gray-800"
+            className="group relative bg-gray-900 rounded-2xl overflow-hidden border border-white/5 transition-all hover:border-green-500/50 hover:shadow-2xl"
         >
-            {/* Background Image (Match Poster) */}
-            <div 
-                className="w-full h-48 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                style={{ backgroundImage: `url(${matchPoster})` }}
-                aria-label={highlight.highlight_title}
-            />
-
-            {/* Black Overlay */}
-            <div className="absolute inset-0 bg-black/50"></div>
-            
-            {/* Live Now Tag (Using Video icon) */}
-            <div className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded text-white bg-green-600 flex items-center gap-1`}>
-                <Video className="w-3 h-3 fill-white" /> HIGHLIGHT
+            <div className="aspect-video relative overflow-hidden bg-gray-800">
+                <img 
+                    src={matchPoster || "/default-cricket.jpg"} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-60" 
+                    alt="Highlight"
+                    onError={(e) => { e.target.src = "/default-cricket.jpg"; }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent" />
+                <div className="absolute top-3 left-3">
+                    <span className="flex items-center gap-1.5 bg-green-600 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg uppercase">
+                        <Video size={10} fill="white" /> Highlight
+                    </span>
+                </div>
             </div>
-
-            {/* Highlight Info (Bottom Section - Overlaid) */}
-            <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                
-                {/* Highlight Title */}
-                <h3 className="text-lg font-extrabold text-white leading-tight">
-                    {highlight.highlight_title}
-                </h3>
-                
-                {/* Segment Type */}
-                <p className="text-xs font-semibold text-yellow-400 mt-1 flex items-center gap-1">
-                    <Zap className="w-3 h-3 fill-yellow-400"/> 
-                    {formatHighlightType(highlight.highlight_type)}
-                </p>
-
-                {/* Match Summary/Update (Placeholder for context) */}
-                <p className="text-xs text-gray-400 mt-1 truncate">
-                    Match: {highlight.match_title}
-                </p>
+            <div className="p-4">
+                <h3 className="text-sm font-black uppercase tracking-tighter text-gray-100 line-clamp-1">{highlight.highlight_title || "Match Clip"}</h3>
+                <p className="text-[10px] font-bold text-gray-500 uppercase mt-1 truncate">Match: {highlight.match_title || "Cricket Match"}</p>
             </div>
         </Link>
     );
 };
-// --- END Highlight Card Component ---
 
-
-// --- Reusable Match Card Component (No changes) ---
+/* ================= COMPONENT: MATCH CARD ================= */
 const MatchCard = ({ match }) => {
-    
+    if (!match) return null;
     const isLive = match.status === 'LIVE';
-    const isScheduled = match.status === 'SCHEDULED';
-    
-    const statusClass = isLive 
-        ? 'bg-red-600' 
-        : isScheduled 
-        ? 'bg-blue-600'
-        : 'bg-gray-700';
-
-    // *** Logic to determine if a scheduled match has passed its start time ***
-    let isScheduledTimePassed = false;
-    let scheduledMessage = match.live_start_time;
-    let finalStatus = match.status; 
-
-    if (isScheduled && match.live_start_time) {
-        try {
-            const startTime = match.live_start_datetime 
-                ? DateTime.fromISO(match.live_start_datetime)
-                : DateTime.fromFormat(match.live_start_time, "h:mm a ZZZ", { zone: 'system' });
-            
-            if (startTime.isValid && startTime < DateTime.now().plus({ minutes: 15 })) {
-                isScheduledTimePassed = true;
-                scheduledMessage = "Starting Soon";
-                finalStatus = 'Starting Soon';
-            }
-        } catch (e) {
-            console.warn("Failed to parse match time:", match.live_start_time, match.live_start_datetime);
-        }
-    }
-    
-    // Determine the final link target
-    // All playable matches (LIVE/ENDED/Starting Soon) go to the primary player route.
-    const playerLink = isScheduled && !isScheduledTimePassed 
-        ? `/live-cricket/player/${match.link_slug}` 
-        : `/live-cricket/player/${match.link_slug}`;
-    
-    // Determine if the card should be disabled visually
-    const isDisabled = isScheduled && !isScheduledTimePassed;
-    
-    const handleClick = (e) => {
-        if (isDisabled) {
-            e.preventDefault();
-            toast.info(`Match is scheduled for ${match.live_start_time}. You cannot click until it starts.`);
-        }
-    };
+    const watchUrl = match.status === "ENDED" ? `/highlights/${match.link_slug}` : `/live-cricket/player/${match.link_slug}`;
 
     return (
         <Link 
-            to={playerLink} 
-            onClick={handleClick}
-            className={`group block w-full relative overflow-hidden rounded-lg shadow-xl cursor-pointer transform transition duration-300
-                      ${isDisabled ? 'opacity-50 cursor-not-allowed hover:scale-100' : 'hover:shadow-2xl hover:scale-[1.02]'}`}
+            to={watchUrl}
+            className={`group relative bg-gray-900/50 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:border-blue-500/30 ${isLive ? 'ring-1 ring-red-500/50' : ''}`}
         >
-            {/* Background Image */}
-            <div 
-                className="w-full h-48 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                style={{ backgroundImage: `url(${match.cover_poster_url})` }}
-                aria-label={`${match.team_1} vs ${match.team_2}`}
-            />
-
-            {/* Black Overlay: The key visual element */}
-            <div className="absolute inset-0 bg-black/50"></div>
-            
-            {/* Status Tag (Top Left) */}
-            <div className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded text-white ${statusClass}`}>
-                {isLive || isScheduledTimePassed ? <Zap className="w-3 h-3 inline-block mr-1 fill-white" /> : <Clock className="w-3 h-3 inline-block mr-1" />}
-                {finalStatus}
+            <div className="aspect-video relative overflow-hidden bg-gray-800">
+                <img 
+                    src={match.cover_poster_url || "/default-cricket.jpg"} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-60" 
+                    alt="Match"
+                    onError={(e) => { e.target.src = "/default-cricket.jpg"; }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent" />
+                <div className="absolute top-3 left-3">
+                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${isLive ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-black/60 border-white/10 text-gray-300'}`}>
+                        {match.status || 'SCHEDULED'}
+                    </span>
+                </div>
             </div>
-
-            {/* Match Info (Bottom Section - Overlaid) */}
-            <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                <p className="text-xs font-semibold text-gray-300">{match.sport} • {match.league}</p>
-                
-                {isScheduled && !isScheduledTimePassed ? (
-                    <div className="flex items-center text-sm font-bold text-yellow-400 mt-1">
-                        <Clock className="w-4 h-4 mr-1"/>
-                        {match.live_start_time}
+            <div className="p-4 relative z-10">
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center text-sm font-bold text-gray-200">
+                        <span>{match.team_1 || 'Team A'}</span>
+                        <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">{match.team_1_score || '-'}</span>
                     </div>
-                ) : (
-                    <>
-                        {/* Team 1 Score */}
-                        <div className="flex justify-between items-center text-white text-base font-bold mt-1">
-                            <span>{match.team_1}</span>
-                            <span>{match.team_1_score}</span>
-                        </div>
-
-                        {/* Team 2 Score */}
-                        <div className="flex justify-between items-center text-white text-base font-bold">
-                            <span>{match.team_2}</span>
-                            <span className={isLive ? 'text-red-400' : 'text-white'}>{match.team_2_score}</span>
-                        </div>
-                    </>
-                )}
-
-                {/* Match Summary/Update */}
-                <p className="text-xs text-gray-400 mt-1">{match.result_summary}</p>
+                    <div className="flex justify-between items-center text-sm font-bold text-gray-200">
+                        <span>{match.team_2 || 'Team B'}</span>
+                        <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">{match.team_2_score || '-'}</span>
+                    </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-500 italic truncate max-w-[80%]">{match.result_summary || "Upcoming Match"}</span>
+                    <PlayCircle className="w-5 h-5 text-blue-500" />
+                </div>
             </div>
         </Link>
     );
 };
-// --- END Match Card Component ---
 
-
+/* ================= MAIN PAGE COMPONENT ================= */
 const SeriesView = () => {
     const { seriesSlug } = useParams();
+    const navigate = useNavigate();
     
     const [series, setSeries] = useState(null);
-    const [matches, setMatches] = useState(null);
+    const [matches, setMatches] = useState([]);
     const [allHighlights, setAllHighlights] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showSeriesHighlights, setShowSeriesHighlights] = useState(false);
 
-
     useEffect(() => {
         const fetchSeriesData = async () => {
+            if (!seriesSlug) return;
             setLoading(true);
             setError(null);
-            setShowSeriesHighlights(false); 
-
+            
             try {
-                // 1. Fetch Series Details
-                const { data: seriesData, error: seriesError } = await supabase
+                // 1. Fetch Series
+                const { data: seriesData, error: sErr } = await supabase
                     .from('series')
-                    .select('id, series_title, series_slug, cover_image_url, current_status, start_date, end_date, highlights_source')
+                    .select('*')
                     .eq('series_slug', seriesSlug)
                     .single();
 
-                if (seriesError || !seriesData) {
-                    throw new Error("Series not found or failed to fetch series data.");
-                }
-                
+                if (sErr || !seriesData) throw new Error("Series metadata not found in database.");
                 setSeries(seriesData);
 
-                // 2. Fetch all related matches and highlight segments
-                
-                // Fetch ALL live_matches in this series
-                const { data: matchesData, error: matchesError } = await supabase
+                // 2. Fetch Matches
+                const { data: matchesData, error: mErr } = await supabase
                     .from('live_matches')
-                    .select('id, link_slug, title, cover_poster_url, league, sport, status, live_start_datetime, live_start_time, team_1, team_2, team_1_score, team_2_score, result_summary')
+                    .select('*')
                     .eq('series_id', seriesData.id)
-                    .order('live_start_datetime', { ascending: true });
-                
-                if (matchesError) {
-                     throw new Error("Failed to fetch matches for this series.");
-                }
-                
-                // Get all match IDs for the next query
-                const matchIds = matchesData.map(match => match.id);
+                    .order('created_at', { ascending: false });
 
-                // Fetch ALL highlight segments for these matches
-                const { data: highlightsData, error: highlightsError } = await supabase
-                    .from('match_highlights')
-                    .select('id, match_id, highlight_title, highlight_type, highlight_source')
-                    .in('match_id', matchIds); // Filter by all match IDs in the series
-                
-                if (highlightsError) {
-                     console.error("Highlight Fetch Error:", highlightsError);
-                     // Allow execution to continue if highlights fail but matches succeed
-                }
-                
-                // --- CONSOLIDATION ---
-                
-                // Create a map of match data for easy lookup
-                const matchMap = {};
-                matchesData.forEach(match => {
-                    matchMap[match.id] = {
-                        title: match.title,
-                        slug: match.link_slug,
-                        poster: match.cover_poster_url,
-                    };
-                });
-                
-                // Consolidate highlights with match context
-                let consolidatedHighlights = [];
-                if (highlightsData) {
-                    highlightsData.forEach(highlight => {
-                        const matchInfo = matchMap[highlight.match_id];
-                        if (matchInfo) {
-                            consolidatedHighlights.push({
-                                ...highlight,
-                                match_slug: matchInfo.slug,
-                                match_poster: matchInfo.poster,
-                                match_title: matchInfo.title,
-                            });
-                        }
-                    });
-                }
-                
-                // Final Processing
-                const processedMatches = matchesData.map(match => ({
-                    ...match,
-                    league: seriesData.series_title, 
-                }));
-                
-                setMatches(processedMatches);
-                setAllHighlights(consolidatedHighlights); 
+                if (mErr) console.warn("Match Fetch Error:", mErr);
+                const safeMatches = matchesData || [];
+                setMatches(safeMatches);
 
+                // 3. Fetch Highlights for these matches
+                if (safeMatches.length > 0) {
+                    const matchIds = safeMatches.map(m => m.id);
+                    const { data: highlightsData } = await supabase
+                        .from('match_highlights')
+                        .select('*')
+                        .in('match_id', matchIds);
+                    
+                    if (highlightsData) {
+                        const matchMap = Object.fromEntries(safeMatches.map(m => [m.id, m]));
+                        const consolidated = highlightsData.map(h => ({
+                            ...h,
+                            match_slug: matchMap[h.match_id]?.link_slug,
+                            match_poster: matchMap[h.match_id]?.cover_poster_url,
+                            match_title: matchMap[h.match_id]?.title,
+                        }));
+                        setAllHighlights(consolidated);
+                    }
+                }
             } catch (err) {
-                console.error("Series View Critical Error:", err);
+                console.error("Critical Render Error:", err);
                 setError(err.message);
-                toast.error(err.message);
             } finally {
                 setLoading(false);
             }
         };
 
-        if (seriesSlug) {
-            fetchSeriesData();
-        }
+        fetchSeriesData();
     }, [seriesSlug]);
 
-    const renderMatchCards = () => {
-        if (matches.length === 0) {
-            return (
-                <div className="text-center p-12 bg-gray-800 rounded-xl">
-                    <p className="text-2xl text-white mb-4">No Matches Found</p>
-                    <p className="text-gray-400">There are no live, scheduled, or ended matches currently associated with **{series.series_title}**.</p>
-                </div>
-            );
-        }
+    if (loading) return (
+        <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.3em]">Syncing Series Data</p>
+        </div>
+    );
 
-        return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {matches.map((match) => (
-                    <MatchCard key={match.id} match={match} />
-                ))}
-            </div>
-        );
-    };
-    
-    // Determine if the series highlight source is an iFrame
-    const isIFrame = series?.highlights_source?.startsWith('<iframe');
-    // const isRawURL = series?.highlights_source && !isIFrame; // Not used in rendering logic here
+    if (error) return (
+        <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
+            <Info className="w-16 h-16 text-red-500 mb-4" />
+            <h1 className="text-white text-2xl font-black mb-2 uppercase">Series Load Failed</h1>
+            <p className="text-gray-500 mb-6 max-w-sm">{error}</p>
+            <button onClick={() => navigate('/live-cricket')} className="bg-blue-600 px-8 py-3 rounded-full font-bold">Back to Hub</button>
+        </div>
+    );
 
-
-    if (loading) {
-        return <div className="min-h-screen bg-gray-900 text-white"><p className="text-xl text-gray-400 p-8 text-center">Loading **{seriesSlug}** series schedule...</p></div>;
-    }
-
-    if (error || !series) {
-        return (
-            <div className="min-h-screen bg-gray-900 text-white">
-                <div className="max-w-7xl mx-auto px-4 sm:px-8">
-                    <div className="text-center p-12 bg-gray-800 rounded-xl mt-10">
-                        <p className="text-2xl text-red-400 mb-4">Error Loading Series</p>
-                        <p className="text-gray-400">{error || "The requested series could not be found."}</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    const formattedStart = series?.start_date ? DateTime.fromISO(series.start_date).toFormat('LLL dd') : 'TBD';
+    const formattedEnd = series?.end_date ? DateTime.fromISO(series.end_date).toFormat('LLL dd, yyyy') : 'Ongoing';
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white">
-            <header className="py-8 bg-gray-800 shadow-lg">
-                <div className="max-w-7xl mx-auto px-4 sm:px-8">
-                    <Link to="/" className="text-blue-400 hover:text-blue-200 transition mb-4 flex items-center gap-1">
-                        <ArrowLeft className="w-4 h-4"/> Back to Home
-                    </Link>
-
-                    {/* Series Header */}
-                    {series && (
-                        <>
-                            <div className="flex items-center gap-6 mt-4">
-                                <Box className="w-10 h-10 text-yellow-500 shrink-0"/>
-                                <div>
-                                    <h1 className="text-4xl font-extrabold text-white">{series.series_title}</h1>
-                                    <p className="text-lg text-gray-400 flex items-center gap-2 mt-1">
-                                        <Calendar className="w-5 h-5"/> 
-                                        {series.start_date ? DateTime.fromISO(series.start_date).toFormat('LLL dd, yyyy') : 'Date TBD'} 
-                                        - 
-                                        {series.end_date ? DateTime.fromISO(series.end_date).toFormat('LLL dd, yyyy') : 'Ongoing'}
-                                    </p>
-                                    <p className={`text-sm font-semibold mt-1 inline-block px-3 py-1 rounded-full ${series.current_status === 'ONGOING' ? 'bg-red-600' : 'bg-blue-600'}`}>
-                                        Status: {series.current_status}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            {/* Series Highlight Button (if present) */}
-                            {series.highlights_source && (
-                                <div className="mt-6">
-                                    <button 
-                                        onClick={() => setShowSeriesHighlights(!showSeriesHighlights)}
-                                        className={`px-6 py-3 rounded-xl font-bold transition flex items-center gap-2 
-                                            ${showSeriesHighlights 
-                                                ? 'bg-red-600 hover:bg-red-700 text-white' 
-                                                : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                                    >
-                                        <Video className="w-5 h-5"/> 
-                                        {showSeriesHighlights ? `Hide Series Highlights` : `Watch Full Series Highlights`}
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
+        <div className="min-h-screen bg-gray-950 text-white selection:bg-blue-500/30 pb-20">
+            {/* Immersive Header */}
+            <header className="relative w-full overflow-hidden min-h-[400px] flex items-center">
+                <div className="absolute inset-0">
+                    <img src={series?.cover_image_url || "/default-series.jpg"} className="w-full h-full object-cover blur-2xl opacity-20 scale-110" alt="" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-950/80 to-gray-950" />
                 </div>
-            </header>
-            
-            {/* --- SERIES HIGHLIGHT PLAYER AREA (CONDITIONAL) --- */}
-            {showSeriesHighlights && series.highlights_source && (
-                <div className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-8">
-                    <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
-                        
-                        <h3 className="text-xl font-bold p-3 bg-gray-900 flex items-center gap-2">
-                            Series Highlight Reel: {series.series_title}
-                        </h3>
-
-                        {isIFrame ? (
-                            <div 
-                                className="w-full h-full"
-                                dangerouslySetInnerHTML={{ __html: series.highlights_source }}
-                            />
-                        ) : (
-                            <div className="flex items-center justify-center h-full bg-black">
-                                <p className="text-yellow-500 p-4">HLS URL: {series.highlights_source} (Needs integration with VideoPlayer component)</p>
-                            </div>
+                
+                <div className="relative max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center gap-10">
+                    <div className="max-w-[240px] w-full aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-white/5">
+                        <img src={series?.cover_image_url || "/default-series.jpg"} className="w-full h-full object-cover" alt="Series Cover" />
+                    </div>
+                    
+                    <div className="flex-1 text-center md:text-left space-y-6">
+                        <button onClick={() => navigate('/live-cricket')} className="inline-flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] tracking-widest hover:text-white transition-all">
+                            <ArrowLeft size={14} /> Back to Live Hub
+                        </button>
+                        <h1 className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none italic">{series?.series_title || "Tournament"}</h1>
+                        <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                            <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-500 bg-blue-500/10 text-blue-400">
+                                {series?.current_status || "ACTIVE"}
+                            </span>
+                            <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5 bg-white/5 text-gray-400 flex items-center gap-2">
+                                <Calendar size={12} /> {formattedStart} - {formattedEnd}
+                            </span>
+                        </div>
+                        {series?.highlights_source && (
+                            <button 
+                                onClick={() => setShowSeriesHighlights(!showSeriesHighlights)}
+                                className={`px-8 py-4 rounded-2xl font-black text-xs transition-all uppercase flex items-center gap-3 shadow-xl ${showSeriesHighlights ? 'bg-red-600' : 'bg-green-600'}`}
+                            >
+                                <Video size={18} /> {showSeriesHighlights ? "Hide Highlights" : "Watch Full Series Highlights"}
+                            </button>
                         )}
                     </div>
-                    <div className="h-4"></div>
                 </div>
-            )}
-            {/* --- END SERIES HIGHLIGHT PLAYER AREA --- */}
+            </header>
 
-            <section className="py-10">
-                <div className="max-w-7xl mx-auto px-4 sm:px-8">
-                    
-                    {/* --- MATCH HIGHLIGHT SEGMENTS (NEW SECTION) --- */}
-                    {allHighlights.length > 0 && (
-                        <div className="mb-10">
-                            <h2 className="text-3xl font-bold text-white mb-8 border-b border-green-700 pb-3 flex items-center gap-2">
-                                <Video className="w-7 h-7 text-green-500"/> Segment Highlights
-                            </h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                {allHighlights.map((highlight) => (
-                                    <HighlightCard 
-                                        key={highlight.id} 
-                                        highlight={highlight} 
-                                        matchPoster={highlight.match_poster}
-                                        matchSlug={highlight.match_slug}
-                                    />
-                                ))}
+            <main className="max-w-7xl mx-auto px-6 py-10 space-y-20">
+                {/* Series Highlights Iframe Area */}
+                {showSeriesHighlights && series?.highlights_source && (
+                    <div className="animate-in slide-in-from-top duration-500">
+                        <div className="relative aspect-video rounded-3xl overflow-hidden bg-black border border-white/5 ring-1 ring-white/10 shadow-2xl">
+                            {series.highlights_source.startsWith('<iframe') ? (
+                                <div className="absolute inset-0 w-full h-full" dangerouslySetInnerHTML={{ __html: series.highlights_source }} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-center">
+                                    <p className="text-gray-500 font-bold p-10">Stream Source Detected. Switch to full player to view.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Highlights Grid */}
+                {allHighlights.length > 0 && (
+                    <div className="space-y-8">
+                        <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                            <div className="w-10 h-10 bg-green-600 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20">
+                                <Zap className="text-white" size={20} fill="white" />
                             </div>
-                            <hr className="border-t border-gray-700 my-8" />
+                            <h2 className="text-xl font-black uppercase tracking-widest">Tournament Highlights</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {allHighlights.map(h => (
+                                <HighlightCard key={`h-card-${h.id}`} highlight={h} matchPoster={h.match_poster} matchSlug={h.match_slug} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Matches Grid */}
+                <div className="space-y-8">
+                    <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                        <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                            <MonitorPlay className="text-white" size={20} />
+                        </div>
+                        <h2 className="text-xl font-black uppercase tracking-widest">Series Fixtures</h2>
+                    </div>
+                    {matches.length === 0 ? (
+                        <div className="py-20 text-center bg-gray-900/30 rounded-3xl border border-dashed border-gray-800">
+                            <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No matches found for this series</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {matches.map(m => (
+                                <MatchCard key={`m-card-${m.id}`} match={m} />
+                            ))}
                         </div>
                     )}
-                    {/* --- END MATCH HIGHLIGHT SEGMENTS --- */}
-
-
-                    <h2 className="text-3xl font-bold text-white mb-8 border-b border-gray-700 pb-3 flex items-center gap-2">
-                        <MonitorPlay className="w-7 h-7 text-red-500"/> All Matches in Series
-                    </h2>
-                    {renderMatchCards()}
                 </div>
-            </section>
+            </main>
         </div>
     );
 };

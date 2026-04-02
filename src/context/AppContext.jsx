@@ -9,6 +9,10 @@ export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
   const navigate = useNavigate();
+  
+  // Retrieve token from localStorage directly for reliable API calls
+  const [token, setToken] = useState(localStorage.getItem("token")); 
+  
   const [isLoggedIn, setIsLoggedIn] = useState(
     localStorage.getItem("isLoggedIn") === "true"
   );
@@ -32,56 +36,55 @@ export const AppContextProvider = ({ children }) => {
     navigate(`/category/${encodeURIComponent(name)}`);
   };
 
-  // ✅ Simple login function
-  const login = (user) => {
+  // ✅ Simple login function (UPDATED to accept and store token)
+  const login = (user, authToken) => {
     setIsLoggedIn(true);
     setUserData(user);
     setIsAdmin(user.email === "sanjusanjay0444@gmail.com");
+    setToken(authToken); // Store token in state
 
+    // Store user data combined with the token for convenience (optional)
     localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userData", JSON.stringify(user));
+    localStorage.setItem("userData", JSON.stringify({ ...user, token: authToken }));
+    localStorage.setItem("token", authToken);
 
     toast.success("Logged in successfully");
   };
 
-  // ✅ Simple logout function (FIXED)
+  // ✅ Simple logout function (CLEANUP ADDED)
   const logout = async () => {
     try {
       // 1. Attempt to log out from the backend (clear HTTP-only cookie).
-      // 🚀 FIX: Using RELATIVE PATH to route through the Vite proxy, 
-      // which prevents the CORS security block on cookie credentials.
       await axios.post(
-        `/api/auth/logout`, // Use relative path instead of ${backendUrl}/...
+        `/api/auth/logout`, 
         {},
         { withCredentials: true }
       );
       console.log("Backend cookie clear attempted (via proxy).");
     } catch (err) {
-      // This catch block runs when CORS blocks the successful 200 response,
-      // or if there is a real network issue. We log and continue cleanup.
       console.warn("Backend logout failed/CORS blocked. Proceeding with client cleanup.", err.message);
-      
-      // We will skip displaying the error here, as it's often a false positive (CORS block).
-      // If needed, you can re-enable this: toast.error(err.response?.data?.message || "Failed to logout");
     }
     
     try {
-        // 2. Clear Supabase session (good practice)
+        // 2. Clear Supabase session 
         await supabase.auth.signOut();
     } catch (err) {
         console.error("Supabase sign out failed:", err);
     }
 
-    // 3. Client-side cleanup (MUST RUN even if backend call fails)
+    // 3. Client-side cleanup (MUST RUN)
     setIsLoggedIn(false);
     setUserData(null);
     setIsAdmin(false);
+    setToken(null); // Clear token state
+    
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userData");
+    localStorage.removeItem("token");
     
     // 4. Final actions
     toast.success("You have been logged out.");
-    navigate("/login"); // Ensure redirection happens after cleanup
+    navigate("/login");
   };
 
   // ✅ Fetch all movies
@@ -107,11 +110,20 @@ export const AppContextProvider = ({ children }) => {
     }
   };
 
-  // ✅ Fetch users count (admin only)
+  // ✅ Fetch users count (admin only - UPDATED token access)
   const fetchAllUsersCount = async () => {
+    // Rely on state or localStorage for the current token
+    const currentToken = token || localStorage.getItem("token");
+
+    if (!currentToken) {
+        console.warn("Attempted to fetch user count without token.");
+        return;
+    }
+
     try {
       const res = await axios.get(`${backendUrl}/api/user/count`, {
-        headers: { Authorization: `Bearer ${userData?.token || ""}` },
+        // Use the token in the Authorization header
+        headers: { Authorization: `Bearer ${currentToken}` },
         withCredentials: true,
       });
 
