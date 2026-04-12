@@ -105,7 +105,7 @@ const WatchHtmlPage = () => {
     }
 
     if (sourceTypeToUse === 'imdb_reader' && imdb) {
-        chosen = `https://kinej395aoo.com/play/${imdb}`;
+        chosen = `https://piexe411qok.com/play/${imdb}`;
     }
     else if (sourceTypeToUse === 'vidify' && tmdb) {
         const s = epContext?.season || 1;
