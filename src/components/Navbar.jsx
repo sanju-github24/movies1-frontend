@@ -29,7 +29,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
       </li>
       <li>
         <button
-          onClick={() => { onNavigate("/live-cricket"); onClose(); }}
+          onClick={() => { onNavigate("/live-cricket-tv"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
         >
           <div className="relative">
@@ -144,17 +144,18 @@ const Navbar = () => {
               )}
             </li>
             <li>
-  <a
-    href="https://live-cricket-puce.vercel.app/"
-    className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
-  >
-    <div className="relative">
-      <MonitorPlay className="w-5 h-5 text-red-500" />
-      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
-    </div>
-    <span className="text-sm font-black">Live Cricket</span>
-  </a>
-</li>
+              {/* ✅ UPDATED: Internal route via Link */}
+              <Link
+                to="/live-cricket-tv"
+                className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-300 hover:text-red-500 transition"
+              >
+                <div className="relative">
+                  <MonitorPlay className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                </div>
+                <span className="text-sm font-black">Live Cricket</span>
+              </Link>
+            </li>
             <li><Link to="/blogs" className="hover:text-blue-200 transition">Blogs</Link></li>
             <li><Link to="/watch" className="hover:text-blue-200 transition">Watch</Link></li>
           </ul>
@@ -244,17 +245,18 @@ const Navbar = () => {
               <li><Link to="/latest" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Clock3 size={20} className="text-blue-600"/> Latest Uploads</Link></li>
               <li><Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition"><Tv size={20} className="text-blue-600"/> Watch Movies</Link></li>
               <li>
-  <button 
-    onClick={() => window.location.href = "https://live-cricket-puce.vercel.app/"}
-    className="w-full flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition"
-  >
-    <div className="flex items-center gap-4">
-      <MonitorPlay size={20}/> 
-      <span>Live Cricket</span>
-    </div>
-    <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
-  </button>
-</li>
+                {/* ✅ UPDATED: Internal route via navigate */}
+                <button 
+                  onClick={() => { navigate("/live-cricket-tv"); setMobileOpen(false); }}
+                  className="w-full flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition"
+                >
+                  <div className="flex items-center gap-4">
+                    <MonitorPlay size={20}/> 
+                    <span>Live Cricket</span>
+                  </div>
+                  <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+                </button>
+              </li>
             </ul>
 
             <div className="mt-auto pt-6 border-t border-gray-100">

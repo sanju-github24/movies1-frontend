@@ -39,6 +39,8 @@ import LiveStreamPlayer from './paged/LiveStreamPlayer';
 import SeriesView from './paged/SeriesView';
 import AuthPage from './paged/AuthPage';
 import UpdatePassword from './paged/UpdatePassword';
+import TorrentSearch from './paged/Torrentsearch';
+import LiveCricketTV from './paged/LiveCricketTV';
 
 // 🛡️ Lockout Component (Standard users see this if they tried to hack /admin)
 const LockoutOverlay = () => {
@@ -157,7 +159,7 @@ const AppContent = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const hidePaths = ["/login", "/auth", "/verify-account", "/reset-password", "/blogs", "/update-password"];
+  const hidePaths = ["/login", "/auth", "/verify-account", "/reset-password", "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv"];
   const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
   const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); 
@@ -222,7 +224,8 @@ const AppContent = () => {
 />
         <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
         <Route path="/live-cricket" element={<LiveCricket />} /> 
-        <Route path="/series/:seriesSlug" element={<SeriesView />} />
+        <Route path="/search-torrent" element={<TorrentSearch />} />
+       <Route path="/live-cricket-tv" element={<LiveCricketTV />} />
         <Route path="/profile" element={<ProtectedRoute session={session} initialized={initialized}><Profile /></ProtectedRoute>} />
         <Route path="/verify-account" element={<EmailVerify />} />
 
