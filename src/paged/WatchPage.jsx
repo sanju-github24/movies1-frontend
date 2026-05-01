@@ -10,7 +10,8 @@ import {
   ArrowLeft, List, MonitorPlay, Server,
   Video, Zap, Database, Clock, Globe, Calendar, AlertCircle, Tags,
   CheckCircle2, Volume2, ChevronDown, Monitor, Cpu, Download, X, Languages,
-  Settings, Eye, ChevronRight
+  Settings, Eye, ChevronRight, Wifi, Film, Tv2, Layers, Radio, ChevronUp,
+  SkipForward, Shield, Sparkles, Signal
 } from "lucide-react";
 
 /* ===== Helper: Safe URI encoding ===== */
@@ -39,11 +40,65 @@ const groupEpisodesBySeason = (episodes) => {
 const Toggle = ({ checked, onChange }) => (
   <button
     onClick={() => onChange(!checked)}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${checked ? "bg-blue-600" : "bg-gray-700"}`}
+    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none ${checked ? "bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]" : "bg-gray-800 border border-white/10"}`}
   >
-    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ${checked ? "translate-x-6" : "translate-x-1"}`} />
+    <span className={`inline-block h-4 w-4 transform rounded-full shadow-md transition-all duration-300 ${checked ? "translate-x-6 bg-white" : "translate-x-1 bg-gray-500"}`} />
   </button>
 );
+
+/* ===== Server Badge Component ===== */
+const ServerBadge = ({ server, isActive, onClick, compact = false }) => {
+  const colorMap = {
+    imdb_reader: { glow: "rgba(234,179,8,0.3)", bg: "from-yellow-500/10 to-yellow-600/5", border: "border-yellow-500/30", text: "text-yellow-400", dot: "bg-yellow-400" },
+    embed: { glow: "rgba(99,102,241,0.3)", bg: "from-indigo-500/10 to-indigo-600/5", border: "border-indigo-500/30", text: "text-indigo-400", dot: "bg-indigo-400" },
+    vidify: { glow: "rgba(168,85,247,0.3)", bg: "from-purple-500/10 to-purple-600/5", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
+    videasy: { glow: "rgba(59,130,246,0.3)", bg: "from-blue-500/10 to-blue-600/5", border: "border-blue-500/30", text: "text-blue-400", dot: "bg-blue-400" },
+    vidup: { glow: "rgba(6,182,212,0.3)", bg: "from-cyan-500/10 to-cyan-600/5", border: "border-cyan-500/30", text: "text-cyan-400", dot: "bg-cyan-400" },
+    tmdb: { glow: "rgba(59,130,246,0.3)", bg: "from-blue-500/10 to-blue-600/5", border: "border-blue-500/30", text: "text-blue-400", dot: "bg-blue-400" },
+    "2embed": { glow: "rgba(249,115,22,0.3)", bg: "from-orange-500/10 to-orange-600/5", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
+    hls: { glow: "rgba(34,197,94,0.3)", bg: "from-green-500/10 to-green-600/5", border: "border-green-500/30", text: "text-green-400", dot: "bg-green-400" },
+  };
+  const c = colorMap[server.id] || colorMap.videasy;
+
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        className={`relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 border ${
+          isActive
+            ? `bg-gradient-to-br ${c.bg} ${c.border} ${c.text}`
+            : "bg-white/[0.03] border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/10"
+        }`}
+        style={isActive ? { boxShadow: `0 0 20px ${c.glow}` } : {}}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? c.dot : "bg-gray-600"} ${isActive ? "animate-pulse" : ""}`} />
+        {server.name}
+        {isActive && <span className={`text-[9px] opacity-60 ml-1`}>{server.label}</span>}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all duration-200 border ${
+        isActive
+          ? `bg-gradient-to-br ${c.bg} ${c.border}`
+          : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10"
+      }`}
+      style={isActive ? { boxShadow: `0 0 24px ${c.glow}` } : {}}
+    >
+      <div className={`shrink-0 p-2 rounded-lg ${isActive ? `bg-gradient-to-br ${c.bg}` : "bg-white/5"}`}>
+        <div className={isActive ? c.text : "text-gray-600"}>{server.icon}</div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-bold truncate ${isActive ? "text-white" : "text-gray-400"}`}>{server.name}</div>
+        <div className={`text-[10px] truncate ${isActive ? c.text : "text-gray-600"}`}>{server.label}</div>
+      </div>
+      {isActive && <span className={`shrink-0 w-2 h-2 rounded-full ${c.dot} animate-pulse`} />}
+    </button>
+  );
+};
 
 const WatchHtmlPage = () => {
   const { slug: routeSlug } = useParams();
@@ -59,6 +114,7 @@ const WatchHtmlPage = () => {
   const [activeServer, setActiveServer] = useState(null);
   const [activeSeason, setActiveSeason] = useState("S1");
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   // Overlay states
   const [showOverlay, setShowOverlay] = useState(false);
@@ -71,6 +127,7 @@ const WatchHtmlPage = () => {
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [autoNextEpisode, setAutoNextEpisode] = useState(true);
   const [spoilerProtection, setSpoilerProtection] = useState(true);
+  const [activeTab, setActiveTab] = useState("servers");
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
 
@@ -78,7 +135,15 @@ const WatchHtmlPage = () => {
     if (!backendUrl || !id) return null;
     try {
       const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: id } });
-      return res.data?.success ? res.data.data : null;
+      if (!res.data?.success) return null;
+      const data = res.data.data;
+      // Normalize cast — backend may return it nested under credits.cast or flat
+      const cast =
+        data?.cast ??
+        data?.credits?.cast ??
+        data?.aggregate_credits?.cast ??
+        [];
+      return { ...data, cast };
     } catch (err) { return null; }
   }, [backendUrl]);
 
@@ -136,7 +201,6 @@ const WatchHtmlPage = () => {
     }
   };
 
-  // Switch server while overlay is open
   const handleServerSwitch = (server) => {
     setActiveServer(server);
     handlePlayAction(currentOverlayEp, server.id);
@@ -197,51 +261,93 @@ const WatchHtmlPage = () => {
     fetchData(); return () => { isMounted = false; };
   }, [routeSlug, backendUrl, fetchTmdbMetadata, location.state]);
 
+  // ─── Loading Screen ───────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center text-blue-500 font-black uppercase text-[10px] tracking-widest">
-      <Loader2 className="w-12 h-12 animate-spin mb-4" />Initializing Neural Link
+    <div className="min-h-screen bg-[#070709] flex flex-col items-center justify-center gap-6">
+      <div className="relative">
+        <div className="w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
+          <Loader2 className="w-7 h-7 text-blue-500 animate-spin" />
+        </div>
+        <div className="absolute -inset-2 rounded-3xl border border-blue-500/10 animate-ping" />
+      </div>
+      <div className="space-y-1 text-center">
+        <p className="text-white font-black text-xs uppercase tracking-[0.3em]">Initializing</p>
+        <p className="text-gray-600 text-[10px] uppercase tracking-widest">Neural Link Active</p>
+      </div>
     </div>
   );
 
+  const serverColorMap = {
+    imdb_reader: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20 hover:border-yellow-500/50",
+    embed: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20 hover:border-indigo-500/50",
+    vidify: "text-purple-400 bg-purple-500/10 border-purple-500/20 hover:border-purple-500/50",
+    videasy: "text-blue-400 bg-blue-500/10 border-blue-500/20 hover:border-blue-500/50",
+    vidup: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20 hover:border-cyan-500/50",
+    tmdb: "text-blue-400 bg-blue-500/10 border-blue-500/20 hover:border-blue-500/50",
+    "2embed": "text-orange-400 bg-orange-500/10 border-orange-500/20 hover:border-orange-500/50",
+    hls: "text-green-400 bg-green-500/10 border-green-500/20 hover:border-green-500/50",
+  };
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white pb-24 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#070709] text-white pb-24 font-sans overflow-x-hidden">
 
-      {/* ══════════════════════════════════════════════
-          🎬 OVERLAY PLAYER — 1Flex Style Side Panel
-      ══════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════════════════
+          🎬 FULLSCREEN OVERLAY PLAYER
+      ══════════════════════════════════════════════════════════════════ */}
       {showOverlay && (
-        <div className="fixed inset-0 z-[1000] bg-black flex flex-col">
+        <div className="fixed inset-0 z-[1000] bg-[#070709] flex flex-col">
 
-          {/* ── Top bar ── */}
-          <div className="flex items-center justify-between px-4 py-3 bg-black/80 backdrop-blur-md border-b border-white/5 shrink-0 z-10">
+          {/* ── Top control bar ── */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/60 backdrop-blur-xl border-b border-white/[0.04] shrink-0 z-20">
             <button
               onClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); }}
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 border border-white/5"
             >
-              <ArrowLeft size={18} />
-              <span className="text-xs font-semibold hidden sm:inline">Back</span>
+              <ArrowLeft size={15} />
+              <span className="text-xs font-bold hidden sm:inline tracking-wide">Back</span>
             </button>
 
-            <h2 className="text-white font-bold text-sm uppercase tracking-wider truncate max-w-[40vw] text-center">
-              {videoTitle}
-            </h2>
+            {/* Title + episode badge */}
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <h2 className="text-white font-black text-xs uppercase tracking-[0.15em] truncate max-w-[35vw]">
+                {videoTitle}
+              </h2>
+            </div>
 
-            {/* Settings toggle button (mobile) */}
             <button
               onClick={() => setShowSettingsPanel(v => !v)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:border-blue-500/50 transition-all"
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-200 text-xs font-bold tracking-wide ${
+                showSettingsPanel
+                  ? "bg-blue-600/20 border-blue-500/40 text-blue-300"
+                  : "bg-white/5 border-white/5 text-gray-400 hover:text-white hover:border-white/20"
+              }`}
             >
-              <Settings size={15} />
-              <span className="text-xs font-semibold hidden sm:inline">Settings</span>
-              <ChevronRight size={13} className={`transition-transform duration-300 ${showSettingsPanel ? "rotate-90" : ""}`} />
+              <Settings size={14} />
+              <span className="hidden sm:inline">Settings</span>
             </button>
           </div>
 
-          {/* ── Player + Side Panel ── */}
-          <div className="flex flex-1 overflow-hidden relative">
+          {/* ── Quick server switcher bar ── */}
+          <div className="px-4 py-2 bg-black/40 backdrop-blur-md border-b border-white/[0.03] shrink-0 z-10 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-2 min-w-max">
+              <span className="text-[9px] text-gray-600 uppercase tracking-widest font-black shrink-0 mr-1">Server:</span>
+              {availableServers.map(s => (
+                <ServerBadge
+                  key={s.id}
+                  server={s}
+                  isActive={activeServer?.id === s.id}
+                  onClick={() => handleServerSwitch(s)}
+                  compact
+                />
+              ))}
+            </div>
+          </div>
 
+          {/* ── Player + Settings Panel ── */}
+          <div className="flex flex-1 overflow-hidden relative">
             {/* Player area */}
-            <div className={`flex-1 bg-black transition-all duration-300 ${showSettingsPanel ? "lg:mr-[300px]" : ""}`}>
+            <div className={`flex-1 bg-black transition-all duration-300 ${showSettingsPanel ? "lg:mr-[320px]" : ""}`}>
               {sourceType === "html" ? (
                 <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSource }} />
               ) : sourceType === "video" ? (
@@ -259,141 +365,163 @@ const WatchHtmlPage = () => {
             {/* ── Settings Panel ── */}
             <div className={`
               absolute lg:relative top-0 right-0 h-full
-              w-full sm:w-[300px] lg:w-[300px]
-              bg-[#0d0d0f] border-l border-white/5
-              flex flex-col overflow-y-auto
+              w-full sm:w-[320px] lg:w-[320px]
+              bg-[#0a0a0c] border-l border-white/[0.04]
+              flex flex-col overflow-hidden
               transition-transform duration-300 ease-in-out z-20
               ${showSettingsPanel ? "translate-x-0" : "translate-x-full lg:translate-x-full"}
             `}>
 
-              {/* Panel header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  <h3 className="text-white font-bold text-sm tracking-wide">Player Settings</h3>
+              {/* Panel header + tabs */}
+              <div className="shrink-0 border-b border-white/[0.04]">
+                <div className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    <h3 className="text-white font-black text-xs uppercase tracking-[0.15em]">Player Settings</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowSettingsPanel(false)}
+                    className="p-1.5 rounded-lg hover:bg-white/5 text-gray-600 hover:text-white transition-all"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowSettingsPanel(false)}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
-                >
-                  <X size={16} />
-                </button>
+
+                {/* Tabs */}
+                <div className="flex px-5 gap-1 pb-3">
+                  {["servers", "cast", "settings"].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-200 ${
+                        activeTab === tab
+                          ? "bg-white/10 text-white border border-white/10"
+                          : "text-gray-600 hover:text-gray-400"
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex-1 p-5 space-y-7 overflow-y-auto">
-
-                {/* ── Server Selection ── */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em]">Server Selection</p>
-
-                  {/* Styled select */}
-                  <div className="relative">
-                    <select
-                      value={activeServer?.id || ""}
-                      onChange={e => {
-                        const srv = availableServers.find(s => s.id === e.target.value);
-                        if (srv) handleServerSwitch(srv);
-                      }}
-                      className="w-full appearance-none bg-[#161618] border border-white/10 text-white text-sm font-semibold px-4 py-3 pr-10 rounded-xl focus:outline-none focus:border-blue-500/60 transition-colors cursor-pointer"
-                    >
-                      {availableServers.map(s => (
-                        <option key={s.id} value={s.id} style={{ background: "#161618" }}>
-                          {s.name} — {s.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              {/* Panel content */}
+              <div className="flex-1 overflow-y-auto">
+                {activeTab === "servers" && (
+                  <div className="p-4 space-y-2">
+                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1 mb-3">Available Servers</p>
+                    {availableServers.map(server => (
+                      <ServerBadge
+                        key={server.id}
+                        server={server}
+                        isActive={activeServer?.id === server.id}
+                        onClick={() => handleServerSwitch(server)}
+                      />
+                    ))}
                   </div>
-                  <p className="text-[11px] text-gray-600">Choose your preferred streaming server</p>
-                </div>
+                )}
 
-                {/* Divider */}
-                <div className="border-t border-white/5" />
+                {activeTab === "cast" && (
+                  <div className="p-4 space-y-4">
+                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1">Starring Cast</p>
 
-                {/* ── All Servers List ── */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em]">All Servers</p>
-                  <div className="space-y-1.5">
-                    {availableServers.map(server => {
-                      const isActive = activeServer?.id === server.id;
-                      return (
-                        <button
-                          key={server.id}
-                          onClick={() => handleServerSwitch(server)}
-                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all border ${
-                            isActive
-                              ? "bg-blue-600/15 border-blue-500/40 text-white"
-                              : "bg-white/[0.02] border-white/5 text-gray-400 hover:bg-white/5 hover:text-gray-200 hover:border-white/10"
-                          }`}
-                        >
-                          <div className={`shrink-0 ${isActive ? "text-blue-400" : "text-gray-600"}`}>
-                            {server.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className={`text-sm font-semibold truncate ${isActive ? "text-white" : ""}`}>
-                              {server.name}
+                    {tmdbMeta?.cast && tmdbMeta.cast.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-3">
+                        {tmdbMeta.cast.slice(0, 18).map((actor, idx) => (
+                          <div key={idx} className="group flex flex-col items-center gap-2 text-center">
+                            <div className="w-full aspect-square rounded-xl overflow-hidden border border-white/5 group-hover:border-blue-500/30 transition-all duration-300 bg-white/5">
+                              <img
+                                src={actor.profile_path ? `https://image.tmdb.org/t/p/w185${actor.profile_path}` : "/default-avatar.jpg"}
+                                className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                                alt={actor.name}
+                                onError={e => { e.target.onerror = null; e.target.src = "/default-avatar.jpg"; }}
+                              />
                             </div>
-                            <div className={`text-[10px] truncate ${isActive ? "text-blue-300" : "text-gray-600"}`}>
-                              {server.label}
-                            </div>
+                            <span className="text-[9px] font-bold text-gray-500 group-hover:text-blue-400 transition-colors leading-tight line-clamp-2 uppercase tracking-tight">
+                              {actor.name}
+                            </span>
+                            {actor.character && (
+                              <span className="text-[8px] text-gray-700 line-clamp-1 w-full">
+                                {actor.character}
+                              </span>
+                            )}
                           </div>
-                          {isActive && (
-                            <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-white/5" />
-
-                {/* ── TV Settings ── */}
-                {episodes.length > 0 && (
-                  <div className="space-y-4">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em]">TV Settings</p>
-
-                    <div className="bg-[#161618] rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5">
-                      {/* Spoiler Protection */}
-                      <div className="flex items-start justify-between gap-4 px-4 py-4">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Spoiler Protection</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">Blur future episodes to avoid spoilers</p>
-                        </div>
-                        <Toggle checked={spoilerProtection} onChange={setSpoilerProtection} />
+                        ))}
                       </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-3">
+                        {[...Array(9)].map((_, i) => (
+                          <div key={i} className="flex flex-col items-center gap-2 animate-pulse">
+                            <div className="w-full aspect-square rounded-xl bg-white/5 border border-white/5" />
+                            <div className="h-1.5 w-3/4 bg-white/5 rounded" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                      {/* Auto Next Episode */}
-                      <div className="flex items-start justify-between gap-4 px-4 py-4">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Auto Next Episode</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">Automatically play next episode when current ends</p>
+                {activeTab === "settings" && (
+                  <div className="p-4 space-y-4">
+                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1">Preferences</p>
+
+                    {/* Now Playing */}
+                    <div className="p-4 rounded-xl bg-blue-600/5 border border-blue-500/10">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-600/10">
+                          <Eye size={14} className="text-blue-400" />
                         </div>
-                        <Toggle checked={autoNextEpisode} onChange={setAutoNextEpisode} />
+                        <div>
+                          <p className="text-[9px] text-gray-500 uppercase tracking-widest mb-0.5">Now Playing</p>
+                          <p className="text-xs font-bold text-white truncate max-w-[180px]">{videoTitle}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {episodes.length > 0 && (
+                      <div className="rounded-xl border border-white/[0.04] overflow-hidden divide-y divide-white/[0.04]">
+                        {/* Spoiler Protection */}
+                        <div className="flex items-start justify-between gap-4 px-4 py-4 bg-white/[0.01]">
+                          <div>
+                            <p className="text-xs font-bold text-white mb-1">Spoiler Protection</p>
+                            <p className="text-[10px] text-gray-600 leading-relaxed">Blur upcoming episodes</p>
+                          </div>
+                          <Toggle checked={spoilerProtection} onChange={setSpoilerProtection} />
+                        </div>
+                        {/* Auto Next */}
+                        <div className="flex items-start justify-between gap-4 px-4 py-4 bg-white/[0.01]">
+                          <div>
+                            <p className="text-xs font-bold text-white mb-1">Auto Next Episode</p>
+                            <p className="text-[10px] text-gray-600 leading-relaxed">Play next automatically</p>
+                          </div>
+                          <Toggle checked={autoNextEpisode} onChange={setAutoNextEpisode} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Status indicators */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1">Stream Status</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-center gap-2">
+                          <Signal size={12} className="text-green-400" />
+                          <span className="text-[10px] text-gray-400 font-bold">Connected</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-center gap-2">
+                          <Shield size={12} className="text-blue-400" />
+                          <span className="text-[10px] text-gray-400 font-bold">Secured</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
-
-                {/* ── Now Playing Info card ── */}
-                <div className="bg-[#161618] rounded-xl border border-white/5 p-4 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-600/10 text-blue-400 shrink-0">
-                    <Eye size={16} />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-gray-500">Now Playing</p>
-                    <p className="text-sm font-semibold text-white truncate max-w-[180px]">{videoTitle}</p>
-                  </div>
-                </div>
-
               </div>
             </div>
 
-            {/* Backdrop click to close panel on mobile */}
+            {/* Mobile backdrop */}
             {showSettingsPanel && (
               <div
-                className="absolute inset-0 bg-black/60 z-10 lg:hidden"
+                className="absolute inset-0 bg-black/70 z-10 lg:hidden backdrop-blur-sm"
                 onClick={() => setShowSettingsPanel(false)}
               />
             )}
@@ -401,104 +529,290 @@ const WatchHtmlPage = () => {
         </div>
       )}
 
-      {/* NAVBAR */}
-      <header className="fixed top-0 inset-x-0 z-[110] bg-gray-950/80 backdrop-blur-xl border-b border-white/5 h-16 flex items-center px-4 font-black">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate("/watch")} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-              <ArrowLeft size={22} />
+      {/* ══════════════════════════════════════════════════════════════════
+          NAVBAR
+      ══════════════════════════════════════════════════════════════════ */}
+      <header className="fixed top-0 inset-x-0 z-[110] h-16 flex items-center px-4">
+        {/* Frosted glass bar */}
+        <div className="absolute inset-0 bg-[#070709]/80 backdrop-blur-xl border-b border-white/[0.04]" />
+        <div className="relative max-w-7xl mx-auto w-full flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/watch")}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all duration-200 group"
+            >
+              <ArrowLeft size={18} className="text-gray-400 group-hover:text-white transition-colors" />
             </button>
-            <Link to="/"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
+            <Link to="/">
+              <img src="/logo_39.png" className="h-7" alt="logo" />
+            </Link>
           </div>
-          <div className="text-gray-500 text-[10px] tracking-widest bg-white/5 px-3 py-1 rounded-full border border-white/5 uppercase">
-            Global Source Active
+
+          {/* Live indicator */}
+          <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest hidden sm:block">Global Source Active</span>
           </div>
         </div>
       </header>
 
-      {/* HERO SECTION */}
-      <div className="relative pt-16 w-full bg-gray-950 min-h-[500px]">
+      {/* ══════════════════════════════════════════════════════════════════
+          HERO SECTION — Cinematic
+      ══════════════════════════════════════════════════════════════════ */}
+      <div className="relative pt-16 w-full min-h-[560px] overflow-hidden">
+
+        {/* Background image with cinematic treatment */}
         {movieMeta?.background && (
-          <div className="absolute inset-0 h-full w-full pointer-events-none z-0 overflow-hidden">
-            <img src={movieMeta.background} className="w-full h-full object-cover opacity-30 transition-opacity duration-1000 scale-105" alt="" />
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent" />
+          <div className="absolute inset-0 z-0">
+            <img
+              src={movieMeta.background}
+              className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-25 scale-100" : "opacity-0 scale-110"}`}
+              alt=""
+              onLoad={() => setImgLoaded(true)}
+            />
+            {/* Vignette layers */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#070709] via-[#070709]/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/30 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#070709] to-transparent" />
           </div>
         )}
-        <div className="relative max-w-7xl mx-auto px-6 py-12 flex flex-col lg:flex-row gap-10 z-10 font-black">
-          <div className="relative shrink-0 mx-auto lg:mx-0">
-            <div className="relative group w-[180px] sm:w-[220px] aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/20">
-              <img src={movieMeta?.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt="" />
+
+        {/* Subtle grain texture overlay */}
+        <div className="absolute inset-0 z-[1] opacity-[0.03] pointer-events-none" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`
+        }} />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start">
+
+          {/* ── Poster ── */}
+          <div className="shrink-0 mx-auto lg:mx-0">
+            <div className="relative">
+              {/* Glow behind poster */}
+              <div className="absolute -inset-4 bg-blue-600/10 rounded-[2rem] blur-2xl" />
+              <div className="relative w-[160px] sm:w-[200px] aspect-[2/3] rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.8)]">
+                <img
+                  src={movieMeta?.poster || "/default-poster.jpg"}
+                  className="w-full h-full object-cover"
+                  alt={movieMeta?.title}
+                />
+                {/* Subtle shine overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
+              </div>
+
+              {/* Rating badge — floated on poster corner */}
+              <div className="absolute -bottom-3 -right-3 flex items-center gap-1 bg-[#070709] border border-white/10 px-2.5 py-1.5 rounded-xl shadow-xl">
+                <Star size={11} className="text-yellow-400" fill="currentColor" />
+                <span className="text-white font-black text-xs">{movieMeta?.imdbRating || "0.0"}</span>
+              </div>
             </div>
           </div>
-          <div className="flex-1 space-y-6 lg:pt-4 text-center lg:text-left font-black">
-            <h1 className="text-3xl sm:text-4xl md:text-6xl font-black uppercase tracking-tighter italic text-white drop-shadow-2xl leading-none">
+
+          {/* ── Meta ── */}
+          <div className="flex-1 space-y-5 lg:pt-6 text-center lg:text-left">
+
+            {/* Eyebrow label */}
+            <div className="flex items-center justify-center lg:justify-start gap-2">
+              {episodes.length > 0
+                ? <><Tv2 size={12} className="text-blue-400" /><span className="text-blue-400 font-black text-[9px] uppercase tracking-[0.25em]">TV Series</span></>
+                : <><Film size={12} className="text-blue-400" /><span className="text-blue-400 font-black text-[9px] uppercase tracking-[0.25em]">Feature Film</span></>
+              }
+            </div>
+
+            {/* Title */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black uppercase tracking-tighter italic text-white leading-[0.9] drop-shadow-2xl">
               {movieMeta?.slug}
             </h1>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 text-[10px] uppercase">
-              <div className="flex items-center gap-1.5 bg-blue-600 px-2.5 py-1 rounded-md shadow-lg text-white font-black"><ShieldCheck size={12} /> HD</div>
-              <span className="text-gray-400 bg-black/40 border border-white/10 px-2 py-1 rounded-md flex items-center gap-1.5"><Clock size={12} className="text-blue-400" /> {tmdbMeta?.runtime || "---"} min</span>
-              <span className="text-gray-400 bg-black/40 border border-white/10 px-2 py-1 rounded-md">{movieMeta?.year}</span>
+
+            {/* Tags row */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
+              <span className="flex items-center gap-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg shadow-blue-600/30">
+                <ShieldCheck size={10} /> HD
+              </span>
+              {tmdbMeta?.runtime && (
+                <span className="flex items-center gap-1.5 text-gray-400 text-[9px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
+                  <Clock size={10} className="text-blue-400" /> {tmdbMeta.runtime} min
+                </span>
+              )}
+              {movieMeta?.year && (
+                <span className="text-gray-400 text-[9px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
+                  {movieMeta.year}
+                </span>
+              )}
+              {(tmdbMeta?.genres || movieMeta?.genres) && (
+                (tmdbMeta?.genres?.map(g => g.name) || movieMeta?.genres || []).slice(0, 2).map((g, i) => (
+                  <span key={i} className="text-gray-400 text-[9px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
+                    {g}
+                  </span>
+                ))
+              )}
             </div>
-            <div className="flex items-center justify-center lg:justify-start gap-3 text-yellow-500 font-black">
-              <Star fill="currentColor" size={14} /> {movieMeta?.imdbRating || "0.0"}
-            </div>
-            <p className="text-gray-200 text-xs sm:text-sm md:text-base italic border-l-4 border-blue-600 pl-5 py-3 mx-auto lg:mx-0 text-left bg-gray-950/20 backdrop-blur-sm rounded-r-xl max-h-[150px] sm:max-h-none overflow-y-auto font-medium">
+
+            {/* Description */}
+            <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-blue-600 pl-4 mx-auto lg:mx-0 text-left max-w-xl lg:max-w-none max-h-[120px] overflow-y-auto font-normal opacity-90">
               {movieMeta?.description}
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center lg:justify-start">
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center lg:justify-start">
+              {/* Primary play button */}
               <button
                 onClick={() => handlePlayAction(episodes.length > 0 ? episodes[0] : null)}
-                className="px-10 sm:px-12 py-3 sm:py-4 bg-white text-black font-black rounded-xl flex items-center justify-center gap-3 hover:bg-blue-600 hover:text-white transition-all shadow-xl text-[10px] sm:text-xs uppercase tracking-widest active:scale-95"
+                className="group relative overflow-hidden px-8 py-3.5 bg-blue-600 text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-blue-600/25 hover:shadow-blue-600/50 transition-all duration-300 text-[10px] uppercase tracking-widest active:scale-[0.98]"
               >
-                <Play size={18} fill="currentColor" /> {episodes.length > 0 ? "Stream Episodes" : "Play Feature"}
+                {/* Shine sweep */}
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                <div className="relative p-1.5 bg-white/20 rounded-lg">
+                  <Play size={14} fill="currentColor" />
+                </div>
+                <span className="relative">{episodes.length > 0 ? "Stream Now" : "Play Now"}</span>
               </button>
+
+              {/* Download button */}
               {movieMeta?.download_links?.length > 0 && (
                 <button
                   onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior: "smooth" })}
-                  className="px-8 sm:px-10 py-3 sm:py-4 bg-white/10 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-green-600 transition-all text-[10px] sm:text-xs uppercase tracking-widest active:scale-95"
+                  className="px-8 py-3.5 bg-white/5 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/20 transition-all duration-200 text-[10px] uppercase tracking-widest active:scale-[0.98]"
                 >
-                  <Download size={18} /> Download Options
+                  <Download size={15} />
+                  <span>Download</span>
                 </button>
               )}
             </div>
+
+            {/* Server quick-select under hero */}
+            {availableServers.length > 0 && (
+              <div className="pt-2">
+                <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2 text-center lg:text-left">Available Servers</p>
+                <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
+                  {availableServers.slice(0, 5).map(server => (
+                    <button
+                      key={server.id}
+                      onClick={() => { setActiveServer(server); handlePlayAction(null, server.id); }}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all duration-200 active:scale-95 ${
+                        activeServer?.id === server.id
+                          ? (serverColorMap[server.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30")
+                          : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"
+                      }`}
+                    >
+                      <span className={`w-1 h-1 rounded-full ${activeServer?.id === server.id ? "bg-current" : "bg-gray-700"}`} />
+                      {server.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <main className="relative max-w-7xl mx-auto px-6 py-16 space-y-24 z-10 font-black">
+      {/* ══════════════════════════════════════════════════════════════════
+          MAIN CONTENT
+      ══════════════════════════════════════════════════════════════════ */}
+      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-20 z-10">
 
-        {/* EPISODES SECTION */}
+        {/* ── EPISODES SECTION ── */}
         {episodes.length > 0 && (
-          <div className="space-y-8">
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+          <div className="space-y-6">
+            {/* Section header */}
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10">
+                <List size={18} className="text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Episodes</h2>
+                <p className="text-[10px] text-gray-600 font-bold">{episodes.length} episodes available</p>
+              </div>
+            </div>
+
+            {/* Season tabs */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
               {Object.keys(groupedEpisodes).map((seasonKey) => (
-                <button key={seasonKey} onClick={() => setActiveSeason(seasonKey)} className={`shrink-0 px-8 py-2.5 rounded-full text-[10px] uppercase transition-all border ${activeSeason === seasonKey ? "bg-blue-600 border-blue-500 shadow-lg text-white" : "bg-gray-900/50 text-gray-500 border-white/5 hover:text-gray-300"}`}>
+                <button
+                  key={seasonKey}
+                  onClick={() => setActiveSeason(seasonKey)}
+                  className={`shrink-0 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 border ${
+                    activeSeason === seasonKey
+                      ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20"
+                      : "bg-white/[0.03] text-gray-500 border-white/5 hover:text-gray-300 hover:border-white/10"
+                  }`}
+                >
                   {groupedEpisodes[seasonKey].name}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Episode grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {groupedEpisodes[activeSeason]?.episodes?.map((ep, i) => (
-                <div key={i} className="relative z-10">
-                  <div onClick={() => setOpenDropdown(openDropdown === i ? null : i)} className={`group flex flex-col sm:flex-row gap-4 sm:gap-6 p-4 rounded-2xl bg-gray-900/40 border border-white/5 hover:border-blue-500/30 transition-all items-center cursor-pointer ${openDropdown === i ? "border-blue-600/50 bg-blue-900/10" : ""}`}>
-                    <div className="relative shrink-0 w-full md:w-40 aspect-video rounded-xl overflow-hidden bg-gray-800 flex items-center justify-center">
-                      <Play size={20} className={openDropdown === i ? "text-blue-400" : "text-white"} />
+                <div key={i} className="relative">
+                  {/* Episode card */}
+                  <div
+                    onClick={() => setOpenDropdown(openDropdown === i ? null : i)}
+                    className={`group flex gap-4 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
+                      openDropdown === i
+                        ? "bg-blue-600/5 border-blue-500/20"
+                        : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04] hover:border-white/10"
+                    }`}
+                  >
+                    {/* Episode thumb */}
+                    <div className={`relative shrink-0 w-28 sm:w-36 aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/5 flex items-center justify-center transition-all duration-300 ${openDropdown === i ? "border-blue-500/30" : ""}`}>
+                      <div className={`p-2.5 rounded-xl transition-all duration-300 ${openDropdown === i ? "bg-blue-600 text-white" : "bg-white/10 text-gray-400 group-hover:bg-white/20"}`}>
+                        <Play size={16} fill="currentColor" />
+                      </div>
                     </div>
-                    <div className="flex-1 text-center sm:text-left">
-                      <p className="text-[10px] font-black uppercase text-blue-500 mb-1">S{ep.season} E{ep.episodeNumberInSeason}</p>
-                      <h4 className="text-base font-bold text-white uppercase truncate max-w-[200px] sm:max-w-full">{ep.title || `Episode ${ep.episodeNumberInSeason}`}</h4>
+
+                    {/* Episode info */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <p className="text-[9px] font-black uppercase text-blue-500 tracking-[0.15em] mb-1.5">
+                        S{ep.season} · E{ep.episodeNumberInSeason}
+                      </p>
+                      <h4 className="text-sm font-bold text-white truncate mb-1">
+                        {ep.title || `Episode ${ep.episodeNumberInSeason}`}
+                      </h4>
+                      {ep.description && (
+                        <p className="text-[11px] text-gray-600 line-clamp-2 leading-relaxed">{ep.description}</p>
+                      )}
                     </div>
-                    <ChevronDown size={20} className={`transition-transform duration-300 ${openDropdown === i ? "rotate-180" : ""}`} />
+
+                    {/* Chevron */}
+                    <div className="shrink-0 self-center">
+                      <ChevronDown
+                        size={16}
+                        className={`text-gray-600 transition-transform duration-300 ${openDropdown === i ? "rotate-180 text-blue-400" : ""}`}
+                      />
+                    </div>
                   </div>
+
+                  {/* ── Dropdown: Server buttons ── */}
                   {openDropdown === i && (
-                    <div className="mt-2 p-4 rounded-2xl bg-black/80 border border-white/10 grid grid-cols-2 gap-2 relative z-20">
-                      <button onClick={() => handlePlayAction(ep, "imdb_reader")} className="px-3 py-3 rounded-xl bg-yellow-600/10 text-yellow-500 text-[10px] font-black active:scale-95 uppercase">Omega</button>
-                      <button onClick={() => handlePlayAction(ep, "embed")} className="px-3 py-3 rounded-xl bg-indigo-600/10 text-indigo-500 text-[10px] font-black active:scale-95 uppercase">Multi Audio</button>
-                      <button onClick={() => handlePlayAction(ep, "vidify")} className="px-3 py-3 rounded-xl bg-purple-600/10 text-purple-500 text-[10px] font-black active:scale-95 uppercase">Vidify</button>
-                      <button onClick={() => handlePlayAction(ep, "videasy")} className="px-3 py-3 rounded-xl bg-blue-600/10 text-blue-500 text-[10px] font-black active:scale-95 uppercase">VidEasy</button>
-                      <button onClick={() => handlePlayAction(ep, "vidup")} className="px-3 py-3 rounded-xl bg-cyan-600/10 text-cyan-500 text-[10px] font-black active:scale-95 uppercase">VidUp</button>
-                      <button onClick={() => handlePlayAction(ep, "tmdb")} className="px-3 py-3 rounded-xl bg-blue-600/10 text-blue-500 text-[10px] font-black active:scale-95 uppercase">Alpha</button>
-                      <button onClick={() => handlePlayAction(ep, "2embed")} className="px-3 py-3 rounded-xl bg-orange-600/10 text-orange-500 text-[10px] font-black active:scale-95 uppercase">Prime</button>
+                    <div className="mt-2 p-3 rounded-2xl bg-[#0a0a0d] border border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: "imdb_reader", label: "Omega", color: "yellow" },
+                        { id: "embed", label: "Multi Audio", color: "indigo" },
+                        { id: "vidify", label: "Vidify", color: "purple" },
+                        { id: "videasy", label: "VidEasy", color: "blue" },
+                        { id: "vidup", label: "VidUp", color: "cyan" },
+                        { id: "tmdb", label: "Alpha", color: "blue" },
+                        { id: "2embed", label: "Prime", color: "orange" },
+                      ].map(srv => {
+                        const colorClasses = {
+                          yellow: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:border-yellow-500/40 hover:bg-yellow-500/15",
+                          indigo: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/40 hover:bg-indigo-500/15",
+                          purple: "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/15",
+                          blue: "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15",
+                          cyan: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/15",
+                          orange: "bg-orange-500/10 text-orange-400 border-orange-500/20 hover:border-orange-500/40 hover:bg-orange-500/15",
+                        };
+                        return (
+                          <button
+                            key={srv.id}
+                            onClick={() => handlePlayAction(ep, srv.id)}
+                            className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all duration-200 active:scale-95 ${colorClasses[srv.color]}`}
+                          >
+                            {srv.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -507,60 +821,120 @@ const WatchHtmlPage = () => {
           </div>
         )}
 
-        {/* CAST */}
-        <div className="space-y-6 relative z-0">
-          <div className="flex items-center gap-4 text-white font-black"><User className="text-blue-500" size={24} /><h2 className="text-xl font-black uppercase tracking-[0.2em]">Starring Cast</h2></div>
-          {tmdbMeta?.cast && tmdbMeta.cast.length > 0 ? (
-            <div className="flex gap-6 overflow-x-auto scrollbar-hide pb-4">
-              {tmdbMeta.cast.slice(0, 12).map((actor, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-3 shrink-0 group">
-                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white/5 group-hover:border-blue-500 transition-all duration-300 shadow-2xl bg-gray-800">
-                    <img
-                      src={actor.profile_path ? `https://image.tmdb.org/t/p/w200${actor.profile_path}` : "/default-avatar.jpg"}
-                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
-                      alt={actor.name}
-                      onError={e => { e.target.onerror = null; e.target.src = "/default-avatar.jpg"; }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter w-24 text-center leading-tight group-hover:text-blue-400">{actor.name}</span>
-                </div>
-              ))}
+        {/* ── METADATA STRIP ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-8 border-t border-white/[0.04]">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <Globe size={14} className="text-blue-500/60 shrink-0" />
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mb-0.5">Origin</p>
+              <p className="text-xs text-white font-bold">{tmdbMeta?.origin_country?.[0] || "Global"}</p>
             </div>
-          ) : (
-            <div className="flex gap-6 overflow-x-auto scrollbar-hide pb-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="flex flex-col items-center gap-3 shrink-0 animate-pulse">
-                  <div className="w-24 h-24 rounded-full bg-white/5 border border-white/5" />
-                  <div className="h-2 w-16 bg-white/5 rounded" />
-                </div>
-              ))}
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <Tags size={14} className="text-blue-500/60 shrink-0" />
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mb-0.5">Genres</p>
+              <p className="text-xs text-blue-400 font-bold">
+                {(tmdbMeta?.genres?.map(g => g.name) || movieMeta?.genres || ["Action"]).slice(0, 3).join(" · ")}
+              </p>
             </div>
-          )}
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <Calendar size={14} className="text-blue-500/60 shrink-0" />
+            <div>
+              <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mb-0.5">Released</p>
+              <p className="text-xs text-white font-bold">
+                {movieMeta?.release_date ? new Date(movieMeta.release_date).toLocaleDateString() : (movieMeta?.year || "Recently")}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* METADATA */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-[11px] uppercase font-black tracking-tight border-t border-white/5 pt-16 relative z-0">
-          <div className="flex items-center gap-3"><Globe size={16} className="text-blue-500/50" /><span className="text-gray-500">Origin:</span><span className="text-gray-200">{tmdbMeta?.origin_country?.[0] || "Global"}</span></div>
-          <div className="flex items-center gap-3"><Tags size={16} className="text-blue-500/50" /><span className="text-gray-500">Genres:</span><div className="flex flex-wrap gap-2 text-blue-400">{(tmdbMeta?.genres?.map(g => g.name) || movieMeta?.genres || ["Action"]).slice(0, 3).map((g, i) => <span key={i}>{g}</span>)}</div></div>
-          <div className="flex items-center gap-3"><Calendar size={16} className="text-blue-500/50" /><span className="text-gray-500">Released:</span><span className="text-gray-200">{movieMeta?.release_date ? new Date(movieMeta.release_date).toLocaleDateString() : (movieMeta?.year || "Recently")}</span></div>
-        </div>
+        {/* ── DEPLOYMENT GRID ── */}
+        {availableServers.length > 0 && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10">
+                <Server size={18} className="text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Deployment Grid</h2>
+                <p className="text-[10px] text-gray-600 font-bold">{availableServers.length} servers online</p>
+              </div>
+            </div>
 
-        {/* DOWNLOAD SECTION */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {availableServers.map(server => {
+                const isActive = activeServer?.id === server.id;
+                const colorClass = serverColorMap[server.id] || "text-blue-400 bg-blue-500/10 border-blue-500/20";
+                return (
+                  <button
+                    key={server.id}
+                    onClick={() => handlePlayAction(null, server.id)}
+                    className={`relative group p-5 rounded-2xl flex flex-col items-center gap-3 transition-all duration-300 border overflow-hidden active:scale-[0.97] ${
+                      isActive
+                        ? colorClass
+                        : "bg-white/[0.02] border-white/[0.04] text-gray-500 hover:bg-white/[0.05] hover:border-white/10 hover:text-gray-300"
+                    }`}
+                    style={isActive ? {} : {}}
+                  >
+                    {/* Glow on active */}
+                    {isActive && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+                    )}
+                    <div className={`relative p-2.5 rounded-xl ${isActive ? "bg-current/10" : "bg-white/5 group-hover:bg-white/10"} transition-all duration-200`}>
+                      {server.icon || <MonitorPlay size={18} />}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black uppercase tracking-widest">{server.name}</p>
+                      <p className={`text-[9px] mt-0.5 ${isActive ? "opacity-70" : "text-gray-700"}`}>{server.label}</p>
+                    </div>
+                    {isActive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── DOWNLOAD SECTION ── */}
         {movieMeta?.download_links?.length > 0 && (
-          <div id="download-section" className="bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-8 border border-white/5 scroll-mt-24 relative z-0 font-black">
-            <div className="flex items-center gap-4 mb-8 text-white border-b border-white/5 pb-4"><Database className="text-green-500" size={24} /><h2 className="text-xl font-black uppercase tracking-[0.2em]">Download Servers</h2></div>
-            <div className="space-y-10">
+          <div id="download-section" className="space-y-5 scroll-mt-24">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-green-600/10 border border-green-500/10">
+                <Database size={18} className="text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Downloads</h2>
+                <p className="text-[10px] text-gray-600 font-bold">{movieMeta.download_links.length} quality options</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
               {movieMeta.download_links.map((block, idx) => (
-                <div key={idx} className="space-y-4">
-                  <div className="flex items-center justify-between bg-gray-900/60 rounded-xl px-5 py-3 font-black">
-                    <span className="text-sm font-black text-green-400 uppercase tracking-widest">{block.quality}</span>
-                    {block.size && <span className="text-[11px] font-bold text-gray-400">{block.size}</span>}
+                <div key={idx} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                      <span className="text-xs font-black text-green-400 uppercase tracking-widest">{block.quality}</span>
+                    </div>
+                    {block.size && <span className="text-[10px] font-bold text-gray-600">{block.size}</span>}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {block.links?.map((link, i) => (
-                      <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="p-4 sm:p-5 rounded-2xl bg-gray-800/40 border border-white/5 hover:border-green-400 hover:bg-green-600/20 transition-all flex items-center gap-3 active:scale-95 font-black uppercase">
-                        <Video size={18} className="text-green-400" />
-                        <p className="text-xs">{link.label}</p>
+                      <a
+                        key={i}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-green-500/30 hover:bg-green-500/5 transition-all duration-200 flex items-center gap-3 active:scale-[0.98]"
+                      >
+                        <div className="p-2 rounded-lg bg-green-500/10 text-green-400 group-hover:bg-green-500/20 transition-colors">
+                          <Download size={14} />
+                        </div>
+                        <p className="text-xs font-bold text-gray-300 group-hover:text-white transition-colors uppercase tracking-wide">{link.label}</p>
                       </a>
                     ))}
                   </div>
@@ -569,23 +943,9 @@ const WatchHtmlPage = () => {
             </div>
           </div>
         )}
-
-        {/* DEPLOYMENT GRID */}
-        {availableServers.length > 0 && (
-          <div className="bg-slate-900/40 rounded-[2rem] p-6 sm:p-8 border border-white/5 backdrop-blur-xl shadow-2xl relative z-0">
-            <div className="flex items-center gap-4 mb-3 text-white border-b border-white/5 pb-4 font-black"><Server className="text-blue-500" size={24} /><h2 className="text-xl font-black uppercase tracking-[0.2em]">Deployment Grid</h2></div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 font-black">
-              {availableServers.map(server => (
-                <button key={server.id} type="button" onClick={() => handlePlayAction(null, server.id)} className={`relative p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex flex-col items-center gap-2 transition-all border overflow-hidden ${activeServer?.id === server.id ? "bg-blue-600 border-blue-400 shadow-lg text-white" : "bg-gray-800/30 border-white/5 text-gray-400 hover:border-white/20"}`}>
-                  {server.icon || <MonitorPlay size={20} />}
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-center">{server.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
+      {/* Mobile nav */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-[110]"><Navbar /></div>
     </div>
   );

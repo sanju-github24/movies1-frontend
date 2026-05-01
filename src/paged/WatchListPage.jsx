@@ -46,6 +46,24 @@ const formatLanguageCount = (langs) => {
   return `${langArray.length} Languages`;
 };
 
+/* ===== Normalize a raw watch_html/merged item so imdbRating and year are ALWAYS present ===== */
+const normalizeMeta = (item) => {
+  // imdbRating: prefer already-formatted string, fall back to raw number, else null
+  const rawRating = item.imdb_rating ?? item.imdbRating;
+  const imdbRating = rawRating != null
+    ? (typeof rawRating === "number" ? rawRating.toFixed(1) : String(rawRating))
+    : null;
+
+  // year: prefer explicit field, then release_date, then first_air_date, then created_at, else null
+  const year =
+    item.year ||
+    item.release_date?.split("-")[0] ||
+    item.first_air_date?.split("-")[0] ||
+    (item.created_at ? String(new Date(item.created_at).getFullYear()) : null);
+
+  return { ...item, imdbRating, year };
+};
+
 /* ====== Mobile Bottom Navigation ====== */
 const MobileNav = ({ session, onSearchClick, showSearch }) => {
   const location = useLocation();
@@ -134,7 +152,6 @@ const MobileNav = ({ session, onSearchClick, showSearch }) => {
               to={item.path}
               className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90 relative"
             >
-              {/* Active indicator dot */}
               {isActive && (
                 <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
               )}
@@ -210,10 +227,13 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none z-30">
-                  <div className="flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/10">
-                    <div className="bg-[#f5c518] text-black px-1 rounded-[2px] font-black text-[7px] leading-none">IMDb</div>
-                    <span className="text-[9px] font-black text-white">{movie.imdbRating || "7.2"}</span>
-                  </div>
+                  {/* Only render IMDb badge if we have a real rating */}
+                  {movie.imdbRating && (
+                    <div className="flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/10">
+                      <div className="bg-[#f5c518] text-black px-1 rounded-[2px] font-black text-[7px] leading-none">IMDb</div>
+                      <span className="text-[9px] font-black text-white">{movie.imdbRating}</span>
+                    </div>
+                  )}
                   <div className="bg-blue-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
                     {formatLanguageCount(movie.language)}
                   </div>
@@ -410,7 +430,21 @@ const WatchListPage = () => {
           const match = (moviesRes.data || []).find((m) => m.slug === item.slug) ||
                         (moviesRes.data || []).find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
           const movieLangs = match?.language?.length ? (Array.isArray(match.language) ? match.language : [match.language]) : ["Unknown"];
-          return { ...item, poster: item.poster || "/default-poster.jpg", cover_poster: item.cover_poster || item.poster || "/default-cover.jpg", language: movieLangs, categories: match?.categories || [], subCategory: match?.subCategory || null, description: match?.description || item.description || "", show_on_hero: item.show_on_hero || false, is_trending: item.is_trending || false, genres: item.genres || match?.categories || [], trailer_key: item.trailer_codes || null };
+          const raw = {
+            ...item,
+            poster: item.poster || "/default-poster.jpg",
+            cover_poster: item.cover_poster || item.poster || "/default-cover.jpg",
+            language: movieLangs,
+            categories: match?.categories || [],
+            subCategory: match?.subCategory || null,
+            description: match?.description || item.description || "",
+            show_on_hero: item.show_on_hero || false,
+            is_trending: item.is_trending || false,
+            genres: item.genres || match?.categories || [],
+            trailer_key: item.trailer_codes || null,
+          };
+          // ← normalize here so imdbRating + year are always set from real data
+          return normalizeMeta(raw);
         });
         setMovies(merged);
         const adminHero = merged.filter(m => m.show_on_hero === true).slice(0, 3);
@@ -438,8 +472,21 @@ const WatchListPage = () => {
         const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: m.imdb_id } });
         if (res.data?.success) {
           const tmdb = res.data.data;
-          await supabase.from("watch_html").update({ genres: tmdb.genres || [], imdb_rating: tmdb.imdb_rating, trailer_codes: tmdb.trailer_key || null }).eq("slug", m.slug);
-          return { ...m, certification: tmdb.certification || "", year: tmdb.year || "", tmdb_genres: tmdb.genres || [], imdbRating: tmdb.imdb_rating?.toFixed(1), runtime: tmdb.runtime, trailer_key: tmdb.trailer_key || null };
+          await supabase.from("watch_html").update({
+            genres: tmdb.genres || [],
+            imdb_rating: tmdb.imdb_rating,
+            trailer_codes: tmdb.trailer_key || null,
+          }).eq("slug", m.slug);
+          // normalizeMeta handles formatting — pass raw tmdb fields through
+          return normalizeMeta({
+            ...m,
+            imdb_rating: tmdb.imdb_rating ?? m.imdb_rating,
+            year: tmdb.year || m.year,
+            certification: tmdb.certification || "",
+            tmdb_genres: tmdb.genres || [],
+            runtime: tmdb.runtime,
+            trailer_key: tmdb.trailer_key || m.trailer_key,
+          });
         }
       } catch (e) { console.warn("Daily Sync failed for", m.title); }
       return m;
@@ -655,11 +702,17 @@ const WatchListPage = () => {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
-                            <div className="flex items-center gap-1.5">
-                              <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
-                              <span className="text-white drop-shadow-md">{liveMovieData.imdbRating || liveMovieData.imdb_rating || "7.5"}</span>
-                            </div>
-                            <span className="text-gray-300 drop-shadow-md font-black">{liveMovieData.year || (liveMovieData.created_at ? new Date(liveMovieData.created_at).getFullYear() : "2024")}</span>
+                            {/* IMDb — only shown when real rating exists */}
+                            {liveMovieData.imdbRating && (
+                              <div className="flex items-center gap-1.5">
+                                <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
+                                <span className="text-white drop-shadow-md">{liveMovieData.imdbRating}</span>
+                              </div>
+                            )}
+                            {/* Year — only shown when real year exists */}
+                            {liveMovieData.year && (
+                              <span className="text-gray-300 drop-shadow-md font-black">{liveMovieData.year}</span>
+                            )}
                             <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(liveMovieData.language)}</span>
                             {liveMovieData.genres?.length > 0 && (
                               <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">{liveMovieData.genres.slice(0, 2).join(" | ")}</span>
@@ -686,7 +739,7 @@ const WatchListPage = () => {
             </div>
           )}
 
-          {/* ── Main content — extra bottom padding on mobile for nav ── */}
+          {/* ── Main content ── */}
           <main className="relative z-20 pb-32 md:pb-32 mt-4">
             {continueList.length > 0 && (
               <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
@@ -766,8 +819,17 @@ const WatchListPage = () => {
                 <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl leading-none">{selectedMovie.title || selectedMovie.slug}</h3>
               )}
               <div className="flex items-center gap-4 text-xs font-black text-gray-400">
-                <div className="flex items-center gap-1.5"><div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] shadow-md">IMDb</div><span className="text-white">{selectedMovie.imdbRating || "7.5"}</span></div>
-                <span>{selectedMovie.year || "2024"}</span>
+                {/* IMDb — only rendered when real data exists */}
+                {selectedMovie.imdbRating && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] shadow-md">IMDb</div>
+                    <span className="text-white">{selectedMovie.imdbRating}</span>
+                  </div>
+                )}
+                {/* Year — only rendered when real data exists */}
+                {selectedMovie.year && (
+                  <span>{selectedMovie.year}</span>
+                )}
                 <span className="font-black text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
               </div>
               <button onClick={() => { saveRecentlyWatched(selectedMovie); navigate(`/watch/${selectedMovie.slug}`); }}
