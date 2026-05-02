@@ -10,6 +10,7 @@ import {
   Eye, Download, Link as LinkIcon, Globe, Tag, MessageCircle,
   Search, Zap, Star, Loader2, ChevronDown, ChevronUp, Clapperboard,
   PlayCircle, Upload, Layers, Settings2, Hash, Languages, Monitor,
+  Bot, Sparkles, AlertCircle,
 } from "lucide-react";
 import axios from "axios";
 
@@ -38,6 +39,8 @@ const STYLES = `
     --cyan-dim: rgba(61,221,232,0.12);
     --green: #3de88c;
     --green-dim: rgba(61,232,140,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.15);
     --text: #e8eaf0;
     --muted: #6b7090;
     --font-display: 'Syne', sans-serif;
@@ -114,11 +117,12 @@ const STYLES = `
     width: 30px; height: 30px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
   }
-  .icon-gold { background: var(--gold-dim); color: var(--gold); }
-  .icon-cyan { background: var(--cyan-dim); color: var(--cyan); }
-  .icon-red  { background: var(--red-dim);  color: var(--red);  }
-  .icon-green{ background: var(--green-dim);color: var(--green);}
-  .icon-muted{ background: rgba(255,255,255,0.05); color: var(--muted); }
+  .icon-gold   { background: var(--gold-dim);   color: var(--gold);   }
+  .icon-cyan   { background: var(--cyan-dim);   color: var(--cyan);   }
+  .icon-red    { background: var(--red-dim);    color: var(--red);    }
+  .icon-green  { background: var(--green-dim);  color: var(--green);  }
+  .icon-purple { background: var(--purple-dim); color: var(--purple); }
+  .icon-muted  { background: rgba(255,255,255,0.05); color: var(--muted); }
 
   .au-section-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
 
@@ -134,6 +138,56 @@ const STYLES = `
   .au-input-icon-wrap { position: relative; }
   .au-input-icon-wrap .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); width: 15px; height: 15px; pointer-events: none; }
   .au-input-icon-wrap .au-input { padding-left: 40px; }
+
+  /* ── 1TamilMV AutoFill block ── */
+  .au-1tmv-block {
+    background: linear-gradient(135deg, rgba(167,139,250,0.08), rgba(61,221,232,0.05));
+    border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 16px; padding: 24px;
+  }
+  .au-1tmv-block:focus-within {
+    border-color: rgba(167,139,250,0.45);
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.08);
+  }
+  .au-1tmv-url-row { display: flex; gap: 12px; }
+  .au-1tmv-url-row .au-input { flex: 1; border-color: rgba(167,139,250,0.2); }
+  .au-1tmv-url-row .au-input:focus { border-color: var(--purple); }
+  .au-autofill-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #7c3aed, var(--purple));
+    color: #fff; padding: 0 22px; border-radius: 10px; border: none;
+    cursor: pointer; font-weight: 700; font-size: 14px;
+    font-family: var(--font-body); white-space: nowrap; transition: all .2s;
+    box-shadow: 0 4px 20px rgba(124,58,237,0.35);
+  }
+  .au-autofill-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,58,237,0.55); }
+  .au-autofill-btn:disabled { opacity: 0.6; transform: none; cursor: not-allowed; }
+  .au-1tmv-hint {
+    margin-top: 10px; font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .au-1tmv-hint a { color: var(--purple); text-decoration: none; }
+  .au-1tmv-hint a:hover { text-decoration: underline; }
+  .au-1tmv-success {
+    margin-top: 14px; padding: 14px 16px;
+    background: rgba(61,232,140,0.06); border: 1px solid rgba(61,232,140,0.25);
+    border-radius: 10px; font-size: 13px; color: var(--green);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .au-1tmv-error {
+    margin-top: 14px; padding: 14px 16px;
+    background: rgba(232,69,90,0.06); border: 1px solid rgba(232,69,90,0.25);
+    border-radius: 10px; font-size: 13px; color: var(--red);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .au-1tmv-blocks-preview {
+    margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .au-1tmv-pill {
+    background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.25);
+    color: var(--purple); font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 20px;
+  }
 
   /* ── TMDB row ── */
   .au-tmdb-row { display: flex; gap: 12px; }
@@ -349,6 +403,13 @@ const STYLES = `
   .animate-in { animation: fadeSlideIn .3s ease; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── bot pulse ── */
+  @keyframes botPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4); }
+    50%       { box-shadow: 0 0 0 8px rgba(124,58,237,0); }
+  }
+  .au-autofill-btn.loading { animation: botPulse 1.2s ease-in-out infinite; }
 `;
 
 /* ─── tiny components ─────────────────────────────────────── */
@@ -447,9 +508,15 @@ const AdminUpload = () => {
   const [movies, setMovies] = useState([]);
   const [formOpen, setFormOpen] = useState(true);
 
+  /* ── TMDB ── */
   const [tmdbQuery, setTmdbQuery] = useState("");
   const [tmdbResult, setTmdbResult] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  /* ── 1TamilMV AutoFill ── */
+  const [autofillUrl, setAutofillUrl] = useState("");
+  const [isAutofilling, setIsAutofilling] = useState(false);
+  const [autofillStatus, setAutofillStatus] = useState(null); // { type: "success"|"error", msg: string, blocks?: number }
 
   const [movie, setMovie] = useState({
     slug: "", title: "", poster: "", description: "",
@@ -465,12 +532,91 @@ const AdminUpload = () => {
 
   /* ── data ── */
   const fetchMovies = useCallback(async () => {
-    const { data, error } = await supabase.from("movies").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("movies")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (error) toast.error("❌ Failed to load movies");
     else setMovies(data || []);
   }, []);
 
   useEffect(() => { fetchMovies(); }, [fetchMovies]);
+
+  /* ──────────────────────────────────────────────────────────
+   * 🤖  1TamilMV AUTO-FILL HANDLER
+   * ─────────────────────────────────────────────────────────*/
+  const handleAutoFill = async () => {
+    const trimmed = autofillUrl.trim();
+    if (!trimmed) {
+      toast.error("Paste a 1TamilMV URL first");
+      return;
+    }
+    if (!backendUrl) {
+      toast.error("backendUrl not configured in AppContext");
+      return;
+    }
+
+    setIsAutofilling(true);
+    setAutofillStatus(null);
+
+    try {
+      const res = await axios.post(`${backendUrl}/api/autofill`, {
+        mode: "url",
+        url: trimmed,
+      });
+
+      if (!res.data.success || !res.data.data) {
+        throw new Error(res.data.error || "Empty response from bot");
+      }
+
+      const d = res.data.data;
+
+      /* ── Hydrate primary fields ── */
+      setMovie((prev) => ({
+        ...prev,
+        title:          d.title        || prev.title,
+        slug:           d.slug         || slugify(d.title || prev.title),
+        poster:         d.poster       || prev.poster,
+        description:    d.description  || prev.description,
+        language:       d.language?.length    ? d.language    : prev.language,
+        subCategory:    d.subCategory?.length ? d.subCategory : prev.subCategory,
+        categories:     d.categories?.length  ? d.categories  : prev.categories,
+        showOnHomepage: d.showOnHomepage ?? prev.showOnHomepage,
+        directLinksOnly: d.directLinksOnly ?? prev.directLinksOnly,
+      }));
+
+      /* ── Hydrate download blocks ── */
+      if (d.downloadBlocks && d.downloadBlocks.length > 0) {
+        const blocks = d.downloadBlocks.map((b) => ({
+          id:          uuidv4(),
+          quality:     b.quality    || "",
+          size:        b.size       || "",
+          format:      b.format     || "",
+          manualUrl:   b.manualUrl  || "",
+          directUrl:   b.directUrl  || "",
+          gpLink:      b.gpLink     || "",
+          showGifAfter: !!b.showGifAfter,
+        }));
+        setDownloadBlocks(blocks);
+      }
+
+      setAutofillStatus({
+        type: "success",
+        msg: `Auto-filled "${d.title}" · ${d.downloadBlocks?.length || 0} download block(s) detected`,
+        blocks: d.downloadBlocks?.length || 0,
+        qualityPills: d.subCategory || [],
+        langPills:    d.language    || [],
+      });
+
+      toast.success("✅ 1TamilMV auto-fill complete!");
+    } catch (err) {
+      const errMsg = err.response?.data?.error || err.message || "Unknown error";
+      setAutofillStatus({ type: "error", msg: errMsg });
+      toast.error(`❌ Auto-fill failed: ${errMsg}`);
+    } finally {
+      setIsAutofilling(false);
+    }
+  };
 
   /* ── TMDB ── */
   const handleTMDBSearch = async () => {
@@ -480,71 +626,137 @@ const AdminUpload = () => {
     const isImdb = /^tt\d{7,10}$/i.test(tmdbQuery.trim());
     try {
       const res = await axios.get(`${backendUrl}/api/tmdb-details`, {
-        params: isImdb ? { imdbId: tmdbQuery.trim() } : { title: tmdbQuery.trim() },
+        params: isImdb
+          ? { imdbId: tmdbQuery.trim() }
+          : { title: tmdbQuery.trim() },
       });
       if (res.data.success && res.data.data) {
-        setTmdbResult(res.data.data); toast.success("✅ Metadata found");
-      } else { toast.error("⚠️ Not found"); }
-    } catch (err) { toast.error(`Search failed: ${err.message}`); }
-    finally { setIsSearching(false); }
+        setTmdbResult(res.data.data);
+        toast.success("✅ Metadata found");
+      } else {
+        toast.error("⚠️ Not found");
+      }
+    } catch (err) {
+      toast.error(`Search failed: ${err.message}`);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleUseMetadata = (data) => {
-    const rating = data.imdb_rating ? Number(data.imdb_rating) : null;
     setMovie((prev) => ({
       ...prev,
-      title: data.title || prev.title,
-      poster: data.poster_url || prev.poster,
+      title:       data.title       || prev.title,
+      poster:      data.poster_url  || prev.poster,
       description: data.description || prev.description,
-      slug: editingMovieId && prev.title === data.title ? prev.slug : slugify(data.title),
+      slug: editingMovieId && prev.title === data.title
+        ? prev.slug
+        : slugify(data.title),
     }));
-    setTmdbResult(null); setTmdbQuery("");
+    setTmdbResult(null);
+    setTmdbQuery("");
     toast.info("🎬 Metadata applied");
   };
 
   /* ── form ── */
   const resetForm = () => {
-    setMovie({ slug:"",title:"",poster:"",description:"",categories:[],subCategory:[],language:[],linkColor:"#3ddde8",showOnHomepage:true,directLinksOnly:false,watchUrl:"",note:"" });
-    setDownloadBlocks([{ id:uuidv4(),quality:"",size:"",format:"",manualUrl:"",directUrl:"",gpLink:"",showGifAfter:false }]);
-    setEditingMovieId(null); setFormOpen(true); setTmdbQuery(""); setTmdbResult(null);
+    setMovie({
+      slug: "", title: "", poster: "", description: "",
+      categories: [], subCategory: [], language: [],
+      linkColor: "#3ddde8", showOnHomepage: true,
+      directLinksOnly: false, watchUrl: "", note: "",
+    });
+    setDownloadBlocks([{
+      id: uuidv4(), quality: "", size: "", format: "",
+      manualUrl: "", directUrl: "", gpLink: "", showGifAfter: false,
+    }]);
+    setEditingMovieId(null);
+    setFormOpen(true);
+    setTmdbQuery("");
+    setTmdbResult(null);
+    setAutofillUrl("");
+    setAutofillStatus(null);
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true);
+    e.preventDefault();
+    setLoading(true);
+
     if (!movie.title || !movie.poster || !movie.description) {
-      toast.error("❌ Title, poster and description are required"); setLoading(false); return;
+      toast.error("❌ Title, poster and description are required");
+      setLoading(false);
+      return;
     }
+
     const slug = movie.slug || slugify(movie.title.trim());
-    const valid = downloadBlocks.filter(b => b.quality && b.size && b.format && (b.manualUrl || b.directUrl || b.gpLink));
-    if (!valid.length) { toast.error("❌ At least one complete download block required"); setLoading(false); return; }
+    const valid = downloadBlocks.filter(
+      (b) => b.quality && b.size && b.format && (b.manualUrl || b.directUrl || b.gpLink)
+    );
+    if (!valid.length) {
+      toast.error("❌ At least one complete download block required");
+      setLoading(false);
+      return;
+    }
 
     const sanitized = valid.map((b) => ({
-      id: b.id || uuidv4(), quality: b.quality, size: b.size, format: b.format,
-      url: b.manualUrl || "", directUrl: b.directUrl || "", gpLink: b.gpLink || "",
-      showGifAfter: !!b.showGifAfter, count: 0,
+      id:          b.id || uuidv4(),
+      quality:     b.quality,
+      size:        b.size,
+      format:      b.format,
+      url:         b.manualUrl || "",
+      directUrl:   b.directUrl || "",
+      gpLink:      b.gpLink    || "",
+      showGifAfter: !!b.showGifAfter,
+      count:       0,
     }));
-    const movieData = { ...movie, slug, downloads: sanitized, uploaded_by: userData?.email || "unknown",
-      ...(editingMovieId ? {} : { created_at: new Date().toISOString() }) };
+
+    const movieData = {
+      ...movie,
+      slug,
+      downloads:   sanitized,
+      uploaded_by: userData?.email || "unknown",
+      ...(editingMovieId ? {} : { created_at: new Date().toISOString() }),
+    };
+
     try {
       const { error } = editingMovieId
         ? await supabase.from("movies").update(movieData).eq("id", editingMovieId)
         : await supabase.from("movies").insert([movieData]);
       if (error) throw error;
       toast.success("✅ Saved successfully");
-      resetForm(); fetchMovies(); setFormOpen(false);
-    } catch (err) { toast.error(`❌ ${err.message}`); }
-    finally { setLoading(false); }
+      resetForm();
+      fetchMovies();
+      setFormOpen(false);
+    } catch (err) {
+      toast.error(`❌ ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (m) => {
-    setEditingMovieId(m.id); setFormOpen(true);
+    setEditingMovieId(m.id);
+    setFormOpen(true);
     const blocks = (m.downloads || []).map((d) => ({
-      id: d.id || uuidv4(), quality: d.quality||"", size: d.size||"",
-      format: d.format||"", manualUrl: d.url||"", directUrl: d.directUrl||"",
-      gpLink: d.gpLink||"", showGifAfter: !!d.showGifAfter,
+      id:          d.id || uuidv4(),
+      quality:     d.quality    || "",
+      size:        d.size       || "",
+      format:      d.format     || "",
+      manualUrl:   d.url        || "",
+      directUrl:   d.directUrl  || "",
+      gpLink:      d.gpLink     || "",
+      showGifAfter: !!d.showGifAfter,
     }));
-    if (!blocks.length) blocks.push({ id:uuidv4(),quality:"",size:"",format:"",manualUrl:"",directUrl:"",gpLink:"",showGifAfter:false });
-    setMovie({ ...m }); setDownloadBlocks(blocks);
+    if (!blocks.length) {
+      blocks.push({
+        id: uuidv4(), quality: "", size: "", format: "",
+        manualUrl: "", directUrl: "", gpLink: "", showGifAfter: false,
+      });
+    }
+    setMovie({ ...m });
+    setDownloadBlocks(blocks);
+    setAutofillUrl("");
+    setAutofillStatus(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -557,17 +769,30 @@ const AdminUpload = () => {
 
   const toggleHomepage = async (m) => {
     const next = !m.showOnHomepage;
-    const updates = next ? { showOnHomepage: true, homepage_added_at: new Date().toISOString() } : { showOnHomepage: false, homepage_added_at: null };
+    const updates = next
+      ? { showOnHomepage: true,  homepage_added_at: new Date().toISOString() }
+      : { showOnHomepage: false, homepage_added_at: null };
     const { error } = await supabase.from("movies").update(updates).eq("id", m.id);
     if (error) toast.error("❌ Update failed");
-    else { toast.success("✅ Updated"); setMovies((prev) => prev.map((x) => x.id === m.id ? { ...x, ...updates } : x)); }
+    else {
+      toast.success("✅ Updated");
+      setMovies((prev) =>
+        prev.map((x) => x.id === m.id ? { ...x, ...updates } : x)
+      );
+    }
   };
 
   const handleDownloadChange = (i, field, value) => {
-    setDownloadBlocks((prev) => { const u = [...prev]; u[i][field] = value; return u; });
+    setDownloadBlocks((prev) => {
+      const u = [...prev];
+      u[i][field] = value;
+      return u;
+    });
   };
 
-  const filtered = movies.filter((m) => m.title?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = movies.filter((m) =>
+    m.title?.toLowerCase().includes(search.toLowerCase())
+  );
   const showPreview = movie.title || movie.poster;
 
   /* ── render ── */
@@ -588,7 +813,9 @@ const AdminUpload = () => {
                   {editingMovieId ? "Edit" : "Upload"} <span>Content</span>
                 </div>
                 <div className="au-subtitle">
-                  {editingMovieId ? `Editing · ${movie.title}` : "Add new movies to your library"}
+                  {editingMovieId
+                    ? `Editing · ${movie.title}`
+                    : "Add new movies to your library"}
                 </div>
               </div>
             </div>
@@ -615,10 +842,95 @@ const AdminUpload = () => {
                 {/* ── LEFT: form ── */}
                 <form onSubmit={handleSubmit} className="au-form-card">
 
-                  {/* TMDB section */}
+                  {/* ════════════════════════════════════════
+                      🤖  1TAMILMV AUTO-FILL SECTION
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-gold"><Zap style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-purple">
+                        <Bot style={{ width: 14, height: 14 }} />
+                      </span>
+                      1TamilMV Auto-Fill
+                    </div>
+
+                    <div className="au-1tmv-block">
+                      <div className="au-1tmv-url-row">
+                        <input
+                          type="url"
+                          className="au-input"
+                          placeholder="Paste 1TamilMV movie page URL…"
+                          value={autofillUrl}
+                          onChange={(e) => {
+                            setAutofillUrl(e.target.value);
+                            setAutofillStatus(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAutoFill();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className={`au-autofill-btn ${isAutofilling ? "loading" : ""}`}
+                          onClick={handleAutoFill}
+                          disabled={isAutofilling}
+                        >
+                          {isAutofilling
+                            ? <Loader2 style={{ width: 16, height: 16 }} className="spin" />
+                            : <Sparkles style={{ width: 16, height: 16 }} />}
+                          {isAutofilling ? "Scraping…" : "Auto Fill"}
+                        </button>
+                      </div>
+
+                      <div className="au-1tmv-hint">
+                        <AlertCircle style={{ width: 12, height: 12 }} />
+                        Paste any{" "}
+                        <a href="https://www.1tamilmv.ltd" target="_blank" rel="noopener noreferrer">
+                          1tamilmv.ltd
+                        </a>{" "}
+                        movie topic URL — title, poster, description &amp; all download blocks will be filled automatically via TMDB.
+                      </div>
+
+                      {/* Status feedback */}
+                      {autofillStatus && autofillStatus.type === "success" && (
+                        <div className="au-1tmv-success animate-in">
+                          <Sparkles style={{ width: 14, height: 14 }} />
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{autofillStatus.msg}</div>
+                            {(autofillStatus.qualityPills?.length > 0 || autofillStatus.langPills?.length > 0) && (
+                              <div className="au-1tmv-blocks-preview">
+                                {autofillStatus.qualityPills.map((p) => (
+                                  <span key={p} className="au-1tmv-pill">{p}</span>
+                                ))}
+                                {autofillStatus.langPills.map((l) => (
+                                  <span key={l} className="au-1tmv-pill">{l}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {autofillStatus && autofillStatus.type === "error" && (
+                        <div className="au-1tmv-error animate-in">
+                          <AlertCircle style={{ width: 14, height: 14 }} />
+                          <span>{autofillStatus.msg}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <hr className="au-section-divider" />
+
+                  {/* ════════════════════════════════════════
+                      ⚡  TMDB MANUAL SEARCH SECTION
+                  ════════════════════════════════════════ */}
+                  <div>
+                    <div className="au-section-head">
+                      <span className="icon-wrap icon-gold">
+                        <Zap style={{ width: 14, height: 14 }} />
+                      </span>
                       Auto-Fill from TMDB
                     </div>
                     <div className="au-tmdb-row">
@@ -629,7 +941,11 @@ const AdminUpload = () => {
                         onChange={(e) => setTmdbQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleTMDBSearch()}
                       />
-                      <button type="button" className="au-search-btn" onClick={handleTMDBSearch} disabled={isSearching}>
+                      <button
+                        type="button" className="au-search-btn"
+                        onClick={handleTMDBSearch}
+                        disabled={isSearching}
+                      >
                         {isSearching
                           ? <Loader2 style={{ width: 16, height: 16 }} className="spin" />
                           : <Search style={{ width: 16, height: 16 }} />}
@@ -638,14 +954,26 @@ const AdminUpload = () => {
                     </div>
                     {tmdbResult && (
                       <div className="au-tmdb-result animate-in">
-                        <img src={tmdbResult.poster_url} className="au-tmdb-poster" alt={tmdbResult.title} />
+                        <img
+                          src={tmdbResult.poster_url}
+                          className="au-tmdb-poster"
+                          alt={tmdbResult.title}
+                        />
                         <div className="au-tmdb-info">
-                          <div className="au-tmdb-title">{tmdbResult.title} ({tmdbResult.year})</div>
+                          <div className="au-tmdb-title">
+                            {tmdbResult.title} ({tmdbResult.year})
+                          </div>
                           <div className="au-tmdb-meta">
                             <Star className="star-icon" />
-                            {tmdbResult.imdb_rating ? Number(tmdbResult.imdb_rating).toFixed(1) : "N/A"}
+                            {tmdbResult.imdb_rating
+                              ? Number(tmdbResult.imdb_rating).toFixed(1)
+                              : "N/A"}
                           </div>
-                          <button type="button" className="au-apply-btn" onClick={() => handleUseMetadata(tmdbResult)}>
+                          <button
+                            type="button"
+                            className="au-apply-btn"
+                            onClick={() => handleUseMetadata(tmdbResult)}
+                          >
                             ✓ Apply Metadata
                           </button>
                         </div>
@@ -655,75 +983,151 @@ const AdminUpload = () => {
 
                   <hr className="au-section-divider" />
 
-                  {/* Primary info */}
+                  {/* ════════════════════════════════════════
+                      ✏️  PRIMARY INFO
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-cyan"><Pencil style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-cyan">
+                        <Pencil style={{ width: 14, height: 14 }} />
+                      </span>
                       Primary Info
                     </div>
                     <div className="au-grid-2" style={{ marginBottom: 14 }}>
-                      <input type="text" className="au-input" placeholder="Movie Title" value={movie.title}
-                        onChange={(e) => setMovie({ ...movie, title: e.target.value, slug: editingMovieId ? movie.slug : slugify(e.target.value) })} required />
-                      <input type="url" className="au-input" placeholder="Poster Image URL" value={movie.poster}
-                        onChange={(e) => setMovie({ ...movie, poster: e.target.value })} required />
+                      <input
+                        type="text" className="au-input"
+                        placeholder="Movie Title"
+                        value={movie.title}
+                        onChange={(e) =>
+                          setMovie({
+                            ...movie,
+                            title: e.target.value,
+                            slug: editingMovieId ? movie.slug : slugify(e.target.value),
+                          })
+                        }
+                        required
+                      />
+                      <input
+                        type="url" className="au-input"
+                        placeholder="Poster Image URL"
+                        value={movie.poster}
+                        onChange={(e) => setMovie({ ...movie, poster: e.target.value })}
+                        required
+                      />
                     </div>
-                    <textarea className="au-input au-textarea" placeholder="Movie description / synopsis…"
-                      value={movie.description} onChange={(e) => setMovie({ ...movie, description: e.target.value })} required />
+                    <textarea
+                      className="au-input au-textarea"
+                      placeholder="Movie description / synopsis…"
+                      value={movie.description}
+                      onChange={(e) => setMovie({ ...movie, description: e.target.value })}
+                      required
+                    />
                   </div>
 
                   <hr className="au-section-divider" />
 
-                  {/* Player & Notes */}
+                  {/* ════════════════════════════════════════
+                      ▶️  PLAYER & NOTES
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-muted"><PlayCircle style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-muted">
+                        <PlayCircle style={{ width: 14, height: 14 }} />
+                      </span>
                       Player & Notes
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <textarea className="au-input au-textarea" style={{ minHeight: 64, fontFamily: "monospace", fontSize: 13 }}
+                      <textarea
+                        className="au-input au-textarea"
+                        style={{ minHeight: 64, fontFamily: "monospace", fontSize: 13 }}
                         placeholder="Watch / Embed URL (iframe src or player link)"
-                        value={movie.watchUrl} onChange={(e) => setMovie({ ...movie, watchUrl: e.target.value })} />
-                      <input type="text" className="au-input" placeholder="Private admin note (not visible to users)"
-                        value={movie.note} onChange={(e) => setMovie({ ...movie, note: e.target.value })} />
+                        value={movie.watchUrl}
+                        onChange={(e) => setMovie({ ...movie, watchUrl: e.target.value })}
+                      />
+                      <input
+                        type="text" className="au-input"
+                        placeholder="Private admin note (not visible to users)"
+                        value={movie.note}
+                        onChange={(e) => setMovie({ ...movie, note: e.target.value })}
+                      />
                     </div>
                   </div>
 
                   <hr className="au-section-divider" />
 
-                  {/* Taxonomy */}
+                  {/* ════════════════════════════════════════
+                      🏷️  CATEGORIES & LANGUAGES
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-gold"><Tag style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-gold">
+                        <Tag style={{ width: 14, height: 14 }} />
+                      </span>
                       Categories & Languages
                     </div>
                     <div className="au-grid-3">
-                      <PillGroup title="Industry" options={["Hollywood","Kollywood","Bollywood"]} selected={movie.categories} onChange={(v) => setMovie({ ...movie, categories: v })} colorClass="active-blue" />
-                      <PillGroup title="Quality" options={["WEB-DL","HDTS","PRE-HD","PreDVD"]} selected={movie.subCategory} onChange={(v) => setMovie({ ...movie, subCategory: v })} colorClass="active-green" />
-                      <PillGroup title="Languages" options={["Tamil","Malayalam","Kannada","Telugu","Hindi","English"]} selected={movie.language} onChange={(v) => setMovie({ ...movie, language: v })} colorClass="active-gold" />
+                      <PillGroup
+                        title="Industry"
+                        options={["Hollywood", "Kollywood", "Bollywood"]}
+                        selected={movie.categories}
+                        onChange={(v) => setMovie({ ...movie, categories: v })}
+                        colorClass="active-blue"
+                      />
+                      <PillGroup
+                        title="Quality"
+                        options={["WEB-DL", "HDTS", "PRE-HD", "PreDVD"]}
+                        selected={movie.subCategory}
+                        onChange={(v) => setMovie({ ...movie, subCategory: v })}
+                        colorClass="active-green"
+                      />
+                      <PillGroup
+                        title="Languages"
+                        options={["Tamil", "Malayalam", "Kannada", "Telugu", "Hindi", "English"]}
+                        selected={movie.language}
+                        onChange={(v) => setMovie({ ...movie, language: v })}
+                        colorClass="active-gold"
+                      />
                     </div>
                   </div>
 
                   <hr className="au-section-divider" />
 
-                  {/* Display */}
+                  {/* ════════════════════════════════════════
+                      🖥️  DISPLAY SETTINGS
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-cyan"><Monitor style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-cyan">
+                        <Monitor style={{ width: 14, height: 14 }} />
+                      </span>
                       Display Settings
                     </div>
                     <div className="au-display-row">
                       <div className="au-color-wrap">
-                        <div className="au-color-swatch" style={{ background: movie.linkColor }}>
-                          <input type="color" value={movie.linkColor} onChange={(e) => setMovie({ ...movie, linkColor: e.target.value })} />
+                        <div
+                          className="au-color-swatch"
+                          style={{ background: movie.linkColor }}
+                        >
+                          <input
+                            type="color"
+                            value={movie.linkColor}
+                            onChange={(e) => setMovie({ ...movie, linkColor: e.target.value })}
+                          />
                         </div>
                         <span>Accent color</span>
                       </div>
                       <label className="au-toggle-label">
-                        <Toggle checked={movie.showOnHomepage} onChange={(e) => setMovie({ ...movie, showOnHomepage: e.target.checked })} />
+                        <Toggle
+                          checked={movie.showOnHomepage}
+                          onChange={(e) => setMovie({ ...movie, showOnHomepage: e.target.checked })}
+                        />
                         Show on Homepage
                       </label>
                       <label className="au-toggle-label">
-                        <Toggle checked={movie.directLinksOnly} onChange={(e) => setMovie({ ...movie, directLinksOnly: e.target.checked })} />
+                        <Toggle
+                          checked={movie.directLinksOnly}
+                          onChange={(e) => setMovie({ ...movie, directLinksOnly: e.target.checked })}
+                        />
                         Direct Links Only
                       </label>
                     </div>
@@ -731,24 +1135,46 @@ const AdminUpload = () => {
 
                   <hr className="au-section-divider" />
 
-                  {/* Downloads */}
+                  {/* ════════════════════════════════════════
+                      ⬇️  DOWNLOAD OPTIONS
+                  ════════════════════════════════════════ */}
                   <div>
                     <div className="au-section-head">
-                      <span className="icon-wrap icon-red"><Download style={{ width: 14, height: 14 }} /></span>
+                      <span className="icon-wrap icon-red">
+                        <Download style={{ width: 14, height: 14 }} />
+                      </span>
                       Download Options
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
+                    <div
+                      style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}
+                    >
                       {downloadBlocks.map((block, i) => (
                         <DownloadBlock
-                          key={block.id} block={block} index={i}
+                          key={block.id}
+                          block={block}
+                          index={i}
                           onChange={handleDownloadChange}
-                          onRemove={(idx) => { if (downloadBlocks.length > 1) setDownloadBlocks((p) => p.filter((_, ii) => ii !== idx)); }}
+                          onRemove={(idx) => {
+                            if (downloadBlocks.length > 1)
+                              setDownloadBlocks((p) => p.filter((_, ii) => ii !== idx));
+                          }}
                           isLast={downloadBlocks.length === 1}
                         />
                       ))}
                     </div>
-                    <button type="button" className="au-add-block-btn"
-                      onClick={() => setDownloadBlocks((p) => [...p, { id:uuidv4(),quality:"",size:"",format:"",manualUrl:"",directUrl:"",gpLink:"",showGifAfter:false }])}>
+                    <button
+                      type="button"
+                      className="au-add-block-btn"
+                      onClick={() =>
+                        setDownloadBlocks((p) => [
+                          ...p,
+                          {
+                            id: uuidv4(), quality: "", size: "", format: "",
+                            manualUrl: "", directUrl: "", gpLink: "", showGifAfter: false,
+                          },
+                        ])
+                      }
+                    >
                       <Plus style={{ width: 15, height: 15 }} /> Add Download Option
                     </button>
                   </div>
@@ -757,7 +1183,9 @@ const AdminUpload = () => {
                   <button type="submit" className="au-submit-btn" disabled={loading}>
                     {loading
                       ? <Loader2 style={{ width: 20, height: 20 }} className="spin" />
-                      : editingMovieId ? <Save style={{ width: 20, height: 20 }} /> : <Upload style={{ width: 20, height: 20 }} />}
+                      : editingMovieId
+                        ? <Save style={{ width: 20, height: 20 }} />
+                        : <Upload style={{ width: 20, height: 20 }} />}
                     {editingMovieId ? "Update Content" : "Publish Content"}
                   </button>
                 </form>
@@ -770,23 +1198,55 @@ const AdminUpload = () => {
                     </div>
                     <img
                       src={movie.poster || "https://via.placeholder.com/300x450?text=No+Poster"}
-                      className="au-preview-poster" alt="preview"
-                      onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/300x450?text=Error"; }}
+                      className="au-preview-poster"
+                      alt="preview"
+                      onError={(e) => {
+                        e.currentTarget.src = "https://via.placeholder.com/300x450?text=Error";
+                      }}
                     />
                     <div className="au-preview-title">{movie.title || "Movie Title"}</div>
                     <div className="au-preview-slug">{movie.slug || "auto-slug"}</div>
                     {movie.language?.length > 0 && (
-                      <div style={{ display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",marginBottom:10 }}>
+                      <div
+                        style={{
+                          display: "flex", justifyContent: "center",
+                          gap: 6, flexWrap: "wrap", marginBottom: 10,
+                        }}
+                      >
                         {movie.language.map((l) => (
-                          <span key={l} style={{ background:"rgba(255,255,255,0.06)",padding:"3px 10px",borderRadius:20,fontSize:11,color:"var(--muted)" }}>{l}</span>
+                          <span
+                            key={l}
+                            style={{
+                              background: "rgba(255,255,255,0.06)",
+                              padding: "3px 10px", borderRadius: 20,
+                              fontSize: 11, color: "var(--muted)",
+                            }}
+                          >
+                            {l}
+                          </span>
                         ))}
                       </div>
                     )}
-                    <div className="au-preview-desc">{movie.description || "No description."}</div>
+                    <div className="au-preview-desc">
+                      {movie.description || "No description."}
+                    </div>
                     {movie.categories?.length > 0 && (
-                      <div style={{ marginTop:14,display:"flex",justifyContent:"center",gap:6 }}>
+                      <div
+                        style={{
+                          marginTop: 14, display: "flex",
+                          justifyContent: "center", gap: 6,
+                        }}
+                      >
                         {movie.categories.map((c) => (
-                          <span key={c} style={{ background:"var(--red-dim)",color:"var(--red)",fontSize:10,padding:"2px 8px",borderRadius:20 }}>{c}</span>
+                          <span
+                            key={c}
+                            style={{
+                              background: "var(--red-dim)", color: "var(--red)",
+                              fontSize: 10, padding: "2px 8px", borderRadius: 20,
+                            }}
+                          >
+                            {c}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -797,7 +1257,12 @@ const AdminUpload = () => {
           )}
 
           {/* ── LIBRARY ── */}
-          <div style={{ marginTop: 64, paddingTop: 40, borderTop: "1px solid var(--border)" }}>
+          <div
+            style={{
+              marginTop: 64, paddingTop: 40,
+              borderTop: "1px solid var(--border)",
+            }}
+          >
             <div className="au-library-head">
               <Film style={{ width: 22, height: 22, color: "var(--red)" }} />
               <span className="au-library-title">Library</span>
@@ -806,34 +1271,59 @@ const AdminUpload = () => {
 
             <div className="au-search-wrap">
               <Search className="icon" />
-              <input type="text" className="au-search-input" placeholder="Search library…"
-                value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input
+                type="text" className="au-search-input"
+                placeholder="Search library…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
             {filtered.length === 0 ? (
-              <div style={{ textAlign:"center",padding:"60px 0",color:"var(--muted)",fontFamily:"var(--font-display)" }}>
-                <Film style={{ width: 48, height: 48, margin:"0 auto 12px",opacity:.3 }} />
+              <div
+                style={{
+                  textAlign: "center", padding: "60px 0",
+                  color: "var(--muted)", fontFamily: "var(--font-display)",
+                }}
+              >
+                <Film style={{ width: 48, height: 48, margin: "0 auto 12px", opacity: 0.3 }} />
                 <div>No titles found</div>
               </div>
             ) : (
               <div className="au-movie-grid">
                 {filtered.map((m) => (
                   <div key={m.id} className="au-movie-card">
-                    <img src={m.poster} className="au-movie-thumb" alt={m.title}
-                      onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/300x450?text=No+Image"; }} />
+                    <img
+                      src={m.poster} className="au-movie-thumb" alt={m.title}
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          "https://via.placeholder.com/300x450?text=No+Image";
+                      }}
+                    />
                     <div className="au-movie-info">
                       <div className="au-movie-name">{m.title}</div>
-                      <div className="au-movie-meta">{[...(m.language||[]),...(m.categories||[])].join(" · ")}</div>
+                      <div className="au-movie-meta">
+                        {[...(m.language || []), ...(m.categories || [])].join(" · ")}
+                      </div>
                       <div className="au-movie-actions">
-                        <button className="au-act-btn au-act-edit" onClick={() => handleEdit(m)}>
+                        <button
+                          className="au-act-btn au-act-edit"
+                          onClick={() => handleEdit(m)}
+                        >
                           <Pencil style={{ width: 10, height: 10 }} /> Edit
                         </button>
                         <button
-                          className={`au-act-btn ${m.showOnHomepage ? "au-act-hide" : "au-act-show"}`}
-                          onClick={() => toggleHomepage(m)}>
+                          className={`au-act-btn ${
+                            m.showOnHomepage ? "au-act-hide" : "au-act-show"
+                          }`}
+                          onClick={() => toggleHomepage(m)}
+                        >
                           {m.showOnHomepage ? "Hide" : "Show"}
                         </button>
-                        <button className="au-act-btn au-act-del" onClick={() => handleDelete(m.id)}>
+                        <button
+                          className="au-act-btn au-act-del"
+                          onClick={() => handleDelete(m.id)}
+                        >
                           <Trash2 style={{ width: 10, height: 10 }} />
                         </button>
                       </div>
