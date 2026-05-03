@@ -21,6 +21,13 @@ const CHANNELS = [
     logo: "/Star_Sports_Hindi.png", url: "https://allrounder-live5.pages.dev/star/star-1-hindi",
     desc: "Star Sports Hindi — Live cricket in Hindi commentary",
   },
+  {
+    id: "star-kannada", name: "Star Sports", sub: "Kannada",
+    color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
+    bg: "rgba(0,168,225,0.06)", tag: "KANNADA", useIcon: false,
+    logo: "/star-sports-kan.jpg", url: "https://binge-giotv.pages.dev/player2?id=ss1kan",
+    desc: "Star Sports 1 — Live cricket in Kannada commentary",
+  },
 ];
 
 // ─── SCHEDULE ─────────────────────────────────────────────────────────────────
