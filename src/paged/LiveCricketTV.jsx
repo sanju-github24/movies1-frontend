@@ -118,7 +118,7 @@ function getActiveMatchId() {
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
 const POLL_MS  = 10_000;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
