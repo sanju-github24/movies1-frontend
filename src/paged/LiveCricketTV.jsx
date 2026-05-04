@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, Tv2, Signal, Volume2, Maximize2, AlertCircle,
-  RefreshCw, Activity, Clock, Calendar, Trophy
+  RefreshCw, Activity, Clock, Calendar, Trophy, BarChart2
 } from "lucide-react";
 
 // ─── CHANNELS ────────────────────────────────────────────────────────────────
@@ -23,8 +23,8 @@ const CHANNELS = [
   },
   {
     id: "star-kannada", name: "Star Sports", sub: "Kannada",
-    color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
-    bg: "rgba(0,168,225,0.06)", tag: "KANNADA", useIcon: false,
+    color: "#a855f7", glow: "rgba(168,85,247,0.3)", border: "rgba(168,85,247,0.25)",
+    bg: "rgba(168,85,247,0.06)", tag: "KANNADA", useIcon: false,
     logo: "/star-sports-kan.jpg", url: "https://binge-giotv.pages.dev/player2?id=ss1kan",
     desc: "Star Sports 1 — Live cricket in Kannada commentary",
   },
@@ -209,8 +209,6 @@ function BallChip({ ball }) {
 }
 
 // ─── BATTING TABLE ────────────────────────────────────────────────────────────
-// Key mapping from actual API innings response:
-// Batsmen[]: BatterName, Runs, Balls, Fours, Sixes, StrikeRate, OutDesc, OnStrike, IsOnCrease
 function BattingTable({ batsmen, ms }) {
   if (!batsmen || !batsmen.length)
     return <p className="text-center text-gray-700 text-xs py-8">No batting data yet</p>;
@@ -232,7 +230,6 @@ function BattingTable({ batsmen, ms }) {
         </thead>
         <tbody>
           {batsmen.map((b, idx) => {
-            // Try all known key variants from the IPL feed
             const name  = b.BatterName  || b.PlayerName || b.Name || "";
             const runs  = b.Runs        ?? b.RunsScored  ?? 0;
             const balls = b.Balls       ?? b.BallsFaced  ?? 0;
@@ -240,7 +237,6 @@ function BattingTable({ batsmen, ms }) {
             const sixes = b.Sixes       ?? b.SixesScored ?? 0;
             const sr    = b.StrikeRate  ?? (balls ? (runs / balls * 100).toFixed(1) : "0.0");
             const outDesc = b.OutDesc   || b.DismissalType || b.HowOut || "";
-            // OnStrike: "1" or true = striker; IsOnCrease = still batting
             const isStriker    = b.OnStrike === "1" || b.OnStrike === true || b.IsStriker === true
                               || (b.PlayerID && b.PlayerID === strikerID);
             const isNonStriker = b.OnStrike === "2" || b.IsNonStriker === true
@@ -274,7 +270,6 @@ function BattingTable({ batsmen, ms }) {
 }
 
 // ─── BOWLING TABLE ────────────────────────────────────────────────────────────
-// Bowlers[]: BowlerName, Overs, Maidens, Runs, Wickets, Economy, CurrentBowler
 function BowlingTable({ bowlers, ms }) {
   if (!bowlers || !bowlers.length)
     return <p className="text-center text-gray-700 text-xs py-8">No bowling data yet</p>;
@@ -344,7 +339,7 @@ function FallOfWickets({ fow }) {
   );
 }
 
-// ─── POINTS TABLE ─────────────────────────────────────────────────────────────
+// ─── POINTS TABLE (UPDATED WITH FORM & LOGOS) ────────────────────────────────
 function PointsTable() {
   const [points, setPoints]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -362,76 +357,309 @@ function PointsTable() {
   }, []);
 
   if (loading) return (
-    <div className="flex justify-center py-8">
+    <div className="flex justify-center py-10">
       <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
         style={{ borderColor:"rgba(245,166,35,0.2)", borderTopColor:"#f5a623" }} />
     </div>
   );
 
-  if (error) return (
-    <div className="text-center py-8">
-      <p className="text-red-400 text-xs">{error}</p>
-    </div>
-  );
-
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 mb-3">
-        <Trophy size={13} className="text-amber-400" />
-        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.25em]">Points Table</span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <Trophy size={14} className="text-amber-400" />
+        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.25em]">Season Standings</span>
       </div>
-      <div className="rounded-2xl overflow-hidden border" style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
-        {/* Header */}
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b"
-          style={{ borderColor:"rgba(255,255,255,0.06)" }}>
-          {["Team","M","W","L","Pts","NRR"].map(h => (
-            <span key={h} className="text-[9px] font-black text-gray-600 uppercase tracking-wider text-right first:text-left">{h}</span>
+
+      <div className="rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02]">
+        {/* Table header */}
+        <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_80px] gap-x-3 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+          {["Team","M","W","L","Pts","NRR", "Form"].map((h, idx) => (
+            <span key={h} className={`text-[9px] font-black text-gray-600 uppercase tracking-widest ${idx === 0 ? "text-left" : "text-right"}`}>
+              {h}
+            </span>
           ))}
         </div>
+
         {points.map((p, i) => {
-          // API keys from backend: TeamName, Matches/MatchesPlayed, Wins, Losses, Points, NetRunRate
-          const teamName = p.TeamName || p.Team || p.TeamFullName || "";
-          const code     = nameToCode(teamName);
+          const teamName = p.TeamName || p.Team || "";
+          const code     = p.TeamCode || nameToCode(teamName);
+          // Prioritize the Logo from the JSON data as requested
+          const teamLogo = p.TeamLogo || getTeam(code).logo;
           const team     = getTeam(code);
-          const m   = p.Matches      || p.MatchesPlayed  || p.P  || 0;
-          const w   = p.Wins         || p.Won            || p.W  || 0;
-          const l   = p.Losses       || p.Lost           || p.L  || 0;
-          const pts = p.Points       || p.Pts            || 0;
-          const nrr = p.NetRunRate   || p.NRR            || "0.000";
-          const qual = i < 4; // top 4 qualify
+          
+          const m   = p.Matches      || 0;
+          const w   = p.Wins         || 0;
+          const l   = p.Losses       || 0;
+          const pts = p.Points       || 0;
+          const nrr = p.NetRunRate   || "0.000";
+          const form = p.Performance  || ""; // e.g., "W,W,L,W,L"
+          const qual = i < 4;
 
           return (
             <div key={i}
-              className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-3 px-3 py-2.5 border-b items-center transition-all hover:bg-white/3"
-              style={{ borderColor:"rgba(255,255,255,0.04)", background: qual && i === 0 ? `${team.primary}10` : "transparent" }}>
-              {/* Team */}
-              <div className="flex items-center gap-2">
-                {qual && (
-                  <span className="text-[8px] font-black rounded px-1"
-                    style={{ background:`${team.primary}30`, color:team.accent }}>
-                    {i + 1}
-                  </span>
-                )}
-                {!qual && (
-                  <span className="text-[8px] font-black text-gray-700">{i + 1}</span>
-                )}
-                <img src={team.logo} alt={code} className="w-5 h-5 object-contain"
-                  onError={e => { e.target.style.display="none"; }} />
-                <span className="text-[11px] font-black text-white">{code}</span>
-                {qual && <span className="text-[7px] font-black text-green-400 hidden sm:inline">Q</span>}
+              className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_80px] gap-x-3 px-4 py-3.5 border-b border-white/5 items-center transition-all hover:bg-white/[0.04]"
+              style={{ background: qual && i === 0 ? `${team.primary}08` : "transparent" }}>
+              
+              {/* Team Info */}
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <img src={teamLogo} alt={code} className="w-6 h-6 object-contain z-10 relative"
+                    onError={e => { e.target.src = team.logo; }} />
+                  {qual && <div className="absolute -inset-1 blur-sm rounded-full" style={{ background: `${team.primary}40` }} />}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[12px] font-black text-white leading-none">{code}</span>
+                  {qual && <span className="text-[7px] font-bold text-amber-500 uppercase tracking-tighter mt-1">Playoff Zone</span>}
+                </div>
               </div>
-              <span className="text-[11px] text-gray-500 text-right">{m}</span>
+
+              {/* Stats */}
+              <span className="text-[11px] text-gray-400 text-right">{m}</span>
               <span className="text-[11px] text-green-400 font-bold text-right">{w}</span>
               <span className="text-[11px] text-red-400 font-bold text-right">{l}</span>
-              <span className="text-[12px] font-black text-white text-right">{pts}</span>
-              <span className="text-[10px] text-gray-600 text-right font-mono">
+              <span className="text-[13px] font-black text-white text-right">{pts}</span>
+              <span className="text-[10px] text-gray-500 text-right font-mono">
                 {parseFloat(nrr) >= 0 ? "+" : ""}{parseFloat(nrr).toFixed(3)}
               </span>
+
+              {/* Form Indicator (Last 5) */}
+              <div className="flex gap-1 justify-end">
+                {form.split(',').map((res, idx) => (
+                  <span key={idx} 
+                    className={`w-3 h-3 flex items-center justify-center rounded-[3px] text-[7px] font-black text-white shadow-sm`}
+                    style={{ 
+                      background: res === 'W' ? '#22c55e' : res === 'L' ? '#ef4444' : '#6b7280',
+                      opacity: 1 - (idx * 0.12) // Fades older matches slightly
+                    }}>
+                    {res}
+                  </span>
+                ))}
+              </div>
             </div>
           );
         })}
       </div>
-      <p className="text-[8px] text-gray-700 text-center">Q = Qualified for playoffs · Top 4 advance</p>
+      <div className="flex justify-between items-center px-1">
+        <p className="text-[8px] text-gray-600 italic">Data updates automatically after match completion</p>
+        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">Top 4 Advance to Playoffs</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── STATS PANEL ──────────────────────────────────────────────────────────────
+function StatsPanel() {
+  const [tab, setTab]             = useState("batting");
+  const [batters, setBatters]     = useState([]);
+  const [bowlers, setBowlers]     = useState([]);
+  const [loadingBat, setLoadingBat] = useState(true);
+  const [loadingBowl, setLoadingBowl] = useState(true);
+  const [errorBat, setErrorBat]   = useState(null);
+  const [errorBowl, setErrorBowl] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/ipl/top-run-scorers`)
+      .then(r => r.json())
+      .then(j => { if (j.ok) setBatters(j.data || []); else setErrorBat(j.error || "Failed"); })
+      .catch(e => setErrorBat(e.message))
+      .finally(() => setLoadingBat(false));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/ipl/most-wickets`)
+      .then(r => r.json())
+      .then(j => { if (j.ok) setBowlers(j.data || []); else setErrorBowl(j.error || "Failed"); })
+      .catch(e => setErrorBowl(e.message))
+      .finally(() => setLoadingBowl(false));
+  }, []);
+
+  const isLoading = tab === "batting" ? loadingBat : loadingBowl;
+  const error     = tab === "batting" ? errorBat   : errorBowl;
+
+  // max runs / wickets for bar scaling
+  const maxRuns    = batters[0]?.runs    ? parseInt(batters[0].runs)    : 1;
+  const maxWickets = bowlers[0]?.wickets ? parseInt(bowlers[0].wickets) : 1;
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <BarChart2 size={13} className="text-amber-400" />
+        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.25em]">Season Stats</span>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-2">
+        {[
+          { key:"batting",  label:"🏏 Top Scorers" },
+          { key:"bowling",  label:"🎳 Top Wickets" },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border"
+            style={{
+              background: tab===key?"rgba(245,166,35,0.1)":"rgba(255,255,255,0.02)",
+              borderColor: tab===key?"rgba(245,166,35,0.3)":"rgba(255,255,255,0.06)",
+              color: tab===key?"#f5a623":"#6b7280",
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && (
+        <div className="flex justify-center py-10">
+          <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+            style={{ borderColor:"rgba(245,166,35,0.2)", borderTopColor:"#f5a623" }} />
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <div className="text-center py-8">
+          <p className="text-red-400 text-xs">{error}</p>
+        </div>
+      )}
+
+      {/* TOP RUN SCORERS SECTION */}
+{tab === "batting" && !isLoading && !errorBat && (
+  <div className="rounded-2xl overflow-hidden border" style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
+    {/* ... Table Header Code ... */}
+
+    {batters.map((p, i) => {
+      const team = getTeam(p.team);
+      const barWidth = Math.round((parseInt(p.runs) / maxRuns) * 100);
+      
+      // Construct the S3 URL using the player name
+      const playerImageUrl = `https://ipl-stats-sports-mechanic.s3.ap-south-1.amazonaws.com/ipl/playerimages/${p.name}.png`;
+
+      return (
+        <div key={i} className="border-b transition-all hover:bg-white/3"
+          style={{ borderColor:"rgba(255,255,255,0.04)" }}>
+          <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 items-center">
+            
+            {/* Rank */}
+            <span className="text-[10px] font-black w-5" style={{ color: i === 0 ? "#f5c518" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#6b7280" }}>
+              {i + 1}
+            </span>
+
+            {/* Player Image, Name + Team */}
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Player Face Image */}
+              <div className="relative w-8 h-8 rounded-full bg-gray-800 overflow-hidden shrink-0 border border-white/10">
+                <img 
+                  src={playerImageUrl} 
+                  alt={p.name} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback if image doesn't exist: show team logo or a generic avatar
+                    e.target.src = team.logo; 
+                  }}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-white truncate">{p.name}</span>
+                </div>
+                <span className="text-[9px] font-bold px-1 rounded mt-0.5 inline-block"
+                  style={{ background:`${team.primary}30`, color:team.accent }}>{p.team}</span>
+              </div>
+            </div>
+
+            {/* Stats columns */}
+            <span className="text-[13px] font-black text-right" style={{ color:"#f5a623" }}>{p.runs}</span>
+            <span className="text-[10px] text-gray-500 text-right">{parseFloat(p.average).toFixed(1)}</span>
+            <span className="text-[10px] text-green-400 font-bold text-right">{parseFloat(p.strikeRate).toFixed(1)}</span>
+            <span className="text-[10px] text-gray-500 text-right pr-3">{p.highScore}</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mx-3 mb-2 h-0.5 rounded-full overflow-hidden" style={{ background:"rgba(255,255,255,0.05)" }}>
+            <div className="h-full rounded-full transition-all duration-700"
+              style={{ width:`${barWidth}%`, background:`linear-gradient(90deg, ${team.primary}, #f5a623)` }} />
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
+
+{/* MOST WICKETS */}
+{tab === "bowling" && !isLoading && !errorBowl && (
+  <div className="rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02]">
+    {/* Table header - Hidden on small mobile to save space, shown on desktop */}
+    <div className="hidden md:grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+      <span className="text-[10px] font-black text-gray-500 uppercase w-6">#</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase ml-14">Bowler</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase text-right">Wkts</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase text-right">Avg</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase text-right">Eco</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase text-right pr-4">BBI</span>
+    </div>
+
+    {bowlers.map((p, i) => {
+      const team = getTeam(p.team);
+      const barWidth = Math.round((parseInt(p.wickets) / maxWickets) * 100);
+      const playerImageUrl = `https://ipl-stats-sports-mechanic.s3.ap-south-1.amazonaws.com/ipl/playerimages/${p.name}.png`;
+
+      return (
+        <div key={i} className="border-b border-white/5 transition-all hover:bg-white/[0.03]">
+          {/* Main Row: Responsive Grid */}
+          <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-3 px-3 md:px-4 py-3 md:py-4 items-center">
+            
+            {/* 1. Rank */}
+            <span className="text-[11px] md:text-xs font-black w-5 md:w-6 text-center"
+              style={{ color: i === 0 ? "#f5c518" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#6b7280" }}>
+              {i + 1}
+            </span>
+
+            {/* 2. Player Profile (Large on Desktop, Adjusted on Mobile) */}
+            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+              <div className="relative w-10 h-10 md:w-14 md:h-14 rounded-full bg-gray-800 overflow-hidden shrink-0 border-2 border-white/10 shadow-xl">
+                <img 
+                  src={playerImageUrl} 
+                  alt={p.name} 
+                  className="w-full h-full object-cover scale-110 translate-y-1"
+                  onError={(e) => {
+                    e.target.src = team.logo; 
+                    e.target.className = "w-full h-full object-contain p-2 opacity-50"; 
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] md:text-sm font-bold text-white truncate leading-tight">{p.name}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[9px] md:text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider"
+                    style={{ background:`${team.primary}30`, color:team.accent }}>{p.team}</span>
+                  {/* Mobile Only: Show basic stat next to name */}
+                  <span className="md:hidden text-[10px] text-gray-500 font-bold">Eco: {parseFloat(p.economy).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Wickets - Larger on mobile to emphasize key stat */}
+            <div className="text-right flex flex-col md:block">
+              <span className="text-lg md:text-xl font-black text-green-400 leading-none">{p.wickets}</span>
+              <span className="md:hidden text-[8px] text-gray-600 uppercase font-bold tracking-tighter">Wickets</span>
+            </div>
+
+            {/* 4. Desktop Only Stats */}
+            <span className="hidden md:block text-[11px] text-gray-400 text-right font-medium">{parseFloat(p.average).toFixed(1)}</span>
+            <span className="hidden md:block text-[11px] text-blue-400 font-bold text-right">{parseFloat(p.economy).toFixed(2)}</span>
+            <span className="hidden md:block text-[11px] text-gray-500 text-right pr-4">{p.bestInnings}</span>
+          </div>
+
+          {/* Progress bar - Thicker on desktop, slim on mobile */}
+          <div className="mx-3 md:mx-4 mb-3 h-0.5 md:h-1 rounded-full overflow-hidden bg-white/5">
+            <div className="h-full rounded-full transition-all duration-1000 ease-out"
+              style={{ width:`${barWidth}%`, background:`linear-gradient(90deg, ${team.primary}, #4ade80)` }} />
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
     </div>
   );
 }
@@ -623,22 +851,18 @@ function IPLScorecard({ matchId, matchInfo }) {
     </div>
   );
 
-  // ── Derive team codes from API keys ──────────────────────────────
   const isLive = String(ms.IsMatchEnd ?? 0) === "0";
   const curInn = String(ms.CurrentInnings || "1");
 
-  // Use HomeTeamCode / AwayTeamCode directly (confirmed in API response)
   const homeCode = ms.HomeTeamCode || nameToCode(ms.HomeTeamName || "");
   const awayCode = ms.AwayTeamCode || nameToCode(ms.AwayTeamName || "");
 
-  // Innings 1 = FirstBattingTeam, Innings 2 = SecondBattingTeam
   const inn1Code = nameToCode(ms.FirstBattingTeam  || "") || awayCode;
   const inn2Code = nameToCode(ms.SecondBattingTeam || "") || homeCode;
 
   const inn1Team = getTeam(inn1Code);
   const inn2Team = getTeam(inn2Code);
 
-  // Scores — keys confirmed: 1FallScore, 1FallWickets, 1FallOvers, 1RunRate etc.
   const s1 = ms["1FallScore"]   ?? ""; const w1 = ms["1FallWickets"] ?? "0"; const o1 = ms["1FallOvers"] ?? "";
   const s2 = ms["2FallScore"]   ?? ""; const w2 = ms["2FallWickets"] ?? "0"; const o2 = ms["2FallOvers"] ?? "";
   const crr    = curInn === "1" ? (ms["1RunRate"] || "") : (ms["2RunRate"] || "");
@@ -649,10 +873,8 @@ function IPLScorecard({ matchId, matchInfo }) {
   const proj3  = ms["3rdProjectedScore"] || "";
   const remaining = ms.RemainingBalls    || "";
 
-  // ── Innings data ─────────────────────────────────────────────────
   const currentInnData = allInnings[viewInnings] || null;
 
-  // Key variants: innings object may have Batsmen or BatsmanDetails etc.
   const balls   = safeList(currentInnData, "BallsInCurrentOver");
   const batsmen = safeList(currentInnData, "Batsmen").length
     ? safeList(currentInnData, "Batsmen")
@@ -665,7 +887,6 @@ function IPLScorecard({ matchId, matchInfo }) {
     : safeList(currentInnData, "Wickets");
   const comms = safeList(currentInnData, "Commentary");
 
-  // On-pitch info from summary (confirmed keys)
   const striker    = ms.CurrentStrikerName    || "";
   const nonStriker = ms.CurrentNonStrikerName || "";
   const bowlerName = ms.CurrentBowlerName     || "";
@@ -677,8 +898,6 @@ function IPLScorecard({ matchId, matchInfo }) {
 
   return (
     <div className="space-y-3">
-
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-amber-400" />
@@ -712,10 +931,8 @@ function IPLScorecard({ matchId, matchInfo }) {
         </div>
       </div>
 
-      {/* Match scoreboard */}
       <div className="rounded-2xl overflow-hidden border"
         style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
-
         <div className="px-4 pt-3 pb-2 border-b" style={{ borderColor:"rgba(255,255,255,0.05)" }}>
           <p className="text-[10px] text-gray-600 truncate">{ms.GroundName || matchInfo?.venue || ""}</p>
           {ms.TossDetails && <p className="text-[10px] text-gray-700 mt-0.5">🪙 {ms.TossDetails}</p>}
@@ -762,7 +979,6 @@ function IPLScorecard({ matchId, matchInfo }) {
           ))}
         </div>
 
-        {/* Stats bar */}
         {(crr || rrr || target || remaining || (proj1 && curInn==="1")) && (
           <div className="px-4 py-2.5 border-t flex gap-4 flex-wrap items-center"
             style={{ borderColor:"rgba(255,255,255,0.05)" }}>
@@ -800,7 +1016,6 @@ function IPLScorecard({ matchId, matchInfo }) {
         )}
       </div>
 
-      {/* Current over */}
       {balls.length > 0 && viewInnings === curInn && (
         <div className="rounded-2xl border px-4 py-3"
           style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
@@ -811,7 +1026,6 @@ function IPLScorecard({ matchId, matchInfo }) {
         </div>
       )}
 
-      {/* On-pitch trio */}
       {viewInnings === curInn && (striker || bowlerName) && (
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -833,7 +1047,6 @@ function IPLScorecard({ matchId, matchInfo }) {
         </div>
       )}
 
-      {/* Innings selector */}
       {availableInnings.length > 1 && (
         <div className="flex gap-2">
           {availableInnings.map(inn => (
@@ -850,7 +1063,6 @@ function IPLScorecard({ matchId, matchInfo }) {
         </div>
       )}
 
-      {/* Tabs */}
       <div className="rounded-2xl border overflow-hidden"
         style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
         <div className="flex border-b" style={{ borderColor:"rgba(255,255,255,0.06)" }}>
@@ -896,7 +1108,6 @@ export default function LiveCricketTV() {
   const [active, setActive]             = useState(CHANNELS[0]);
   const [switching, setSwitching]       = useState(false);
   const [activeMatchId, setActiveMatchId] = useState(() => getActiveMatchId());
-  // "scorecard" | "schedule" | "points"
   const [rightPanel, setRightPanel]     = useState("scorecard");
   const iframeRef = useRef(null);
   const playerRef = useRef(null);
@@ -940,6 +1151,7 @@ export default function LiveCricketTV() {
             {[
               { key:"schedule", icon:<Calendar size={9}/>, label:"Schedule" },
               { key:"points",   icon:<Trophy size={9}/>,   label:"Points" },
+              { key:"stats",    icon:<BarChart2 size={9}/>, label:"Stats" },
             ].map(({ key, icon, label }) => (
               <button key={key} onClick={() => setRightPanel(p => p === key ? "scorecard" : key)}
                 className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border transition-all"
@@ -981,7 +1193,7 @@ export default function LiveCricketTV() {
 
           {/* LEFT */}
           <div className="flex-1 min-w-0 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {CHANNELS.map(ch => (
                 <ChannelCard key={ch.id} ch={ch} active={active.id===ch.id} onClick={handleSwitch} />
               ))}
@@ -1039,7 +1251,7 @@ export default function LiveCricketTV() {
             {/* Quick-switch */}
             <div className="flex items-center gap-3">
               <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest shrink-0">Quick Switch</span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {CHANNELS.map(ch => (
                   <button key={ch.id} onClick={() => handleSwitch(ch)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
@@ -1064,20 +1276,21 @@ export default function LiveCricketTV() {
             <div className="lg:hidden flex items-center gap-3 mb-4">
               <div className="flex-1 h-px bg-white/5" />
               <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">
-                {rightPanel === "schedule" ? "Schedule" : rightPanel === "points" ? "Points Table" : "Match Center"}
+                {rightPanel === "schedule" ? "Schedule" : rightPanel === "points" ? "Points Table" : rightPanel === "stats" ? "Season Stats" : "Match Center"}
               </span>
               <div className="flex-1 h-px bg-white/5" />
             </div>
 
             {/* Panel tabs */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-1.5 mb-4">
               {[
                 { key:"scorecard", label:"Scorecard" },
                 { key:"schedule",  label:"Schedule" },
                 { key:"points",    label:"Points" },
+                { key:"stats",     label:"Stats" },
               ].map(({ key, label }) => (
                 <button key={key} onClick={() => setRightPanel(key)}
-                  className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border"
+                  className="flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border"
                   style={{
                     background: rightPanel===key?"rgba(245,166,35,0.1)":"rgba(255,255,255,0.02)",
                     borderColor: rightPanel===key?"rgba(245,166,35,0.3)":"rgba(255,255,255,0.06)",
@@ -1092,7 +1305,8 @@ export default function LiveCricketTV() {
               <SchedulePanel activeMatchId={activeMatchId}
                 onSelectMatch={id => { setActiveMatchId(id); setRightPanel("scorecard"); }} />
             )}
-            {rightPanel === "points" && <PointsTable />}
+            {rightPanel === "points"   && <PointsTable />}
+            {rightPanel === "stats"    && <StatsPanel />}
             {rightPanel === "scorecard" && (
               <IPLScorecard matchId={activeMatchId} matchInfo={activeMatchInfo} />
             )}
