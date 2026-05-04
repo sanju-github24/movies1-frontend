@@ -28,6 +28,20 @@ const CHANNELS = [
     logo: "/star-sports-kan.jpg", url: "https://binge-giotv.pages.dev/player2?id=ss1kan",
     desc: "Star Sports 1 — Live cricket in Kannada commentary",
   },
+  {
+    id: "star-tamil", name: "Star Sports", sub: "Tamil",
+    color: "#f59e0b", glow: "rgba(245,158,11,0.3)", border: "rgba(245,158,11,0.25)",
+    bg: "rgba(245,158,11,0.06)", tag: "TAMIL", useIcon: false,
+    logo: "/star-sports-tam.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tam",
+    desc: "Star Sports 1 — Live cricket in Tamil commentary",
+  },
+  {
+    id: "star-telugu", name: "Star Sports", sub: "Telugu",
+    color: "#10b981", glow: "rgba(16,185,129,0.3)", border: "rgba(16,185,129,0.25)",
+    bg: "rgba(16,185,129,0.06)", tag: "TELUGU", useIcon: false,
+    logo: "/star-sports-tel.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tel",
+    desc: "Star Sports 1 — Live cricket in Telugu commentary",
+  },
 ];
 
 // ─── SCHEDULE ─────────────────────────────────────────────────────────────────
@@ -188,22 +202,45 @@ function ChannelCard({ ch, active, onClick }) {
 }
 
 function BallChip({ ball }) {
-  const b = String(ball);
-  const map = {
-    "4":  { bg:"rgba(29,78,216,0.7)",  border:"#3b82f6", color:"#93c5fd",  label:"4" },
-    "6":  { bg:"rgba(109,40,217,0.7)", border:"#8b5cf6", color:"#c4b5fd",  label:"6" },
-    "W":  { bg:"rgba(153,27,27,0.8)",  border:"#ef4444", color:"#fca5a5",  label:"W" },
-    "w":  { bg:"rgba(153,27,27,0.8)",  border:"#ef4444", color:"#fca5a5",  label:"W" },
-    "Wd": { bg:"rgba(68,64,60,0.7)",   border:"#78716c", color:"#d6d3d1",  label:"Wd" },
-    "WD": { bg:"rgba(68,64,60,0.7)",   border:"#78716c", color:"#d6d3d1",  label:"Wd" },
-    "Nb": { bg:"rgba(113,63,18,0.7)",  border:"#f59e0b", color:"#fde68a",  label:"NB" },
-    "NB": { bg:"rgba(113,63,18,0.7)",  border:"#f59e0b", color:"#fde68a",  label:"NB" },
+  const b = String(ball).trim().toUpperCase();
+  
+  // Logic to handle "WK" or "W" consistently
+  const displayLabel = b.includes("WK") || b === "W" ? "W" : b === "0" ? "·" : b;
+
+  const styles = {
+    "4":  { bg: "#3b82f6", border: "#2563eb", color: "#fff" }, // Blue
+    "6":  { bg: "#16a34a", border: "#15803d", color: "#fff" }, // Green
+    "W":  { bg: "#dc2626", border: "#b91c1c", color: "#fff" }, // Red
+    "WK": { bg: "#dc2626", border: "#b91c1c", color: "#fff" }, // Red
+    "NB": { bg: "#f59e0b", border: "#d97706", color: "#fff" }, // Amber
+    "WD": { bg: "#78716c", border: "#57534e", color: "#fff" }, // Stone
+    ".":  { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.2)", color: "#9ca3af" },
+    "0":  { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.2)", color: "#9ca3af" },
   };
-  const s = map[b] || { bg:"rgba(255,255,255,0.06)", border:"rgba(255,255,255,0.12)", color:"rgba(255,255,255,0.7)", label:b||"·" };
+
+  // Determine which style to use based on the label content
+  let s = styles["."]; // Default
+  if (displayLabel.includes("4")) s = styles["4"];
+  else if (displayLabel.includes("6")) s = styles["6"];
+  else if (displayLabel.includes("W")) s = styles["W"];
+  else if (displayLabel.includes("NB")) s = styles["NB"];
+  else if (displayLabel.includes("WD")) s = styles["WD"];
+
+  // Dynamic font size: smaller for 2+ characters to ensure it stays in the circle
+  const fontSize = displayLabel.length > 1 ? "8px" : "11px";
+
   return (
-    <span className="inline-flex items-center justify-center w-9 h-9 rounded-full text-[13px] font-bold"
-      style={{ background:s.bg, border:`1.5px solid ${s.border}`, color:s.color }}>
-      {s.label}
+    <span className="flex items-center justify-center rounded-full font-black border transition-transform shrink-0"
+      style={{ 
+        backgroundColor: s.bg, 
+        borderColor: s.border, 
+        color: s.color,
+        width: "28px",   // Fixed width
+        height: "28px",  // Fixed height for perfect circle
+        fontSize: fontSize,
+        lineHeight: "1"
+      }}>
+      {displayLabel}
     </span>
   );
 }
@@ -763,19 +800,175 @@ function SchedulePanel({ activeMatchId, onSelectMatch }) {
   );
 }
 
-// ─── SCORECARD ────────────────────────────────────────────────────────────────
+function BallByBallTracker({ innData }) {
+  // Using the provided 'OverHistory' array from the source
+  const overHistory = innData?.OverHistory || [];
+  if (!overHistory.length) return null;
+
+  // Group balls by OverNo (e.g., OverNo: 1 is the 1st over)
+  const groupedOvers = overHistory.reduce((acc, ball) => {
+    const ov = ball.OverNo; 
+    if (!acc[ov]) acc[ov] = [];
+    acc[ov].push(ball);
+    return acc;
+  }, {});
+
+  // Sort by highest over number first (latest overs)
+  const sortedOverKeys = Object.keys(groupedOvers).sort((a, b) => b - a).slice(0, 3);
+
+  return (
+    <div className="mt-4 px-4 overflow-x-auto border-t border-white/5 pt-4 pb-2">
+      <div className="flex items-center gap-6 min-w-max">
+        {sortedOverKeys.map((ovKey, idx) => (
+          <div key={ovKey} className="flex items-center gap-4">
+            <div className="flex flex-col items-center min-w-[30px]">
+              <span className="text-[9px] font-black text-gray-500 uppercase">OV</span>
+              {/* ovKey from data (1, 2, etc.) is the correct over number */}
+              <span className="text-sm font-black text-white">{ovKey}</span>
+            </div>
+
+            <div className="flex gap-1.5">
+              {groupedOvers[ovKey].map((ball, bIdx) => (
+                <BallChip key={bIdx} ball={ball.Runs} />
+              ))}
+            </div>
+
+            {idx < sortedOverKeys.length - 1 && (
+              <div className="h-8 w-px bg-white/10 mx-1" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function DetailedBattingTable({ battingCard, strikerID, nonStrikerID }) {
+  if (!battingCard || !battingCard.length) return null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="border-b border-white/5 bg-white/[0.01]">
+            {["Batter", "Status", "R", "B", "4s", "6s", "SR"].map((h, i) => (
+              <th key={h} className={`py-3 font-black text-gray-500 uppercase tracking-wider text-[9px]
+                ${i === 0 ? "pl-4 text-left" : "text-right px-2"} ${i === 6 ? "pr-4" : ""}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {battingCard.map((b, idx) => {
+            const pid = b.PlayerID || b.PLAYER_ID;
+            const isOnPitch = pid === strikerID || pid === nonStrikerID || b.OutDesc === "not out";
+            const isStriker = pid === strikerID;
+            
+            // Image Logic: Prioritize API image URL, fallback to name-based S3 URL
+            const playerImageUrl = b.PlayerImage || `https://ipl-stats-sports-mechanic.s3.ap-south-1.amazonaws.com/ipl/playerimages/${b.PlayerName.trim()}.png`;
+
+            return (
+              <tr key={idx} className="border-b border-white/[0.03] transition-colors hover:bg-white/[0.02]">
+                <td className="pl-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {/* Player Image */}
+                    <div className="relative w-7 h-7 rounded-full bg-gray-800 overflow-hidden shrink-0 border border-white/10">
+                      <img 
+                        src={playerImageUrl} 
+                        alt="" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.src = "/default-avatar.png"; }} // Add a local fallback path
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className={`font-bold ${isOnPitch ? "text-amber-400" : "text-gray-300"}`}>
+                        {b.PlayerName} {isStriker && "★"}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-2 py-3 text-[10px] text-gray-500 italic max-w-[120px] leading-tight">
+                  {b.OutDesc}
+                </td>
+                <td className="px-2 py-3 text-right font-black text-white">{b.Runs}</td>
+                <td className="px-2 py-3 text-right text-gray-500">{b.Balls}</td>
+                <td className="px-2 py-3 text-right text-blue-400/80">{b.Fours}</td>
+                <td className="px-2 py-3 text-right text-violet-400/80">{b.Sixes}</td>
+                <td className="pr-4 py-3 text-right text-gray-600 font-mono">{b.StrikeRate}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DetailedBowlingTable({ bowlingCard, currentBowlerID }) {
+  if (!bowlingCard || !bowlingCard.length) return null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="border-b border-white/5 bg-white/[0.01]">
+            {["Bowler", "O", "M", "R", "W", "Eco", "0s"].map((h, i) => (
+              <th key={h} className={`py-3 font-black text-gray-500 uppercase tracking-wider text-[9px]
+                ${i === 0 ? "pl-4 text-left" : "text-right px-2"} ${i === 6 ? "pr-4" : ""}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {bowlingCard.map((b, idx) => {
+            const pid = b.PlayerID || b.PLAYER_ID;
+            const isCurrent = pid === currentBowlerID;
+            
+            // Image Logic
+            const playerImageUrl = b.PlayerImage || `https://ipl-stats-sports-mechanic.s3.ap-south-1.amazonaws.com/ipl/playerimages/${b.PlayerName.trim()}.png`;
+
+            return (
+              <tr key={idx} className="border-b border-white/[0.03] transition-colors hover:bg-white/[0.02]">
+                <td className="pl-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {/* Bowler Image */}
+                    <div className="relative w-7 h-7 rounded-full bg-gray-900 overflow-hidden shrink-0 border border-white/10">
+                      <img 
+                        src={playerImageUrl} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.src = "/default-avatar.png"; }}
+                      />
+                    </div>
+                    <span className={`font-bold ${isCurrent ? "text-blue-400" : "text-gray-300"}`}>
+                      {b.PlayerName} {isCurrent && "●"}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-2 py-3 text-right text-white font-mono">{b.Overs}</td>
+                <td className="px-2 py-3 text-right text-gray-500">{b.Maidens}</td>
+                <td className="px-2 py-3 text-right text-white font-bold">{b.Runs}</td>
+                <td className="px-2 py-3 text-right text-green-400 font-black">{b.Wickets}</td>
+                <td className="px-2 py-3 text-right text-gray-500">{b.Economy}</td>
+                <td className="pr-4 py-3 text-right text-gray-700">{b.DotBalls || 0}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── MAIN SCORECARD COMPONENT ───────────────────────────────────────────────
 function IPLScorecard({ matchId, matchInfo }) {
-  const [ms, setMs]               = useState(null);
+  const [ms, setMs] = useState(null);
   const [allInnings, setAllInnings] = useState({});
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("batting");
   const [viewInnings, setViewInnings] = useState("1");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [countdown, setCountdown] = useState(POLL_MS / 1000);
+  const [countdown, setCountdown] = useState(10);
 
-  const msRef    = useRef(null);
+  const msRef = useRef(null);
   const matchRef = useRef(matchId);
 
   useEffect(() => {
@@ -787,17 +980,16 @@ function IPLScorecard({ matchId, matchInfo }) {
     if (!silent) setLoading(true);
     setRefreshing(true);
     try {
-      const res  = await fetch(`${API_BASE}/api/match/${matchRef.current}`);
+      const res = await fetch(`${API_BASE}/api/match/${matchRef.current}`);
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Unknown error");
+      if (!json.ok) throw new Error(json.error || "Network error");
 
       const { summary, innings: inn, currentInnings } = json.data;
+      
       let msData = summary?.MatchSummary || {};
       if (Array.isArray(msData)) msData = msData[0] || {};
-      const parsed = typeof msData === "object" ? msData : {};
-
-      msRef.current = parsed;
-      setMs(parsed);
+      setMs(msData);
+      msRef.current = msData;
 
       if (inn) {
         setAllInnings(prev => ({ ...prev, [currentInnings]: inn }));
@@ -805,7 +997,7 @@ function IPLScorecard({ matchId, matchInfo }) {
       }
 
       setLastUpdate(new Date());
-      setCountdown(POLL_MS / 1000);
+      setCountdown(10);
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -815,294 +1007,194 @@ function IPLScorecard({ matchId, matchInfo }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load, matchId]);
-
   useEffect(() => {
+    load();
     const interval = setInterval(() => {
       if (String(msRef.current?.IsMatchEnd ?? "0") === "0") load(true);
-    }, POLL_MS);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [load]);
+  }, [load, matchId]);
 
   useEffect(() => {
-    if (!lastUpdate) return;
-    setCountdown(POLL_MS / 1000);
-    const tick = setInterval(() => setCountdown(p => p <= 1 ? POLL_MS / 1000 : p - 1), 1000);
+    const tick = setInterval(() => setCountdown(c => c <= 1 ? 10 : c - 1), 1000);
     return () => clearInterval(tick);
   }, [lastUpdate]);
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4">
-      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin"
-        style={{ borderColor:"rgba(245,166,35,0.2)", borderTopColor:"#f5a623" }} />
-      <p className="text-[11px] text-gray-600 uppercase tracking-widest font-black">Loading match {matchId}…</p>
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:"rgba(245,166,35,0.1)", borderTopColor:"#f5a623" }} />
+      <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Live Syncing...</p>
     </div>
   );
 
   if (error || !ms) return (
     <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-4">
       <AlertCircle size={28} className="text-red-500/60" />
-      <p className="text-sm text-red-400">Could not load match data</p>
       <p className="text-[11px] text-gray-700 max-w-xs">{error}</p>
-      <button onClick={() => load()}
-        className="mt-2 px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider hover:bg-amber-500/20 transition-colors">
-        Retry
-      </button>
+      <button onClick={() => load()} className="mt-2 px-4 py-2 rounded-xl border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">Retry</button>
     </div>
   );
 
   const isLive = String(ms.IsMatchEnd ?? 0) === "0";
   const curInn = String(ms.CurrentInnings || "1");
 
+  // Dynamic Data Extraction for the active view
+  const currentInnKey = `Innings${viewInnings}`;
+  const innData = allInnings[viewInnings]?.[currentInnKey] || allInnings[viewInnings] || {};
+  const battingCard = innData?.BattingCard || [];
+  const bowlingCard = innData?.BowlingCard || [];
+  const commentary = innData?.OverHistory || innData?.Commentary || [];
+
   const homeCode = ms.HomeTeamCode || nameToCode(ms.HomeTeamName || "");
   const awayCode = ms.AwayTeamCode || nameToCode(ms.AwayTeamName || "");
-
-  const inn1Code = nameToCode(ms.FirstBattingTeam  || "") || awayCode;
-  const inn2Code = nameToCode(ms.SecondBattingTeam || "") || homeCode;
-
-  const inn1Team = getTeam(inn1Code);
-  const inn2Team = getTeam(inn2Code);
-
-  const s1 = ms["1FallScore"]   ?? ""; const w1 = ms["1FallWickets"] ?? "0"; const o1 = ms["1FallOvers"] ?? "";
-  const s2 = ms["2FallScore"]   ?? ""; const w2 = ms["2FallWickets"] ?? "0"; const o2 = ms["2FallOvers"] ?? "";
-  const crr    = curInn === "1" ? (ms["1RunRate"] || "") : (ms["2RunRate"] || "");
-  const rrr    = curInn === "2" ? (ms.RequiredRunRate || "") : "";
-  const target = curInn === "2" ? (ms.Target || "") : "";
-  const proj1  = ms.ProjectedScore       || "";
-  const proj2  = ms["2ndProjectedScore"] || "";
-  const proj3  = ms["3rdProjectedScore"] || "";
-  const remaining = ms.RemainingBalls    || "";
-
-  const currentInnData = allInnings[viewInnings] || null;
-
-  const balls   = safeList(currentInnData, "BallsInCurrentOver");
-  const batsmen = safeList(currentInnData, "Batsmen").length
-    ? safeList(currentInnData, "Batsmen")
-    : safeList(currentInnData, "BatsmanDetails");
-  const bowlers = safeList(currentInnData, "Bowlers").length
-    ? safeList(currentInnData, "Bowlers")
-    : safeList(currentInnData, "BowlerDetails");
-  const fow   = safeList(currentInnData, "FallOfWickets").length
-    ? safeList(currentInnData, "FallOfWickets")
-    : safeList(currentInnData, "Wickets");
-  const comms = safeList(currentInnData, "Commentary");
-
-  const striker    = ms.CurrentStrikerName    || "";
-  const nonStriker = ms.CurrentNonStrikerName || "";
-  const bowlerName = ms.CurrentBowlerName     || "";
-
-  const viewInnCode  = viewInnings === "1" ? inn1Code : inn2Code;
-  const viewBowlCode = viewInnings === "1" ? inn2Code : inn1Code;
-  const availableInnings = Object.keys(allInnings).sort();
-  const tabs = ["batting", "bowling", "commentary"];
+  const viewInnCode = viewInnings === "1" ? (nameToCode(ms.FirstBattingTeam) || awayCode) : (nameToCode(ms.SecondBattingTeam) || homeCode);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-amber-400" />
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.25em]">
-            Match {matchInfo?.num || ""} · Scorecard
-          </span>
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Match Scorecard</span>
           {isLive && (
-            <span className="flex items-center gap-1 bg-red-500/15 border border-red-500/30 text-red-400 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
-              Live
+            <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live {countdown}s
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {lastUpdate && (
-            <div className="flex items-center gap-1.5 text-[9px] text-gray-700 font-bold">
-              <Clock size={9} />
-              <span>{lastUpdate.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" })}</span>
-              {isLive && (
-                <span className="ml-1 px-1.5 py-0.5 rounded text-[8px] font-black"
-                  style={{ background:"rgba(245,166,35,0.12)", color:"#f5a623" }}>
-                  {countdown}s
-                </span>
-              )}
+        <button onClick={() => load()} className={`text-gray-600 hover:text-amber-400 transition-all ${refreshing ? 'animate-spin' : ''}`}>
+          <RefreshCw size={12} />
+        </button>
+      </div>
+
+      {/* ── SCORE BANNER ── */}
+<div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-lg">
+  <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+     {/* Lighter, more visible ground name */}
+     <p className="text-[10px] text-gray-400 font-semibold tracking-wide uppercase">
+       {ms.GroundName}
+     </p>
+     {/* Softened toss details */}
+     <p className="text-[10px] text-gray-500 mt-0.5 font-medium italic flex items-center gap-1">
+       <span className="opacity-70">🪙</span> {ms.TossDetails}
+     </p>
+  </div>
+        
+        <div className="p-3 space-y-2">
+          {[1, 2].map(num => {
+            const s = ms[`${num}FallScore`];
+            const w = ms[`${num}FallWickets`];
+            const o = ms[`${num}FallOvers`];
+            const isBatting = curInn === String(num) && isLive;
+            const teamCode = num === 1 ? (nameToCode(ms.FirstBattingTeam) || "T1") : (nameToCode(ms.SecondBattingTeam) || "T2");
+            const team = getTeam(teamCode);
+            
+            return (
+              <div key={num} className="flex items-center gap-3 rounded-2xl px-3 py-3 border transition-all"
+                style={{ background: isBatting ? `${team.primary}12` : "rgba(255,255,255,0.02)", borderColor: isBatting ? `${team.primary}30` : "rgba(255,255,255,0.04)" }}>
+                <img src={team.logo} className="w-9 h-9 object-contain opacity-80" alt="" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-white">{teamCode}</span>
+                    {isBatting && <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">Batting</span>}
+                  </div>
+                  <p className="text-[9px] text-gray-600 truncate">{team.name}</p>
+                </div>
+                <div className="text-right">
+                  {s ? (
+                    <div className="flex flex-col">
+                      <span className="text-xl font-black text-white">{s}/{w}</span>
+                      <span className="text-[10px] text-gray-600">({o} ov)</span>
+                    </div>
+                  ) : <span className="text-[10px] text-gray-700 font-bold uppercase tracking-widest">Yet to bat</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Live Over Tracker (Grouped Multi-over UI from Screenshot) */}
+        {viewInnings === curInn && <BallByBallTracker innData={innData} />}
+
+        {/* Live Innings Stats (CRR / RRR) */}
+        {isLive && (
+          <div className="px-4 py-3 border-t border-white/5 flex gap-5 bg-white/[0.01]">
+             <div className="flex flex-col">
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Run Rate</span>
+                <span className="text-sm font-black text-green-400">{ms[`${curInn}RunRate`] || "—"}</span>
+             </div>
+             {curInn === "2" && (
+               <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Required</span>
+                  <span className="text-sm font-black text-amber-500">{ms.RequiredRunRate || "—"}</span>
+               </div>
+             )}
+             <div className="ml-auto flex flex-col text-right">
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Projected</span>
+                <span className="text-sm font-black text-white">{ms.ProjectedScore || "—"}</span>
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── INNINGS SELECTOR ── */}
+      {Object.keys(allInnings).length > 1 && (
+        <div className="flex gap-2">
+          {Object.keys(allInnings).sort().map(inn => (
+            <button key={inn} onClick={() => setViewInnings(inn)}
+              className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border"
+              style={{
+                background: viewInnings === inn ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.04)",
+                color: viewInnings === inn ? "#f5a623" : "#6b7280",
+                borderColor: viewInnings === inn ? "rgba(245,166,35,0.3)" : "rgba(255,255,255,0.06)",
+              }}>
+              Innings {inn}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── TABS ── */}
+      <div className="rounded-3xl border border-white/5 bg-white/[0.02] overflow-hidden">
+        <div className="flex border-b border-white/5 bg-white/[0.01]">
+          {["batting", "bowling", "commentary"].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)}
+              className="flex-1 py-3 text-[9px] font-black uppercase tracking-[0.2em] transition-all border-b-2"
+              style={{ color: activeTab === t ? "#f5a623" : "#4b5563", borderBottomColor: activeTab === t ? "#f5a623" : "transparent" }}>
+              {t === "batting" ? `${viewInnCode} Bat` : t}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-[260px]">
+          {activeTab === "batting" && (
+            <>
+              <DetailedBattingTable battingCard={battingCard} strikerID={ms?.CurrentStrikerID} nonStrikerID={ms?.CurrentNonStrikerID} />
+              <FallOfWickets fow={innData?.FallOfWickets || []} />
+            </>
+          )}
+          {activeTab === "bowling" && <DetailedBowlingTable bowlingCard={bowlingCard} currentBowlerID={ms?.CurrentBowlerID} />}
+          {activeTab === "commentary" && (
+            <div className="divide-y divide-white/[0.03]">
+              {commentary.slice(0, 15).map((c, i) => (
+                <div key={i} className="px-4 py-3 flex gap-4 hover:bg-white/[0.01]">
+                  <div className="w-10 shrink-0 text-center">
+                    <span className="text-[10px] font-black text-amber-500">{c.BallName || c.OverNo}</span>
+                    <div className="mt-1 flex justify-center"><BallChip ball={c.Runs} /></div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    <span className="font-bold text-gray-200 block mb-0.5">{c.CommentStrikers || ""}</span>
+                    {c.NewCommentry || c.CommentaryText}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
-          <button onClick={() => load()} disabled={refreshing}
-            className="flex items-center gap-1 text-[10px] font-black text-gray-600 hover:text-amber-400 transition-colors disabled:opacity-40">
-            <RefreshCw size={11} className={refreshing ? "animate-spin" : ""} />
-          </button>
         </div>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden border"
-        style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
-        <div className="px-4 pt-3 pb-2 border-b" style={{ borderColor:"rgba(255,255,255,0.05)" }}>
-          <p className="text-[10px] text-gray-600 truncate">{ms.GroundName || matchInfo?.venue || ""}</p>
-          {ms.TossDetails && <p className="text-[10px] text-gray-700 mt-0.5">🪙 {ms.TossDetails}</p>}
-        </div>
-
-        <div className="p-3 space-y-2">
-          {[
-            { team:inn1Team, code:inn1Code, s:s1, w:w1, o:o1, isBatting:curInn==="1"&&isLive, proj:curInn==="1"&&isLive?proj1:"", inn:"1st Inn" },
-            { team:inn2Team, code:inn2Code, s:s2, w:w2, o:o2, isBatting:curInn==="2"&&isLive, proj:curInn==="2"&&isLive?proj1:"", inn:"2nd Inn", yet:!s2 },
-          ].map(({ team, code, s, w, o, isBatting, proj, inn, yet }) => (
-            <div key={code}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-all"
-              style={{ background:isBatting?`${team.primary}12`:"rgba(255,255,255,0.02)", borderColor:isBatting?`${team.primary}40`:"rgba(255,255,255,0.05)" }}>
-              <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 border"
-                style={{ background:`${team.primary}20`, borderColor:`${team.primary}30` }}>
-                <img src={team.logo} alt={code} className="w-9 h-9 object-contain"
-                  onError={e => { e.target.style.display="none"; }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-black text-white uppercase tracking-tight">{code}</span>
-                  <span className="text-[8px] text-gray-700 font-bold">{inn}</span>
-                  {isBatting && (
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded"
-                      style={{ background:`${team.accent}25`, color:team.accent }}>Batting</span>
-                  )}
-                </div>
-                <span className="text-[10px] text-gray-600 truncate block">{team.name}</span>
-              </div>
-              <div className="text-right shrink-0">
-                {yet ? (
-                  <span className="text-[11px] text-gray-700">Yet to bat</span>
-                ) : (
-                  <>
-                    <span className="text-xl font-black text-white" style={{ fontVariantNumeric:"tabular-nums" }}>
-                      {s}/{w}
-                    </span>
-                    {o && <span className="text-[10px] text-gray-600 ml-1">({o} ov)</span>}
-                    {proj && <div className="text-[9px] font-bold mt-0.5" style={{ color:"#f5a623" }}>Proj: {proj}</div>}
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {(crr || rrr || target || remaining || (proj1 && curInn==="1")) && (
-          <div className="px-4 py-2.5 border-t flex gap-4 flex-wrap items-center"
-            style={{ borderColor:"rgba(255,255,255,0.05)" }}>
-            {crr && parseFloat(crr) > 0 && (
-              <div><span className="text-[9px] text-gray-700 uppercase tracking-wider block">CRR</span>
-                <span className="text-sm font-black text-green-400">{parseFloat(crr).toFixed(2)}</span></div>
-            )}
-            {rrr && parseFloat(rrr) > 0 && (
-              <div><span className="text-[9px] text-gray-700 uppercase tracking-wider block">RRR</span>
-                <span className="text-sm font-black text-amber-400">{parseFloat(rrr).toFixed(2)}</span></div>
-            )}
-            {target && (
-              <div><span className="text-[9px] text-gray-700 uppercase tracking-wider block">Target</span>
-                <span className="text-sm font-black text-white">{target}</span></div>
-            )}
-            {remaining && curInn==="2" && (
-              <div><span className="text-[9px] text-gray-700 uppercase tracking-wider block">Balls Left</span>
-                <span className="text-sm font-black text-white">{remaining}</span></div>
-            )}
-            {proj1 && curInn==="1" && isLive && (
-              <div className="ml-auto flex gap-3">
-                {[[proj1,"C"],[proj2,"M"],[proj3,"A"]].filter(([v])=>v).map(([val,label]) => (
-                  <div key={label} className="text-right">
-                    <span className="text-[8px] text-gray-700 uppercase tracking-wider block">{label}</span>
-                    <span className="text-sm font-black" style={{ color:"#f5a623" }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        {ms.Comments && (
-          <div className="px-4 py-2 border-t text-[11px] text-gray-400 font-medium"
-            style={{ borderColor:"rgba(255,255,255,0.05)" }}>{ms.Comments}</div>
-        )}
-      </div>
-
-      {balls.length > 0 && viewInnings === curInn && (
-        <div className="rounded-2xl border px-4 py-3"
-          style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
-          <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-3">This Over</p>
-          <div className="flex gap-2 flex-wrap">
-            {balls.map((b,i) => <BallChip key={i} ball={b} />)}
-          </div>
-        </div>
-      )}
-
-      {viewInnings === curInn && (striker || bowlerName) && (
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label:"Striker",     name:striker,    runs:ms.StrikerRuns,    balls:ms.StrikerBalls,    sr:ms.StrikerSR,    color:"#f5a623" },
-            { label:"Non-striker", name:nonStriker, runs:ms.NonStrikerRuns, balls:ms.NonStrikerBalls, sr:ms.NonStrikerSR, color:"rgba(255,255,255,0.5)" },
-            { label:"Bowler",      name:bowlerName, runs:ms.BowlerWickets!=null?`${ms.BowlerWickets}/${ms.BowlerRuns}`:ms.BowlerRuns, balls:ms.BowlerOvers, sr:ms.BowlerEconomy, color:"#60a5fa", isBowler:true },
-          ].map(({ label, name, runs, balls:b, sr, color, isBowler }) => name ? (
-            <div key={label} className="rounded-xl border px-3 py-2.5"
-              style={{ borderColor:`${color}22`, background:`${color}06` }}>
-              <span className="text-[8px] font-black uppercase tracking-widest block mb-1" style={{ color }}>{label}</span>
-              <span className="text-[11px] font-semibold text-white block leading-tight truncate">{name}</span>
-              <div className="mt-1 flex items-baseline gap-1">
-                <span className="text-base font-black" style={{ color }}>{runs??"-"}</span>
-                <span className="text-[9px] text-gray-600">({b??"-"})</span>
-              </div>
-              <span className="text-[9px] text-gray-700">{isBowler?"Eco":"SR"}: {sr?parseFloat(sr).toFixed(1):"-"}</span>
-            </div>
-          ) : null)}
-        </div>
-      )}
-
-      {availableInnings.length > 1 && (
-        <div className="flex gap-2">
-          {availableInnings.map(inn => (
-            <button key={inn} onClick={() => setViewInnings(inn)}
-              className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all"
-              style={{
-                background: viewInnings===inn?"rgba(245,166,35,0.15)":"rgba(255,255,255,0.04)",
-                color: viewInnings===inn?"#f5a623":"#6b7280",
-                border: `1px solid ${viewInnings===inn?"rgba(245,166,35,0.3)":"rgba(255,255,255,0.06)"}`,
-              }}>
-              {inn==="1"?`${inn1Code} Inn 1`:`${inn2Code} Inn 2`}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="rounded-2xl border overflow-hidden"
-        style={{ borderColor:"rgba(255,255,255,0.07)", background:"rgba(255,255,255,0.02)" }}>
-        <div className="flex border-b" style={{ borderColor:"rgba(255,255,255,0.06)" }}>
-          {tabs.map(t => (
-            <button key={t} onClick={() => setActiveTab(t)}
-              className="flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all border-b-2"
-              style={{ color:activeTab===t?"#f5a623":"#4b5563", borderBottomColor:activeTab===t?"#f5a623":"transparent", background:"transparent" }}>
-              {t==="batting"?`${viewInnCode} Bat`:t==="bowling"?`${viewBowlCode} Bowl`:"Commentary"}
-            </button>
-          ))}
-        </div>
-
-        {activeTab==="batting"    && <><BattingTable batsmen={batsmen} ms={ms} /><FallOfWickets fow={fow} /></>}
-        {activeTab==="bowling"    && <BowlingTable bowlers={bowlers} ms={ms} />}
-        {activeTab==="commentary" && (
-          <div className="divide-y" style={{ borderColor:"rgba(255,255,255,0.04)" }}>
-            {comms.length ? comms.slice(0,15).map((c,i) => {
-              const text = c.Commentary||c.Text||"";
-              const over = c.OverNumber||c.OverNum||"";
-              const isBig = /SIX|FOUR|six|four/.test(text);
-              const isWkt = /WICKET|OUT|caught|bowled|lbw/i.test(text);
-              const dotColor = isWkt?"#ef4444":isBig?"#f5a623":"rgba(255,255,255,0.15)";
-              return (
-                <div key={i} className="flex gap-3 px-4 py-2.5"
-                  style={{ background:i===0?"rgba(255,255,255,0.03)":"transparent" }}>
-                  <div className="flex items-start gap-1.5 pt-1.5 shrink-0 w-10">
-                    <div className="w-1.5 h-1.5 rounded-full mt-0.5 shrink-0" style={{ background:dotColor }} />
-                    <span className="text-[9px] text-gray-700 font-bold leading-none">{over}</span>
-                  </div>
-                  <p className="text-[12px] text-gray-400 leading-relaxed flex-1">{text}</p>
-                </div>
-              );
-            }) : <p className="text-center text-gray-700 text-xs py-8">No commentary yet</p>}
-          </div>
-        )}
       </div>
     </div>
   );
 }
-
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function LiveCricketTV() {
   const [active, setActive]             = useState(CHANNELS[0]);
