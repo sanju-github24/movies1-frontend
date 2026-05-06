@@ -131,10 +131,25 @@ function nameToCode(name = "") {
 // ─── SCHEDULE HELPERS ─────────────────────────────────────────────────────────
 function getActiveMatchId() {
   const now = new Date();
+  
+  // 1. Check for current LIVE match
   const live = SCHEDULE_WITH_TIMES.filter(m => now >= m.startTime && now <= m.endTime);
   if (live.length > 0) return live[0].id;
-  const upcoming = SCHEDULE_WITH_TIMES.filter(m => now < m.startTime);
-  if (upcoming.length > 0) return upcoming[0].id;
+
+  // 2. Check for UPCOMING match starting within the next 30 minutes
+  const upcomingSoon = SCHEDULE_WITH_TIMES.find(m => {
+    const timeToStart = m.startTime.getTime() - now.getTime();
+    return timeToStart > 0 && timeToStart <= 30 * 60 * 1000;
+  });
+  if (upcomingSoon) return upcomingSoon.id;
+
+  // 3. Fallback: Show the most recently COMPLETED match result
+  const completed = [...SCHEDULE_WITH_TIMES]
+    .filter(m => now > m.endTime)
+    .sort((a, b) => b.endTime - a.endTime); // Latest first
+    
+  if (completed.length > 0) return completed[0].id;
+
   return BASE_MATCH_ID;
 }
 
@@ -957,18 +972,21 @@ function DetailedBowlingTable({ bowlingCard, currentBowlerID }) {
 }
 
 // ─── MAIN SCORECARD COMPONENT ───────────────────────────────────────────────
-function IPLScorecard({ matchId, matchInfo }) {
-  const [ms, setMs] = useState(null);
-  const [allInnings, setAllInnings] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("batting");
-  const [viewInnings, setViewInnings] = useState("1");
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [countdown, setCountdown] = useState(10);
+// ─── DROP-IN REPLACEMENT: IPLScorecard only ───────────────────────
+// No result banner card. Result shown as green text inside score card only.
 
-  const msRef = useRef(null);
+function IPLScorecard({ matchId, matchInfo }) {
+  const [ms, setMs]                   = useState(null);
+  const [allInnings, setAllInnings]   = useState({});
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [activeTab, setActiveTab]     = useState("batting");
+  const [viewInnings, setViewInnings] = useState("1");
+  const [lastUpdate, setLastUpdate]   = useState(null);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [countdown, setCountdown]     = useState(10);
+
+  const msRef    = useRef(null);
   const matchRef = useRef(matchId);
 
   useEffect(() => {
@@ -980,12 +998,11 @@ function IPLScorecard({ matchId, matchInfo }) {
     if (!silent) setLoading(true);
     setRefreshing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/match/${matchRef.current}`);
+      const res  = await fetch(`${API_BASE}/api/match/${matchRef.current}`);
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "Network error");
 
       const { summary, innings: inn, currentInnings } = json.data;
-      
       let msData = summary?.MatchSummary || {};
       if (Array.isArray(msData)) msData = msData[0] || {};
       setMs(msData);
@@ -994,6 +1011,18 @@ function IPLScorecard({ matchId, matchInfo }) {
       if (inn) {
         setAllInnings(prev => ({ ...prev, [currentInnings]: inn }));
         setViewInnings(currentInnings);
+      }
+
+      // When match ends, fetch the other innings too for full scorecard
+      if (String(msData.IsMatchEnd ?? "0") === "1") {
+        const otherInn = currentInnings === "1" ? "2" : "1";
+        try {
+          const r2 = await fetch(`${API_BASE}/api/match/${matchRef.current}?innings=${otherInn}`);
+          const j2 = await r2.json();
+          if (j2.ok && j2.data?.innings) {
+            setAllInnings(prev => ({ ...prev, [otherInn]: j2.data.innings }));
+          }
+        } catch { /* ignore */ }
       }
 
       setLastUpdate(new Date());
@@ -1009,9 +1038,7 @@ function IPLScorecard({ matchId, matchInfo }) {
 
   useEffect(() => {
     load();
-    const interval = setInterval(() => {
-      if (String(msRef.current?.IsMatchEnd ?? "0") === "0") load(true);
-    }, 10000);
+    const interval = setInterval(() => load(true), 10_000);
     return () => clearInterval(interval);
   }, [load, matchId]);
 
@@ -1022,8 +1049,9 @@ function IPLScorecard({ matchId, matchInfo }) {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:"rgba(245,166,35,0.1)", borderTopColor:"#f5a623" }} />
-      <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Live Syncing...</p>
+      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin"
+        style={{ borderColor: "rgba(245,166,35,0.1)", borderTopColor: "#f5a623" }} />
+      <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Loading…</p>
     </div>
   );
 
@@ -1031,163 +1059,312 @@ function IPLScorecard({ matchId, matchInfo }) {
     <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-4">
       <AlertCircle size={28} className="text-red-500/60" />
       <p className="text-[11px] text-gray-700 max-w-xs">{error}</p>
-      <button onClick={() => load()} className="mt-2 px-4 py-2 rounded-xl border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">Retry</button>
+      <button onClick={() => load()}
+        className="mt-2 px-4 py-2 rounded-xl border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
+        Retry
+      </button>
     </div>
   );
 
-  const isLive = String(ms.IsMatchEnd ?? 0) === "0";
-  const curInn = String(ms.CurrentInnings || "1");
+  const isLive   = String(ms.IsMatchEnd ?? 0) === "0";
+  const isEnded  = !isLive;
+  const curInn   = String(ms.CurrentInnings || "1");
+  const inn1Code = nameToCode(ms.FirstBattingTeam  || "") || (ms.AwayTeamCode || "");
+  const inn2Code = nameToCode(ms.SecondBattingTeam || "") || (ms.HomeTeamCode || "");
+  const inn1Team = getTeam(inn1Code);
+  const inn2Team = getTeam(inn2Code);
 
-  // Dynamic Data Extraction for the active view
-  const currentInnKey = `Innings${viewInnings}`;
-  const innData = allInnings[viewInnings]?.[currentInnKey] || allInnings[viewInnings] || {};
-  const battingCard = innData?.BattingCard || [];
-  const bowlingCard = innData?.BowlingCard || [];
-  const commentary = innData?.OverHistory || innData?.Commentary || [];
+  const s1 = ms["1FallScore"] ?? ""; const w1 = ms["1FallWickets"] ?? "0"; const o1 = ms["1FallOvers"] ?? "";
+  const s2 = ms["2FallScore"] ?? ""; const w2 = ms["2FallWickets"] ?? "0"; const o2 = ms["2FallOvers"] ?? "";
 
-  const homeCode = ms.HomeTeamCode || nameToCode(ms.HomeTeamName || "");
-  const awayCode = ms.AwayTeamCode || nameToCode(ms.AwayTeamName || "");
-  const viewInnCode = viewInnings === "1" ? (nameToCode(ms.FirstBattingTeam) || awayCode) : (nameToCode(ms.SecondBattingTeam) || homeCode);
+  const crr    = curInn === "1" ? ms["1RunRate"] ?? "" : ms["2RunRate"] ?? "";
+  const rrr    = curInn === "2" ? ms.RequiredRunRate ?? "" : "";
+  const target = curInn === "2" ? ms.Target ?? "" : "";
+  const proj1  = ms.ProjectedScore ?? "";
+  const proj2  = ms["2ndProjectedScore"] ?? "";
+  const proj3  = ms["3rdProjectedScore"] ?? "";
+
+  let reqRuns = "";
+  if (curInn === "2" && target && s2 !== "" && isLive) {
+    const n = parseInt(target) - parseInt(s2 || 0);
+    reqRuns = n > 0 ? String(n) : "0";
+  }
+
+  const currentInnKey  = `Innings${viewInnings}`;
+  const innDataWrapper = allInnings[viewInnings] || {};
+  const innData        = innDataWrapper?.[currentInnKey] || innDataWrapper || {};
+  const battingCard    = innData?.BattingCard   || [];
+  const bowlingCard    = innData?.BowlingCard   || [];
+  const commentary     = innData?.OverHistory   || innData?.Commentary || [];
+  const fowData        = innData?.FallOfWickets || [];
+
+  const viewInnCode  = viewInnings === "1" ? inn1Code : inn2Code;
+  const availInnings = Object.keys(allInnings).sort();
+
+  // Winner detection
+  const winnerID = String(ms.WinningTeamID || "");
+  const homeID   = String(ms.HomeTeamID   || "");
+  const awayID   = String(ms.AwayTeamID   || "");
+  const winnerCode = isEnded && winnerID
+    ? winnerID === homeID
+      ? (ms.HomeTeamCode || inn2Code)
+      : winnerID === awayID
+        ? (ms.AwayTeamCode || inn1Code)
+        : nameToCode(ms.WinningTeamName || "")
+    : "";
 
   return (
     <div className="space-y-3">
+
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-amber-400" />
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Match Scorecard</span>
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+            Match {matchInfo?.num || ""} Scorecard
+          </span>
           {isLive && (
             <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live {countdown}s
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              Live {countdown}s
+            </span>
+          )}
+          {isEnded && (
+            <span className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+              ✓ Completed
             </span>
           )}
         </div>
-        <button onClick={() => load()} className={`text-gray-600 hover:text-amber-400 transition-all ${refreshing ? 'animate-spin' : ''}`}>
+        <button onClick={() => load()}
+          className={`text-gray-600 hover:text-amber-400 transition-all ${refreshing ? "animate-spin" : ""}`}>
           <RefreshCw size={12} />
         </button>
       </div>
 
-      {/* ── SCORE BANNER ── */}
-<div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-lg">
-  <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-     {/* Lighter, more visible ground name */}
-     <p className="text-[10px] text-gray-400 font-semibold tracking-wide uppercase">
-       {ms.GroundName}
-     </p>
-     {/* Softened toss details */}
-     <p className="text-[10px] text-gray-500 mt-0.5 font-medium italic flex items-center gap-1">
-       <span className="opacity-70">🪙</span> {ms.TossDetails}
-     </p>
-  </div>
-        
+      {/* ── SCORE CARD ── */}
+      <div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-lg">
+
+        {/* Venue + Toss */}
+        <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+          <p className="text-[10px] text-gray-400 font-semibold tracking-wide uppercase">{ms.GroundName}</p>
+          <p className="text-[10px] text-gray-500 mt-0.5 font-medium italic flex items-center gap-1">
+            <span className="opacity-70">🪙</span> {ms.TossDetails}
+          </p>
+        </div>
+
+        {/* Two team rows */}
         <div className="p-3 space-y-2">
-          {[1, 2].map(num => {
-            const s = ms[`${num}FallScore`];
-            const w = ms[`${num}FallWickets`];
-            const o = ms[`${num}FallOvers`];
+          {[
+            { num: 1, code: inn1Code, team: inn1Team, score: s1, wkts: w1, overs: o1 },
+            { num: 2, code: inn2Code, team: inn2Team, score: s2, wkts: w2, overs: o2 },
+          ].map(({ num, code, team, score, wkts, overs }) => {
             const isBatting = curInn === String(num) && isLive;
-            const teamCode = num === 1 ? (nameToCode(ms.FirstBattingTeam) || "T1") : (nameToCode(ms.SecondBattingTeam) || "T2");
-            const team = getTeam(teamCode);
-            
+            const isWinner  = isEnded && code === winnerCode;
             return (
-              <div key={num} className="flex items-center gap-3 rounded-2xl px-3 py-3 border transition-all"
-                style={{ background: isBatting ? `${team.primary}12` : "rgba(255,255,255,0.02)", borderColor: isBatting ? `${team.primary}30` : "rgba(255,255,255,0.04)" }}>
-                <img src={team.logo} className="w-9 h-9 object-contain opacity-80" alt="" />
+              <div key={num}
+                className="flex items-center gap-3 rounded-2xl px-3 py-3 border transition-all"
+                style={{
+                  background: isBatting ? `${team.primary}12` : isWinner ? `${team.primary}10` : "rgba(255,255,255,0.02)",
+                  borderColor: isBatting ? `${team.primary}30` : isWinner ? `${team.primary}30` : "rgba(255,255,255,0.04)",
+                }}>
+                <img src={team.logo} className="w-9 h-9 object-contain opacity-90" alt=""
+                  onError={e => { e.target.style.display = "none"; }} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-white">{teamCode}</span>
-                    {isBatting && <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">Batting</span>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-white">{code}</span>
+                    {isBatting && (
+                      <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded"
+                        style={{ background: "rgba(245,166,35,0.2)", color: "#f5a623" }}>
+                        Batting
+                      </span>
+                    )}
+                    {isWinner && (
+                      <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded"
+                        style={{ background: `${team.accent}25`, color: team.accent }}>
+                        Winner 🏆
+                      </span>
+                    )}
                   </div>
                   <p className="text-[9px] text-gray-600 truncate">{team.name}</p>
                 </div>
-                <div className="text-right">
-                  {s ? (
-                    <div className="flex flex-col">
-                      <span className="text-xl font-black text-white">{s}/{w}</span>
-                      <span className="text-[10px] text-gray-600">({o} ov)</span>
-                    </div>
-                  ) : <span className="text-[10px] text-gray-700 font-bold uppercase tracking-widest">Yet to bat</span>}
+                <div className="text-right shrink-0">
+                  {score ? (
+                    <>
+                      <span className="text-xl font-black text-white">{score}/{wkts}</span>
+                      {overs && <span className="text-[10px] text-gray-600 ml-1">({overs} ov)</span>}
+                      {isBatting && proj1 && (
+                        <div className="text-[9px] font-bold mt-0.5" style={{ color: "#f5a623" }}>
+                          Proj: {proj1}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-gray-700 font-bold uppercase tracking-widest">Yet to bat</span>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Live Over Tracker (Grouped Multi-over UI from Screenshot) */}
-        {viewInnings === curInn && <BallByBallTracker innData={innData} />}
+        {/* Ball-by-ball — live only */}
+        {isLive && viewInnings === curInn && <BallByBallTracker innData={innData} />}
 
-        {/* Live Innings Stats (CRR / RRR) */}
+        {/* Live stats bar */}
         {isLive && (
-          <div className="px-4 py-3 border-t border-white/5 flex gap-5 bg-white/[0.01]">
-             <div className="flex flex-col">
-                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Run Rate</span>
-                <span className="text-sm font-black text-green-400">{ms[`${curInn}RunRate`] || "—"}</span>
-             </div>
-             {curInn === "2" && (
-               <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Required</span>
-                  <span className="text-sm font-black text-amber-500">{ms.RequiredRunRate || "—"}</span>
-               </div>
-             )}
-             <div className="ml-auto flex flex-col text-right">
-                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest">Projected</span>
-                <span className="text-sm font-black text-white">{ms.ProjectedScore || "—"}</span>
-             </div>
+          <div className="px-4 py-3 border-t border-white/5 flex gap-5 flex-wrap bg-white/[0.01]">
+            {crr && parseFloat(crr) > 0 && (
+              <div>
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest block">CRR</span>
+                <span className="text-sm font-black text-green-400">{parseFloat(crr).toFixed(2)}</span>
+              </div>
+            )}
+            {rrr && parseFloat(rrr) > 0 && (
+              <div>
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest block">RRR</span>
+                <span className="text-sm font-black text-amber-400">{parseFloat(rrr).toFixed(2)}</span>
+              </div>
+            )}
+            {target && (
+              <div>
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest block">Target</span>
+                <span className="text-sm font-black text-white">{target}</span>
+              </div>
+            )}
+            {reqRuns && (
+              <div>
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest block">Need</span>
+                <span className="text-sm font-black" style={{ color: "#f87171" }}>{reqRuns} runs</span>
+              </div>
+            )}
+            {ms.RemainingBalls && curInn === "2" && (
+              <div>
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest block">Balls</span>
+                <span className="text-sm font-black text-white">{ms.RemainingBalls}</span>
+              </div>
+            )}
+            {curInn === "1" && proj1 && (
+              <div className="ml-auto flex gap-3">
+                {[[proj1,"C"],[proj2,"M"],[proj3,"A"]].filter(([v]) => v).map(([val, lbl]) => (
+                  <div key={lbl} className="text-right">
+                    <span className="text-[8px] text-gray-700 uppercase tracking-widest block">{lbl}</span>
+                    <span className="text-sm font-black" style={{ color: "#f5a623" }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Result text — green line at bottom when ended ── */}
+        {isEnded && ms.Comments && (
+          <div className="px-4 py-2.5 border-t border-white/5 text-center"
+            style={{ background: "rgba(74,222,128,0.04)" }}>
+            <p className="text-[11px] font-black text-green-400">{ms.Comments}</p>
           </div>
         )}
       </div>
 
       {/* ── INNINGS SELECTOR ── */}
-      {Object.keys(allInnings).length > 1 && (
+      {availInnings.length > 1 && (
         <div className="flex gap-2">
-          {Object.keys(allInnings).sort().map(inn => (
-            <button key={inn} onClick={() => setViewInnings(inn)}
-              className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border"
-              style={{
-                background: viewInnings === inn ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.04)",
-                color: viewInnings === inn ? "#f5a623" : "#6b7280",
-                borderColor: viewInnings === inn ? "rgba(245,166,35,0.3)" : "rgba(255,255,255,0.06)",
-              }}>
-              Innings {inn}
-            </button>
-          ))}
+          {availInnings.map(inn => {
+            const innCode = inn === "1" ? inn1Code : inn2Code;
+            return (
+              <button key={inn} onClick={() => setViewInnings(inn)}
+                className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border"
+                style={{
+                  background: viewInnings === inn ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.04)",
+                  color: viewInnings === inn ? "#f5a623" : "#6b7280",
+                  borderColor: viewInnings === inn ? "rgba(245,166,35,0.3)" : "rgba(255,255,255,0.06)",
+                }}>
+                {innCode} Inn {inn}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* ── TABS ── */}
+      {/* ── SCORECARD TABS ── */}
       <div className="rounded-3xl border border-white/5 bg-white/[0.02] overflow-hidden">
         <div className="flex border-b border-white/5 bg-white/[0.01]">
           {["batting", "bowling", "commentary"].map(t => (
             <button key={t} onClick={() => setActiveTab(t)}
               className="flex-1 py-3 text-[9px] font-black uppercase tracking-[0.2em] transition-all border-b-2"
-              style={{ color: activeTab === t ? "#f5a623" : "#4b5563", borderBottomColor: activeTab === t ? "#f5a623" : "transparent" }}>
-              {t === "batting" ? `${viewInnCode} Bat` : t}
+              style={{
+                color: activeTab === t ? "#f5a623" : "#4b5563",
+                borderBottomColor: activeTab === t ? "#f5a623" : "transparent",
+                background: "transparent",
+              }}>
+              {t === "batting"
+                ? `${viewInnCode} Bat`
+                : t === "bowling"
+                ? `${viewInnings === "1" ? inn2Code : inn1Code} Bowl`
+                : "Comm"}
             </button>
           ))}
         </div>
 
-        <div className="min-h-[260px]">
+        <div className="min-h-[200px]">
           {activeTab === "batting" && (
             <>
-              <DetailedBattingTable battingCard={battingCard} strikerID={ms?.CurrentStrikerID} nonStrikerID={ms?.CurrentNonStrikerID} />
-              <FallOfWickets fow={innData?.FallOfWickets || []} />
+              <DetailedBattingTable
+                battingCard={battingCard}
+                strikerID={ms?.CurrentStrikerID}
+                nonStrikerID={ms?.CurrentNonStrikerID}
+              />
+              {fowData.length > 0 && (
+                <div className="px-4 py-3 border-t border-white/5">
+                  <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2">
+                    Fall of Wickets
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fowData.map((w, i) => (
+                      <span key={i} className="text-[9px] text-gray-500 bg-white/5 px-2 py-0.5 rounded">
+                        {w.FallScore}/{w.FallWickets} · {w.PlayerName} ({w.FallOvers} ov)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
-          {activeTab === "bowling" && <DetailedBowlingTable bowlingCard={bowlingCard} currentBowlerID={ms?.CurrentBowlerID} />}
+
+          {activeTab === "bowling" && (
+            <DetailedBowlingTable
+              bowlingCard={bowlingCard}
+              currentBowlerID={ms?.CurrentBowlerID}
+            />
+          )}
+
           {activeTab === "commentary" && (
             <div className="divide-y divide-white/[0.03]">
-              {commentary.slice(0, 15).map((c, i) => (
-                <div key={i} className="px-4 py-3 flex gap-4 hover:bg-white/[0.01]">
-                  <div className="w-10 shrink-0 text-center">
-                    <span className="text-[10px] font-black text-amber-500">{c.BallName || c.OverNo}</span>
-                    <div className="mt-1 flex justify-center"><BallChip ball={c.Runs} /></div>
+              {commentary.length > 0 ? commentary.slice(0, 20).map((c, i) => {
+                const text      = c.NewCommentry || c.CommentaryText || c.Commentary || c.Text || "";
+                const cleanText = text.replace(/<[^>]+>/g, "").trim();
+                const over      = c.BallName || c.OverNumber || c.OverNo || "";
+                const isFour    = String(c.IsFour)   === "1";
+                const isSix     = String(c.IsSix)    === "1";
+                const isWkt     = String(c.IsWicket) === "1";
+                return (
+                  <div key={i} className="px-4 py-3 flex gap-3 hover:bg-white/[0.01] transition-colors">
+                    <div className="w-10 shrink-0 text-center pt-0.5">
+                      <span className="text-[10px] font-black text-amber-500 block">{over}</span>
+                      <div className="mt-1 flex justify-center">
+                        <BallChip ball={isWkt ? "W" : isSix ? "6" : isFour ? "4" : String(c.Runs ?? "")} />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {c.CommentStrikers && (
+                        <p className="text-[10px] font-black text-gray-300 mb-0.5 truncate">{c.CommentStrikers}</p>
+                      )}
+                      <p className="text-[11px] text-gray-500 leading-relaxed">{cleanText}</p>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
-                    <span className="font-bold text-gray-200 block mb-0.5">{c.CommentStrikers || ""}</span>
-                    {c.NewCommentry || c.CommentaryText}
-                  </p>
-                </div>
-              ))}
+                );
+              }) : (
+                <p className="text-center text-gray-700 text-xs py-8">No commentary available</p>
+              )}
             </div>
           )}
         </div>
