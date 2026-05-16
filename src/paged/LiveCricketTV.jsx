@@ -21,27 +21,27 @@ const CHANNELS = [
     logo: "/Star_Sports_Hindi.png", url: "https://allrounder-live5.pages.dev/star/star-1-hindi",
     desc: "Star Sports Hindi — Live cricket in Hindi commentary",
   },
-  {
-    id: "star-kannada", name: "Star Sports", sub: "Kannada",
-    color: "#a855f7", glow: "rgba(168,85,247,0.3)", border: "rgba(168,85,247,0.25)",
-    bg: "rgba(168,85,247,0.06)", tag: "KANNADA", useIcon: false,
-    logo: "/star-sports-kan.jpg", url: "https://binge-giotv.pages.dev/player2?id=ss1kan",
-    desc: "Star Sports 1 — Live cricket in Kannada commentary",
-  },
-  {
-    id: "star-tamil", name: "Star Sports", sub: "Tamil",
-    color: "#f59e0b", glow: "rgba(245,158,11,0.3)", border: "rgba(245,158,11,0.25)",
-    bg: "rgba(245,158,11,0.06)", tag: "TAMIL", useIcon: false,
-    logo: "/star-sports-tam.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tam",
-    desc: "Star Sports 1 — Live cricket in Tamil commentary",
-  },
-  {
-    id: "star-telugu", name: "Star Sports", sub: "Telugu",
-    color: "#10b981", glow: "rgba(16,185,129,0.3)", border: "rgba(16,185,129,0.25)",
-    bg: "rgba(16,185,129,0.06)", tag: "TELUGU", useIcon: false,
-    logo: "/star-sports-tel.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tel",
-    desc: "Star Sports 1 — Live cricket in Telugu commentary",
-  },
+  // {
+  //   id: "star-kannada", name: "Star Sports", sub: "Kannada",
+  //   color: "#a855f7", glow: "rgba(168,85,247,0.3)", border: "rgba(168,85,247,0.25)",
+  //   bg: "rgba(168,85,247,0.06)", tag: "KANNADA", useIcon: false,
+  //   logo: "/star-sports-kan.jpg", url: "https://binge-giotv.pages.dev/player2?id=ss1kan",
+  //   desc: "Star Sports 1 — Live cricket in Kannada commentary",
+  // },
+  // {
+  //   id: "star-tamil", name: "Star Sports", sub: "Tamil",
+  //   color: "#f59e0b", glow: "rgba(245,158,11,0.3)", border: "rgba(245,158,11,0.25)",
+  //   bg: "rgba(245,158,11,0.06)", tag: "TAMIL", useIcon: false,
+  //   logo: "/star-sports-tam.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tam",
+  //   desc: "Star Sports 1 — Live cricket in Tamil commentary",
+  // },
+  // {
+  //   id: "star-telugu", name: "Star Sports", sub: "Telugu",
+  //   color: "#10b981", glow: "rgba(16,185,129,0.3)", border: "rgba(16,185,129,0.25)",
+  //   bg: "rgba(16,185,129,0.06)", tag: "TELUGU", useIcon: false,
+  //   logo: "/star-sports-tel.png", url: "https://binge-giotv.pages.dev/player2?id=ss1tel",
+  //   desc: "Star Sports 1 — Live cricket in Telugu commentary",
+  // },
 ];
 
 // ─── SCHEDULE ─────────────────────────────────────────────────────────────────
@@ -1151,6 +1151,7 @@ function IPLScorecard({ matchId, matchInfo }) {
             <span className="opacity-70">🪙</span> {ms.TossDetails}
           </p>
         </div>
+        
 
         {/* Two team rows */}
         <div className="p-3 space-y-2">
