@@ -47,7 +47,11 @@ const CHANNELS = [
 // ─── SCHEDULE ─────────────────────────────────────────────────────────────────
 const BASE_MATCH_NUM = 44;
 const BASE_MATCH_ID  = 2484;
-function getMatchId(n) { return BASE_MATCH_ID + (n - BASE_MATCH_NUM); }
+function getMatchId(n) {
+  if (n === 71) return 2535;
+  if (n === 72) return 2536;
+  return BASE_MATCH_ID + (n - BASE_MATCH_NUM);
+}
 
 function makeIST(dateStr, timeStr) {
   const monthMap = { JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11 };
@@ -86,6 +90,8 @@ const SCHEDULE = [
   { num:68, date:"23-MAY-26", day:"Sat", time:"7:30 PM",  home:"LSG",  away:"PBKS", venue:"Lucknow" },
   { num:69, date:"24-MAY-26", day:"Sun", time:"3:30 PM",  home:"MI",   away:"RR",   venue:"Mumbai" },
   { num:70, date:"24-MAY-26", day:"Sun", time:"7:30 PM",  home:"KKR",  away:"DC",   venue:"Kolkata" },
+  { num:71, date:"26-MAY-26", day:"Tue", time:"7:30 PM",  home:"RCB",  away:"GT",   venue:"Dharmshala" },
+  { num:72, date:"27-MAY-26", day:"Wed", time:"7:30 PM",  home:"SRH",  away:"RR",   venue:"New Chandigarh" },
 ];
 
 const SCHEDULE_WITH_TIMES = SCHEDULE.map(m => ({
