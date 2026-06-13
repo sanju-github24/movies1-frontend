@@ -36,7 +36,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
             <MonitorPlay className="w-5 h-5 text-red-500" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
           </div>
-          <span className="text-sm font-black">Live Cricket</span>
+          <span className="text-sm font-black">Live Sports</span>
         </button>
       </li>
     </ul>

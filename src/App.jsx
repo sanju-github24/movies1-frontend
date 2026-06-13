@@ -41,6 +41,7 @@ import AuthPage from './paged/AuthPage';
 import UpdatePassword from './paged/UpdatePassword';
 import TorrentSearch from './paged/Torrentsearch';
 import LiveCricketTV from './paged/LiveCricketTV';
+import Homeies from './paged/Homeies';
 
 // 🛡️ Lockout Component (Standard users see this if they tried to hack /admin)
 const LockoutOverlay = () => {
@@ -165,11 +166,12 @@ const AppContent = () => {
   const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); 
   const isAdminPath = location.pathname.startsWith("/admin");
   const isLiveStreamPlayerPath = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname); 
-  const isLiveCricketPath = location.pathname === "/live-cricket"; 
+  const isLiveCricketPath = location.pathname === "/live-cricket";
+  const isSportsPath = location.pathname === "/sports";
 
   const hideNavbarAndCategoryBar =
     hidePaths.includes(location.pathname) || 
-    isBlogViewerPath || isWatchPath || isPlayerPath || isAdminPath || isLiveCricketPath || isLiveStreamPlayerPath;
+    isBlogViewerPath || isWatchPath || isPlayerPath || isAdminPath || isLiveCricketPath || isLiveStreamPlayerPath || isSportsPath;
 
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
@@ -225,6 +227,7 @@ const AppContent = () => {
         <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
         <Route path="/live-cricket" element={<LiveCricket />} /> 
         <Route path="/search-torrent" element={<TorrentSearch />} />
+        <Route path="/sports" element={<Homeies />} />
        <Route path="/live-cricket-tv" element={<LiveCricketTV />} />
         <Route path="/profile" element={<ProtectedRoute session={session} initialized={initialized}><Profile /></ProtectedRoute>} />
         <Route path="/verify-account" element={<EmailVerify />} />

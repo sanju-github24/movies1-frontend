@@ -633,8 +633,8 @@ const WatchListPage = () => {
             <Link to="/search-torrent" className="flex items-center gap-1.5 text-red-400 hover:text-red-300 transition border border-red-500/30 px-3 py-0.5 rounded-full hover:border-red-400 hover:bg-red-500/10">
               <span>⚡</span> Torrents
             </Link>
-            <Link to="/live-cricket-tv" className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition border border-blue-500/30 px-3 py-0.5 rounded-full hover:border-blue-400 hover:bg-blue-500/10">
-              <span>📺</span> Cricket Live
+            <Link to="/sports" className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition border border-blue-500/30 px-3 py-0.5 rounded-full hover:border-blue-400 hover:bg-blue-500/10">
+              <span>📺</span> Sports Live
             </Link>
           </nav>
 
