@@ -247,7 +247,7 @@ const Navbar = () => {
               <li>
                 {/* ✅ UPDATED: Internal route via navigate */}
                 <button 
-                  onClick={() => { navigate("/live-cricket-tv"); setMobileOpen(false); }}
+                  onClick={() => { navigate("/sports"); setMobileOpen(false); }}
                   className="w-full flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition"
                 >
                   <div className="flex items-center gap-4">
