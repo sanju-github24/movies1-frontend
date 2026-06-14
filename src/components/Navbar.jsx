@@ -146,14 +146,14 @@ const Navbar = () => {
             <li>
               {/* ✅ UPDATED: Internal route via Link */}
               <Link
-                to="/live-cricket-tv"
+                to="/sports"
                 className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-300 hover:text-red-500 transition"
               >
                 <div className="relative">
                   <MonitorPlay className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
                 </div>
-                <span className="text-sm font-black">Live Cricket</span>
+                <span className="text-sm font-black">Live Sports</span>
               </Link>
             </li>
             <li><Link to="/blogs" className="hover:text-blue-200 transition">Blogs</Link></li>
