@@ -1,6 +1,6 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
 
@@ -15,7 +15,6 @@ import MovieDetail from './paged/MovieDetail';
 import SearchResults from './paged/SearchResults';
 import CategoryPage from './components/CategoryPage';
 import LatestUploads from './components/LatestUploads';
-
 import { AppContext } from './context/AppContext';
 import AdminUpload from './context/AdminUpload';
 import BlogEditor from './components/BlogEditor';
@@ -42,8 +41,10 @@ import UpdatePassword from './paged/UpdatePassword';
 import TorrentSearch from './paged/Torrentsearch';
 import LiveCricketTV from './paged/LiveCricketTV';
 import Homeies from './paged/Homeies';
+import LiveChannelsUpload from './paged/LiveChannelsUpload';
+import LiveChannelsPage from './paged/LiveChannelsPage';
 
-// 🛡️ Lockout Component (Standard users see this if they tried to hack /admin)
+// ── Lockout Overlay ──
 const LockoutOverlay = () => {
   const [timeLeft, setTimeLeft] = useState(null);
 
@@ -80,42 +81,37 @@ const LockoutOverlay = () => {
   );
 };
 
-// 🛡️ Standard Protected Route
+// ── Protected Routes ──
 const ProtectedRoute = ({ children, session, initialized }) => {
-  if (!initialized) return null; 
+  if (!initialized) return null;
   return session ? children : <Navigate to="/auth" />;
 };
 
-// 👑 Strict Admin Protected Route
 const ProtectedAdminRoute = ({ children, session, initialized }) => {
   const adminEmail = "sanjusanjay0444@gmail.com";
   if (!initialized) return null;
-
   const isAuthorized = session?.user?.email?.toLowerCase() === adminEmail.toLowerCase();
-
   if (!isAuthorized) {
     const lockoutTime = Date.now() + 10 * 60 * 1000;
     localStorage.setItem('admin_lockout', lockoutTime.toString());
     return <Navigate to="/" replace />;
   }
-
   return children;
 };
 
 const AppContent = () => {
   const { isLoggedIn } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState("");
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [initialized, setInitialized] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
 
-  // --- 🛡️ ANTI-INSPECT LOGIC ---
+  // ── Anti-Inspect Logic ──
   useEffect(() => {
     const adminEmail = "sanjusanjay0444@gmail.com";
-    
+
     const handleContextMenu = (e) => {
       if (session?.user?.email?.toLowerCase() !== adminEmail) {
         e.preventDefault();
@@ -124,58 +120,63 @@ const AppContent = () => {
 
     const handleKeyDown = (e) => {
       if (session?.user?.email?.toLowerCase() === adminEmail) return;
-
-      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
       if (
-        e.keyCode === 123 || 
-        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || 
+        e.keyCode === 123 ||
+        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) ||
         (e.ctrlKey && e.keyCode === 85)
       ) {
         e.preventDefault();
-        // Force exit/redirect if they try to inspect
-        window.location.href = "https://www.google.com"; 
+        window.location.href = "https://www.google.com";
       }
     };
 
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("keydown", handleKeyDown);
-
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [session]);
 
+  // ── Auth State ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setInitialized(true);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setInitialized(true);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  const hidePaths = ["/login", "/auth", "/verify-account", "/reset-password", "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv"];
-  const isBlogViewerPath = /^\/blogs\/[^/]+$/.test(location.pathname);
-  const isWatchPath = /^\/watch(\/[^/]+)?$/.test(location.pathname);
-  const isPlayerPath = /^\/player(\/.*)?$/.test(location.pathname); 
-  const isAdminPath = location.pathname.startsWith("/admin");
-  const isLiveStreamPlayerPath = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname); 
-  const isLiveCricketPath = location.pathname === "/live-cricket";
-  const isSportsPath = location.pathname === "/sports";
+  // ── Navbar/CategoryBar hide logic ──
+  const hidePaths = [
+    "/login", "/auth", "/verify-account", "/reset-password",
+    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv"
+  ];
+  const isBlogViewerPath   = /^\/blogs\/[^/]+$/.test(location.pathname);
+  const isWatchPath        = /^\/watch(\/[^/]+)?$/.test(location.pathname);
+  const isPlayerPath       = /^\/player(\/.*)?$/.test(location.pathname);
+  const isAdminPath        = location.pathname.startsWith("/admin");
+  const isLiveStreamPlayer = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname);
+  const isLiveCricketPath  = location.pathname === "/live-cricket";
+  const isSportsPath       = location.pathname === "/sports";
+  // NOTE: /live-stream is NOT hidden — navbar shows on Live TV page
 
-  const hideNavbarAndCategoryBar =
-    hidePaths.includes(location.pathname) || 
-    isBlogViewerPath || isWatchPath || isPlayerPath || isAdminPath || isLiveCricketPath || isLiveStreamPlayerPath || isSportsPath;
+  const hideNavbar =
+    hidePaths.includes(location.pathname) ||
+    isBlogViewerPath ||
+    isWatchPath ||
+    isPlayerPath ||
+    isAdminPath ||
+    isLiveCricketPath ||
+    isLiveStreamPlayer ||
+    isSportsPath;
 
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
-    setMobileOpen(false);
   };
 
   return (
@@ -183,84 +184,73 @@ const AppContent = () => {
       <LockoutOverlay />
       <ToastContainer position="top-center" autoClose={3000} theme="dark" />
 
-      {!hideNavbarAndCategoryBar && (
+      {/* Single Navbar — handles desktop + mobile internally */}
+      {!hideNavbar && (
         <>
+          <Navbar />
           <div className="hidden sm:block">
-            <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} onNavigate={handleNavigate} />
-          </div>
-          <div className="sm:hidden">
-            <Navbar searchTerm={searchTerm} setSearchTerm={setSearchTerm} isMobile={true} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} onNavigate={handleNavigate} />
-            {mobileOpen && (
-              <div className="fixed inset-0 z-50">
-                <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-                <div className="absolute top-0 right-0 w-72 h-full bg-white shadow-xl p-4 flex flex-col overflow-y-auto rounded-l-xl text-black">
-                  <CategoryBar isMobile={true} onNavigate={handleNavigate} onClose={() => setMobileOpen(false)} />
-                </div>
-              </div>
-            )}
+            <CategoryBar onNavigate={handleNavigate} />
           </div>
         </>
       )}
 
       <Routes>
-        <Route path="/" element={<Home searchTerm={searchTerm} />} />
-        <Route path="/movie/:code" element={<MovieDetail />} />
-        <Route path="/search" element={<SearchResults searchTerm={searchTerm} />} />
-        <Route path="/category/:name" element={<CategoryPage />} />
-        <Route path="/latest" element={<LatestUploads />} />
-        <Route path="/blogs" element={<BlogList />} />
-        <Route path="/blogs/:slug" element={<BlogViewer />} />
-        <Route path="/auth" element={session ? <Navigate to="/watch" /> : <AuthPage />} />
-        <Route path="/update-password" element={<UpdatePassword />} />
-        {/* 🎬 PUBLIC WATCH ROUTES (Login no longer forced) */}
-<Route path="/watch" element={<WatchListPage />} />
-
-<Route 
-  path="/watch/:slug/*" 
-  element={<WatchPage />} 
-/>
-
-<Route 
-  path="/player/:slug?" 
-  element={<VideoPlayerPage />} 
-/>
+        <Route path="/"                       element={<Home searchTerm={searchTerm} />} />
+        <Route path="/movie/:code"            element={<MovieDetail />} />
+        <Route path="/search"                 element={<SearchResults searchTerm={searchTerm} />} />
+        <Route path="/category/:name"         element={<CategoryPage />} />
+        <Route path="/latest"                 element={<LatestUploads />} />
+        <Route path="/blogs"                  element={<BlogList />} />
+        <Route path="/blogs/:slug"            element={<BlogViewer />} />
+        <Route path="/auth"                   element={session ? <Navigate to="/watch" /> : <AuthPage />} />
+        <Route path="/update-password"        element={<UpdatePassword />} />
+        <Route path="/watch"                  element={<WatchListPage />} />
+        <Route path="/watch/:slug/*"          element={<WatchPage />} />
+        <Route path="/player/:slug?"          element={<VideoPlayerPage />} />
         <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
-        <Route path="/live-cricket" element={<LiveCricket />} /> 
-        <Route path="/search-torrent" element={<TorrentSearch />} />
-        <Route path="/sports" element={<Homeies />} />
-       <Route path="/live-cricket-tv" element={<LiveCricketTV />} />
-        <Route path="/profile" element={<ProtectedRoute session={session} initialized={initialized}><Profile /></ProtectedRoute>} />
-        <Route path="/verify-account" element={<EmailVerify />} />
+        <Route path="/live-cricket"           element={<LiveCricket />} />
+        <Route path="/search-torrent"         element={<TorrentSearch />} />
+        <Route path="/sports"                 element={<Homeies />} />
+        <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
+        <Route path="/live-stream"            element={<LiveChannelsPage />} />
+        <Route path="/profile"                element={
+          <ProtectedRoute session={session} initialized={initialized}>
+            <Profile />
+          </ProtectedRoute>
+        } />
+        <Route path="/verify-account"         element={<EmailVerify />} />
 
         {!isLoggedIn && (
           <>
-            <Route path="/login" element={<Login />} />
+            <Route path="/login"          element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
           </>
         )}
 
-        <Route 
-            path="/admin/*" 
-            element={
-              <ProtectedAdminRoute session={session} initialized={initialized}>
-                <Routes>
-                  <Route index element={<Navigate to="upload" replace />} />
-                  <Route path="upload" element={<AdminUpload />} />
-                  <Route path="dashboard" element={<AdminDashboard />} />
-                  <Route path="blog-editor" element={<BlogEditor />} />
-                  <Route path="stories" element={<AdminStories />} />
-                  <Route path="upload-watch-html" element={<UploadWatchHtml />} />
-                  <Route path="live-upload" element={<AdminLiveMatchUpload />} />
-                  <Route path="members" element={<AdminMembers />} />
-                  <Route path="up4stream" element={<AdminUp4streamFiles />} />
-                </Routes>
-              </ProtectedAdminRoute>
-            } 
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedAdminRoute session={session} initialized={initialized}>
+              <Routes>
+                <Route index                   element={<Navigate to="upload" replace />} />
+                <Route path="upload"           element={<AdminUpload />} />
+                <Route path="dashboard"        element={<AdminDashboard />} />
+                <Route path="blog-editor"      element={<BlogEditor />} />
+                <Route path="stories"          element={<AdminStories />} />
+                <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+                <Route path="live-upload"      element={<AdminLiveMatchUpload />} />
+                <Route path="members"          element={<AdminMembers />} />
+                <Route path="up4stream"        element={<AdminUp4streamFiles />} />
+                <Route path="live-channels"    element={<LiveChannelsUpload />} />
+              </Routes>
+            </ProtectedAdminRoute>
+          }
         />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayerPath) && (
+      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayer) && (
         <>
           <AdScriptLoader />
           <PopAdsScript />
@@ -271,8 +261,6 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-    <AppContent />
-);
+const App = () => <AppContent />;
 
 export default App;
