@@ -41,6 +41,11 @@ const ADMIN_LINKS = [
     label: "Watch HTML (MV)",
   },
   {
+    path: "/admin/live-channels",
+    icon: MonitorPlay,
+    label: "Upload Bundle url only",
+  },
+  {
     path: "/admin/blog-editor",
     icon: Feather,
     label: "Blog Editor",
@@ -50,6 +55,7 @@ const ADMIN_LINKS = [
     icon: ListChecks,
     label: "Stories/Tasks",
   },
+
   {
     path: "/admin/members",
     icon: Users,
