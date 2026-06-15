@@ -29,7 +29,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
       </li>
       <li>
         <button
-          onClick={() => { onNavigate("/live-cricket-tv"); onClose(); }}
+          onClick={() => { onNavigate("/sports"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
         >
           <div className="relative">
