@@ -2,7 +2,128 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
-// ── XOR helpers ───────────────────────────────────────────────────────────────
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const tokens = {
+  bg: {
+    base:    "#07070f",
+    surface: "rgba(255,255,255,0.03)",
+    glass:   "rgba(255,255,255,0.055)",
+    overlay: "rgba(7,7,15,0.96)",
+  },
+  border: {
+    subtle:  "rgba(255,255,255,0.06)",
+    default: "rgba(255,255,255,0.10)",
+    strong:  "rgba(255,255,255,0.18)",
+  },
+  text: {
+    primary:   "#f4f4f6",
+    secondary: "rgba(244,244,246,0.55)",
+    muted:     "rgba(244,244,246,0.28)",
+  },
+  accent: {
+    red:        "#f03e3e",
+    redDim:     "rgba(240,62,62,0.14)",
+    redBorder:  "rgba(240,62,62,0.32)",
+  },
+  radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 },
+  shadow: {
+    card:  "0 4px 24px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    glow:  "0 0 0 2px rgba(240,62,62,0.2), 0 4px 24px rgba(240,62,62,0.12)",
+    modal: "0 24px 80px rgba(0,0,0,0.7)",
+  },
+};
+
+// ─── Category Palette ─────────────────────────────────────────────────────────
+const CAT_CONFIG = {
+  Sports:        { color: "#3b82f6", bg: "rgba(59,130,246,0.12)",  border: "rgba(59,130,246,0.28)" },
+  News:          { color: "#ef4444", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.28)" },
+  Entertainment: { color: "#a855f7", bg: "rgba(168,85,247,0.12)",  border: "rgba(168,85,247,0.28)" },
+  Movies:        { color: "#f59e0b", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.28)" },
+  Kids:          { color: "#ec4899", bg: "rgba(236,72,153,0.12)",  border: "rgba(236,72,153,0.28)" },
+  Music:         { color: "#10b981", bg: "rgba(16,185,129,0.12)",  border: "rgba(16,185,129,0.28)" },
+  Other:         { color: "#6b7280", bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.28)" },
+};
+function getCat(cat) { return CAT_CONFIG[cat] || CAT_CONFIG.Other; }
+
+// ─── SVG Icon Library ─────────────────────────────────────────────────────────
+const Icon = {
+  Back: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M12 19l-7-7 7-7"/>
+    </svg>
+  ),
+  Search: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+  ),
+  X: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </svg>
+  ),
+  Tv: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/>
+    </svg>
+  ),
+  Play: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+  ),
+  Channels: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+  ),
+  ChevronDown: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </svg>
+  ),
+  Signal: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 20h.01M7 20v-4M12 20V10M17 20V4M22 20v-8"/>
+    </svg>
+  ),
+  Sports: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/>
+    </svg>
+  ),
+  News: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
+      <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>
+    </svg>
+  ),
+  Film: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>
+    </svg>
+  ),
+  Music: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    </svg>
+  ),
+  Kids: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM4 22c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+    </svg>
+  ),
+  AlertCircle: (p) => (
+    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  ),
+};
+
+const CAT_ICONS = { Sports: Icon.Sports, News: Icon.News, Entertainment: Icon.Film, Movies: Icon.Film, Music: Icon.Music, Kids: Icon.Kids };
+function getCatIcon(cat) { return CAT_ICONS[cat] || Icon.Tv; }
+
+// ─── XOR helpers ──────────────────────────────────────────────────────────────
 const _SK = "sx2025xjio";
 function _xor(str, k) {
   let r = "";
@@ -20,14 +141,31 @@ function dob(s) {
   try { let t = s.replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; return decodeURIComponent(escape(_xor(atob(t), _SK))); }
   catch { try { return atob(s); } catch { return s; } }
 }
+
+/**
+ * Decode a bundle URL into { title, channels, ids, _format }
+ * Handles both:
+ *   - Legacy:   { title, channels: [{name,url,keyId,key,cookie,logo}] }
+ *   - Permanent:{ title, ids: ["ch_id_1", ...] }  ← needs live feed resolution
+ */
 function parseBundleUrl(bundleUrl) {
   try {
     const params = new URLSearchParams(new URL(bundleUrl).search);
     const encoded = params.get("bundle");
     if (!encoded) return null;
-    return JSON.parse(dob(decodeURIComponent(encoded)));
+    const decoded = JSON.parse(dob(decodeURIComponent(encoded)));
+    if (!decoded) return null;
+
+    if (decoded.channels && decoded.channels.length > 0) {
+      return { ...decoded, _format: "legacy" };
+    }
+    if (decoded.ids && decoded.ids.length > 0) {
+      return { ...decoded, _format: "permanent", channels: [] }; // channels resolved later
+    }
+    return null;
   } catch { return null; }
 }
+
 function buildChannelUrl(basePlayerUrl, channel) {
   const params = new URLSearchParams();
   params.set("src", obf(channel.url));
@@ -38,30 +176,71 @@ function buildChannelUrl(basePlayerUrl, channel) {
   if (channel.logo)   params.set("lg", obf(channel.logo));
   return `${basePlayerUrl}?${params}`;
 }
+
 function extractBaseUrl(bundleUrl) {
   try { const u = new URL(bundleUrl); return `${u.origin}${u.pathname}`; }
   catch { return bundleUrl.split("?")[0]; }
 }
 
-// ── Logo sources ──────────────────────────────────────────────────────────────
+// ─── Live feed fetchers ───────────────────────────────────────────────────────
 const OLD_JSON = "https://binge-giotv.pages.dev/data/id.json";
 const NEW_JSON  = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 
-async function fetchLogoMap() {
-  const map = {};
-  try {
+let _chMapCache = null;
+let _chMapPromise = null;
+
+/**
+ * Returns a map of { [channelId]: channelObject }
+ * Shared across all callers so the feed is only fetched once per session.
+ */
+async function getChMap() {
+  if (_chMapCache) return _chMapCache;
+  if (_chMapPromise) return _chMapPromise;
+  _chMapPromise = (async () => {
+    const map = {};
     const [r1, r2] = await Promise.allSettled([
       fetch(OLD_JSON + "?_=" + Date.now()).then((r) => (r.ok ? r.json() : null)),
       fetch(NEW_JSON  + "?_=" + Date.now()).then((r) => (r.ok ? r.json() : null)),
     ]);
     if (r1.status === "fulfilled" && r1.value) {
       const raw = Array.isArray(r1.value) ? r1.value : (r1.value.channels || []);
-      raw.forEach((ch) => { if (ch.name && ch.logo) map[ch.name.trim()] = ch.logo; });
+      raw.forEach((ch) => {
+        if (ch.id) map[ch.id] = {
+          id: ch.id, name: ch.name || "Channel",
+          url: ch.url || "", keyId: ch.keyId || "",
+          key: ch.key || "", cookie: ch.cookie || "",
+          logo: ch.logo || "",
+        };
+      });
     }
     if (r2.status === "fulfilled" && r2.value) {
       const raw = Array.isArray(r2.value) ? r2.value : (r2.value.channels || []);
-      raw.forEach((ch) => { const n = ch.channel_name?.trim(); if (n && ch.channel_logo) map[n] = ch.channel_logo; });
+      raw.forEach((ch) => {
+        let url = ch.channel_url || "";
+        if (url.includes("?")) url = url.split("?")[0];
+        if (ch.channel_id) map[ch.channel_id] = {
+          id: ch.channel_id, name: ch.channel_name || "Channel",
+          url, keyId: ch.keyId || "", key: ch.key || "",
+          cookie: ch.cookie || "", logo: ch.channel_logo || "",
+        };
+      });
     }
+    _chMapCache = map;
+    return map;
+  })();
+  return _chMapPromise;
+}
+
+/**
+ * Build a logo map keyed by channel name for enriching legacy bundles.
+ */
+async function fetchLogoMap() {
+  const map = {};
+  try {
+    const chMap = await getChMap();
+    Object.values(chMap).forEach((ch) => {
+      if (ch.name && ch.logo) map[ch.name.trim()] = ch.logo;
+    });
   } catch (e) { console.warn("fetchLogoMap failed", e); }
   return map;
 }
@@ -70,17 +249,106 @@ function enrichChannels(channels, logoMap) {
   return channels.map((ch) => ({ ...ch, logo: ch.logo || logoMap[ch.name?.trim()] || "" }));
 }
 
-// ── Category config ───────────────────────────────────────────────────────────
-const CAT_CONFIG = {
-  Sports:        { color: "#3b82f6", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.3)", icon: "🏏" },
-  News:          { color: "#ef4444", bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.3)",  icon: "📰" },
-  Entertainment: { color: "#a855f7", bg: "rgba(168,85,247,0.12)", border: "rgba(168,85,247,0.3)", icon: "🎬" },
-  Movies:        { color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.3)", icon: "🎥" },
-  Kids:          { color: "#ec4899", bg: "rgba(236,72,153,0.12)", border: "rgba(236,72,153,0.3)", icon: "🧸" },
-  Music:         { color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.3)", icon: "🎵" },
-  Other:         { color: "#6b7280", bg: "rgba(107,114,128,0.12)",border: "rgba(107,114,128,0.3)",icon: "📺" },
-};
-function getCat(cat) { return CAT_CONFIG[cat] || CAT_CONFIG.Other; }
+/**
+ * Resolve a parsed bundle:
+ * - legacy format:   enrich logos from the live feed
+ * - permanent format: look up each ID in the live feed for fresh keys + logos
+ */
+async function resolveBundle(parsed, logoMap) {
+  if (!parsed) return null;
+
+  if (parsed._format === "legacy") {
+    // Try to refresh keys from live feed by name match
+    let nameMap = {};
+    try {
+      const chMap = await getChMap();
+      Object.values(chMap).forEach((ch) => { nameMap[ch.name] = ch; });
+    } catch {}
+    const refreshed = parsed.channels.map((ch) => {
+      const live = nameMap[ch.name];
+      return live ? { ...live, logo: live.logo || ch.logo } : ch;
+    });
+    return { ...parsed, channels: enrichChannels(refreshed, logoMap) };
+  }
+
+  if (parsed._format === "permanent") {
+    const chMap = await getChMap();
+    const channels = parsed.ids.map((id) => chMap[id]).filter(Boolean);
+    return { ...parsed, channels };
+  }
+
+  return null;
+}
+
+// ─── Global CSS ───────────────────────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @keyframes spin       { to { transform: rotate(360deg) } }
+  @keyframes pulse-dot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
+  @keyframes fade-up    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes shimmer    { 0%{background-position:-600px 0} 100%{background-position:600px 0} }
+  @keyframes slide-down { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+  ::-webkit-scrollbar        { width:4px;height:4px }
+  ::-webkit-scrollbar-track  { background:transparent }
+  ::-webkit-scrollbar-thumb  { background:rgba(255,255,255,0.1);border-radius:4px }
+
+  .ch-card {
+    transition: transform 0.18s cubic-bezier(.34,1.56,.64,1),
+                box-shadow 0.18s ease,
+                border-color 0.18s ease,
+                background 0.18s ease !important;
+    cursor: pointer;
+  }
+  .ch-card:hover:not(.active) {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5) !important;
+    border-color: rgba(255,255,255,0.14) !important;
+    background: rgba(255,255,255,0.07) !important;
+  }
+  .ch-card:active { transform: scale(0.97) !important; }
+
+  .cat-pill { transition: all 0.15s ease; cursor: pointer; }
+  .cat-pill:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  .cat-pill:active { transform: scale(0.96); }
+
+  .strip-ch { transition: background 0.13s, border-color 0.13s; cursor: pointer; }
+  .strip-ch:hover:not(.active) { background: rgba(255,255,255,0.08) !important; }
+
+  .watch-btn {
+    transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), filter 0.15s;
+    cursor: pointer;
+  }
+  .watch-btn:hover { transform: scale(1.05); filter: brightness(1.12); }
+  .watch-btn:active { transform: scale(0.97); }
+
+  .collapse-btn { transition: all 0.15s; cursor: pointer; }
+  .collapse-btn:hover { background: rgba(255,255,255,0.1) !important; color: #f4f4f6 !important; }
+
+  .nav-input:focus {
+    outline: none;
+    border-color: rgba(240,62,62,0.55) !important;
+    background: rgba(255,255,255,0.09) !important;
+    box-shadow: 0 0 0 3px rgba(240,62,62,0.08);
+  }
+
+  .shimmer-block {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+    background-size: 600px 100%;
+    animation: shimmer 1.4s ease infinite;
+  }
+`;
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+const SkeletonGrid = () => (
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
+    {Array.from({ length: 16 }).map((_, i) => (
+      <div key={i} className="shimmer-block" style={{ borderRadius: 14, height: 100 }} />
+    ))}
+  </div>
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
@@ -88,10 +356,13 @@ function getCat(cat) { return CAT_CONFIG[cat] || CAT_CONFIG.Other; }
 const LiveChannelsPage = () => {
   const navigate = useNavigate();
 
-  const [bundles, setBundles]         = useState([]);
-  const [allChannels, setAllChannels] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [logoMap, setLogoMap]         = useState({});
+  const [bundles, setBundles]               = useState([]);
+  // resolvedBundles: Map<row.id, { ...parsedBundle, channels: [...] }>
+  const [resolvedBundles, setResolvedBundles] = useState({});
+  const [allChannels, setAllChannels]       = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [feedError, setFeedError]           = useState(false);
+  const [logoMap, setLogoMap]               = useState({});
 
   const [activeBundle, setActiveBundle]         = useState(null);
   const [activeBundleMeta, setActiveBundleMeta] = useState(null);
@@ -102,43 +373,71 @@ const LiveChannelsPage = () => {
 
   const [searchTerm, setSearchTerm]         = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [searchFocused, setSearchFocused]   = useState(false);
 
-  const iframeRef     = useRef(null);
-  const playerRef     = useRef(null);
-  const searchRef     = useRef(null);
+  const iframeRef  = useRef(null);
+  const playerRef  = useRef(null);
+  const searchRef  = useRef(null);
 
+  // ── Boot: fetch feed + bundles in parallel ──────────────────────────────────
   useEffect(() => {
-    fetchLogoMap().then((map) => { setLogoMap(map); fetchBundles(map); });
-  }, []);
+    (async () => {
+      setLoading(true);
+      try {
+        // Kick off both in parallel
+        const [map, { data: rows, error }] = await Promise.all([
+          fetchLogoMap(),
+          supabase
+            .from("live_channel_bundles")
+            .select("*")
+            .eq("is_active", true)
+            .order("created_at", { ascending: false }),
+        ]);
 
-  const fetchBundles = async (map = logoMap) => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("live_channel_bundles").select("*").eq("is_active", true)
-      .order("created_at", { ascending: false });
-    if (error) { console.error(error); setLoading(false); return; }
-    const rows = data || [];
-    setBundles(rows);
-    const flat = [];
-    rows.forEach((row) => {
-      const parsed = parseBundleUrl(row.bundle_url);
-      if (parsed?.channels) {
-        const enriched = enrichChannels(parsed.channels, map);
-        enriched.forEach((ch) => flat.push({ ...ch, _bundleMeta: row, _parsedBundle: { ...parsed, channels: enriched } }));
+        if (error) throw error;
+        setLogoMap(map);
+
+        const bundleRows = rows || [];
+        setBundles(bundleRows);
+
+        // Resolve all bundles (ID-based and legacy) against the live feed
+        const resolved = {};
+        const flat = [];
+
+        await Promise.all(
+          bundleRows.map(async (row) => {
+            const parsed = parseBundleUrl(row.bundle_url);
+            if (!parsed) return;
+
+            const fullBundle = await resolveBundle(parsed, map);
+            if (!fullBundle || !fullBundle.channels.length) return;
+
+            resolved[row.id] = fullBundle;
+            fullBundle.channels.forEach((ch) =>
+              flat.push({ ...ch, _bundleMeta: row, _parsedBundle: fullBundle })
+            );
+          })
+        );
+
+        setResolvedBundles(resolved);
+        setAllChannels(flat);
+      } catch (e) {
+        console.error("LiveChannelsPage boot error:", e);
+        setFeedError(true);
+      } finally {
+        setLoading(false);
       }
-    });
-    setAllChannels(flat);
-    setLoading(false);
-  };
+    })();
+  }, []);
 
   const categories = ["All", ...Array.from(new Set(bundles.map((b) => b.category).filter(Boolean)))];
 
   const filteredBundles = bundles.filter((b) => {
     const matchCat    = activeCategory === "All" || b.category === activeCategory;
     const matchSearch = !searchTerm || b.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchCat && matchSearch;
+    // Only show bundles that resolved successfully
+    return matchCat && matchSearch && !!resolvedBundles[b.id];
   });
+
   const filteredChannels = allChannels.filter((ch) => {
     const matchCat    = activeCategory === "All" || ch._bundleMeta?.category === activeCategory;
     const matchSearch = !searchTerm || ch.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -154,151 +453,183 @@ const LiveChannelsPage = () => {
     setPlayerUrl(url);
     setIframeLoading(true);
     setChannelListOpen(false);
-    // Smooth scroll to player
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }, []);
 
-  const playBundle = (row) => {
-    const parsed = parseBundleUrl(row.bundle_url);
-    if (!parsed?.channels?.length) return;
-    const enriched = enrichChannels(parsed.channels, logoMap);
-    playChannel(enriched[0], row, { ...parsed, channels: enriched });
-  };
-
-  // ── Loading ─────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#080810", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-        <div style={{ width: 44, height: 44, border: "3px solid rgba(255,255,255,0.08)", borderTop: "3px solid #e53e3e", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, letterSpacing: "0.05em" }}>Loading channels…</p>
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+  const playBundle = useCallback((row) => {
+    const fullBundle = resolvedBundles[row.id];
+    if (!fullBundle?.channels?.length) return;
+    playChannel(fullBundle.channels[0], row, fullBundle);
+  }, [resolvedBundles, playChannel]);
 
   const catInfo = activeChannel ? getCat(activeBundleMeta?.category) : null;
 
+  // ── Loading ─────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ minHeight: "100dvh", background: tokens.bg.base, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, system-ui, sans-serif" }}>
+      <style>{GLOBAL_CSS}</style>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+        <div style={{ position: "relative", width: 56, height: 56 }}>
+          <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid rgba(240,62,62,0.2)", animation: "pulse-dot 1.4s ease infinite" }} />
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%",
+            background: "linear-gradient(135deg, rgba(240,62,62,0.2), rgba(240,62,62,0.05))",
+            border: "1px solid rgba(240,62,62,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon.Tv width={24} height={24} style={{ color: tokens.accent.red }} />
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: tokens.text.primary, fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>Loading Live TV</p>
+          <p style={{ color: tokens.text.muted, fontSize: 12, marginTop: 4 }}>Fetching channels & resolving bundles…</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: "100vh", background: "#080810", color: "#fff", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
-        .ch-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important; }
-        .ch-card { transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease !important; }
-        .cat-pill:hover { opacity: 0.85; transform: scale(0.97); }
-        .cat-pill { transition: opacity 0.12s, transform 0.12s; }
-        .strip-ch:hover { background: rgba(255,255,255,0.08) !important; }
-        .strip-ch { transition: background 0.12s; }
-        .watch-btn:hover { transform: scale(1.03); filter: brightness(1.1); }
-        .watch-btn { transition: transform 0.15s, filter 0.15s; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
-        .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
-        * { box-sizing: border-box; }
-        .nav-search:focus { outline: none; border-color: rgba(229,62,62,0.6) !important; background: rgba(255,255,255,0.08) !important; }
-      `}</style>
+    <div style={{ minHeight: "100dvh", background: tokens.bg.base, color: tokens.text.primary, fontFamily: "Inter, system-ui, sans-serif" }}>
+      <style>{GLOBAL_CSS}</style>
 
       {/* ══ NAVBAR ══════════════════════════════════════════════════════════════ */}
       <nav style={{
-        position: "sticky", top: 0, zIndex: 50,
-        background: "rgba(8,8,16,0.92)", backdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        padding: "0 20px", height: 60,
-        display: "flex", alignItems: "center", gap: 16,
+        position: "sticky", top: 0, zIndex: 100,
+        background: "rgba(7,7,15,0.88)", backdropFilter: "blur(24px) saturate(160%)",
+        borderBottom: `1px solid ${tokens.border.subtle}`,
+        padding: "0 20px", height: 64,
+        display: "flex", alignItems: "center", gap: 14,
       }}>
-        {/* Back */}
-        <button onClick={() => navigate(-1)} style={{
-          background: "none", border: "none", color: "rgba(255,255,255,0.55)", cursor: "pointer",
-          width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, transition: "background 0.15s, color 0.15s",
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#fff"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "rgba(255,255,255,0.55)"; }}
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          style={{
+            background: "none", border: `1px solid ${tokens.border.subtle}`,
+            color: tokens.text.secondary, cursor: "pointer",
+            width: 38, height: 38, borderRadius: tokens.radius.full,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: "all 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = tokens.bg.glass; e.currentTarget.style.color = tokens.text.primary; e.currentTarget.style.borderColor = tokens.border.default; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = tokens.text.secondary; e.currentTarget.style.borderColor = tokens.border.subtle; }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-          </svg>
+          <Icon.Back width={16} height={16} />
         </button>
 
-        {/* Brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <div style={{
-            width: 8, height: 8, borderRadius: "50%", background: "#e53e3e",
-            animation: "pulse 2s ease infinite", flexShrink: 0,
-          }} />
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Live TV</span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, color: "#e53e3e",
-            background: "rgba(229,62,62,0.12)", border: "1px solid rgba(229,62,62,0.25)",
-            padding: "1px 7px", borderRadius: 20, letterSpacing: "0.06em",
-          }}>LIVE</span>
+            width: 34, height: 34, borderRadius: tokens.radius.md,
+            background: "linear-gradient(135deg, rgba(240,62,62,0.28), rgba(240,62,62,0.08))",
+            border: `1px solid ${tokens.accent.redBorder}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon.Tv width={17} height={17} style={{ color: tokens.accent.red }} />
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>Live TV</span>
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: tokens.accent.red,
+                background: tokens.accent.redDim, border: `1px solid ${tokens.accent.redBorder}`,
+                padding: "2px 6px", borderRadius: tokens.radius.full, letterSpacing: "0.08em",
+                display: "flex", alignItems: "center", gap: 4,
+              }}>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: tokens.accent.red, animation: "pulse-dot 1.5s ease infinite", display: "inline-block" }} />
+                LIVE
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Channel count pill */}
         {allChannels.length > 0 && (
           <div style={{
-            fontSize: 11, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)", padding: "3px 10px", borderRadius: 20,
-            flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
+            display: "flex", alignItems: "center", gap: 5,
+            fontSize: 11, color: tokens.text.muted,
+            background: tokens.bg.surface, border: `1px solid ${tokens.border.subtle}`,
+            padding: "4px 10px", borderRadius: tokens.radius.full, flexShrink: 0,
           }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5 }}>
-              <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-            </svg>
+            <Icon.Signal width={10} height={10} style={{ opacity: 0.5 }} />
             {allChannels.length} channels
           </div>
         )}
 
         <div style={{ flex: 1 }} />
 
-        {/* Search */}
-        <div style={{ position: "relative", maxWidth: 260, width: "100%" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)"
-            style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-          </svg>
+        <div style={{ position: "relative", maxWidth: 280, width: "100%" }}>
+          <Icon.Search width={14} height={14} style={{
+            position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)",
+            color: tokens.text.muted, pointerEvents: "none",
+          }} />
           <input
             ref={searchRef}
-            className="nav-search"
+            className="nav-input"
             type="text"
             placeholder="Search channels…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
+            aria-label="Search channels"
             style={{
-              width: "100%", background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)", color: "#fff",
-              borderRadius: 24, padding: "8px 36px 8px 36px",
-              fontSize: 13, fontFamily: "inherit", transition: "border-color 0.2s, background 0.2s",
+              width: "100%",
+              background: tokens.bg.glass,
+              border: `1px solid ${tokens.border.default}`,
+              color: tokens.text.primary,
+              borderRadius: tokens.radius.full,
+              padding: "9px 36px 9px 38px",
+              fontSize: 13, fontFamily: "inherit",
+              transition: "all 0.2s",
             }}
           />
           {searchTerm && (
-            <button onClick={() => setSearchTerm("")} style={{
-              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-              background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.5)",
-              width: 18, height: 18, borderRadius: "50%", cursor: "pointer", fontSize: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>✕</button>
+            <button
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
+              style={{
+                position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)",
+                background: tokens.bg.glass, border: `1px solid ${tokens.border.subtle}`,
+                color: tokens.text.muted,
+                width: 20, height: 20, borderRadius: "50%", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.12)"}
+              onMouseLeave={e => e.currentTarget.style.background = tokens.bg.glass}
+            >
+              <Icon.X width={9} height={9} />
+            </button>
           )}
         </div>
       </nav>
 
+      {/* ══ FEED ERROR BANNER ════════════════════════════════════════════════ */}
+      {feedError && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 20px",
+          background: "rgba(240,62,62,0.08)", borderBottom: `1px solid rgba(240,62,62,0.2)`,
+          fontSize: 13, color: "rgba(248,113,113,0.9)",
+        }}>
+          <Icon.AlertCircle width={15} height={15} style={{ flexShrink: 0 }} />
+          Could not reach the channel feed. Some bundles may not load. Check your connection and refresh.
+        </div>
+      )}
+
       {/* ══ PLAYER ZONE ═════════════════════════════════════════════════════════ */}
       {playerUrl && (
-        <div ref={playerRef} style={{ background: "#000", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-
-          {/* 16:9 iframe */}
-          <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", background: "#000" }}>
+        <div ref={playerRef} style={{ background: "#000", borderBottom: `1px solid ${tokens.border.subtle}` }}>
+          <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%" }}>
             {iframeLoading && (
               <div style={{
-                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", background: "#000", zIndex: 5, gap: 12,
+                position: "absolute", inset: 0, zIndex: 5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                background: "#000", gap: 14,
               }}>
-                <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.08)", borderTop: "3px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>Loading stream…</span>
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%",
+                  border: "2.5px solid rgba(255,255,255,0.07)",
+                  borderTop: "2.5px solid rgba(255,255,255,0.7)",
+                  animation: "spin 0.75s linear infinite",
+                }} />
+                <span style={{ fontSize: 12, color: tokens.text.muted, letterSpacing: "0.02em" }}>Loading stream…</span>
               </div>
             )}
             <iframe
@@ -315,91 +646,102 @@ const LiveChannelsPage = () => {
           {/* Now-playing bar */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "10px 16px", gap: 12,
-            background: "rgba(0,0,0,0.6)", borderTop: `1px solid ${catInfo?.border || "rgba(255,255,255,0.06)"}`,
+            padding: "12px 18px", gap: 12,
+            background: "linear-gradient(to right, rgba(0,0,0,0.85), rgba(0,0,0,0.6))",
+            borderTop: `1px solid ${catInfo ? catInfo.border : tokens.border.subtle}`,
           }}>
-            {/* Left: logo + name + badge */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-              {activeChannel?.logo ? (
-                <img src={activeChannel.logo} alt={activeChannel.name}
-                  style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid rgba(255,255,255,0.1)" }}
-                  onError={(e) => e.target.style.display = "none"} />
-              ) : (
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: catInfo?.bg, border: `1px solid ${catInfo?.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
-                  {getCat(activeBundleMeta?.category).icon}
+            <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flex: 1 }}>
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                {activeChannel?.logo ? (
+                  <img
+                    src={activeChannel.logo} alt={activeChannel.name}
+                    style={{ width: 36, height: 36, borderRadius: tokens.radius.md, objectFit: "cover", border: `1px solid ${tokens.border.default}`, display: "block" }}
+                    onError={(e) => { e.target.style.display = "none"; e.target.nextElementSibling.style.display = "flex"; }}
+                  />
+                ) : null}
+                <div style={{
+                  width: 36, height: 36, borderRadius: tokens.radius.md,
+                  background: catInfo?.bg, border: `1px solid ${catInfo?.border}`,
+                  display: activeChannel?.logo ? "none" : "flex",
+                  alignItems: "center", justifyContent: "center",
+                }}>
+                  {React.createElement(getCatIcon(activeBundleMeta?.category), { width: 16, height: 16, style: { color: catInfo?.color } })}
                 </div>
-              )}
+                <div style={{
+                  position: "absolute", top: -3, right: -3,
+                  width: 10, height: 10, borderRadius: "50%",
+                  background: tokens.accent.red,
+                  border: "2px solid #000",
+                  animation: "pulse-dot 1.5s ease infinite",
+                }} />
+              </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#e53e3e", animation: "pulse 1.5s ease infinite", flexShrink: 0 }} />
-                  <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>
-                    {activeChannel?.name}
-                  </span>
+                <div style={{ fontSize: 14, fontWeight: 700, color: tokens.text.primary, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>
+                  {activeChannel?.name}
                 </div>
                 {activeBundleMeta && (
-                  <div style={{ fontSize: 11, color: catInfo?.color, marginTop: 1 }}>
-                    {getCat(activeBundleMeta.category).icon} {activeBundleMeta.category}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
+                    {React.createElement(getCatIcon(activeBundleMeta.category), { width: 11, height: 11, style: { color: catInfo?.color, flexShrink: 0 } })}
+                    <span style={{ fontSize: 11, color: catInfo?.color, fontWeight: 500 }}>{activeBundleMeta.category}</span>
+                    <span style={{ fontSize: 11, color: tokens.text.muted }}>·</span>
+                    <span style={{ fontSize: 11, color: tokens.text.muted }}>{activeBundleMeta.name}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right: channel list toggle */}
             <button
               onClick={() => setChannelListOpen(!channelListOpen)}
               style={{
                 display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                background: channelListOpen ? "rgba(229,62,62,0.15)" : "rgba(255,255,255,0.06)",
-                border: channelListOpen ? "1px solid rgba(229,62,62,0.35)" : "1px solid rgba(255,255,255,0.1)",
-                color: channelListOpen ? "#e53e3e" : "rgba(255,255,255,0.7)",
-                borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                transition: "all 0.15s",
+                background: channelListOpen ? tokens.accent.redDim : tokens.bg.glass,
+                border: channelListOpen ? `1px solid ${tokens.accent.redBorder}` : `1px solid ${tokens.border.default}`,
+                color: channelListOpen ? tokens.accent.red : tokens.text.secondary,
+                borderRadius: tokens.radius.full, padding: "7px 14px",
+                fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.18s",
               }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-              </svg>
-              {activeBundle?.channels?.length} channels
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ transform: channelListOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
-                <path d="M7 10l5 5 5-5z"/>
-              </svg>
+              <Icon.Channels width={13} height={13} />
+              <span>{activeBundle?.channels?.length} ch</span>
+              <Icon.ChevronDown width={12} height={12} style={{ transform: channelListOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
             </button>
           </div>
 
-          {/* Channel list drawer */}
+          {/* Channel drawer */}
           {channelListOpen && activeBundle?.channels && (
-            <div style={{ background: "rgba(6,6,12,0.97)", borderTop: "1px solid rgba(255,255,255,0.06)", animation: "fadeIn 0.15s ease" }}>
-              {/* Horizontal pill strip for quick switching */}
-              <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 16px 6px", scrollbarWidth: "none" }}>
+            <div style={{ background: "rgba(5,5,12,0.98)", borderTop: `1px solid ${tokens.border.subtle}`, animation: "slide-down 0.18s ease" }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "12px 16px 8px", scrollbarWidth: "none" }}>
                 {activeBundle.channels.map((ch, i) => {
                   const isActive = activeChannel?.name === ch.name;
                   return (
                     <button
                       key={i}
-                      className="strip-ch"
+                      className={`strip-ch${isActive ? " active" : ""}`}
                       onClick={() => playChannel(ch, activeBundleMeta, activeBundle)}
                       style={{
                         flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                        background: isActive ? "rgba(229,62,62,0.18)" : "rgba(255,255,255,0.05)",
-                        border: isActive ? "1px solid rgba(229,62,62,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                        color: isActive ? "#e53e3e" : "rgba(255,255,255,0.65)",
-                        borderRadius: 20, padding: "5px 12px 5px 6px", fontSize: 12, fontWeight: isActive ? 600 : 400,
-                        cursor: "pointer", whiteSpace: "nowrap",
+                        background: isActive ? tokens.accent.redDim : tokens.bg.surface,
+                        border: isActive ? `1px solid ${tokens.accent.redBorder}` : `1px solid ${tokens.border.subtle}`,
+                        color: isActive ? tokens.accent.red : tokens.text.secondary,
+                        borderRadius: tokens.radius.full, padding: "5px 12px 5px 6px",
+                        fontSize: 12, fontWeight: isActive ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap",
                       }}
                     >
                       {ch.logo ? (
-                        <img src={ch.logo} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover" }} onError={(e) => e.target.style.display = "none"} />
+                        <img src={ch.logo} alt="" style={{ width: 18, height: 18, borderRadius: 5, objectFit: "cover" }} onError={(e) => e.target.style.display = "none"} />
                       ) : (
-                        <span style={{ fontSize: 12 }}>📺</span>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, background: tokens.bg.glass, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icon.Tv width={10} height={10} style={{ color: tokens.text.muted }} />
+                        </div>
                       )}
                       {ch.name}
-                      {isActive && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#e53e3e", animation: "pulse 1.5s ease infinite" }} />}
+                      {isActive && <span style={{ width: 5, height: 5, borderRadius: "50%", background: tokens.accent.red, animation: "pulse-dot 1.5s ease infinite" }} />}
                     </button>
                   );
                 })}
               </div>
-              {/* Full list — grid of cards */}
-              <div className="sidebar-scroll" style={{ maxHeight: 280, overflowY: "auto", padding: "8px 16px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8 }}>
+
+              <div style={{ maxHeight: 290, overflowY: "auto", padding: "8px 16px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
                 {activeBundle.channels.map((ch, i) => {
                   const isActive = activeChannel?.name === ch.name;
                   return (
@@ -407,21 +749,23 @@ const LiveChannelsPage = () => {
                       key={i}
                       onClick={() => playChannel(ch, activeBundleMeta, activeBundle)}
                       style={{
-                        background: isActive ? "rgba(229,62,62,0.1)" : "rgba(255,255,255,0.03)",
-                        border: isActive ? "1px solid rgba(229,62,62,0.35)" : "1px solid rgba(255,255,255,0.06)",
-                        borderRadius: 10, padding: "8px 6px", cursor: "pointer",
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
-                        transition: "all 0.12s",
+                        background: isActive ? tokens.accent.redDim : tokens.bg.surface,
+                        border: isActive ? `1px solid ${tokens.accent.redBorder}` : `1px solid ${tokens.border.subtle}`,
+                        borderRadius: tokens.radius.md, padding: "10px 6px",
+                        cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
+                        transition: "all 0.14s",
                       }}
-                      onMouseEnter={e => !isActive && (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
-                      onMouseLeave={e => !isActive && (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+                      onMouseEnter={e => !isActive && (e.currentTarget.style.background = tokens.bg.glass)}
+                      onMouseLeave={e => !isActive && (e.currentTarget.style.background = tokens.bg.surface)}
                     >
                       {ch.logo ? (
-                        <img src={ch.logo} alt={ch.name} style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }} onError={(e) => e.target.style.display = "none"} />
+                        <img src={ch.logo} alt={ch.name} style={{ width: 38, height: 38, borderRadius: 9, objectFit: "cover" }} onError={(e) => e.target.style.display = "none"} />
                       ) : (
-                        <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📺</div>
+                        <div style={{ width: 38, height: 38, borderRadius: 9, background: tokens.bg.glass, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icon.Tv width={18} height={18} style={{ color: tokens.text.muted }} />
+                        </div>
                       )}
-                      <span style={{ fontSize: 10, color: isActive ? "#f87171" : "rgba(255,255,255,0.6)", lineHeight: 1.3, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                      <span style={{ fontSize: 10, color: isActive ? "#f87171" : tokens.text.secondary, lineHeight: 1.3, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", width: "100%", fontWeight: isActive ? 600 : 400 }}>
                         {ch.name}
                       </span>
                     </button>
@@ -435,29 +779,32 @@ const LiveChannelsPage = () => {
 
       {/* ══ CATEGORY FILTER BAR ═══════════════════════════════════════════════ */}
       <div style={{
-        display: "flex", gap: 6, overflowX: "auto", padding: "14px 20px 10px",
-        borderBottom: "1px solid rgba(255,255,255,0.05)", scrollbarWidth: "none",
-        position: "sticky", top: 60, zIndex: 40,
-        background: "rgba(8,8,16,0.95)", backdropFilter: "blur(12px)",
+        display: "flex", gap: 6, overflowX: "auto", padding: "14px 20px 12px",
+        borderBottom: `1px solid ${tokens.border.subtle}`,
+        position: "sticky", top: 64, zIndex: 50,
+        background: "rgba(7,7,15,0.94)", backdropFilter: "blur(16px)",
+        scrollbarWidth: "none",
       }}>
         {categories.map((cat) => {
           const isActive = cat === activeCategory;
           const cfg = getCat(cat);
+          const CatIcon = getCatIcon(cat);
           return (
             <button
               key={cat}
               className="cat-pill"
               onClick={() => setActiveCategory(cat)}
               style={{
-                flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
-                background: isActive ? cfg.bg : "rgba(255,255,255,0.04)",
-                border: isActive ? `1px solid ${cfg.border}` : "1px solid rgba(255,255,255,0.08)",
-                color: isActive ? cfg.color : "rgba(255,255,255,0.45)",
-                borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: isActive ? 600 : 400,
-                cursor: "pointer",
+                flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
+                background: isActive ? cfg.bg : tokens.bg.surface,
+                border: isActive ? `1px solid ${cfg.border}` : `1px solid ${tokens.border.subtle}`,
+                color: isActive ? cfg.color : tokens.text.secondary,
+                borderRadius: tokens.radius.full, padding: "7px 15px",
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
               }}
             >
-              {cat !== "All" && <span style={{ fontSize: 12 }}>{cfg.icon}</span>}
+              {cat !== "All" && <CatIcon width={13} height={13} />}
+              {cat === "All" && <Icon.Signal width={11} height={11} />}
               {cat}
             </button>
           );
@@ -465,23 +812,21 @@ const LiveChannelsPage = () => {
       </div>
 
       {/* ══ CONTENT AREA ══════════════════════════════════════════════════════ */}
-      <div style={{ padding: "20px 20px 60px", maxWidth: 1400, margin: "0 auto" }}>
+      <div style={{ padding: "24px 20px 72px", maxWidth: 1440, margin: "0 auto" }}>
 
         {/* Search results */}
         {searchTerm && (
-          <div style={{ marginBottom: 32, animation: "fadeIn 0.2s ease" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {filteredChannels.length} result{filteredChannels.length !== 1 ? "s" : ""} for
+          <div style={{ marginBottom: 36, animation: "fade-up 0.22s ease" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: tokens.text.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                {filteredChannels.length} result{filteredChannels.length !== 1 ? "s" : ""}
               </span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "rgba(255,255,255,0.08)", padding: "2px 10px", borderRadius: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: tokens.text.primary, background: tokens.bg.glass, border: `1px solid ${tokens.border.default}`, padding: "2px 10px", borderRadius: tokens.radius.full }}>
                 "{searchTerm}"
               </span>
             </div>
             {filteredChannels.length === 0 ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 14 }}>
-                No channels found. Try a different name.
-              </div>
+              <EmptySearch term={searchTerm} />
             ) : (
               <ChannelGrid channels={filteredChannels} activeChannel={activeChannel}
                 onPlay={(ch) => playChannel(ch, ch._bundleMeta, ch._parsedBundle)} />
@@ -489,25 +834,16 @@ const LiveChannelsPage = () => {
           </div>
         )}
 
-        {/* Empty state */}
-        {!searchTerm && filteredBundles.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "96px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: "rgba(255,255,255,0.5)", margin: "0 0 8px" }}>No channels available</h3>
-            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", margin: 0 }}>Check back soon — bundles will appear here once published.</p>
-          </div>
-        )}
+        {!searchTerm && filteredBundles.length === 0 && <EmptyState />}
 
-        {/* Bundle sections */}
         {!searchTerm && filteredBundles.map((row) => {
-          const parsed = parseBundleUrl(row.bundle_url);
-          if (!parsed?.channels?.length) return null;
-          const enriched = enrichChannels(parsed.channels, logoMap);
+          const fullBundle = resolvedBundles[row.id];
+          if (!fullBundle?.channels?.length) return null;
           return (
             <BundleSection
               key={row.id}
               row={row}
-              parsed={{ ...parsed, channels: enriched }}
+              parsed={fullBundle}
               activeChannel={activeChannel}
               onPlayChannel={playChannel}
               onPlayBundle={playBundle}
@@ -520,43 +856,84 @@ const LiveChannelsPage = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EMPTY STATES
+// ─────────────────────────────────────────────────────────────────────────────
+const EmptySearch = ({ term }) => (
+  <div style={{ padding: "64px 24px", textAlign: "center", animation: "fade-up 0.2s ease" }}>
+    <div style={{ width: 56, height: 56, borderRadius: "50%", background: tokens.bg.glass, border: `1px solid ${tokens.border.default}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+      <Icon.Search width={22} height={22} style={{ color: tokens.text.muted }} />
+    </div>
+    <h3 style={{ fontSize: 16, fontWeight: 700, color: tokens.text.secondary, marginBottom: 6 }}>No channels found</h3>
+    <p style={{ fontSize: 13, color: tokens.text.muted }}>No results for "{term}". Try a different name.</p>
+  </div>
+);
+
+const EmptyState = () => (
+  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "96px 24px", textAlign: "center" }}>
+    <div style={{
+      width: 72, height: 72, borderRadius: 20,
+      background: "linear-gradient(135deg, rgba(240,62,62,0.14), rgba(240,62,62,0.04))",
+      border: `1px solid rgba(240,62,62,0.32)`,
+      display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
+    }}>
+      <Icon.Tv width={30} height={30} style={{ color: "#f03e3e" }} />
+    </div>
+    <h3 style={{ fontSize: 18, fontWeight: 700, color: tokens.text.secondary, marginBottom: 8 }}>No channels available</h3>
+    <p style={{ fontSize: 13, color: tokens.text.muted, maxWidth: 320, lineHeight: 1.6 }}>
+      Bundles will appear here once published. Check back soon.
+    </p>
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BUNDLE SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 const BundleSection = ({ row, parsed, activeChannel, onPlayChannel, onPlayBundle }) => {
   const [expanded, setExpanded] = useState(true);
   const channels  = parsed.channels || [];
   const cfg       = getCat(row.category);
+  const CatIcon   = getCatIcon(row.category);
   const hasActive = channels.some((ch) => ch.name === activeChannel?.name);
 
   return (
-    <div style={{ marginBottom: 36, animation: "fadeIn 0.2s ease" }}>
-      {/* Section header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-        {/* Thumbnail or category icon */}
+    <div style={{ marginBottom: 40, animation: "fade-up 0.22s ease" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap",
+        padding: "14px 18px",
+        background: tokens.bg.surface,
+        border: `1px solid ${tokens.border.subtle}`,
+        borderRadius: tokens.radius.lg,
+      }}>
         {row.thumbnail ? (
           <img src={row.thumbnail} alt={row.name}
-            style={{ width: 36, height: 36, borderRadius: 10, objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }}
-            onError={(e) => e.target.style.display = "none"} />
+            style={{ width: 40, height: 40, borderRadius: tokens.radius.md, objectFit: "cover", border: `1px solid ${tokens.border.default}`, flexShrink: 0 }}
+            onError={(e) => e.target.style.display = "none"}
+          />
         ) : (
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: cfg.bg, border: `1px solid ${cfg.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-            {cfg.icon}
+          <div style={{
+            width: 40, height: 40, borderRadius: tokens.radius.md,
+            background: cfg.bg, border: `1px solid ${cfg.border}`,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <CatIcon width={18} height={18} style={{ color: cfg.color }} />
           </div>
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{row.name}</h2>
-            <span style={{ fontSize: 11, fontWeight: 600, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, padding: "2px 8px", borderRadius: 20 }}>
-              {cfg.icon} {row.category}
+            <h2 style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", color: tokens.text.primary }}>{row.name}</h2>
+            <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, padding: "2px 8px", borderRadius: tokens.radius.full, display: "flex", alignItems: "center", gap: 4 }}>
+              <CatIcon width={10} height={10} />
+              {row.category}
             </span>
             {hasActive && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#e53e3e", background: "rgba(229,62,62,0.1)", border: "1px solid rgba(229,62,62,0.25)", padding: "2px 8px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#e53e3e", animation: "pulse 1.5s ease infinite" }} />
-                Now playing
+              <span style={{ fontSize: 10, fontWeight: 700, color: tokens.accent.red, background: tokens.accent.redDim, border: `1px solid ${tokens.accent.redBorder}`, padding: "2px 8px", borderRadius: tokens.radius.full, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: tokens.accent.red, animation: "pulse-dot 1.5s ease infinite" }} />
+                Now Playing
               </span>
             )}
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>{channels.length} channels</span>
           </div>
+          <div style={{ fontSize: 11, color: tokens.text.muted, marginTop: 3 }}>{channels.length} channels</div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -564,32 +941,33 @@ const BundleSection = ({ row, parsed, activeChannel, onPlayChannel, onPlayBundle
             className="watch-btn"
             onClick={() => onPlayBundle(row)}
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: `linear-gradient(135deg, #e53e3e, #c53030)`,
-              border: "none", color: "#fff", borderRadius: 20, padding: "7px 16px",
-              fontSize: 12, fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 7,
+              background: "linear-gradient(135deg, #f03e3e, #c92a2a)",
+              boxShadow: "0 2px 12px rgba(240,62,62,0.35)",
+              border: "none", color: "#fff", borderRadius: tokens.radius.full,
+              padding: "8px 18px", fontSize: 12, fontWeight: 700,
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+            <Icon.Play width={11} height={11} />
             Watch
           </button>
           <button
+            className="collapse-btn"
             onClick={() => setExpanded(!expanded)}
             style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.45)", borderRadius: 20, padding: "7px 12px",
-              fontSize: 12, cursor: "pointer", transition: "all 0.15s",
+              background: tokens.bg.glass, border: `1px solid ${tokens.border.default}`,
+              color: tokens.text.secondary, borderRadius: tokens.radius.full,
+              padding: "8px 14px", fontSize: 12, fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 5,
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.45)"; }}
           >
+            <Icon.ChevronDown width={12} height={12} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
             {expanded ? "Hide" : "Show"}
           </button>
         </div>
       </div>
 
-      {/* Horizontal rule */}
-      <div style={{ height: 1, background: `linear-gradient(90deg, ${cfg.border}, transparent)`, marginBottom: 14 }} />
+      <div style={{ height: 1, background: `linear-gradient(90deg, ${cfg.border} 0%, transparent 70%)`, marginBottom: 16 }} />
 
       {expanded && (
         <ChannelGrid
@@ -606,7 +984,7 @@ const BundleSection = ({ row, parsed, activeChannel, onPlayChannel, onPlayBundle
 // CHANNEL GRID
 // ─────────────────────────────────────────────────────────────────────────────
 const ChannelGrid = ({ channels, activeChannel, onPlay }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8 }}>
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 10 }}>
     {channels.map((ch, i) => (
       <ChannelCard key={i} ch={ch} isActive={activeChannel?.name === ch.name} onClick={() => onPlay(ch)} />
     ))}
@@ -618,50 +996,59 @@ const ChannelGrid = ({ channels, activeChannel, onPlay }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 const ChannelCard = ({ ch, isActive, onClick }) => (
   <button
-    className="ch-card"
+    className={`ch-card${isActive ? " active" : ""}`}
     onClick={onClick}
+    aria-label={`Watch ${ch.name}`}
+    aria-pressed={isActive}
     style={{
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-      padding: "10px 6px 8px",
-      background: isActive ? "rgba(229,62,62,0.1)" : "rgba(255,255,255,0.03)",
-      border: isActive ? "1px solid rgba(229,62,62,0.4)" : "1px solid rgba(255,255,255,0.07)",
-      borderRadius: 12, cursor: "pointer", textAlign: "center",
-      boxShadow: isActive ? "0 0 0 2px rgba(229,62,62,0.15)" : "none",
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+      padding: "12px 8px 10px",
+      background: isActive
+        ? "linear-gradient(135deg, rgba(240,62,62,0.16), rgba(240,62,62,0.06))"
+        : tokens.bg.surface,
+      border: isActive
+        ? `1px solid ${tokens.accent.redBorder}`
+        : `1px solid ${tokens.border.subtle}`,
+      borderRadius: tokens.radius.lg,
+      boxShadow: isActive ? tokens.shadow.glow : tokens.shadow.card,
+      textAlign: "center",
     }}
   >
-    {/* Logo container */}
-    <div style={{ position: "relative", width: 44, height: 44, flexShrink: 0 }}>
+    <div style={{ position: "relative", width: 46, height: 46, flexShrink: 0 }}>
       {ch.logo ? (
         <img
-          src={ch.logo}
-          alt={ch.name}
-          style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", display: "block" }}
-          onError={(e) => {
-            e.target.style.display = "none";
-            e.target.nextElementSibling.style.display = "flex";
-          }}
+          src={ch.logo} alt={ch.name}
+          style={{ width: 46, height: 46, borderRadius: 11, objectFit: "cover", display: "block", border: `1px solid ${tokens.border.subtle}` }}
+          onError={(e) => { e.target.style.display = "none"; e.target.nextElementSibling.style.display = "flex"; }}
         />
       ) : null}
       <div style={{
-        width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,0.05)",
-        display: ch.logo ? "none" : "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
-      }}>📺</div>
-      {/* Live dot overlay */}
+        width: 46, height: 46, borderRadius: 11,
+        background: isActive ? tokens.accent.redDim : tokens.bg.glass,
+        border: `1px solid ${isActive ? tokens.accent.redBorder : tokens.border.subtle}`,
+        display: ch.logo ? "none" : "flex",
+        alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon.Tv width={20} height={20} style={{ color: isActive ? tokens.accent.red : tokens.text.muted }} />
+      </div>
       {isActive && (
         <div style={{
-          position: "absolute", top: -3, right: -3, width: 10, height: 10,
-          borderRadius: "50%", background: "#e53e3e", border: "2px solid #080810",
-          animation: "pulse 1.5s ease infinite",
+          position: "absolute", top: -3, right: -3,
+          width: 11, height: 11, borderRadius: "50%",
+          background: tokens.accent.red,
+          border: "2px solid #07070f",
+          animation: "pulse-dot 1.5s ease infinite",
+          boxShadow: "0 0 8px rgba(240,62,62,0.7)",
         }} />
       )}
     </div>
-
-    {/* Name */}
     <span style={{
-      fontSize: 10, lineHeight: 1.3, color: isActive ? "#f87171" : "rgba(255,255,255,0.65)",
+      fontSize: 10.5, lineHeight: 1.35,
+      color: isActive ? "#f87171" : tokens.text.secondary,
       fontWeight: isActive ? 600 : 400,
-      overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-      width: "100%",
+      overflow: "hidden",
+      display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+      width: "100%", letterSpacing: "-0.01em",
     }}>
       {ch.name}
     </span>
