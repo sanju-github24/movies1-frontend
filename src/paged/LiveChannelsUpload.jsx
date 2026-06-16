@@ -33,7 +33,14 @@ function parseBundleUrl(bundleUrl) {
     const params = new URLSearchParams(new URL(bundleUrl).search);
     const encoded = params.get("bundle");
     if (!encoded) return null;
-    return JSON.parse(dob(decodeURIComponent(encoded)));
+    const decoded = JSON.parse(dob(decodeURIComponent(encoded)));
+    
+    // Normalize: if ids-only format, fake a channels array with just names unknown
+    // (count still works; names shown as IDs until resolved)
+    if (decoded.ids && !decoded.channels) {
+      decoded.channels = decoded.ids.map(id => ({ name: id, url: '' }));
+    }
+    return decoded;
   } catch { return null; }
 }
 
