@@ -65,11 +65,11 @@ const FOOTBALL_CHANNELS = [
     desc: "Sports18 — FIFA World Cup 2026 in English",
   },
    {
-    id: "sports18-english", name: "Sports18", sub: "English",
+    id: "sports18", name: "Sports", sub: "English",
     color: "#1ed596", glow: "rgba(30,213,150,0.3)", border: "rgba(30,213,150,0.25)",
     bg: "rgba(30,213,150,0.06)", tag: "ENG", useIcon: true,
     logo: "", url: "https://fifa-world-cup-live.pages.dev/fussball",
-    desc: "Sports18 — FIFA World Cup 2026 in English",
+    desc: "FIFA World Cup 2026 in English",
   },
   {
     id: "sports18-hindi", name: "Sports18", sub: "Hindi",
