@@ -3,6 +3,14 @@ import { Link, useLocation } from "react-router-dom";
 import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home } from "lucide-react";
 import HeroSection from "./HeroSection";
 
+function encodeMatchHash(payload) {
+  return btoa(JSON.stringify(payload))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+
 const API_BASE      = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
 const FIFA_API_BASE = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
@@ -361,7 +369,14 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
-        link: "/live-cricket-tv",
+       link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "bcci",
+  matchId: m.MatchID,
+  competitionId: m.CompetitionID,
+  matchOrder: m.MatchOrder,
+  competitionName: m.CompetitionName,
+})}`,
       };
     }),
     // WT20 live
@@ -376,7 +391,11 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "wt20",
+  matchId: m.match_id,
+})}`,
       };
     }),
     // FIFA live
@@ -390,7 +409,11 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: "FIFA WC 2026",
         venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "football",
+  type: "fifa",
+  matchId: m.IdMatch,
+})}`,
       };
     }),
   ];
