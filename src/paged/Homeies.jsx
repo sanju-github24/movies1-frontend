@@ -21,6 +21,18 @@ function bcciFmtDate(s) {
   try { return new Date(s).toLocaleDateString("en-IN", { day:"numeric", month:"short", timeZone:"Asia/Kolkata" }); }
   catch { return s; }
 }
+// BCCI-style countdown badge: "4 HOURS TO GO" / "2 DAYS TO GO"
+function countdownLabel(dateStr) {
+  if (!dateStr) return "";
+  const diffMs = new Date(dateStr) - new Date();
+  if (diffMs <= 0) return "Starting soon";
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 60) return `${mins} MIN${mins!==1?"S":""} TO GO`;
+  const hrs = Math.round(diffMs / 3600000);
+  if (hrs < 24) return `${hrs} HOUR${hrs!==1?"S":""} TO GO`;
+  const days = Math.round(hrs / 24);
+  return `${days} DAY${days!==1?"S":""} TO GO`;
+}
 
 // ─── FIFA / MISC HELPERS ──────────────────────────────────────────────────────
 const ICC_FLAGS = {
@@ -37,6 +49,19 @@ function getFifaStatus(m) {
   if (m.MatchStatus === 3) return "live";
   if (m.HomeTeamScore !== null && m.HomeTeamScore !== undefined) return "finished";
   return "upcoming";
+}
+
+// ─── SIDE BUILDER ─────────────────────────────────────────────────────────────
+// Bundles code + name + logo + score + overs into ONE object per team so a
+// logo/flag can never end up paired with the wrong code or score.
+function buildSide({ code, name, logo, score, overs }) {
+  return {
+    code: code || "—",
+    name: name || code || "—",
+    logo: logo || null,
+    score: (score === undefined) ? null : score,
+    overs: overs || null,
+  };
 }
 
 // ─── CACHE ────────────────────────────────────────────────────────────────────
@@ -103,112 +128,121 @@ function TopNav() {
   );
 }
 
-// ─── QUICK MATCH CARD ─────────────────────────────────────────────────────────
-function QuickMatchCard({ sport, homeShort, awayShort, homeFlag, awayFlag,
-  homeFlagImg, awayFlagImg, score, status, venue, time, tournament, result, link }) {
-  const isLive     = status === "live";
-  const isFinished = status === "finished";
-  const accent      = sport === "cricket" ? "#8b5cf6" : "#1ed596";
-  const accentBg    = sport === "cricket" ? "rgba(139,92,246,0.08)" : "rgba(30,213,150,0.08)";
-  const accentBorder= sport === "cricket" ? "rgba(139,92,246,0.22)" : "rgba(30,213,150,0.22)";
+// ─── TEAM BADGE (circular for cricket, square for football — BCCI-style) ─────
+// Tracks image-load failure in state and falls back to the flag/globe glyph,
+// instead of hiding a broken <img> and leaving an empty box (the previous bug).
+function TeamBadge({ team, sport, size = 44 }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const hasLogo = !!team.logo && !imgFailed;
 
-  return (
-    <Link to={link || "/live-cricket-tv"}
-      className="block rounded-2xl border transition-all duration-200 overflow-hidden active:scale-[0.98] hover:border-white/20"
-      style={{
-        background: isLive ? accentBg : "rgba(255,255,255,0.02)",
-        borderColor: isLive ? accentBorder : isFinished ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.06)",
-        boxShadow: isLive ? `0 0 18px ${accentBg}` : "none",
-      }}>
-      <div className="p-3">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest truncate max-w-[130px]">{tournament}</span>
-          {isLive
-            ? <span className="flex items-center gap-1 shrink-0"><PulsingDot color="#ef4444" size={5}/><span className="text-[8px] font-black text-red-400 uppercase">Live</span></span>
-            : isFinished
-              ? <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
-              : <span className="text-[8px] text-gray-700 font-bold shrink-0">{time}</span>}
-        </div>
-
-        {/* Teams */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            {homeFlagImg
-              ? <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-white/5"><img src={homeFlagImg} alt="" className="w-full h-full object-cover" onError={e=>{e.target.style.display="none";}}/></div>
-              : <span style={{fontSize:22,lineHeight:1}}>{homeFlag}</span>}
-            <div className="min-w-0">
-              <p className="text-[12px] font-black text-white uppercase tracking-tight">{homeShort}</p>
-              {score?.home !== undefined && (isLive || isFinished) && (
-                <p className="text-[10px] font-black" style={{color: isFinished ? "rgba(255,255,255,0.65)" : accent}}>{score.home}</p>
-              )}
-            </div>
-          </div>
-          <div className="shrink-0 text-center px-1">
-            {(isLive||isFinished) && score?.home !== undefined
-              ? <span className="text-[13px] font-black text-white/40">:</span>
-              : <span className="text-[10px] font-black text-gray-700">vs</span>}
-          </div>
-          <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-            <div className="min-w-0 text-right">
-              <p className="text-[12px] font-black text-white uppercase tracking-tight">{awayShort}</p>
-              {score?.away !== undefined && score?.away !== null && (isLive || isFinished) && (
-                <p className="text-[10px] font-black" style={{color: isFinished ? "rgba(255,255,255,0.65)" : accent}}>{score.away}</p>
-              )}
-            </div>
-            {awayFlagImg
-              ? <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-white/5"><img src={awayFlagImg} alt="" className="w-full h-full object-cover" onError={e=>{e.target.style.display="none";}}/></div>
-              : <span style={{fontSize:22,lineHeight:1}}>{awayFlag}</span>}
-          </div>
-        </div>
-
-        {venue && <p className="text-[8px] text-gray-700 mt-1.5 truncate">📍 {venue}</p>}
-        {isFinished && result && <p className="text-[8px] font-black mt-0.5" style={{color:"#4ade80"}}>{result}</p>}
+  if (sport === "football") {
+    return hasLogo ? (
+      <div className="rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width:size, height:size }}>
+        <img src={team.logo} alt="" className="w-full h-full object-cover" onError={()=>setImgFailed(true)}/>
       </div>
-    </Link>
+    ) : (
+      <div className="rounded-lg border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width:size, height:size }}>
+        <span style={{ fontSize:size*0.55, lineHeight:1 }}>🌍</span>
+      </div>
+    );
+  }
+
+  const flag = ICC_FLAGS[team.code] || "🏏";
+  return hasLogo ? (
+    <div className="rounded-full overflow-hidden border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width:size, height:size }}>
+      <img src={team.logo} alt="" className="w-full h-full object-contain" style={{padding:"12%"}} onError={()=>setImgFailed(true)}/>
+    </div>
+  ) : (
+    <div className="rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width:size, height:size }}>
+      <span style={{ fontSize:size*0.55, lineHeight:1 }}>{flag}</span>
+    </div>
   );
 }
 
-// ─── RESULT CARD (shared for cricket + football finished) ─────────────────────
-function ResultCard({ sport, homeShort, awayShort, homeFlag, awayFlag, homeFlagImg, awayFlagImg,
-  homeScore, awayScore, result, tournament, group, venue, link }) {
-  const hWon = sport === "football" && typeof homeScore === "number" && typeof awayScore === "number" && homeScore > awayScore;
-  const aWon = sport === "football" && typeof homeScore === "number" && typeof awayScore === "number" && awayScore > homeScore;
+// ─── BCCI-STYLE MATCH CARD (shared: live / scheduled / finished, cricket + football) ──
+function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, away, venue, link, result, tossText }) {
+  const isLive     = status === "live";
+  const isFinished = status === "finished";
+  const accent     = sport === "cricket" ? "#8b5cf6" : "#1ed596";
+  const hWon = isFinished && typeof home.score === "number" && typeof away.score === "number" && home.score > away.score;
+  const aWon = isFinished && typeof home.score === "number" && typeof away.score === "number" && away.score > home.score;
+  const showCricketScores = sport === "cricket" && (isLive || isFinished) && (home.score || away.score);
+  const showFootballScores = sport === "football" && (isLive || isFinished) && home.score !== null && home.score !== undefined;
 
   return (
     <Link to={link || "/live-cricket-tv"}
-      className="block rounded-2xl border transition-all overflow-hidden active:scale-[0.98] hover:border-white/15"
-      style={{background:"rgba(255,255,255,0.02)", borderColor:"rgba(255,255,255,0.06)"}}>
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest truncate max-w-[150px]">
-            {group ? `${group} · ` : ""}{tournament}
+      className="flex rounded-2xl overflow-hidden border transition-all duration-200 active:scale-[0.98] hover:border-white/20"
+      style={{
+        borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
+        boxShadow: isLive ? `0 0 18px ${accent}22` : "none",
+      }}>
+      {/* side accent bar */}
+      <div className="w-1.5 shrink-0" style={{ background: accent }} />
+
+      <div className="flex-1 bg-white/[0.02]">
+        {/* header strip */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] gap-2">
+          <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider truncate">
+            {matchLabel ? `${matchLabel} · ` : ""}{leagueLabel}
           </span>
-          <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
+          {isLive ? (
+            <span className="flex items-center gap-1 shrink-0">
+              <PulsingDot color="#ef4444" size={5}/>
+              <span className="text-[8px] font-black text-red-400 uppercase">Live</span>
+            </span>
+          ) : isFinished ? (
+            <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
+          ) : (
+            <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>{statusLabel}</span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            {homeFlagImg
-              ? <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-white/5"><img src={homeFlagImg} alt="" className="w-full h-full object-cover" onError={e=>{e.target.style.display="none";}}/></div>
-              : <span style={{fontSize:22,lineHeight:1}}>{homeFlag || "🏏"}</span>}
-            <span className="text-[13px] font-black uppercase tracking-tight" style={{color: hWon ? "#4ade80" : "rgba(255,255,255,0.85)"}}>{homeShort}</span>
+
+        {/* teams: badge-over-name, BCCI style */}
+        <div className="flex items-center justify-between px-3 py-3 gap-2">
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            <TeamBadge team={home} sport={sport} size={36}/>
+            <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: hWon ? "#4ade80" : "white" }}>
+              {home.code}
+            </span>
+            {showCricketScores && home.score && (
+              <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+                {home.score}{home.overs ? ` (${home.overs})` : ""}
+              </span>
+            )}
+            {showFootballScores && (
+              <span className="text-[12px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{home.score}</span>
+            )}
           </div>
+
           <div className="shrink-0 text-center px-1">
-            {sport === "football"
-              ? <span className="text-[15px] font-black text-white">{homeScore} : {awayScore}</span>
-              : homeScore
-                ? <div className="text-right"><p className="text-[9px] text-gray-500">{homeScore}</p>{awayScore && <p className="text-[9px] text-gray-500">{awayScore}</p>}</div>
-                : <span className="text-[11px] font-black text-gray-700">vs</span>}
+            {showFootballScores
+              ? <span className="text-[12px] font-black text-white/40">:</span>
+              : <span className="text-[10px] font-black text-gray-600">vs</span>}
           </div>
-          <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-            <span className="text-[13px] font-black uppercase tracking-tight" style={{color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)"}}>{awayShort}</span>
-            {awayFlagImg
-              ? <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-white/5"><img src={awayFlagImg} alt="" className="w-full h-full object-cover" onError={e=>{e.target.style.display="none";}}/></div>
-              : <span style={{fontSize:22,lineHeight:1}}>{awayFlag || "🏏"}</span>}
+
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            <TeamBadge team={away} sport={sport} size={36}/>
+            <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
+              {away.code}
+            </span>
+            {showCricketScores && away.score && (
+              <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+                {away.score}{away.overs ? ` (${away.overs})` : ""}
+              </span>
+            )}
+            {showFootballScores && (
+              <span className="text-[12px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{away.score}</span>
+            )}
           </div>
         </div>
-        {result && <p className="text-[8px] font-black mt-1.5" style={{color:"#4ade80"}}>{result}</p>}
-        {venue && !result && <p className="text-[8px] text-gray-700 mt-1.5">📍 {venue}</p>}
+
+        {/* footer: venue / result / toss / match info */}
+        <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06] gap-2">
+          <span className="text-[8px] text-gray-600 font-bold truncate">
+            {result ? result : tossText ? `🪙 ${tossText}` : venue ? `📍 ${venue}` : ""}
+          </span>
+          <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>Match Info →</span>
+        </div>
       </div>
     </Link>
   );
@@ -303,102 +337,111 @@ function LiveNowStrip() {
   const liveCount = indiaLive.length + fifaLive.length + wt20Live.length;
 
   // ── Build live+today cards ─────────────────────────────────────────────────
+  // Each match builds ONE home object + ONE away object together, so the
+  // logo/flag, code, and score for a side can never get mismatched.
   const liveCards = [
     // India live
-    ...indiaLive.map(m => ({
-      id: `ind-live-${m.MatchID}`,
-      sport: "cricket",
-      homeShort: m.HomeTeamCode || m.FirstBattingTeamCode || "IND",
-      awayShort: m.AwayTeamCode || m.SecondBattingTeamCode || "",
-      homeFlag: "🇮🇳",
-      awayFlag: ICC_FLAGS[m.AwayTeamCode || m.SecondBattingTeamCode] || "🏏",
-      homeFlagImg: m.MatchHomeTeamLogo || null,
-      awayFlagImg: m.MatchAwayTeamLogo || null,
-      status: "live",
-      tournament: m.CompetitionName || "India Cricket",
-      venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
-      score: (m["1FallScore"] || m["2FallScore"]) ? {
-        home: m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]}` : null,
-        away: m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]}` : null,
-      } : undefined,
-      link: "/live-cricket-tv",
-    })),
+    ...indiaLive.map(m => {
+      const home = buildSide({
+        code: m.HomeTeamCode || m.FirstBattingTeamCode || "IND",
+        name: m.HomeTeamName,
+        logo: m.MatchHomeTeamLogo,
+        score: m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]}` : null,
+      });
+      const away = buildSide({
+        code: m.AwayTeamCode || m.SecondBattingTeamCode || "",
+        name: m.AwayTeamName,
+        logo: m.MatchAwayTeamLogo,
+        score: m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]}` : null,
+      });
+      return {
+        id: `ind-live-${m.MatchID}`,
+        sport: "cricket",
+        status: "live",
+        home, away,
+        leagueLabel: m.CompetitionName || "India Cricket",
+        venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
+        link: "/live-cricket-tv",
+      };
+    }),
     // WT20 live
-    ...wt20Live.map(m => ({
-      id: `wt20-live-${m.match_id}`,
-      sport: "cricket",
-      homeShort: m.teama_short || "—",
-      awayShort: m.teamb_short || "—",
-      homeFlag: ICC_FLAGS[m.teama_short] || "🏏",
-      awayFlag: ICC_FLAGS[m.teamb_short] || "🏏",
-      status: "live",
-      tournament: "ICC WT20 WC 2026",
-      venue: m.venue || "",
-      score: m.scores?.[0] ? { home: `${m.scores[0].team_runs}/${m.scores[0].team_wickets}`, away: null } : undefined,
-      link: "/live-cricket-tv",
-    })),
+    ...wt20Live.map(m => {
+      const score = m.scores?.[0];
+      const home = buildSide({ code: m.teama_short, name: m.teama_display_name, score: score ? `${score.team_runs}/${score.team_wickets}` : null });
+      const away = buildSide({ code: m.teamb_short, name: m.teamb_display_name });
+      return {
+        id: `wt20-live-${m.match_id}`,
+        sport: "cricket",
+        status: "live",
+        home, away,
+        leagueLabel: "ICC WT20 WC 2026",
+        venue: m.venue || "",
+        link: "/live-cricket-tv",
+      };
+    }),
     // FIFA live
-    ...fifaLive.map(m => ({
-      id: `fifa-live-${m.IdMatch}`,
-      sport: "football",
-      homeShort: fifaAbbr(m.Home) || "—",
-      awayShort: fifaAbbr(m.Away) || "—",
-      homeFlagImg: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null,
-      awayFlagImg: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null,
-      status: "live",
-      tournament: "FIFA WC 2026",
-      venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
-      score: m.HomeTeamScore !== null && m.HomeTeamScore !== undefined ? { home: m.HomeTeamScore, away: m.AwayTeamScore } : undefined,
-      link: "/live-cricket-tv",
-    })),
+    ...fifaLive.map(m => {
+      const home = buildSide({ code: fifaAbbr(m.Home) || "—", logo: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null, score: m.HomeTeamScore });
+      const away = buildSide({ code: fifaAbbr(m.Away) || "—", logo: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null, score: m.AwayTeamScore });
+      return {
+        id: `fifa-live-${m.IdMatch}`,
+        sport: "football",
+        status: "live",
+        home, away,
+        leagueLabel: "FIFA WC 2026",
+        venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
+        link: "/live-cricket-tv",
+      };
+    }),
   ];
 
   // ── Build scheduled (today + next upcoming) ───────────────────────────────
   const scheduledCards = [
     // India upcoming (next 2)
-    ...indiaUpcoming.slice(0, 2).map(m => ({
-      id: `ind-up-${m.MatchID}`,
-      sport: "cricket",
-      homeShort: m.HomeTeamCode || "IND",
-      awayShort: m.AwayTeamCode || "",
-      homeFlag: "🇮🇳",
-      awayFlag: ICC_FLAGS[m.AwayTeamCode] || "🏏",
-      homeFlagImg: m.MatchHomeTeamLogo || null,
-      awayFlagImg: m.MatchAwayTeamLogo || null,
-      status: "upcoming",
-      tournament: m.CompetitionName || "India Cricket",
-      venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
-      time: `${bcciFmtDate(m.MatchDate)} IST`,
-      link: "/live-cricket-tv",
-    })),
+    ...indiaUpcoming.slice(0, 2).map(m => {
+      const home = buildSide({ code: m.HomeTeamCode || "IND", name: m.HomeTeamName, logo: m.MatchHomeTeamLogo });
+      const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo });
+      return {
+        id: `ind-up-${m.MatchID}`,
+        sport: "cricket",
+        status: "upcoming",
+        home, away,
+        leagueLabel: m.CompetitionName || "India Cricket",
+        venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
+        statusLabel: countdownLabel(m.MatchDate) || `${bcciFmtDate(m.MatchDate)} IST`,
+        link: "/live-cricket-tv",
+      };
+    }),
     // WT20 upcoming (next 2)
-    ...wt20Upcoming.slice(0, 2).map(m => ({
-      id: `wt20-up-${m.match_id}`,
-      sport: "cricket",
-      homeShort: m.teama_short || "—",
-      awayShort: m.teamb_short || "—",
-      homeFlag: ICC_FLAGS[m.teama_short] || "🏏",
-      awayFlag: ICC_FLAGS[m.teamb_short] || "🏏",
-      status: "upcoming",
-      tournament: "ICC WT20 WC 2026",
-      venue: m.venue || "",
-      time: m.match_time_ist ? `${m.match_time_ist} IST` : "",
-      link: "/live-cricket-tv",
-    })),
+    ...wt20Upcoming.slice(0, 2).map(m => {
+      const home = buildSide({ code: m.teama_short, name: m.teama_display_name });
+      const away = buildSide({ code: m.teamb_short, name: m.teamb_display_name });
+      return {
+        id: `wt20-up-${m.match_id}`,
+        sport: "cricket",
+        status: "upcoming",
+        home, away,
+        leagueLabel: "ICC WT20 WC 2026",
+        venue: m.venue || "",
+        statusLabel: (m.start_date && countdownLabel(m.start_date)) || (m.match_time_ist ? `${m.match_time_ist} IST` : ""),
+        link: "/live-cricket-tv",
+      };
+    }),
     // FIFA today (not live) + next upcoming
-    ...[...fifaToday, ...fifaUpcoming.slice(0, 3)].slice(0, 3).map(m => ({
-      id: `fifa-up-${m.IdMatch}`,
-      sport: "football",
-      homeShort: fifaAbbr(m.Home) || "—",
-      awayShort: fifaAbbr(m.Away) || "—",
-      homeFlagImg: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null,
-      awayFlagImg: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null,
-      status: "upcoming",
-      tournament: "FIFA WC 2026",
-      venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
-      time: fmtIST(m.Date) ? `${fmtIST(m.Date)} IST` : "",
-      link: "/live-cricket-tv",
-    })),
+    ...[...fifaToday, ...fifaUpcoming.slice(0, 3)].slice(0, 3).map(m => {
+      const home = buildSide({ code: fifaAbbr(m.Home) || "—", logo: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null });
+      const away = buildSide({ code: fifaAbbr(m.Away) || "—", logo: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null });
+      return {
+        id: `fifa-up-${m.IdMatch}`,
+        sport: "football",
+        status: "upcoming",
+        home, away,
+        leagueLabel: "FIFA WC 2026",
+        venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
+        statusLabel: countdownLabel(m.Date) || (fmtIST(m.Date) ? `${fmtIST(m.Date)} IST` : ""),
+        link: "/live-cricket-tv",
+      };
+    }),
   ];
 
   // ── Build recent results ──────────────────────────────────────────────────
@@ -408,18 +451,13 @@ function LiveNowStrip() {
       const homeIsFirst = String(m.FirstBattingTeamID) === String(m.HomeTeamID);
       const inn1 = m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]} (${m["1FallOvers"]} ov)` : null;
       const inn2 = m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]} (${m["2FallOvers"]} ov)` : null;
+      const home = buildSide({ code: m.HomeTeamCode || "IND", name: m.HomeTeamName, logo: m.MatchHomeTeamLogo, score: homeIsFirst ? inn1 : inn2 });
+      const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
       return {
-        id: `ind-fin-${m.MatchID}`, sport: "cricket",
-        homeShort: m.HomeTeamCode || "IND",
-        awayShort: m.AwayTeamCode || "",
-        homeFlag: "🇮🇳",
-        awayFlag: ICC_FLAGS[m.AwayTeamCode] || "🏏",
-        homeFlagImg: m.MatchHomeTeamLogo || null,
-        awayFlagImg: m.MatchAwayTeamLogo || null,
-        homeScore: homeIsFirst ? inn1 : inn2,
-        awayScore: homeIsFirst ? inn2 : inn1,
+        id: `ind-fin-${m.MatchID}`, sport: "cricket", status: "finished",
+        home, away,
         result: m.Comments || m.Commentss || null,
-        tournament: m.CompetitionName || "India Cricket",
+        leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName || "",
         link: "/live-cricket-tv",
       };
@@ -427,15 +465,13 @@ function LiveNowStrip() {
     // WT20 recent (last 2)
     ...wt20Recent.slice(0, 2).map(m => {
       const score = m.scores?.[0];
+      const home = buildSide({ code: m.teama_short, name: m.teama_display_name, score: score ? `${score.team_runs}/${score.team_wickets} (${score.team_overs} ov)` : null });
+      const away = buildSide({ code: m.teamb_short, name: m.teamb_display_name });
       return {
-        id: `wt20-fin-${m.match_id}`, sport: "cricket",
-        homeShort: m.teama_short || "—",
-        awayShort: m.teamb_short || "—",
-        homeFlag: ICC_FLAGS[m.teama_short] || "🏏",
-        awayFlag: ICC_FLAGS[m.teamb_short] || "🏏",
-        homeScore: score ? `${score.team_runs}/${score.team_wickets} (${score.team_overs} ov)` : null,
+        id: `wt20-fin-${m.match_id}`, sport: "cricket", status: "finished",
+        home, away,
         result: m.match_result || null,
-        tournament: "ICC WT20 WC 2026",
+        leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
         link: "/live-cricket-tv",
       };
@@ -446,15 +482,13 @@ function LiveNowStrip() {
       const city  = m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "";
       const hWon  = m.HomeTeamScore > m.AwayTeamScore;
       const aWon  = m.AwayTeamScore > m.HomeTeamScore;
+      const home = buildSide({ code: fifaAbbr(m.Home) || "—", logo: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null, score: m.HomeTeamScore });
+      const away = buildSide({ code: fifaAbbr(m.Away) || "—", logo: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null, score: m.AwayTeamScore });
       return {
-        id: `fifa-fin-${m.IdMatch}`, sport: "football",
-        homeShort: fifaAbbr(m.Home) || "—",
-        awayShort: fifaAbbr(m.Away) || "—",
-        homeFlagImg: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null,
-        awayFlagImg: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null,
-        homeScore: m.HomeTeamScore, awayScore: m.AwayTeamScore,
-        result: hWon ? `${fifaAbbr(m.Home)} win` : aWon ? `${fifaAbbr(m.Away)} win` : "Draw",
-        tournament: "FIFA WC 2026", group, venue: city,
+        id: `fifa-fin-${m.IdMatch}`, sport: "football", status: "finished",
+        home, away,
+        result: hWon ? `${home.code} win` : aWon ? `${away.code} win` : "Draw",
+        leagueLabel: "FIFA WC 2026", matchLabel: group, venue: city,
         link: "/live-cricket-tv",
       };
     }),
@@ -485,7 +519,7 @@ function LiveNowStrip() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {liveCards.slice(0, 6).map(c => <QuickMatchCard key={c.id} {...c}/>)}
+            {liveCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c}/>)}
           </div>
         </div>
       )}
@@ -505,7 +539,7 @@ function LiveNowStrip() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {scheduledCards.slice(0, 6).map(c => <QuickMatchCard key={c.id} {...c}/>)}
+            {scheduledCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c}/>)}
           </div>
         </div>
       )}
@@ -520,7 +554,7 @@ function LiveNowStrip() {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recentResults.slice(0, 6).map(r => <ResultCard key={r.id} {...r}/>)}
+            {recentResults.slice(0, 6).map(r => <MatchCard key={r.id} {...r}/>)}
           </div>
         </div>
       )}
