@@ -16,6 +16,8 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet";
 
+const API = import.meta.env.VITE_BACKEND_URL;
+
 const FEEDS_META = {
   bollywood: { label: "Bollywood", color: "#D85A30" },
   tamil:     { label: "Tamil",     color: "#1D9E75" },
@@ -85,7 +87,9 @@ const NewsViewer = () => {
     setLoading(true);
     setError(null);
     try {
-      const res  = await fetch(`/api/rss/article?url=${encodeURIComponent(articleUrl)}`);
+      const res = await fetch(
+  `${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`
+);
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Failed to load article");
       setArticle(json.article);
