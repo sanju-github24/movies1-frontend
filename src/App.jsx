@@ -43,7 +43,8 @@ import LiveCricketTV from './paged/LiveCricketTV';
 import Homeies from './paged/Homeies';
 import LiveChannelsUpload from './paged/LiveChannelsUpload';
 import LiveChannelsPage from './paged/LiveChannelsPage';
-
+import MatchCenter from './paged/MatchCenter';
+import NewsViewer from './components/NewsReader';
 // ── Lockout Overlay ──
 const LockoutOverlay = () => {
   const [timeLeft, setTimeLeft] = useState(null);
@@ -154,7 +155,7 @@ const AppContent = () => {
   // ── Navbar/CategoryBar hide logic ──
   const hidePaths = [
     "/login", "/auth", "/verify-account", "/reset-password",
-    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv"
+    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv","/match-center"
   ];
   const isBlogViewerPath   = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath        = /^\/watch(\/[^/]+)?$/.test(location.pathname);
@@ -201,6 +202,7 @@ const AppContent = () => {
         <Route path="/category/:name"         element={<CategoryPage />} />
         <Route path="/latest"                 element={<LatestUploads />} />
         <Route path="/blogs"                  element={<BlogList />} />
+        <Route path="/news"              element={<NewsViewer />} />
         <Route path="/blogs/:slug"            element={<BlogViewer />} />
         <Route path="/auth"                   element={session ? <Navigate to="/watch" /> : <AuthPage />} />
         <Route path="/update-password"        element={<UpdatePassword />} />
@@ -212,6 +214,8 @@ const AppContent = () => {
         <Route path="/search-torrent"         element={<TorrentSearch />} />
         <Route path="/sports"                 element={<Homeies />} />
         <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
+        <Route path="/match-center/:hash"     element={<MatchCenter />}
+/>
         <Route path="/live-stream"            element={<LiveChannelsPage />} />
         <Route path="/profile"                element={
           <ProtectedRoute session={session} initialized={initialized}>
