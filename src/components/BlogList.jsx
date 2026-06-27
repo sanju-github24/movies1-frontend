@@ -1,9 +1,22 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../utils/supabaseClient";
 import { Helmet } from "react-helmet";
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+/**
+ * BlogList.jsx — News hub page.
+ *
+ * Layout, top to bottom:
+ *   1. Header
+ *   2. Cricket hero — latest 2 stories from ESPNcricinfo, asymmetric tiles
+ *   3. Language rows — Bollywood / Kannada / Tamil / Telugu, horizontal
+ *      scroll-snap carousels
+ *   4. Mixed feed — all sources together, with tabs + search (FilmiBeatSection)
+ *   5. Footer
+ *
+ * The previous Supabase-backed "admin uploaded" blog list has been removed —
+ * this page is now driven entirely by the live RSS proxy.
+ */
+
 const RSS_PROXY_BASE =
   import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
 
@@ -17,18 +30,19 @@ const FEEDS = [
   { key: "hollywood", label: "Hollywood", color: "#444441", icon: "🎥" },
   { key: "tv",        label: "TV",        color: "#639922", icon: "📺" },
   { key: "ott",       label: "OTT",       color: "#993556", icon: "🎞️" },
+  { key: "cricket",   label: "Cricket",   color: "#0B6E4F", icon: "🏏" },
+];
+
+const LANGUAGE_ROWS = [
+  { key: "bollywood", label: "Bollywood", color: "#D85A30", icon: "🎬" },
+  { key: "kannada",   label: "Kannada",   color: "#BA7517", icon: "🏺" },
+  { key: "tamil",     label: "Tamil",     color: "#1D9E75", icon: "🎭" },
+  { key: "telugu",    label: "Telugu",    color: "#378ADD", icon: "🌟" },
 ];
 
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const getTextPreview = (html, maxLength = 150) => {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  const text = div.textContent || div.innerText || "";
-  return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
-};
-
 const timeAgo = (dateStr) => {
   if (!dateStr) return "";
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
@@ -38,84 +52,226 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
-const generateHash = (str) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36).slice(0, 6).padStart(6, "0");
-};
+async function fetchFeed(key, count) {
+  const url = `${RSS_PROXY_BASE}/api/rss?feed=${key}&count=${count}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Backend HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || "Feed returned success:false");
+  return json.articles || [];
+}
 
-// ─── Blog Detail View ─────────────────────────────────────────────────────────
-const BlogDetail = ({ blog, onBack }) => {
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+// ─── Seam divider — the page's one recurring signature mark ─────────────────
+// A stitched-seam curve, like the one on a cricket ball, used sparingly as a
+// section break. Ties the new cricket content into the page's identity
+// without competing with the movie-news cards underneath it.
+const SeamDivider = () => (
+  <svg
+    viewBox="0 0 1200 40"
+    className="w-full h-10 my-10 opacity-70"
+    preserveAspectRatio="none"
+  >
+    <path
+      d="M0 20 Q 150 0, 300 20 T 600 20 T 900 20 T 1200 20"
+      fill="none"
+      stroke="#c5c107"
+      strokeWidth="1.5"
+      strokeDasharray="2 9"
+    />
+  </svg>
+);
 
-  const readingTime = Math.max(
-    1,
-    Math.ceil((blog.content?.replace(/<[^>]+>/g, "").split(/\s+/).length || 0) / 200)
-  );
+// ─── Cricket Hero ─────────────────────────────────────────────────────────────
+const CricketHero = () => {
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFeed("cricket", 2)
+      .then((data) => { if (!cancelled) setStories(data); })
+      .catch((err) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (error) return null; // fail quietly — cricket feed is a bonus, not core
 
   return (
-    <>
-      <Helmet>
-        <title>{blog.title} | AnchorMovies</title>
-        <meta name="description" content={getTextPreview(blog.content, 160)} />
-        <link rel="canonical" href={`https://www.1anchormovies.live/blogs#${generateHash(blog.id || blog.slug)}`} />
-      </Helmet>
+    <section className="relative">
+      <div className="flex items-center gap-3 mb-5">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold text-white bg-[#0B6E4F] px-2.5 py-1 rounded-full uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
+          🏏 Cricket
+        </span>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
+          From ESPNcricinfo
+        </p>
+      </div>
 
-      <article className="min-h-screen bg-[#0e0e0e] text-white">
-        <div className="relative h-[60vh] min-h-[360px] overflow-hidden">
-          <img
-            src={blog.poster_image || blog.thumbnail_url || "https://via.placeholder.com/1200x600"}
-            alt={blog.title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-[#0e0e0e]/60 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 max-w-4xl mx-auto">
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-2 text-xs font-semibold text-[#c5c107] uppercase tracking-widest mb-4 hover:text-white transition"
-            >
-              ← Back to Blogs
-            </button>
-            <h1 className="text-2xl sm:text-4xl font-extrabold leading-tight text-white mb-3">
-              {blog.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-              <span>🕒 {new Date(blog.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</span>
-              <span>📖 {readingTime} min read</span>
-              <span className="bg-[#c5c107]/20 text-[#c5c107] px-2 py-0.5 rounded-full font-semibold">
-                #{generateHash(blog.id || blog.slug)}
-              </span>
-            </div>
-          </div>
+      {loading ? (
+        <div className="grid gap-4 sm:grid-cols-5">
+          <div className="sm:col-span-3 h-72 bg-white/5 rounded-2xl animate-pulse" />
+          <div className="sm:col-span-2 h-72 bg-white/5 rounded-2xl animate-pulse" />
         </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-5">
+          {stories[0] && (
+            <Link
+              to={`/news?url=${encodeURIComponent(stories[0].link)}`}
+              className="group sm:col-span-3 relative rounded-2xl overflow-hidden h-72 sm:h-80 bg-[#0d1f17] border border-[#0B6E4F]/30 hover:border-[#0B6E4F]/70 transition-all"
+            >
+              {stories[0].thumbnail ? (
+                <img
+                  src={stories[0].thumbnail}
+                  alt={stories[0].title}
+                  className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-7xl opacity-20">🏏</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <span className="text-[10px] font-bold text-[#7CF5C2] uppercase tracking-widest">
+                  🕒 {timeAgo(stories[0].pubDate)}
+                </span>
+                <h3 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mt-2 line-clamp-3 group-hover:text-[#7CF5C2] transition">
+                  {stories[0].title}
+                </h3>
+              </div>
+            </Link>
+          )}
 
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-10">
-          <div
-            className="prose prose-invert prose-sm sm:prose-base max-w-none
-              prose-headings:text-[#c5c107] prose-headings:font-bold
-              prose-p:text-gray-300 prose-p:leading-relaxed
-              prose-a:text-[#c5c107] prose-a:no-underline hover:prose-a:underline
-              prose-img:rounded-lg prose-img:shadow-lg
-              prose-blockquote:border-l-[#c5c107] prose-blockquote:text-gray-400"
-            dangerouslySetInnerHTML={{ __html: blog.content }}
-          />
-          <div className="mt-14 pt-8 border-t border-white/10 flex justify-center">
-            <button
-              onClick={onBack}
-              className="bg-[#c5c107] text-black text-sm font-bold px-8 py-3 rounded-full hover:bg-yellow-400 transition"
+          {stories[1] && (
+            <Link
+              to={`/news?url=${encodeURIComponent(stories[1].link)}`}
+              className="group sm:col-span-2 relative rounded-2xl overflow-hidden h-72 sm:h-80 bg-[#0d1f17] border border-[#0B6E4F]/30 hover:border-[#0B6E4F]/70 transition-all"
             >
-              ← Back to all articles
-            </button>
-          </div>
+              {stories[1].thumbnail ? (
+                <img
+                  src={stories[1].thumbnail}
+                  alt={stories[1].title}
+                  className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-20">🏏</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-5">
+                <span className="text-[10px] font-bold text-[#7CF5C2] uppercase tracking-widest">
+                  🕒 {timeAgo(stories[1].pubDate)}
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white leading-snug mt-2 line-clamp-4 group-hover:text-[#7CF5C2] transition">
+                  {stories[1].title}
+                </h3>
+              </div>
+            </Link>
+          )}
         </div>
-      </article>
-    </>
+      )}
+    </section>
   );
 };
 
-// ─── FilmiBeat News Card ──────────────────────────────────────────────────────
+// ─── Compact carousel card (used in language rows) ───────────────────────────
+const CarouselCard = ({ article, accent }) => (
+  <Link
+    to={`/news?url=${encodeURIComponent(article.link)}`}
+    className="group shrink-0 w-64 snap-start bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden hover:border-white/20 transition-all hover:-translate-y-0.5"
+  >
+    <div className="relative h-36 bg-[#111] overflow-hidden">
+      {article.thumbnail ? (
+        <img
+          src={article.thumbnail}
+          alt={article.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        />
+      ) : (
+        <div className="absolute inset-0" style={{ background: `${accent}22` }} />
+      )}
+    </div>
+    <div className="p-3.5">
+      <h4 className="text-sm font-semibold text-gray-100 group-hover:text-[#c5c107] transition leading-snug line-clamp-2">
+        {article.title}
+      </h4>
+      <p className="text-[10px] text-gray-500 mt-2">🕒 {timeAgo(article.pubDate)}</p>
+    </div>
+  </Link>
+);
+
+// ─── Language Row ─────────────────────────────────────────────────────────────
+const LanguageRow = ({ feed }) => {
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const scrollerRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFeed(feed.key, 10)
+      .then((data) => { if (!cancelled) setArticles(data); })
+      .catch(() => { if (!cancelled) setArticles([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [feed.key]);
+
+  const scrollBy = (dir) => {
+    scrollerRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  };
+
+  if (!loading && articles.length === 0) return null;
+
+  return (
+    <section className="mb-12">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="text-[10px] font-bold text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider"
+            style={{ background: feed.color }}
+          >
+            {feed.icon} {feed.label}
+          </span>
+          <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wide">Movie News</h3>
+        </div>
+        <div className="hidden sm:flex items-center gap-2">
+          <button
+            onClick={() => scrollBy(-1)}
+            aria-label={`Scroll ${feed.label} news left`}
+            className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 transition flex items-center justify-center"
+          >
+            ←
+          </button>
+          <button
+            onClick={() => scrollBy(1)}
+            aria-label={`Scroll ${feed.label} news right`}
+            className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 transition flex items-center justify-center"
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="shrink-0 w-64 h-52 bg-white/5 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div
+          ref={scrollerRef}
+          className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+        >
+          {articles.map((a) => (
+            <CarouselCard key={a.id || a.link} article={a} accent={feed.color} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+// ─── Mixed-feed News Card (full grid section below the language rows) ────────
 const NewsCard = ({ article, isNew }) => {
   const feed = FEEDS.find((f) => f.key === article.source) || FEEDS[1];
 
@@ -178,8 +334,8 @@ const NewsCard = ({ article, isNew }) => {
   );
 };
 
-// ─── FilmiBeat Section ────────────────────────────────────────────────────────
-const FilmiBeatSection = () => {
+// ─── Mixed Feed Section (all sources, tabs + search) ──────────────────────────
+const MixedFeedSection = () => {
   const [news, setNews]               = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -190,20 +346,13 @@ const FilmiBeatSection = () => {
   const [nextRefresh, setNextRefresh] = useState(Date.now() + REFRESH_INTERVAL_MS);
   const [countdown, setCountdown]     = useState("");
 
-  // ── FIX 1: use RSS_PROXY_BASE (was incorrectly "API" in old code) ──────────
-  // ── FIX 2: check json.success (matches rssProxy.js response shape) ─────────
   const fetchNews = useCallback(async (feedKey = "all", isManual = false) => {
     if (!isManual) setLoading(true);
     setError(null);
     try {
-      const url = `${RSS_PROXY_BASE}/api/rss?feed=${feedKey}&count=30`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Backend HTTP ${res.status} — Render may be waking up, try refreshing in 30s`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Feed returned success:false");
-
+      const data = await fetchFeed(feedKey, 30);
       setPrevIds(new Set(news.map((n) => n.id)));
-      setNews(json.articles || []);
+      setNews(data);
       setLastUpdated(new Date());
       setNextRefresh(Date.now() + REFRESH_INTERVAL_MS);
     } catch (err) {
@@ -250,12 +399,12 @@ const FilmiBeatSection = () => {
   ).length;
 
   return (
-    <section className="mt-20">
+    <section className="mt-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.2em] mb-1">Live Feed</p>
           <h2 className="text-2xl font-extrabold text-white uppercase tracking-wide">
-            🎬 FilmiBeat News
+            📡 Everything, Mixed
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             {news.length} articles · {todayCount} today ·{" "}
@@ -283,7 +432,7 @@ const FilmiBeatSection = () => {
         </div>
       </div>
 
-      {/* Language tabs */}
+      {/* Source tabs */}
       <div className="flex gap-2 flex-wrap mb-6">
         {FEEDS.map((f) => (
           <button
@@ -301,7 +450,6 @@ const FilmiBeatSection = () => {
         ))}
       </div>
 
-      {/* Skeleton */}
       {loading && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -310,7 +458,6 @@ const FilmiBeatSection = () => {
         </div>
       )}
 
-      {/* Error — with wake-up help */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-5 text-sm space-y-3">
           <p><strong>⚠️ News feed error:</strong> {error}</p>
@@ -364,183 +511,26 @@ const FilmiBeatSection = () => {
           <a href="https://www.filmibeat.com" target="_blank" rel="noopener noreferrer" className="text-[#c5c107] hover:underline">
             filmibeat.com
           </a>
+          {" "}&{" "}
+          <a href="https://www.espncricinfo.com" target="_blank" rel="noopener noreferrer" className="text-[#0B6E4F] hover:underline">
+            espncricinfo.com
+          </a>
         </p>
       )}
     </section>
   );
 };
 
-// ─── Blog Card ────────────────────────────────────────────────────────────────
-const BlogCard = ({ blog, onClick, index }) => {
-  const isFeatured = index === 0;
-  const hash = generateHash(blog.id || blog.slug);
-
-  if (isFeatured) {
-    return (
-      <button
-        onClick={() => onClick(blog, hash)}
-        className="group col-span-full bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden flex flex-col sm:flex-row hover:border-[#c5c107]/40 transition-all duration-300 hover:shadow-[0_0_40px_rgba(197,193,7,0.1)] text-left"
-      >
-        <div className="sm:w-1/2 relative overflow-hidden h-60 sm:h-auto bg-black">
-          <img
-            src={blog.poster_image || blog.thumbnail_url || "https://via.placeholder.com/800x500"}
-            alt={blog.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#1a1a1a]/80 hidden sm:block" />
-          <span className="absolute top-3 left-3 bg-[#c5c107] text-black text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-            Featured
-          </span>
-        </div>
-        <div className="sm:w-1/2 p-7 flex flex-col justify-center gap-3">
-          <p className="text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.2em]">#{hash}</p>
-          <h3 className="text-xl sm:text-2xl font-extrabold text-white group-hover:text-[#c5c107] transition leading-snug">
-            {blog.title}
-          </h3>
-          <p className="text-sm text-gray-400 leading-relaxed">
-            {getTextPreview(blog.content, 200)}
-          </p>
-          <div className="flex items-center gap-3 mt-2">
-            <span className="text-xs text-gray-500">
-              🕒 {new Date(blog.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-            </span>
-            <span className="ml-auto text-xs font-bold text-[#c5c107]">Read more →</span>
-          </div>
-        </div>
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => onClick(blog, hash)}
-      className="group bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-[#c5c107]/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(197,193,7,0.08)] hover:-translate-y-0.5 text-left"
-    >
-      <div className="relative overflow-hidden h-48 bg-black">
-        <img
-          src={blog.poster_image || blog.thumbnail_url || "https://via.placeholder.com/600x400"}
-          alt={blog.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/90 to-transparent" />
-        <span className="absolute bottom-3 left-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-          #{hash}
-        </span>
-      </div>
-      <div className="p-5 flex flex-col flex-grow gap-2">
-        <h3 className="text-base font-bold text-gray-100 group-hover:text-[#c5c107] transition leading-snug line-clamp-2">
-          {blog.title}
-        </h3>
-        <p className="text-xs text-gray-500 leading-relaxed line-clamp-2 flex-grow">
-          {getTextPreview(blog.content)}
-        </p>
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
-          <span className="text-[10px] text-gray-600">
-            🕒 {new Date(blog.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-          </span>
-          <span className="text-[10px] font-bold text-[#c5c107]">Read →</span>
-        </div>
-      </div>
-    </button>
-  );
-};
-
 // ─── Main BlogList ────────────────────────────────────────────────────────────
 const BlogList = () => {
-  const [blogs, setBlogs]           = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [activeBlog, setActiveBlog] = useState(null);
-
-  useEffect(() => {
-    const checkHash = () => {
-      const hash = window.location.hash.slice(1);
-      if (hash && blogs.length > 0) {
-        const match = blogs.find((b) => generateHash(b.id || b.slug) === hash);
-        if (match) { setActiveBlog({ blog: match, hash }); return; }
-      }
-      setActiveBlog(null);
-    };
-    checkHash();
-    window.addEventListener("hashchange", checkHash);
-    return () => window.removeEventListener("hashchange", checkHash);
-  }, [blogs]);
-
-  const openBlog = (blog, hash) => {
-    window.location.hash = hash;
-    setActiveBlog({ blog, hash });
-    window.scrollTo(0, 0);
-  };
-
-  const closeBlog = () => {
-    history.pushState("", document.title, window.location.pathname + window.location.search);
-    setActiveBlog(null);
-    window.scrollTo(0, 0);
-  };
-
-  useEffect(() => { fetchBlogs(); }, []);
-
-  const fetchBlogs = async () => {
-    try {
-      const { data: blogsData, error: blogsError } = await supabase
-        .from("blogs")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (blogsError) throw blogsError;
-
-      const blogsWithPoster = await Promise.all(
-        (blogsData || []).map(async (blog) => {
-          if (blog.related_movie_ids?.length > 0) {
-            const movieIds = Array.isArray(blog.related_movie_ids)
-              ? blog.related_movie_ids
-              : blog.related_movie_ids.split(",").map((id) => id.trim()).filter(Boolean);
-
-            if (movieIds.length > 0) {
-              const { data: moviesData } = await supabase
-                .from("watch_html")
-                .select("id, poster, cover_poster")
-                .in("id", [movieIds[0]])
-                .limit(1);
-              if (moviesData?.length > 0) {
-                blog.poster_image = moviesData[0].cover_poster || moviesData[0].poster;
-              }
-            }
-          }
-          return blog;
-        })
-      );
-      setBlogs(blogsWithPoster || []);
-    } catch (err) {
-      console.error("Failed to fetch blogs:", err.message);
-      setError("Failed to load blogs.");
-    }
-    setLoading(false);
-  };
-
-  if (activeBlog) {
-    return (
-      <div className="min-h-screen bg-[#0e0e0e] font-['Roboto']">
-        <header className="bg-black/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center h-[60px]">
-            <Link to="/" className="text-white text-xl font-bold tracking-wide uppercase">
-              Anchor<span className="text-[#c5c107]">Movies</span>
-            </Link>
-            <button onClick={closeBlog} className="text-sm text-gray-400 hover:text-white transition flex items-center gap-2">
-              ← All Blogs
-            </button>
-          </div>
-        </header>
-        <BlogDetail blog={activeBlog.blog} onBack={closeBlog} />
-      </div>
-    );
-  }
-
   return (
     <>
       <Helmet>
-        <title>Movie Blogs & Reviews | 1AnchorMovies</title>
-        <meta name="description" content="Explore the latest movie blogs, reviews, and updates from Tamil, Telugu, Kannada, and Malayalam cinema on 1AnchorMovies." />
+        <title>Movie & Cricket News | 1AnchorMovies</title>
+        <meta
+          name="description"
+          content="Live movie news from Bollywood, Tamil, Telugu, Kannada, Malayalam and Hollywood cinema, plus the latest cricket headlines — all on 1AnchorMovies."
+        />
         <link rel="canonical" href="https://www.1anchormovies.live/blogs" />
       </Helmet>
 
@@ -561,52 +551,34 @@ const BlogList = () => {
           </div>
         </header>
 
-        <section className="relative bg-[#0e0e0e] border-b border-white/5 py-20 px-4 text-center overflow-hidden">
+        <section className="relative bg-[#0e0e0e] border-b border-white/5 py-16 px-4 text-center overflow-hidden">
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full bg-[#c5c107]/5 blur-[120px]" />
           </div>
           <p className="relative text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.3em] mb-3">
-            Entertainment · Reviews · Insights
+            Entertainment · Cricket · Live Updates
           </p>
           <h2 className="relative text-4xl sm:text-6xl font-black mb-4 tracking-tight">
-            Movie<span className="text-[#c5c107]">Blogs</span>
+            Movie<span className="text-[#c5c107]">News</span>
           </h2>
           <p className="relative text-gray-500 max-w-xl mx-auto text-sm leading-relaxed">
-            Reviews, industry insights, and latest updates across South Indian cinema — Tamil, Telugu, Kannada, and Malayalam.
+            Reviews, industry updates, and headlines across Bollywood, Tamil, Telugu, Kannada,
+            Malayalam and Hollywood cinema — plus the latest from the cricket world.
           </p>
         </section>
 
         <main className="max-w-7xl mx-auto py-14 px-4 sm:px-6 lg:px-8">
-          <div className="mb-10 flex items-end justify-between">
-            <div>
-              <p className="text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.2em] mb-1">Original Articles</p>
-              <h2 className="text-2xl font-extrabold text-white uppercase tracking-wide">📚 Latest Posts</h2>
-            </div>
-            {!loading && <span className="text-xs text-gray-600">{blogs.length} articles</span>}
-          </div>
+          <CricketHero />
 
-          {loading && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-white/5 rounded-2xl h-72 animate-pulse" />
-              ))}
-            </div>
-          )}
-          {error && (
-            <div className="text-red-400 text-center py-10 bg-red-500/5 rounded-xl border border-red-500/10">{error}</div>
-          )}
-          {!loading && !error && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {blogs.map((blog, index) => (
-                <BlogCard key={blog.id} blog={blog} index={index} onClick={openBlog} />
-              ))}
-              {blogs.length === 0 && (
-                <div className="col-span-full text-center text-gray-600 py-16">No articles yet — check back soon.</div>
-              )}
-            </div>
-          )}
+          <SeamDivider />
 
-          <FilmiBeatSection />
+          {LANGUAGE_ROWS.map((feed) => (
+            <LanguageRow key={feed.key} feed={feed} />
+          ))}
+
+          <SeamDivider />
+
+          <MixedFeedSection />
         </main>
 
         <footer className="bg-black border-t border-white/5 text-gray-500 py-12 mt-16">
