@@ -46,15 +46,13 @@ const formatLanguageCount = (langs) => {
   return `${langArray.length} Languages`;
 };
 
-/* ===== Normalize a raw watch_html/merged item so imdbRating and year are ALWAYS present ===== */
+/* ===== Normalize a raw watch_html/merged item ===== */
 const normalizeMeta = (item) => {
-  // imdbRating: prefer already-formatted string, fall back to raw number, else null
   const rawRating = item.imdb_rating ?? item.imdbRating;
   const imdbRating = rawRating != null
     ? (typeof rawRating === "number" ? rawRating.toFixed(1) : String(rawRating))
     : null;
 
-  // year: prefer explicit field, then release_date, then first_air_date, then created_at, else null
   const year =
     item.year ||
     item.release_date?.split("-")[0] ||
@@ -64,10 +62,103 @@ const normalizeMeta = (item) => {
   return { ...item, imdbRating, year };
 };
 
+/* ===== Generate slug from title ===== */
+const generateSlug = (title) =>
+  title?.toLowerCase().trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "";
+
+// Language code → display name
+const LANG_DISPLAY = {
+  ta: "Tamil", te: "Telugu", ml: "Malayalam", kn: "Kannada",
+  hi: "Hindi", en: "English"
+};
+
+/* ===== Detect content type robustly from TMDB item ===== */
+// A TMDB item is TV if: explicit content_type="tv", has first_air_date/name (TV fields),
+// or was fetched from a ?type=tv endpoint (flagged as _isTv).
+const detectContentType = (t) => {
+  if (t.content_type === "tv") return "tv";
+  if (t.content_type === "movie") return "movie";
+  if (t._isTv) return "tv";                    // flag set by fetchTmdbMovies below
+  if (t.first_air_date || t.name) return "tv"; // TMDB TV-specific fields
+  return "movie";
+};
+
+/* ===== Build a unified movie object from a TMDB API response item ===== */
+const buildTmdbMovie = (t) => {
+  const title = t.title || t.name || "";
+  const slug = generateSlug(title) || String(t.id || t.tmdb_id);
+  const langCode = t.original_language || "en";
+  const langDisplay = LANG_DISPLAY[langCode] || langCode.toUpperCase();
+  const contentType = detectContentType(t);
+
+  return {
+    id: `tmdb_${t.id || t.tmdb_id}`,
+    slug,
+    title,
+    source: "tmdb",
+    content_type: contentType,                  // ← now reliable on the top-level object
+    // ── Top-level copies of the identifiers, kept in sync with tmdbPayload below.
+    // These survive even if some component spreads/clones the movie object and
+    // drops the nested tmdbPayload field — that mismatch was previously causing
+    // "Content Not Found" for genre-row / related-movie navigation.
+    tmdb_id: t.tmdb_id || t.id || null,
+    imdb_id: t.imdb_id || null,
+    first_air_date: t.first_air_date || null,
+    release_date: t.release_date || null,
+    episodes: t.episodes || [],
+    cast: t.cast || [],
+    poster: t.poster_url || (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "/default-poster.jpg"),
+    cover_poster: t.cover_poster_url || (t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "/default-cover.jpg")),
+    title_logo: t.title_logo || null,
+    description: t.overview || t.description || "",
+    year: t.year || t.release_date?.split("-")[0] || t.first_air_date?.split("-")[0] || null,
+    imdbRating: t.imdb_rating != null
+      ? (typeof t.imdb_rating === "number" ? t.imdb_rating.toFixed(1) : String(t.imdb_rating))
+      : (t.vote_average != null ? Number(t.vote_average).toFixed(1) : null),
+    language: [langDisplay],
+    genres: (t.genres || []).map(g => (typeof g === "object" ? g.name : g)),
+    tmdb_genres: (t.genres || []).map(g => (typeof g === "object" ? g.name : g)),
+    categories: (t.genres || []).map(g => (typeof g === "object" ? g.name : g)),
+    certification: t.certification || null,
+    runtime: t.runtime || null,
+    trailer_key: t.trailer_key || null,
+    // ─── tmdbPayload: everything WatchHtmlPage needs via location.state ───
+    tmdbPayload: {
+      // identifiers
+      tmdb_id:      t.tmdb_id || t.id,
+      imdb_id:      t.imdb_id || null,
+      // display
+      title,
+      slug,
+      poster:       t.poster_url || (t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "/default-poster.jpg"),
+      cover_poster: t.cover_poster_url || (t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : "/default-cover.jpg"),
+      description:  t.overview || t.description || "",
+      year:         t.year || t.release_date?.split("-")[0] || t.first_air_date?.split("-")[0],
+      imdb_rating:  t.imdb_rating || t.vote_average,
+      // ← content_type is now authoritative — WatchHtmlPage uses this directly
+      content_type: contentType,
+      // TV-specific raw fields so WatchHtmlPage can also self-detect
+      first_air_date: t.first_air_date || null,
+      release_date:   t.release_date   || null,
+      // episodes / cast come from WatchHtmlPage's own TMDB detail fetch
+      episodes:     t.episodes || [],
+      cast:         t.cast     || [],
+      genres:       (t.genres  || []).map(g => (typeof g === "object" ? g.name : g)),
+      certification: t.certification || null,
+      runtime:      t.runtime  || null,
+      trailer_key:  t.trailer_key || null,
+    },
+    show_on_hero: false,
+    is_trending:  false,
+  };
+};
+
 /* ====== Mobile Bottom Navigation ====== */
 const MobileNav = ({ session, onSearchClick, showSearch }) => {
   const location = useLocation();
-  const navigate = useNavigate();
   const path = location.pathname;
 
   const navItems = [
@@ -131,40 +222,24 @@ const MobileNav = ({ session, onSearchClick, showSearch }) => {
 
           if (item.isAction) {
             return (
-              <button
-                key="search"
-                onClick={onSearchClick}
-                className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90"
-              >
-                <span className={isActive ? "text-blue-400" : "text-gray-500"}>
-                  {item.icon(isActive)}
-                </span>
-                <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? "text-blue-400" : "text-gray-600"}`}>
-                  {item.label}
-                </span>
+              <button key="search" onClick={onSearchClick}
+                className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90">
+                <span className={isActive ? "text-blue-400" : "text-gray-500"}>{item.icon(isActive)}</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? "text-blue-400" : "text-gray-600"}`}>{item.label}</span>
               </button>
             );
           }
 
           return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90 relative"
-            >
+            <Link key={item.path} to={item.path}
+              className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90 relative">
               {isActive && (
                 <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
               )}
-              <span className={`transition-colors ${
-                isActive ? "text-blue-400" :
-                isTorrents ? "text-red-400/70" : "text-gray-500"
-              }`}>
+              <span className={`transition-colors ${isActive ? "text-blue-400" : isTorrents ? "text-red-400/70" : "text-gray-500"}`}>
                 {item.icon(isActive)}
               </span>
-              <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
-                isActive ? "text-blue-400" :
-                isTorrents ? "text-red-400/70" : "text-gray-600"
-              }`}>
+              <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${isActive ? "text-blue-400" : isTorrents ? "text-red-400/70" : "text-gray-600"}`}>
                 {item.label}
               </span>
             </Link>
@@ -219,7 +294,8 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                 {hoveredId === movie.id && showTrailer && movie.trailer_key && window.innerWidth >= 640 && (
                   <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
                     <div className="w-full h-full scale-[1.5] pointer-events-none">
-                      <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`} className="w-full h-full" frameBorder="0" allow="autoplay" />
+                      <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                        className="w-full h-full" frameBorder="0" allow="autoplay" />
                     </div>
                     <div className="absolute top-3 left-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm">
                       <span className="text-[7px] font-black text-white/90 uppercase tracking-[0.2em]">Trailer</span>
@@ -227,7 +303,6 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none z-30">
-                  {/* Only render IMDb badge if we have a real rating */}
                   {movie.imdbRating && (
                     <div className="flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-white/10">
                       <div className="bg-[#f5c518] text-black px-1 rounded-[2px] font-black text-[7px] leading-none">IMDb</div>
@@ -237,6 +312,12 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   <div className="bg-blue-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
                     {formatLanguageCount(movie.language)}
                   </div>
+                  {/* ← TV badge so users can tell it's a series */}
+                  {movie.content_type === "tv" && (
+                    <div className="bg-purple-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
+                      SERIES
+                    </div>
+                  )}
                 </div>
                 <div className="absolute inset-0 sm:opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent flex flex-col justify-end p-4 z-20">
                   {movie.title_logo ? (
@@ -246,7 +327,9 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
                   )}
                   <div className="flex items-center gap-2">
                     <Play className="w-4 h-4 text-white fill-current" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-tighter">Watch Now</span>
+                    <span className="text-[10px] font-black text-white uppercase tracking-tighter">
+                      {movie.content_type === "tv" ? "Stream Series" : "Watch Now"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -319,11 +402,18 @@ const GenreRow = ({ title, movies, onSelect }) => {
               {hoveredId === movie.id && showTrailer && movie.trailer_key && window.innerWidth >= 640 && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-xl">
                   <div className="w-full h-full scale-[1.6] pointer-events-none">
-                    <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`} className="w-full h-full" frameBorder="0" />
+                    <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                      className="w-full h-full" frameBorder="0" />
                   </div>
                   <div className="absolute top-3 left-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm">
                     <span className="text-[7px] font-black text-white/90 uppercase tracking-[0.2em]">Trailer</span>
                   </div>
+                </div>
+              )}
+              {/* TV series badge on card */}
+              {movie.content_type === "tv" && (
+                <div className="absolute top-2 left-2 z-30 px-1.5 py-0.5 bg-purple-600/90 backdrop-blur-md rounded text-[7px] font-black uppercase text-white tracking-tighter">
+                  SERIES
                 </div>
               )}
               <div className="hidden sm:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/60 to-transparent flex-col justify-end p-5 rounded-xl pointer-events-none group-hover:pointer-events-auto z-40">
@@ -334,11 +424,15 @@ const GenreRow = ({ title, movies, onSelect }) => {
                 )}
                 <div className="flex items-center gap-2 text-[10px] font-bold text-gray-300 mb-2">
                   <span className="text-blue-400 uppercase font-black">{formatLanguageCount(movie.language)}</span>
+                  {movie.content_type === "tv" && (
+                    <span className="px-1.5 border border-purple-500/60 rounded text-purple-300 bg-purple-900/40 uppercase text-[8px] font-black">Series</span>
+                  )}
                   {movie.certification && <span className="px-1.5 border border-white/40 rounded text-white bg-black/40">{movie.certification}</span>}
                 </div>
                 <p className="text-[9px] text-gray-300 line-clamp-2 mb-4 leading-relaxed italic">{movie.description}</p>
                 <button className="w-full py-2 bg-white text-black text-[10px] font-extrabold rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
-                  <Play className="w-3.5 h-3.5 fill-current" /> WATCH NOW
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  {movie.content_type === "tv" ? "STREAM SERIES" : "WATCH NOW"}
                 </button>
               </div>
             </div>
@@ -355,7 +449,10 @@ const GenreRow = ({ title, movies, onSelect }) => {
 /* ====== Main Page Component ====== */
 const WatchListPage = () => {
   const { backendUrl } = useContext(AppContext);
+  const navigate = useNavigate();
+
   const [movies, setMovies] = useState([]);
+  const [allMovies, setAllMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [userLangs, setUserLangs] = useState([]);
@@ -373,8 +470,6 @@ const WatchListPage = () => {
   const [infoVisible, setInfoVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
-  const navigate = useNavigate();
-
   const langAssets = [
     { name: "Hindi", img: "/Hindi.webp" },
     { name: "English", img: "/English.webp" },
@@ -391,23 +486,18 @@ const WatchListPage = () => {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      setSession(initialSession);
-      const langs = initialSession?.user?.user_metadata?.languages || [];
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      const langs = s?.user?.user_metadata?.languages || [];
       setUserLangs(langs);
-      if (initialSession?.user && !initialSession.user.user_metadata?.hasSelectedLanguage) {
-        setShowLangPopup(true);
-      }
+      if (s?.user && !s.user.user_metadata?.hasSelectedLanguage) setShowLangPopup(true);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleLangSelect = (name) => {
+  const handleLangSelect = (name) =>
     setUserLangs(prev => prev.includes(name) ? prev.filter(l => l !== name) : [...prev, name]);
-  };
 
   const saveLanguages = async () => {
     if (userLangs.length === 0) return;
@@ -418,6 +508,56 @@ const WatchListPage = () => {
     } catch (e) { console.error(e); }
   };
 
+  /* ─── Fetch TMDB regional movies ── */
+  const fetchTmdbMovies = async (localMovies) => {
+    if (!backendUrl) return [];
+
+    const localTitles = new Set(localMovies.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
+    const localSlugs  = new Set(localMovies.map(m => m.slug?.toLowerCase()).filter(Boolean));
+
+    // Each entry: [url, isTv] — we tag TV endpoints so buildTmdbMovie can detect type
+    const endpoints = [
+      [`${backendUrl}/api/tmdb-regional?lang=ta&type=movie&page=1`, false],
+      [`${backendUrl}/api/tmdb-regional?lang=te&type=movie&page=1`, false],
+      [`${backendUrl}/api/tmdb-regional?lang=ml&type=movie&page=1`, false],
+      [`${backendUrl}/api/tmdb-regional?lang=kn&type=movie&page=1`, false],
+      [`${backendUrl}/api/tmdb-regional?lang=hi&type=movie&page=1`, false],
+      [`${backendUrl}/api/tmdb-regional?lang=ta&type=tv&page=1`,    true ],  // Tamil TV
+      [`${backendUrl}/api/tmdb-regional?lang=te&type=tv&page=1`,    true ],  // Telugu TV
+      [`${backendUrl}/api/tmdb-regional?lang=hi&type=tv&page=1`,    true ],  // Hindi TV
+      [`${backendUrl}/api/tmdb-trending`,                            false],  // has mixed; content_type field from backend
+    ];
+
+    const results = [];
+    const responses = await Promise.allSettled(
+      endpoints.map(([url]) => axios.get(url))
+    );
+    responses.forEach((r, idx) => {
+      if (r.status === "fulfilled") {
+        const isTv = endpoints[idx][1];
+        const list = r.value.data?.results || r.value.data?.data || [];
+        list.forEach(t => results.push({ ...t, _isTv: isTv || t.content_type === "tv" }));
+      }
+    });
+
+    // De-duplicate by tmdb id, filter already-local content
+    const seen = new Set();
+    const unique = [];
+    for (const t of results) {
+      const key = String(t.id || t.tmdb_id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const title = (t.title || t.name || "").toLowerCase().trim();
+      const slug = generateSlug(title);
+      if (localTitles.has(title) || localSlugs.has(slug)) continue;
+
+      unique.push(buildTmdbMovie(t));
+    }
+    return unique;
+  };
+
+  /* ─── Main data fetch ── */
   useEffect(() => {
     const fetchMovies = async () => {
       setLoading(true);
@@ -426,12 +566,16 @@ const WatchListPage = () => {
           supabase.from("watch_html").select("*").order("created_at", { ascending: false }).limit(400),
           supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
         ]);
+
         const merged = (watchRes.data || []).map((item) => {
           const match = (moviesRes.data || []).find((m) => m.slug === item.slug) ||
                         (moviesRes.data || []).find((m) => m.title?.toLowerCase() === item.title?.toLowerCase());
-          const movieLangs = match?.language?.length ? (Array.isArray(match.language) ? match.language : [match.language]) : ["Unknown"];
+          const movieLangs = match?.language?.length
+            ? (Array.isArray(match.language) ? match.language : [match.language])
+            : ["Unknown"];
           const raw = {
             ...item,
+            source: "local",
             poster: item.poster || "/default-poster.jpg",
             cover_poster: item.cover_poster || item.poster || "/default-cover.jpg",
             language: movieLangs,
@@ -443,19 +587,35 @@ const WatchListPage = () => {
             genres: item.genres || match?.categories || [],
             trailer_key: item.trailer_codes || null,
           };
-          // ← normalize here so imdbRating + year are always set from real data
           return normalizeMeta(raw);
         });
+
         setMovies(merged);
+
+        const tmdb = await fetchTmdbMovies(merged);
+        const combined = [...merged, ...tmdb];
+        setAllMovies(combined);
+
         const adminHero = merged.filter(m => m.show_on_hero === true).slice(0, 3);
-        const others = merged.filter(m => !adminHero.some(a => a.id === m.id));
-        const mixedExtra = others.sort(() => 0.5 - Math.random()).slice(0, 4);
-        setHeroMovies([...adminHero, ...mixedExtra]);
+        const tmdbWithAssets = tmdb.filter(m => m.title_logo || m.trailer_key);
+        const tmdbHero = tmdbWithAssets.sort(() => 0.5 - Math.random()).slice(0, 4);
+        const localOthers = merged.filter(m => !adminHero.some(a => a.id === m.id));
+        const localExtra = localOthers.sort(() => 0.5 - Math.random()).slice(0, 2);
+        setHeroMovies([...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
+
         const manualTrending = merged.filter(m => m.is_trending === true).slice(0, 10);
-        const autoTrending = merged.filter(m => !manualTrending.some(t => t.id === m.id)).slice(0, 10 - manualTrending.length);
-        setTrendingMovies([...manualTrending, ...autoTrending]);
+        const autoFill = combined
+          .filter(m => !manualTrending.some(t => t.id === m.id))
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 10 - manualTrending.length);
+        setTrendingMovies([...manualTrending, ...autoFill]);
+
         syncTodaysUploads(merged);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchMovies();
   }, [backendUrl]);
@@ -477,7 +637,6 @@ const WatchListPage = () => {
             imdb_rating: tmdb.imdb_rating,
             trailer_codes: tmdb.trailer_key || null,
           }).eq("slug", m.slug);
-          // normalizeMeta handles formatting — pass raw tmdb fields through
           return normalizeMeta({
             ...m,
             imdb_rating: tmdb.imdb_rating ?? m.imdb_rating,
@@ -496,18 +655,79 @@ const WatchListPage = () => {
       enriched.forEach(e => map.set(e.slug, e));
       return Array.from(map.values());
     });
+    setAllMovies(prev => {
+      const map = new Map(prev.map(o => [o.slug, o]));
+      enriched.forEach(e => map.set(e.slug, e));
+      return Array.from(map.values());
+    });
+  };
+
+  /* ─── When a movie card is clicked ── */
+  const handleMovieSelect = (movie) => {
+    setSelectedMovie(movie);
+  };
+
+  /* ─── Navigate to watch page ── */
+  const handleNavigateToWatch = (movie) => {
+    saveRecentlyWatched(movie);
+
+    if (movie.source === "tmdb") {
+      // Prefer the rich nested payload, but fall back to rebuilding it from
+      // the top-level fields if tmdbPayload was dropped somewhere along the
+      // way (e.g. a component re-shaping the movie object before calling
+      // onNavigate). This is what was causing "Content Not Found" for
+      // genre-row / related-movie clicks.
+      const payload = movie.tmdbPayload || {
+        tmdb_id: movie.tmdb_id
+          || (typeof movie.id === "string" ? movie.id.replace("tmdb_", "") : movie.id),
+        imdb_id: movie.imdb_id || null,
+        title: movie.title,
+        slug: movie.slug,
+        poster: movie.poster,
+        cover_poster: movie.cover_poster,
+        description: movie.description,
+        year: movie.year,
+        imdb_rating: movie.imdbRating,
+        content_type: movie.content_type,
+        first_air_date: movie.first_air_date || null,
+        release_date: movie.release_date || null,
+        episodes: movie.episodes || [],
+        cast: movie.cast || [],
+        genres: movie.genres || [],
+        certification: movie.certification || null,
+        runtime: movie.runtime || null,
+        trailer_key: movie.trailer_key || null,
+      };
+
+      if (!payload.tmdb_id && !payload.imdb_id) {
+        console.error("[handleNavigateToWatch] No tmdb_id/imdb_id resolvable for", movie);
+      }
+
+      navigate(`/watch/${movie.slug}`, {
+        state: {
+          movie: {
+            ...payload,
+            content_type: movie.content_type || payload.content_type,
+          },
+        },
+      });
+    } else {
+      navigate(`/watch/${movie.slug}`, { state: { movie } });
+    }
+
+    setSelectedMovie(null);
   };
 
   const relatedMovies = useMemo(() => {
     if (!selectedMovie) return [];
     const targetGenres = selectedMovie.tmdb_genres || selectedMovie.genres || selectedMovie.categories || [];
     const targetLangs = Array.isArray(selectedMovie.language) ? selectedMovie.language : [selectedMovie.language];
-    return movies.filter(m => m.slug !== selectedMovie.slug).filter(m => {
-      const movieGenres = m.tmdb_genres || m.genres || m.categories || [];
-      const movieLangs = Array.isArray(m.language) ? m.language : [m.language];
-      return movieGenres.some(g => targetGenres.includes(g)) && movieLangs.some(l => targetLangs.includes(l));
+    return allMovies.filter(m => m.slug !== selectedMovie.slug).filter(m => {
+      const mGenres = m.tmdb_genres || m.genres || m.categories || [];
+      const mLangs = Array.isArray(m.language) ? m.language : [m.language];
+      return mGenres.some(g => targetGenres.includes(g)) && mLangs.some(l => targetLangs.includes(l));
     }).slice(0, 12);
-  }, [selectedMovie, movies]);
+  }, [selectedMovie, allMovies]);
 
   const resumeMap = useMemo(() => {
     const raw = readAllResumeTimes();
@@ -523,18 +743,34 @@ const WatchListPage = () => {
     Object.values(resumeMap).filter(r => (r.time || 0) > 10).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
   [resumeMap]);
 
+  /* ─── Genre rows ── */
   const groupedByBackendGenre = useMemo(() => {
     const query = search.toLowerCase().trim();
-    let filteredList = !query ? movies : movies.filter(m => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
-    if (userLangs.length > 0) filteredList = filteredList.filter(movie => movie.language.some(lang => userLangs.includes(lang)));
+    let filteredList = !query
+      ? allMovies
+      : allMovies.filter(m => [m.title, m.slug, m.description].join(" ").toLowerCase().includes(query));
+
+    if (userLangs.length > 0)
+      filteredList = filteredList.filter(movie =>
+        (Array.isArray(movie.language) ? movie.language : [movie.language]).some(lang => userLangs.includes(lang))
+      );
+
     const result = filteredList.reduce((acc, movie) => {
-      const genres = movie.tmdb_genres?.length > 0 ? movie.tmdb_genres : (movie.genres?.length > 0 ? movie.genres : (movie.categories?.length > 0 ? movie.categories : ["Others"]));
-      genres.forEach(genre => { if (!acc[genre]) acc[genre] = []; acc[genre].push(movie); });
+      const genres =
+        movie.tmdb_genres?.length > 0 ? movie.tmdb_genres :
+        movie.genres?.length > 0 ? movie.genres :
+        movie.categories?.length > 0 ? movie.categories :
+        ["Others"];
+      genres.forEach(genre => {
+        if (!acc[genre]) acc[genre] = [];
+        acc[genre].push(movie);
+      });
       return acc;
     }, {});
+
     Object.keys(result).forEach(key => { result[key] = result[key].sort(() => 0.5 - Math.random()); });
     return result;
-  }, [movies, search, userLangs]);
+  }, [allMovies, search, userLangs]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -554,7 +790,7 @@ const WatchListPage = () => {
     if (isMobile) {
       slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
     } else {
-      if (!currentHero.trailer_key) {
+      if (!currentHero?.trailer_key) {
         slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
       } else {
         trailerTimer = setTimeout(() => { if (window.scrollY < 400) setHeroTrailerActive(true); }, 2000);
@@ -575,7 +811,7 @@ const WatchListPage = () => {
   if (loading) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center">
       <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
-      <p className="text-gray-400 font-mono tracking-widest uppercase text-[10px]">Global Database Sync</p>
+      <p className="text-gray-400 font-mono tracking-widest uppercase text-[10px]">Loading Movies...</p>
     </div>
   );
 
@@ -674,7 +910,9 @@ const WatchListPage = () => {
           {heroMovies.length > 0 && (
             <div className="relative h-[65vh] sm:h-[90vh] w-full overflow-hidden bg-black">
               {heroMovies.map((movie, idx) => {
-                const liveMovieData = movies.find(m => m.slug === movie.slug) || movie;
+                const liveMovieData = (movie.source === "local"
+                  ? (allMovies.find(m => m.slug === movie.slug) || movie)
+                  : movie);
                 return (
                   <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
                     <img src={liveMovieData.cover_poster}
@@ -698,33 +936,42 @@ const WatchListPage = () => {
                             {liveMovieData.title_logo ? (
                               <img src={liveMovieData.title_logo} className="max-h-full max-w-full object-contain object-left drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]" alt="" />
                             ) : (
-                              <h1 className="text-3xl sm:text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none text-white">{liveMovieData.slug}</h1>
+                              <h1 className="text-3xl sm:text-6xl font-black italic uppercase tracking-tighter drop-shadow-2xl leading-none text-white">
+                                {liveMovieData.title || liveMovieData.slug}
+                              </h1>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-[10px] sm:text-sm font-black text-gray-300">
-                            {/* IMDb — only shown when real rating exists */}
                             {liveMovieData.imdbRating && (
                               <div className="flex items-center gap-1.5">
                                 <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[4px] font-black text-[10px] sm:text-[11px] shadow-lg">IMDb</div>
                                 <span className="text-white drop-shadow-md">{liveMovieData.imdbRating}</span>
                               </div>
                             )}
-                            {/* Year — only shown when real year exists */}
                             {liveMovieData.year && (
                               <span className="text-gray-300 drop-shadow-md font-black">{liveMovieData.year}</span>
                             )}
                             <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(liveMovieData.language)}</span>
+                            {/* Hero TV badge */}
+                            {liveMovieData.content_type === "tv" && (
+                              <span className="px-2 py-0.5 bg-purple-600/80 text-white text-[9px] font-black uppercase tracking-widest rounded">SERIES</span>
+                            )}
                             {liveMovieData.genres?.length > 0 && (
-                              <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">{liveMovieData.genres.slice(0, 2).join(" | ")}</span>
+                              <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
+                                {liveMovieData.genres.slice(0, 2).join(" | ")}
+                              </span>
                             )}
                           </div>
                           <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{liveMovieData.description}</p>
                         </div>
-                        <Link to={`/watch/${liveMovieData.slug}`}
+                        <button
+                          onClick={() => handleNavigateToWatch(liveMovieData)}
                           className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest">
                           <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" />
-                          <span className="text-[11px] sm:text-base tracking-widest font-black">PLAY NOW</span>
-                        </Link>
+                          <span className="text-[11px] sm:text-base tracking-widest font-black">
+                            {liveMovieData.content_type === "tv" ? "STREAM SERIES" : "PLAY NOW"}
+                          </span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -772,8 +1019,8 @@ const WatchListPage = () => {
 
             {Object.entries(groupedByBackendGenre).map(([genreName, list], index) => (
               <React.Fragment key={genreName}>
-                <GenreRow title={genreName} movies={list} onSelect={m => setSelectedMovie(m)} />
-                {index === 0 && <TrendingNumbersRow movies={trendingMovies} onSelect={m => setSelectedMovie(m)} />}
+                <GenreRow title={genreName} movies={list} onSelect={handleMovieSelect} />
+                {index === 0 && <TrendingNumbersRow movies={trendingMovies} onSelect={handleMovieSelect} />}
               </React.Fragment>
             ))}
           </main>
@@ -819,22 +1066,23 @@ const WatchListPage = () => {
                 <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl leading-none">{selectedMovie.title || selectedMovie.slug}</h3>
               )}
               <div className="flex items-center gap-4 text-xs font-black text-gray-400">
-                {/* IMDb — only rendered when real data exists */}
                 {selectedMovie.imdbRating && (
                   <div className="flex items-center gap-1.5">
                     <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] shadow-md">IMDb</div>
                     <span className="text-white">{selectedMovie.imdbRating}</span>
                   </div>
                 )}
-                {/* Year — only rendered when real data exists */}
-                {selectedMovie.year && (
-                  <span>{selectedMovie.year}</span>
-                )}
+                {selectedMovie.year && <span>{selectedMovie.year}</span>}
                 <span className="font-black text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
+                {selectedMovie.content_type === "tv" && (
+                  <span className="px-2 py-0.5 bg-purple-600/80 text-white text-[9px] font-black uppercase tracking-widest rounded">SERIES</span>
+                )}
               </div>
-              <button onClick={() => { saveRecentlyWatched(selectedMovie); navigate(`/watch/${selectedMovie.slug}`); }}
+              <button
+                onClick={() => handleNavigateToWatch(selectedMovie)}
                 className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg uppercase tracking-widest">
-                <Play className="w-5 h-5 fill-current" /> WATCH NOW
+                <Play className="w-5 h-5 fill-current" />
+                {selectedMovie.content_type === "tv" ? "STREAM SERIES" : "WATCH NOW"}
               </button>
               <div className="flex flex-wrap justify-center gap-2">
                 {(selectedMovie.tmdb_genres || selectedMovie.genres || []).map(g => (
@@ -868,7 +1116,7 @@ const WatchListPage = () => {
         <DesktopDetailOverlay
           movie={selectedMovie}
           onClose={() => setSelectedMovie(null)}
-          onNavigate={m => { saveRecentlyWatched(m); navigate(`/watch/${m.slug}`, { state: { movie: m } }); setSelectedMovie(null); }}
+          onNavigate={handleNavigateToWatch}
           relatedMovies={relatedMovies}
           isMuted={isMuted}
           setIsMuted={setIsMuted}
