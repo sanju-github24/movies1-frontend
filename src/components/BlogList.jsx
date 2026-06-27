@@ -8,7 +8,7 @@ import { Helmet } from "react-helmet";
 // In dev: add  server: { proxy: { '/api': 'http://localhost:4000' } }  to vite.config.js
 // In prod: your Express server should serve both the frontend and /api routes.
 const RSS_PROXY_BASE =
-  import.meta.env.VITE_BACKEND_URL + "/api";
+  import.meta.env.VITE_BACKEND_URL;
 
 const FEEDS = [
   { key: "all",       label: "All",       color: "#7F77DD", icon: "🎬" },
