@@ -4,11 +4,8 @@ import { supabase } from "../utils/supabaseClient";
 import { Helmet } from "react-helmet";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-// Use relative path so it works in dev (via Vite proxy) and production.
-// In dev: add  server: { proxy: { '/api': 'http://localhost:4000' } }  to vite.config.js
-// In prod: your Express server should serve both the frontend and /api routes.
 const RSS_PROXY_BASE =
-  import.meta.env.VITE_BACKEND_URL;
+  import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
 
 const FEEDS = [
   { key: "all",       label: "All",       color: "#7F77DD", icon: "🎬" },
@@ -22,7 +19,7 @@ const FEEDS = [
   { key: "ott",       label: "OTT",       color: "#993556", icon: "🎞️" },
 ];
 
-const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getTextPreview = (html, maxLength = 150) => {
@@ -41,10 +38,6 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
-/**
- * Generate a stable hash from any string (blog id or slug).
- * Returns a 6-char alphanumeric string, e.g. "a3f9k2".
- */
 const generateHash = (str) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -53,11 +46,9 @@ const generateHash = (str) => {
   return Math.abs(hash).toString(36).slice(0, 6).padStart(6, "0");
 };
 
-// ─── Blog Detail View (hash-routed) ──────────────────────────────────────────
+// ─── Blog Detail View ─────────────────────────────────────────────────────────
 const BlogDetail = ({ blog, onBack }) => {
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const readingTime = Math.max(
     1,
@@ -73,7 +64,6 @@ const BlogDetail = ({ blog, onBack }) => {
       </Helmet>
 
       <article className="min-h-screen bg-[#0e0e0e] text-white">
-        {/* Hero */}
         <div className="relative h-[60vh] min-h-[360px] overflow-hidden">
           <img
             src={blog.poster_image || blog.thumbnail_url || "https://via.placeholder.com/1200x600"}
@@ -101,7 +91,6 @@ const BlogDetail = ({ blog, onBack }) => {
           </div>
         </div>
 
-        {/* Content */}
         <div className="max-w-3xl mx-auto px-5 sm:px-8 py-10">
           <div
             className="prose prose-invert prose-sm sm:prose-base max-w-none
@@ -112,8 +101,6 @@ const BlogDetail = ({ blog, onBack }) => {
               prose-blockquote:border-l-[#c5c107] prose-blockquote:text-gray-400"
             dangerouslySetInnerHTML={{ __html: blog.content }}
           />
-
-          {/* Back CTA */}
           <div className="mt-14 pt-8 border-t border-white/10 flex justify-center">
             <button
               onClick={onBack}
@@ -134,10 +121,9 @@ const NewsCard = ({ article, isNew }) => {
 
   return (
     <Link
-  to={`/news?url=${encodeURIComponent(article.link)}`}
-  className="group bg-[#1a1a1a] border border-white/5 rounded-2xl hover:border-[#c5c107]/40 transition-all duration-300 overflow-hidden flex flex-col hover:shadow-[0_0_30px_rgba(197,193,7,0.08)] hover:-translate-y-0.5"
->
-      {/* Thumbnail */}
+      to={`/news?url=${encodeURIComponent(article.link)}`}
+      className="group bg-[#1a1a1a] border border-white/5 rounded-2xl hover:border-[#c5c107]/40 transition-all duration-300 overflow-hidden flex flex-col hover:shadow-[0_0_30px_rgba(197,193,7,0.08)] hover:-translate-y-0.5"
+    >
       <div className="relative overflow-hidden h-44 bg-[#111] flex items-center justify-center">
         {article.thumbnail ? (
           <img
@@ -157,16 +143,12 @@ const NewsCard = ({ article, isNew }) => {
           {feed.icon}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/80 to-transparent opacity-0 group-hover:opacity-100 transition" />
-
-        {/* Language pill */}
         <span
           className="absolute top-2 left-2 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider"
           style={{ background: feed.color }}
         >
           {feed.label}
         </span>
-
-        {/* NEW badge */}
         {isNew && (
           <span className="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
             NEW
@@ -174,7 +156,6 @@ const NewsCard = ({ article, isNew }) => {
         )}
       </div>
 
-      {/* Body */}
       <div className="p-4 flex flex-col flex-grow gap-2">
         <h3 className="text-sm font-semibold text-gray-100 group-hover:text-[#c5c107] transition leading-snug line-clamp-3">
           {article.title}
@@ -193,42 +174,49 @@ const NewsCard = ({ article, isNew }) => {
           </span>
         </div>
       </div>
-   </Link>
+    </Link>
   );
 };
 
 // ─── FilmiBeat Section ────────────────────────────────────────────────────────
 const FilmiBeatSection = () => {
-  const [news, setNews]           = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
-  const [activeTab, setActiveTab] = useState("all");
-  const [search, setSearch]       = useState("");
-  const [prevIds, setPrevIds]     = useState(new Set());
+  const [news, setNews]               = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [activeTab, setActiveTab]     = useState("all");
+  const [search, setSearch]           = useState("");
+  const [prevIds, setPrevIds]         = useState(new Set());
   const [lastUpdated, setLastUpdated] = useState(null);
   const [nextRefresh, setNextRefresh] = useState(Date.now() + REFRESH_INTERVAL_MS);
-  const [countdown, setCountdown] = useState("");
+  const [countdown, setCountdown]     = useState("");
 
+  // ── FIX 1: use RSS_PROXY_BASE (was incorrectly "API" in old code) ──────────
+  // ── FIX 2: check json.success (matches rssProxy.js response shape) ─────────
   const fetchNews = useCallback(async (feedKey = "all", isManual = false) => {
     if (!isManual) setLoading(true);
     setError(null);
     try {
-      const url = `${API}/api/rss?feed=${feedKey}&count=30`;
+      const url = `${RSS_PROXY_BASE}/api/rss?feed=${feedKey}&count=30`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      if (!res.ok) throw new Error(`Backend HTTP ${res.status} — Render may be waking up, try refreshing in 30s`);
       const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Feed error");
+      if (!json.success) throw new Error(json.error || "Feed returned success:false");
 
       setPrevIds(new Set(news.map((n) => n.id)));
       setNews(json.articles || []);
       setLastUpdated(new Date());
       setNextRefresh(Date.now() + REFRESH_INTERVAL_MS);
     } catch (err) {
-      setError(`Could not load news: ${err.message}`);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [news]);
+
+  // Wake up Render instance immediately on mount (free tier sleeps after 15min)
+  useEffect(() => {
+    fetch(`${RSS_PROXY_BASE}/api/rss?feed=bollywood&count=1`).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchNews("all");
@@ -243,8 +231,8 @@ const FilmiBeatSection = () => {
   useEffect(() => {
     const tick = setInterval(() => {
       const rem = Math.max(0, nextRefresh - Date.now());
-      const m = Math.floor(rem / 60000);
-      const s = Math.floor((rem % 60000) / 1000);
+      const m   = Math.floor(rem / 60000);
+      const s   = Math.floor((rem % 60000) / 1000);
       setCountdown(`${m}m ${String(s).padStart(2, "0")}s`);
     }, 1000);
     return () => clearInterval(tick);
@@ -263,7 +251,6 @@ const FilmiBeatSection = () => {
 
   return (
     <section className="mt-20">
-      {/* Section header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.2em] mb-1">Live Feed</p>
@@ -314,6 +301,7 @@ const FilmiBeatSection = () => {
         ))}
       </div>
 
+      {/* Skeleton */}
       {loading && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -322,14 +310,33 @@ const FilmiBeatSection = () => {
         </div>
       )}
 
+      {/* Error — with wake-up help */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-4 text-sm">
-          <strong>Error:</strong> {error}
-          <br />
-          <span className="text-xs text-red-500/70">
-            Make sure your backend is running at{" "}
-            <code className="bg-red-500/10 px-1 rounded">{RSS_PROXY_BASE}</code>.
-          </span>
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-5 text-sm space-y-3">
+          <p><strong>⚠️ News feed error:</strong> {error}</p>
+          <div className="text-xs text-red-400/70 space-y-1">
+            <p>Backend: <code className="bg-red-500/10 px-1.5 py-0.5 rounded font-mono">{RSS_PROXY_BASE}/api/rss?feed=all</code></p>
+            <p className="text-gray-500">
+              Render free tier sleeps after 15 min. The wake-up ping above fires automatically,
+              but it takes ~30s. Wait a moment then:
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => fetchNews(activeTab, true)}
+              className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/20 px-4 py-1.5 rounded-lg transition font-semibold"
+            >
+              ↻ Try again
+            </button>
+            <a
+              href={`${RSS_PROXY_BASE}/api/rss?feed=bollywood&count=2`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-400 underline"
+            >
+              Check backend directly ↗
+            </a>
+          </div>
         </div>
       )}
 
@@ -354,12 +361,7 @@ const FilmiBeatSection = () => {
       {!loading && !error && (
         <p className="text-center text-xs text-gray-600 mt-8">
           {filtered.length} articles · refreshes in {countdown} ·{" "}
-          <a
-            href="https://www.filmibeat.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#c5c107] hover:underline"
-          >
+          <a href="https://www.filmibeat.com" target="_blank" rel="noopener noreferrer" className="text-[#c5c107] hover:underline">
             filmibeat.com
           </a>
         </p>
@@ -402,9 +404,7 @@ const BlogCard = ({ blog, onClick, index }) => {
             <span className="text-xs text-gray-500">
               🕒 {new Date(blog.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
             </span>
-            <span className="ml-auto text-xs font-bold text-[#c5c107] group-hover:gap-2 transition">
-              Read more →
-            </span>
+            <span className="ml-auto text-xs font-bold text-[#c5c107]">Read more →</span>
           </div>
         </div>
       </button>
@@ -445,29 +445,22 @@ const BlogCard = ({ blog, onClick, index }) => {
   );
 };
 
-// ─── Main BlogList Component ──────────────────────────────────────────────────
+// ─── Main BlogList ────────────────────────────────────────────────────────────
 const BlogList = () => {
-  const [blogs, setBlogs]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
-  const [activeBlog, setActiveBlog] = useState(null); // { blog, hash }
+  const [blogs, setBlogs]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [activeBlog, setActiveBlog] = useState(null);
 
-  // ── Hash routing: read on mount, write on navigation ──
   useEffect(() => {
     const checkHash = () => {
       const hash = window.location.hash.slice(1);
       if (hash && blogs.length > 0) {
-        const match = blogs.find(
-          (b) => generateHash(b.id || b.slug) === hash
-        );
-        if (match) {
-          setActiveBlog({ blog: match, hash });
-          return;
-        }
+        const match = blogs.find((b) => generateHash(b.id || b.slug) === hash);
+        if (match) { setActiveBlog({ blog: match, hash }); return; }
       }
       setActiveBlog(null);
     };
-
     checkHash();
     window.addEventListener("hashchange", checkHash);
     return () => window.removeEventListener("hashchange", checkHash);
@@ -485,9 +478,7 @@ const BlogList = () => {
     window.scrollTo(0, 0);
   };
 
-  useEffect(() => {
-    fetchBlogs();
-  }, []);
+  useEffect(() => { fetchBlogs(); }, []);
 
   const fetchBlogs = async () => {
     try {
@@ -503,10 +494,7 @@ const BlogList = () => {
           if (blog.related_movie_ids?.length > 0) {
             const movieIds = Array.isArray(blog.related_movie_ids)
               ? blog.related_movie_ids
-              : blog.related_movie_ids
-                  .split(",")
-                  .map((id) => id.trim())
-                  .filter(Boolean);
+              : blog.related_movie_ids.split(",").map((id) => id.trim()).filter(Boolean);
 
             if (movieIds.length > 0) {
               const { data: moviesData } = await supabase
@@ -514,17 +502,14 @@ const BlogList = () => {
                 .select("id, poster, cover_poster")
                 .in("id", [movieIds[0]])
                 .limit(1);
-
               if (moviesData?.length > 0) {
-                blog.poster_image =
-                  moviesData[0].cover_poster || moviesData[0].poster;
+                blog.poster_image = moviesData[0].cover_poster || moviesData[0].poster;
               }
             }
           }
           return blog;
         })
       );
-
       setBlogs(blogsWithPoster || []);
     } catch (err) {
       console.error("Failed to fetch blogs:", err.message);
@@ -533,7 +518,6 @@ const BlogList = () => {
     setLoading(false);
   };
 
-  // ── Show blog detail view ──
   if (activeBlog) {
     return (
       <div className="min-h-screen bg-[#0e0e0e] font-['Roboto']">
@@ -542,10 +526,7 @@ const BlogList = () => {
             <Link to="/" className="text-white text-xl font-bold tracking-wide uppercase">
               Anchor<span className="text-[#c5c107]">Movies</span>
             </Link>
-            <button
-              onClick={closeBlog}
-              className="text-sm text-gray-400 hover:text-white transition flex items-center gap-2"
-            >
+            <button onClick={closeBlog} className="text-sm text-gray-400 hover:text-white transition flex items-center gap-2">
               ← All Blogs
             </button>
           </div>
@@ -559,15 +540,11 @@ const BlogList = () => {
     <>
       <Helmet>
         <title>Movie Blogs & Reviews | 1AnchorMovies</title>
-        <meta
-          name="description"
-          content="Explore the latest movie blogs, reviews, and updates from Tamil, Telugu, Kannada, and Malayalam cinema on 1AnchorMovies."
-        />
+        <meta name="description" content="Explore the latest movie blogs, reviews, and updates from Tamil, Telugu, Kannada, and Malayalam cinema on 1AnchorMovies." />
         <link rel="canonical" href="https://www.1anchormovies.live/blogs" />
       </Helmet>
 
       <div className="min-h-screen bg-[#0e0e0e] text-white font-['Roboto']">
-        {/* ── Header ── */}
         <header className="bg-black/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 flex justify-between items-center h-[64px]">
             <Link to="/" className="flex items-center space-x-2">
@@ -584,9 +561,7 @@ const BlogList = () => {
           </div>
         </header>
 
-        {/* ── Hero ── */}
         <section className="relative bg-[#0e0e0e] border-b border-white/5 py-20 px-4 text-center overflow-hidden">
-          {/* ambient glow */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full bg-[#c5c107]/5 blur-[120px]" />
           </div>
@@ -602,18 +577,12 @@ const BlogList = () => {
         </section>
 
         <main className="max-w-7xl mx-auto py-14 px-4 sm:px-6 lg:px-8">
-
-          {/* ── Blog Articles Grid ── */}
           <div className="mb-10 flex items-end justify-between">
             <div>
               <p className="text-[10px] font-bold text-[#c5c107] uppercase tracking-[0.2em] mb-1">Original Articles</p>
-              <h2 className="text-2xl font-extrabold text-white uppercase tracking-wide">
-                📚 Latest Posts
-              </h2>
+              <h2 className="text-2xl font-extrabold text-white uppercase tracking-wide">📚 Latest Posts</h2>
             </div>
-            {!loading && (
-              <span className="text-xs text-gray-600">{blogs.length} articles</span>
-            )}
+            {!loading && <span className="text-xs text-gray-600">{blogs.length} articles</span>}
           </div>
 
           {loading && (
@@ -624,48 +593,30 @@ const BlogList = () => {
             </div>
           )}
           {error && (
-            <div className="text-red-400 text-center py-10 bg-red-500/5 rounded-xl border border-red-500/10">
-              {error}
-            </div>
+            <div className="text-red-400 text-center py-10 bg-red-500/5 rounded-xl border border-red-500/10">{error}</div>
           )}
-
           {!loading && !error && (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {blogs.map((blog, index) => (
-                <BlogCard
-                  key={blog.id}
-                  blog={blog}
-                  index={index}
-                  onClick={openBlog}
-                />
+                <BlogCard key={blog.id} blog={blog} index={index} onClick={openBlog} />
               ))}
               {blogs.length === 0 && (
-                <div className="col-span-full text-center text-gray-600 py-16">
-                  No articles yet — check back soon.
-                </div>
+                <div className="col-span-full text-center text-gray-600 py-16">No articles yet — check back soon.</div>
               )}
             </div>
           )}
 
-          {/* ── FilmiBeat Live News ── */}
           <FilmiBeatSection />
         </main>
 
-        {/* ── Footer ── */}
         <footer className="bg-black border-t border-white/5 text-gray-500 py-12 mt-16">
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 px-6">
             <div className="space-y-3">
-              <h4 className="text-xs uppercase font-bold tracking-widest text-gray-300">
-                Join our community
-              </h4>
-              <p className="text-sm leading-relaxed">
-                Get updates on the latest movies, blogs, and entertainment news.
-              </p>
+              <h4 className="text-xs uppercase font-bold tracking-widest text-gray-300">Join our community</h4>
+              <p className="text-sm leading-relaxed">Get updates on the latest movies, blogs, and entertainment news.</p>
             </div>
             <div className="flex justify-center items-center">
-              <h1 className="text-white text-5xl font-black tracking-tighter italic">
-                ANCHOR
-              </h1>
+              <h1 className="text-white text-5xl font-black tracking-tighter italic">ANCHOR</h1>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-2">
