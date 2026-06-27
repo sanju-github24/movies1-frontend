@@ -1,9 +1,9 @@
 /**
  * NewsViewer.jsx
  *
- * Renders a FilmiBeat news article in-site instead of redirecting to filmibeat.com.
+ * Renders a FilmiBeat or Cricinfo article in-site instead of redirecting away.
  *
- * Route: /news?url=https://www.filmibeat.com/...
+ * Route: /news?url=https://www.filmibeat.com/...  or  ?url=https://www.espncricinfo.com/...
  * Add to your router:
  *   <Route path="/news" element={<NewsViewer />} />
  *
@@ -27,16 +27,25 @@ const FEEDS_META = {
   hollywood: { label: "Hollywood", color: "#444441" },
   tv:        { label: "TV",        color: "#639922" },
   ott:       { label: "OTT",       color: "#993556" },
+  cricket:   { label: "Cricket",   color: "#0B6E4F" },
 };
 
-// Detect language from filmibeat URL path
+// Detect source/language from the article URL's domain and path.
 function detectLanguage(url = "") {
+  if (url.includes("cricinfo.com")) return "cricket";
   for (const key of Object.keys(FEEDS_META)) {
     if (url.includes(`/${key}/`) || url.includes(`/${key}-`)) return key;
   }
   if (url.includes("/bollywood/") || url.includes("/hindi/")) return "bollywood";
   if (url.includes("/english/") || url.includes("/hollywood/")) return "hollywood";
   return "bollywood";
+}
+
+function sourceLabel(url = "") {
+  return url.includes("cricinfo.com") ? "ESPNcricinfo" : "FilmiBeat";
+}
+function sourceHome(url = "") {
+  return url.includes("cricinfo.com") ? "https://www.espncricinfo.com" : "https://www.filmibeat.com";
 }
 
 function timeAgo(dateStr) {
@@ -72,6 +81,8 @@ const NewsViewer = () => {
   const articleUrl = params.get("url") || "";
   const language   = detectLanguage(articleUrl);
   const feedMeta   = FEEDS_META[language] || FEEDS_META.bollywood;
+  const srcLabel   = sourceLabel(articleUrl);
+  const srcHome    = sourceHome(articleUrl);
 
   useEffect(() => {
     if (!articleUrl) {
@@ -88,8 +99,8 @@ const NewsViewer = () => {
     setError(null);
     try {
       const res = await fetch(
-  `${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`
-);
+        `${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`
+      );
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Failed to load article");
       setArticle(json.article);
@@ -149,12 +160,12 @@ const NewsViewer = () => {
             <span className="text-xs text-gray-500 ml-auto">
               Powered by{" "}
               <a
-                href="https://www.filmibeat.com"
+                href={srcHome}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#c5c107] hover:underline"
               >
-                FilmiBeat
+                {srcLabel}
               </a>
             </span>
           </div>
@@ -176,7 +187,7 @@ const NewsViewer = () => {
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-10 text-center">
                 <p className="text-red-400 text-sm mb-4">{error}</p>
                 <p className="text-gray-500 text-xs mb-6">
-                  Content couldn't be loaded from FilmiBeat.
+                  Content couldn't be loaded from {srcLabel}.
                 </p>
                 <a
                   href={articleUrl}
@@ -184,7 +195,7 @@ const NewsViewer = () => {
                   rel="noopener noreferrer"
                   className="inline-block bg-[#c5c107] text-black text-sm font-bold px-6 py-2.5 rounded-full hover:bg-yellow-400 transition"
                 >
-                  Read on FilmiBeat →
+                  Read on {srcLabel} →
                 </a>
               </div>
             )}
@@ -223,7 +234,7 @@ const NewsViewer = () => {
                       </span>
                     )}
                     <span className="text-xs text-gray-500">📖 {readingTime} min read</span>
-                    {article.author && article.author !== "FilmiBeat" && (
+                    {article.author && article.author !== "FilmiBeat" && article.author !== "ESPNcricinfo" && (
                       <span className="text-xs text-gray-500">✍️ {article.author}</span>
                     )}
                   </div>
@@ -254,12 +265,12 @@ const NewsViewer = () => {
                     <p className="text-xs text-gray-500">
                       Content sourced from{" "}
                       <a
-                        href="https://www.filmibeat.com"
+                        href={srcHome}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[#c5c107] hover:underline"
                       >
-                        FilmiBeat
+                        {srcLabel}
                       </a>
                       . All rights reserved to original authors.
                     </p>
