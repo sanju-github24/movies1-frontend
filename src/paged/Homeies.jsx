@@ -369,13 +369,28 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
-       link: `/match-center/${encodeMatchHash({
+link: `/match-center/${encodeMatchHash({
   sport: "cricket",
   type: "bcci",
-  matchId: m.MatchID,
-  competitionId: m.CompetitionID,
-  matchOrder: m.MatchOrder,
-  competitionName: m.CompetitionName,
+  homeCode: m.HomeTeamCode || m.FirstBattingTeamCode || "IND",
+  awayCode: m.AwayTeamCode || m.SecondBattingTeamCode || "",
+  leagueLabel: m.CompetitionName || "India Cricket",
+  matchData: {
+    MatchID: m.MatchID,
+    CompetitionID: m.CompetitionID,
+    MatchOrder: m.MatchOrder,
+    CompetitionName: m.CompetitionName,
+    HomeTeamName: m.HomeTeamName,
+    AwayTeamName: m.AwayTeamName,
+    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+    HomeTeamCode: m.HomeTeamCode,
+    AwayTeamCode: m.AwayTeamCode,
+    MatchDate: m.MatchDate,
+    MatchTime: m.MatchTime,
+    GroundName: m.GroundName,
+    MatchType: m.MatchType,
+  },
 })}`,
       };
     }),
@@ -391,10 +406,13 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
-        link: `/match-center/${encodeMatchHash({
+link: `/match-center/${encodeMatchHash({
   sport: "cricket",
   type: "wt20",
   matchId: m.match_id,
+  homeCode: m.teama_short || "",
+  awayCode: m.teamb_short || "",
+  leagueLabel: "ICC WT20 WC 2026",
 })}`,
       };
     }),
@@ -409,10 +427,13 @@ function LiveNowStrip() {
         home, away,
         leagueLabel: "FIFA WC 2026",
         venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
-        link: `/match-center/${encodeMatchHash({
+link: `/match-center/${encodeMatchHash({
   sport: "football",
   type: "fifa",
   matchId: m.IdMatch,
+  homeCode: fifaAbbr(m.Home) || "—",
+  awayCode: fifaAbbr(m.Away) || "—",
+  leagueLabel: "FIFA WC 2026",
 })}`,
       };
     }),
@@ -432,7 +453,29 @@ function LiveNowStrip() {
         leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
         statusLabel: countdownLabel(m.MatchDate) || `${bcciFmtDate(m.MatchDate)} IST`,
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "bcci",
+  homeCode: m.HomeTeamCode || "IND",
+  awayCode: m.AwayTeamCode || "",
+  leagueLabel: m.CompetitionName || "India Cricket",
+  matchData: {
+    MatchID: m.MatchID,
+    CompetitionID: m.CompetitionID,
+    MatchOrder: m.MatchOrder,
+    CompetitionName: m.CompetitionName,
+    HomeTeamName: m.HomeTeamName,
+    AwayTeamName: m.AwayTeamName,
+    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+    HomeTeamCode: m.HomeTeamCode,
+    AwayTeamCode: m.AwayTeamCode,
+    MatchDate: m.MatchDate,
+    MatchTime: m.MatchTime,
+    GroundName: m.GroundName,
+    MatchType: m.MatchType,
+  },
+})}`,
       };
     }),
     // WT20 upcoming (next 2)
@@ -447,7 +490,14 @@ function LiveNowStrip() {
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
         statusLabel: (m.start_date && countdownLabel(m.start_date)) || (m.match_time_ist ? `${m.match_time_ist} IST` : ""),
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "wt20",
+  matchId: m.match_id,
+  homeCode: m.teama_short || "",
+  awayCode: m.teamb_short || "",
+  leagueLabel: "ICC WT20 WC 2026",
+})}`,
       };
     }),
     // FIFA today (not live) + next upcoming
@@ -462,7 +512,14 @@ function LiveNowStrip() {
         leagueLabel: "FIFA WC 2026",
         venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
         statusLabel: countdownLabel(m.Date) || (fmtIST(m.Date) ? `${fmtIST(m.Date)} IST` : ""),
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "football",
+  type: "fifa",
+  matchId: m.IdMatch,
+  homeCode: fifaAbbr(m.Home) || "—",
+  awayCode: fifaAbbr(m.Away) || "—",
+  leagueLabel: "FIFA WC 2026",
+})}`,
       };
     }),
   ];
@@ -482,7 +539,30 @@ function LiveNowStrip() {
         result: m.Comments || m.Commentss || null,
         leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName || "",
-        link: "/live-cricket-tv",
+        // AFTER
+link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "bcci",
+  homeCode: m.HomeTeamCode || "IND",
+  awayCode: m.AwayTeamCode || "",
+  leagueLabel: m.CompetitionName || "India Cricket",
+  matchData: {
+    MatchID: m.MatchID,
+    CompetitionID: m.CompetitionID,
+    MatchOrder: m.MatchOrder,
+    CompetitionName: m.CompetitionName,
+    HomeTeamName: m.HomeTeamName,
+    AwayTeamName: m.AwayTeamName,
+    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+    HomeTeamCode: m.HomeTeamCode,
+    AwayTeamCode: m.AwayTeamCode,
+    MatchDate: m.MatchDate,
+    MatchTime: m.MatchTime,
+    GroundName: m.GroundName,
+    MatchType: m.MatchType,
+  },
+})}`,
       };
     }),
     // WT20 recent (last 2)
@@ -496,7 +576,14 @@ function LiveNowStrip() {
         result: m.match_result || null,
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "cricket",
+  type: "wt20",
+  matchId: m.match_id,
+  homeCode: m.teama_short || "",
+  awayCode: m.teamb_short || "",
+  leagueLabel: "ICC WT20 WC 2026",
+})}`,
       };
     }),
     // FIFA recent results (last 4)
@@ -512,7 +599,14 @@ function LiveNowStrip() {
         home, away,
         result: hWon ? `${home.code} win` : aWon ? `${away.code} win` : "Draw",
         leagueLabel: "FIFA WC 2026", matchLabel: group, venue: city,
-        link: "/live-cricket-tv",
+        link: `/match-center/${encodeMatchHash({
+  sport: "football",
+  type: "fifa",
+  matchId: m.IdMatch,
+  homeCode: fifaAbbr(m.Home) || "—",
+  awayCode: fifaAbbr(m.Away) || "—",
+  leagueLabel: "FIFA WC 2026",
+})}`,
       };
     }),
   ];
