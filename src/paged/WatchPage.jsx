@@ -61,10 +61,11 @@ const groupEpisodesBySeason = (episodes) => {
 const Toggle = ({ checked, onChange }) => (
   <button
     onClick={() => onChange(!checked)}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none
+    aria-pressed={checked}
+    className={`relative inline-flex h-7 w-12 sm:h-6 sm:w-11 items-center rounded-full transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 touch-manipulation
       ${checked ? "bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]" : "bg-gray-800 border border-white/10"}`}
   >
-    <span className={`inline-block h-4 w-4 transform rounded-full shadow-md transition-all duration-300
+    <span className={`inline-block h-5 w-5 sm:h-4 sm:w-4 transform rounded-full shadow-md transition-all duration-300
       ${checked ? "translate-x-6 bg-white" : "translate-x-1 bg-gray-500"}`} />
   </button>
 );
@@ -85,18 +86,18 @@ const ServerBadge = ({ server, isActive, onClick, compact = false }) => {
   const c = COLOR[server.id] || COLOR.videasy;
   if (compact) return (
     <button onClick={onClick}
-      className={`relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider
-        transition-all duration-200 border
+      className={`relative flex items-center gap-2 px-3.5 py-2.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold uppercase tracking-wider
+        transition-all duration-200 border min-h-[44px] touch-manipulation active:scale-95
         ${isActive ? `bg-gradient-to-br ${c.bg} ${c.border} ${c.text}` : "bg-white/[0.03] border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/10"}`}
       style={isActive ? { boxShadow:`0 0 20px ${c.glow}` } : {}}>
       <span className={`w-1.5 h-1.5 rounded-full ${isActive ? c.dot : "bg-gray-600"} ${isActive ? "animate-pulse" : ""}`} />
       {server.name}
-      {isActive && <span className="text-[9px] opacity-60 ml-1">{server.label}</span>}
+      {isActive && <span className="text-[9px] opacity-60 ml-1 hidden sm:inline">{server.label}</span>}
     </button>
   );
   return (
     <button onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all duration-200 border
+      className={`w-full flex items-center gap-3 px-4 py-4 sm:py-3.5 rounded-xl text-left transition-all duration-200 border min-h-[44px] touch-manipulation active:scale-[0.98]
         ${isActive ? `bg-gradient-to-br ${c.bg} ${c.border}` : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10"}`}
       style={isActive ? { boxShadow:`0 0 24px ${c.glow}` } : {}}>
       <div className={`shrink-0 p-2 rounded-lg ${isActive ? `bg-gradient-to-br ${c.bg}` : "bg-white/5"}`}>
@@ -177,6 +178,21 @@ const WatchHtmlPage = () => {
   const [activeTab,         setActiveTab        ] = useState("servers");
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
+
+  /* Lock body scroll behind the overlay player on mobile so the iframe
+     is the only scrollable/interactive surface and nothing shifts under touch */
+  useEffect(() => {
+    if (showOverlay) {
+      const prevOverflow = document.body.style.overflow;
+      const prevTouch = document.body.style.touchAction;
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.touchAction = prevTouch;
+      };
+    }
+  }, [showOverlay]);
 
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
@@ -556,29 +572,41 @@ if (!alive) return;
 
       {/* ── OVERLAY PLAYER ── */}
       {showOverlay && (
-        <div className="fixed inset-0 z-[1000] bg-[#070709] flex flex-col">
+        <div
+          className="fixed inset-0 z-[1000] bg-[#070709] flex flex-col"
+          style={{
+            paddingTop: "env(safe-area-inset-top)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+            height: "100dvh",
+          }}
+        >
 
           {/* Top bar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-black/60 backdrop-blur-xl border-b border-white/[0.04] shrink-0 z-20">
-            <button onClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); }}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/5">
-              <ArrowLeft size={15} />
+          <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-black/60 backdrop-blur-xl border-b border-white/[0.04] shrink-0 z-20">
+            <button onClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); setShowSettingsPanel(false); }}
+              aria-label="Close player and go back"
+              className="flex items-center gap-2 px-3 py-2.5 min-h-[44px] min-w-[44px] justify-center rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 text-gray-400 hover:text-white transition-all border border-white/5 touch-manipulation">
+              <ArrowLeft size={17} />
               <span className="text-xs font-bold hidden sm:inline tracking-wide">Back</span>
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              <h2 className="text-white font-black text-xs uppercase tracking-[0.15em] truncate max-w-[35vw]">{videoTitle}</h2>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
+              <h2 className="text-white font-black text-[10px] sm:text-xs uppercase tracking-[0.1em] sm:tracking-[0.15em] truncate max-w-[40vw] sm:max-w-[35vw]">{videoTitle}</h2>
             </div>
             <button onClick={() => setShowSettingsPanel(v => !v)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold tracking-wide
+              aria-label="Toggle player settings"
+              className={`flex items-center gap-2 px-3 py-2.5 min-h-[44px] min-w-[44px] justify-center rounded-xl border transition-all text-xs font-bold tracking-wide touch-manipulation
                 ${showSettingsPanel ? "bg-blue-600/20 border-blue-500/40 text-blue-300" : "bg-white/5 border-white/5 text-gray-400 hover:text-white hover:border-white/20"}`}>
-              <Settings size={14} />
+              <Settings size={16} />
               <span className="hidden sm:inline">Settings</span>
             </button>
           </div>
 
           {/* Quick server bar */}
-          <div className="px-4 py-2 bg-black/40 backdrop-blur-md border-b border-white/[0.03] shrink-0 z-10 overflow-x-auto scrollbar-hide">
+          <div
+            className="px-3 sm:px-4 py-2 bg-black/40 backdrop-blur-md border-b border-white/[0.03] shrink-0 z-10 overflow-x-auto"
+            style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
+          >
             <div className="flex items-center gap-2 min-w-max">
               <span className="text-[9px] text-gray-600 uppercase tracking-widest font-black shrink-0 mr-1">Server:</span>
               {availableServers.map(s => (
@@ -589,33 +617,58 @@ if (!alive) return;
           </div>
 
           {/* Player + settings */}
-          <div className="flex flex-1 overflow-hidden relative">
-            <div className={`flex-1 bg-black transition-all duration-300 ${showSettingsPanel ? "lg:mr-[320px]" : ""}`}>
+          <div className="flex flex-1 overflow-hidden relative min-h-0">
+            <div className={`flex-1 bg-black transition-all duration-300 relative ${showSettingsPanel ? "lg:mr-[320px]" : ""}`}>
               {sourceType === "html"  ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSource }} /> :
-               sourceType === "video" ? <video src={finalSource} controls autoPlay className="w-full h-full" /> :
-               <iframe src={finalSource} className="w-full h-full border-none" allowFullScreen allow="autoplay; encrypted-media" />}
+               sourceType === "video" ? (
+                 <video
+                   src={finalSource}
+                   controls
+                   autoPlay
+                   playsInline
+                   webkit-playsinline="true"
+                   preload="metadata"
+                   className="w-full h-full bg-black"
+                 />
+               ) : (
+                 <iframe
+                   src={finalSource}
+                   title={videoTitle}
+                   className="w-full h-full border-none"
+                   allowFullScreen
+                   webkitallowfullscreen="true"
+                   mozallowfullscreen="true"
+                   allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write"
+                   referrerPolicy="no-referrer-when-downgrade"
+                 />
+               )}
             </div>
 
             {/* Settings panel */}
-            <div className={`absolute lg:relative top-0 right-0 h-full w-full sm:w-[320px] lg:w-[320px]
+            <div
+              className={`absolute lg:relative top-0 right-0 h-full w-full sm:w-[340px] lg:w-[320px]
               bg-[#0a0a0c] border-l border-white/[0.04] flex flex-col overflow-hidden
               transition-transform duration-300 ease-in-out z-20
-              ${showSettingsPanel ? "translate-x-0" : "translate-x-full lg:translate-x-full"}`}>
+              ${showSettingsPanel ? "translate-x-0" : "translate-x-full lg:translate-x-full"}`}
+              style={{ paddingBottom: showSettingsPanel ? "env(safe-area-inset-bottom)" : undefined }}
+            >
 
               <div className="shrink-0 border-b border-white/[0.04]">
-                <div className="flex items-center justify-between px-5 py-4">
+                <div className="flex items-center justify-between px-4 sm:px-5 py-4">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                     <h3 className="text-white font-black text-xs uppercase tracking-[0.15em]">Player Settings</h3>
                   </div>
-                  <button onClick={() => setShowSettingsPanel(false)} className="p-1.5 rounded-lg hover:bg-white/5 text-gray-600 hover:text-white transition-all">
-                    <X size={15} />
+                  <button onClick={() => setShowSettingsPanel(false)}
+                    aria-label="Close settings panel"
+                    className="p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-white/5 active:bg-white/10 text-gray-600 hover:text-white transition-all touch-manipulation">
+                    <X size={16} />
                   </button>
                 </div>
-                <div className="flex px-5 gap-1 pb-3">
+                <div className="flex px-3 sm:px-5 gap-1 pb-3">
                   {["servers","cast","settings"].map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
-                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                      className={`flex-1 py-2.5 min-h-[40px] rounded-lg text-[10px] font-black uppercase tracking-widest transition-all touch-manipulation
                         ${activeTab === tab ? "bg-white/10 text-white border border-white/10" : "text-gray-600 hover:text-gray-400"}`}>
                       {tab}
                     </button>
@@ -623,7 +676,7 @@ if (!alive) return;
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
                 {activeTab === "servers" && (
                   <div className="p-4 space-y-2">
                     <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1 mb-3">Available Servers</p>
@@ -713,7 +766,7 @@ if (!alive) return;
             </div>
 
             {showSettingsPanel && (
-              <div className="absolute inset-0 bg-black/70 z-10 lg:hidden backdrop-blur-sm" onClick={() => setShowSettingsPanel(false)} />
+              <div className="absolute inset-0 bg-black/70 z-10 lg:hidden backdrop-blur-sm touch-manipulation" onClick={() => setShowSettingsPanel(false)} />
             )}
           </div>
         </div>
@@ -725,7 +778,8 @@ if (!alive) return;
         <div className="relative max-w-7xl mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all group">
+              aria-label="Go back"
+              className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 hover:border-white/10 transition-all group touch-manipulation">
               <ArrowLeft size={18} className="text-gray-400 group-hover:text-white transition-colors" />
             </button>
             <Link to="/"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
@@ -826,14 +880,14 @@ if (!alive) return;
                 const autoServer = firstEp?.hasEmbed ? "embed" : null;
                 handlePlayAction(firstEp, autoServer);
               }}
-                className="group relative overflow-hidden px-8 py-3.5 bg-blue-600 text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-blue-600/25 hover:shadow-blue-600/50 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98]">
+                className="group relative overflow-hidden px-8 py-4 sm:py-3.5 min-h-[48px] bg-blue-600 text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-blue-600/25 hover:shadow-blue-600/50 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation">
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <div className="relative p-1.5 bg-white/20 rounded-lg"><Play size={14} fill="currentColor"/></div>
                 <span className="relative">{isTVShow ? "Stream Now" : "Play Now"}</span>
               </button>
               {movieMeta.download_links?.length > 0 && (
                 <button onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior:"smooth" })}
-                  className="px-8 py-3.5 bg-white/5 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/20 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98]">
+                  className="px-8 py-4 sm:py-3.5 min-h-[48px] bg-white/5 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/20 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation">
                   <Download size={15}/> Download
                 </button>
               )}
@@ -843,11 +897,14 @@ if (!alive) return;
             {availableServers.length > 0 && (
               <div className="pt-2">
                 <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2 text-center lg:text-left">Available Servers</p>
-                <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
+                <div
+                  className="flex gap-2 justify-start lg:justify-start overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
                   {availableServers.slice(0,5).map(sv => (
                     <button key={sv.id}
                       onClick={() => { setActiveServer(sv); handlePlayAction(null, sv.id); }}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95
+                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
                         ${activeServer?.id === sv.id ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30") : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"}`}>
                       <span className={`w-1 h-1 rounded-full ${activeServer?.id === sv.id ? "bg-current" : "bg-gray-700"}`}/>
                       {sv.name}
@@ -875,10 +932,10 @@ if (!alive) return;
             </div>
 
             {/* Season tabs */}
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
               {Object.keys(groupedEpisodes).map(sk => (
                 <button key={sk} onClick={() => setActiveSeason(sk)}
-                  className={`shrink-0 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border
+                  className={`shrink-0 px-5 py-2.5 min-h-[40px] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border touch-manipulation
                     ${activeSeason === sk ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" : "bg-white/[0.03] text-gray-500 border-white/5 hover:text-gray-300 hover:border-white/10"}`}>
                   {groupedEpisodes[sk].name}
                 </button>
@@ -897,28 +954,13 @@ if (!alive) return;
                     }
                     setOpenDropdown(openDropdown === i ? null : i);
                   }}
-                    className={`group flex gap-4 p-4 rounded-2xl border transition-all cursor-pointer
+                    className={`group flex gap-4 p-4 rounded-2xl border transition-all cursor-pointer touch-manipulation active:scale-[0.99]
                       ${openDropdown === i ? "bg-blue-600/5 border-blue-500/20" : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04] hover:border-white/10"}`}>
                     <div className={`relative shrink-0 w-28 sm:w-36 aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/5 flex items-center justify-center transition-all ${openDropdown === i ? "border-blue-500/30" : ""}`}>
-                      {ep.thumbnail && (
-                        <img
-                          src={ep.thumbnail}
-                          alt={ep.title || ep.name || ""}
-                          className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
-                          onError={e => { e.target.style.display = "none"; }}
-                        />
-                      )}
-                      <div className={`relative shrink-0 w-28 sm:w-36 aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/5 flex items-center justify-center transition-all ${openDropdown === i ? "border-blue-500/30" : ""}`}>
-                      {ep.thumbnail && (
-                        <img src={ep.thumbnail} alt=""
-                          className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
-                          onError={e => { e.target.style.display = "none"; }} />
-                      )}
-                      <div className={`relative shrink-0 w-28 sm:w-36 aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/5 flex items-center justify-center transition-all ${openDropdown === i ? "border-blue-500/30" : ""}`}>
                       {(ep.thumbnail || ep.still_path) && (
                         <img
                           src={ep.thumbnail || (ep.still_path?.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`)}
-                          alt=""
+                          alt={ep.title || ep.name || ""}
                           className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
                           onError={e => { e.target.style.display = "none"; }}
                         />
@@ -932,8 +974,6 @@ if (!alive) return;
                         <Play size={16} fill="currentColor"/>
                       </div>
                     </div>
-                    </div>
-                    </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <p className="text-[9px] font-black uppercase text-blue-500 tracking-[0.15em] mb-1.5">S{ep.season} · E{ep.episodeNumberInSeason}</p>
                       <h4 className="text-sm font-bold text-white truncate mb-1">{ep.title || ep.name || `Episode ${ep.episodeNumberInSeason}`}</h4>
@@ -944,7 +984,7 @@ if (!alive) return;
                       )}
                       {(ep.description || ep.overview) && <p className="text-[11px] text-gray-600 line-clamp-2 leading-relaxed">{ep.description || ep.overview}</p>}
                     </div>
-                    <div className="shrink-0 self-center">
+                    <div className="shrink-0 self-center p-2 -m-2">
                       <ChevronDown size={16} className={`text-gray-600 transition-transform ${openDropdown === i ? "rotate-180 text-blue-400" : ""}`}/>
                     </div>
                   </div>
@@ -974,7 +1014,7 @@ if (!alive) return;
                         };
                         return (
                           <button key={srv.id} onClick={() => handlePlayAction(ep, srv.id)}
-                            className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 ${cc[srv.color]}`}>
+                            className={`py-3 px-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation ${cc[srv.color]}`}>
                             {srv.label}
                           </button>
                         );
@@ -1020,7 +1060,7 @@ if (!alive) return;
                 const isActive = activeServer?.id === sv.id;
                 return (
                   <button key={sv.id} onClick={() => handlePlayAction(null, sv.id)}
-                    className={`relative group p-5 rounded-2xl flex flex-col items-center gap-3 transition-all border overflow-hidden active:scale-[0.97]
+                    className={`relative group p-5 min-h-[44px] rounded-2xl flex flex-col items-center gap-3 transition-all border overflow-hidden active:scale-[0.97] touch-manipulation
                       ${isActive ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/20") : "bg-white/[0.02] border-white/[0.04] text-gray-500 hover:bg-white/[0.05] hover:border-white/10 hover:text-gray-300"}`}>
                     {isActive && <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"/>}
                     <div className={`relative p-2.5 rounded-xl ${isActive ? "bg-current/10" : "bg-white/5 group-hover:bg-white/10"} transition-all`}>
@@ -1061,7 +1101,7 @@ if (!alive) return;
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {block.links?.map((link, i) => (
                       <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                        className="group p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-green-500/30 hover:bg-green-500/5 transition-all flex items-center gap-3 active:scale-[0.98]">
+                        className="group p-4 min-h-[44px] rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-green-500/30 hover:bg-green-500/5 transition-all flex items-center gap-3 active:scale-[0.98] touch-manipulation">
                         <div className="p-2 rounded-lg bg-green-500/10 text-green-400 group-hover:bg-green-500/20 transition-colors"><Download size={14}/></div>
                         <p className="text-xs font-bold text-gray-300 group-hover:text-white transition-colors uppercase tracking-wide">{link.label}</p>
                       </a>
