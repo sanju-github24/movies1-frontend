@@ -66,7 +66,7 @@ export const FOOTBALL_CHANNELS = [
     color: "#1ed596", glow: "rgba(30,213,150,0.3)", border: "rgba(30,213,150,0.25)",
     bg: "rgba(30,213,150,0.06)", tag: "ENG", useIcon: true,
     logo: "",
-    url: "https://m3u8-player-ashen.vercel.app/?sid=xhnp1jmaa49q&src=GwxGQEEPV0UaGxwKU1dXGx8FBggfHVNAW0ZWCQYCXBpeRVdfGRMaF1waQUBdRwwZRgISFltWV0YMRARcBkA&t=PxFEVRJzEQwI",
+    url: "https://m3u8-player-ashen.vercel.app/?sid=xxlnzgeutvc7&src=GwxGQEEPV0UFBgUdAgUcXhcPGQgXVlNAQhoUAx8KXEoGBQQET1lcQR5LRwg&t=Bx1BRA",
     desc: "Sports18 — FIFA World Cup 2026 in English",
   },
   {
