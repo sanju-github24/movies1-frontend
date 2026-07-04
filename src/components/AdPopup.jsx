@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 
 const AdPopup = () => {
   const [visible, setVisible] = useState(false);
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => {
     const container = document.getElementById('popup-ad');
     if (!container) return;
+
+    // Clear previous if any
+    container.innerHTML = '';
 
     // Inject atOptions config
     const configScript = document.createElement('script');
@@ -40,7 +44,7 @@ const AdPopup = () => {
     return () => clearInterval(interval);
   }, []);
 
-  if (!visible) return null;
+  if (closed) return null;
 
   return (
     <div
@@ -49,18 +53,40 @@ const AdPopup = () => {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: '320px',
-        height: '50px',
-        backgroundColor: '#fff',
+        width: '340px',
+        height: '90px',
+        backgroundColor: '#171717',
+        border: '1px solid rgba(255,255,255,0.1)',
         zIndex: 9999,
-        borderRadius: '8px',
-        boxShadow: '0 0 12px rgba(0,0,0,0.3)',
-        display: 'flex',
+        borderRadius: '12px',
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5)',
+        display: visible ? 'flex' : 'none',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        padding: '6px',
       }}
     >
-      <div id="popup-ad" style={{ width: '100%', height: '100%' }} />
+      <button
+        onClick={() => setClosed(true)}
+        style={{
+          alignSelf: 'flex-end',
+          background: 'none',
+          border: 'none',
+          color: 'rgba(255, 255, 255, 0.5)',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          marginBottom: '4px',
+          marginRight: '8px',
+          padding: '2px 6px',
+        }}
+        onMouseEnter={(e) => { e.target.style.color = '#fff'; }}
+        onMouseLeave={(e) => { e.target.style.color = 'rgba(255, 255, 255, 0.5)'; }}
+      >
+        Close [x]
+      </button>
+      <div id="popup-ad" style={{ width: '320px', height: '50px' }} />
     </div>
   );
 };
