@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, RefreshCw, Trophy, Star, AlertCircle,
-  Tv2, Signal, Maximize2
+  Tv2, Signal, Maximize2, PlayCircle
 } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
 
@@ -77,6 +77,120 @@ function ecbInitials(name) {
   return (name || "").split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
+// ─── CACHE (shared style with Homeies.jsx) ────────────────────────────────────
+const _cache = {};
+function getCached(k) { const e = _cache[k]; return (e && Date.now() - e.ts < 600000) ? e.data : null; }
+function setCache(k, d) { _cache[k] = { data: d, ts: Date.now() }; }
+
+// ─── BCCI SQUAD FETCH ────────────────────────────────────────────────────────
+async function fetchBcciSquad(matchID) {
+  if (!matchID) return null;
+  const k = `squad_${matchID}`;
+  const cached = getCached(k);
+  if (cached) return cached;
+  try {
+    const res = await fetch(`${API_BASE}/api/bcci/squad?matchID=${matchID}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    setCache(k, json);
+    return json;
+  } catch { return null; }
+}
+
+// ─── BCCI MATCH SUMMARY FETCH ─────────────────────────────────────────────────
+async function fetchBcciMatchSummary(matchID) {
+  if (!matchID) return null;
+  const k = `matchsummary_${matchID}`;
+  const cached = getCached(k);
+  if (cached) return cached;
+  try {
+    const res = await fetch(`${API_BASE}/api/bcci/matchsummary?matchID=${matchID}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    setCache(k, json);
+    return json;
+  } catch { return null; }
+}
+
+// ─── INDIA HIGHLIGHTS (routed through your backend to avoid CORS) ────────────
+// Returns the full list of videos for a match so we can show a FIFA-style
+// multi-clip grid. Each item includes short_code for stream extraction.
+async function fetchIndiaHighlights(smMatchId) {
+  if (!smMatchId) return null;
+  const k = `highlights_all_${smMatchId}`;
+  const cached = getCached(k);
+  if (cached !== undefined && cached !== null) return cached;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/bcci/highlight?smMatchId=${smMatchId}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const videos = json.data || [];
+    if (!videos.length) { setCache(k, null); return null; }
+
+    // Map every video to a normalised shape (preserve short_code for stream extraction)
+    const mapped = videos.map(v => ({
+      id:        v._id || v.id,
+      title:     v.title || "Untitled",
+      thumbnail: v.thumbnail_image || v.imageUrl || v.imageBackup || null,
+      duration:  v.duration || 0,
+      views:     v.views_count || v.views || 0,
+      shortCode: v.short_code || null,         // ← used to build bccilink URL
+      urlSegment: v.titleUrlSegment || null,   // ← fallback
+    }));
+
+    setCache(k, mapped);
+    return mapped;
+  } catch (e) {
+    console.error("[highlights] fetch failed", e);
+    return null;
+  }
+}
+
+// ─── FIFA HIGHLIGHTS ──────────────────────────────────────────────────────────
+const FIFA_VIDEOS_API = "https://cxm-api.fifa.com/fifaplusweb/api/sections/matchdetails/videos";
+
+// NOTE: stageId varies per round (group stage / round of 32 / etc). If FIFA's
+// calendar match objects expose their own stage id (e.g. m.IdStage), prefer
+// that over the fixed FIFA_STAGE constant — confirm via the console log
+// already present in FifaMatchCenter's highlight effect.
+async function fetchFifaHighlight(matchId, stageId = FIFA_STAGE) {
+  if (!matchId) return null;
+  const k = `fifa_highlight_${matchId}`;
+  const cached = getCached(k);
+  if (cached !== undefined && cached !== null) return cached;
+
+  try {
+    const url = `${FIFA_VIDEOS_API}?locale=en&competitionId=${FIFA_COMPETITION}&seasonId=${FIFA_SEASON}&stageId=${stageId}&matchId=${matchId}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      console.warn("[fifa highlight] status", res.status, "matchId", matchId);
+      return null;
+    }
+    const json = await res.json();
+    const items = json?.vodVideosBaseCarousel?.items || [];
+    if (!items.length) { setCache(k, null); return null; }
+
+    // Prefer the standard cut over sign-language / accessibility variants
+    const vid = items.find(v => !/sign language/i.test(v.title || "")) || items[0];
+
+    const highlight = {
+      title: vid.title,
+      thumbnail: vid.image?.src || null,
+      // readMorePageUrl looks like "/en/watch/SQUgNGrNai36KI7q8vHo6" — relative.
+      // Verify the correct base domain once you click through on fifa.com.
+      watchPath: vid.readMorePageUrl || null,
+    };
+    setCache(k, highlight);
+    return highlight;
+  } catch (e) {
+    console.error("[fifa highlight] fetch failed", matchId, e);
+    return null;
+  }
+}
+
+
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ECB SHARED ATOMS
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -91,6 +205,36 @@ function PulsingDot({ color = "#ef4444", size = 8 }) {
   );
 }
 
+/* ── Highlight video card (generic — BCCI or FIFA) ── */
+function EcbHighlightCard({ highlight, accent = ECB_RED, onOpen, loading = false }) {
+  if (!highlight) return null;
+  return (
+    <button
+      onClick={onOpen}
+      disabled={loading}
+      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/[0.03] transition-colors disabled:opacity-70"
+      style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+    >
+      <div className="relative w-20 h-14 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/10">
+        {highlight.thumbnail && (
+          <img src={highlight.thumbnail} alt="" className="w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+          {loading
+            ? <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${accent}40`, borderTopColor: accent }} />
+            : <PlayCircle size={22} className="text-white" />
+          }
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: accent }}>
+          ▶ Watch Highlights
+        </p>
+        <p className="text-[13px] font-bold text-white truncate">{highlight.title}</p>
+      </div>
+    </button>
+  );
+}
 /* ECB red "Live Now" pill */
 function LiveNowBadge({ countdown }) {
   return (
@@ -170,6 +314,7 @@ function EcbHero({
   statusText, tossText, seriesText, venueText,
   matchTypeText, countdown, refreshing, onRefresh,
   accentColor,
+  
   children, // slot: live players / over strip / result / upcoming
 }) {
   const navy = accentColor
@@ -306,90 +451,137 @@ function EcbHero({
 }
 
 /* ── ECB live player cards: bowler | striker | non-striker ── */
-function EcbCreaseCards({ bowlerName, bowlerFigures, bowlerEco, bowlerOvers,
+/* ── ECB premium live player cards: bowler | striker | non-striker ── */
+function EcbCreaseCards({ 
+  bowlerName, bowlerFigures, bowlerEco, bowlerOvers,
   strikerName, strikerRuns, strikerBalls, strikerFours, strikerSixes, strikerSR,
   nonStrikerName, nonStrikerRuns, nonStrikerBalls,
   strikerImg, nonStrikerImg, bowlerImg,
 }) {
-  const panels = [
-    bowlerName && {
-      label: "Bowling", labelColor: "#93c5fd", labelBg: "rgba(59,130,246,0.18)",
-      bg: "linear-gradient(160deg,rgba(0,27,78,0.98) 0%,rgba(0,5,18,1) 100%)",
-      name: bowlerName,
-      stat: bowlerFigures,
-      sub: `${bowlerOvers} ov · Eco ${bowlerEco}`,
-      img: bowlerImg,
-    },
-    strikerName && {
-      label: "★ On strike", labelColor: "#fca5a5", labelBg: "rgba(207,20,43,0.22)",
-      bg: "linear-gradient(160deg,rgba(207,20,43,0.12) 0%,rgba(0,5,18,1) 100%)",
-      name: strikerName,
-      stat: `${strikerRuns}`,
-      statSuffix: `(${strikerBalls})`,
-      sub: [strikerFours > 0 && `${strikerFours}×4`, strikerSixes > 0 && `${strikerSixes}×6`, strikerSR && `SR ${strikerSR}`].filter(Boolean).join("  "),
-      img: strikerImg,
-    },
-    nonStrikerName && {
-      label: "Non-striker", labelColor: "rgba(255,255,255,0.3)", labelBg: "rgba(255,255,255,0.06)",
-      bg: "linear-gradient(160deg,rgba(0,27,78,0.88) 0%,rgba(0,5,18,1) 100%)",
-      name: nonStrikerName,
-      stat: `${nonStrikerRuns}`,
-      statSuffix: `(${nonStrikerBalls})`,
-      sub: "",
-      img: nonStrikerImg,
-    },
-  ].filter(Boolean);
-
-  if (!panels.length) return null;
-
   return (
-    <div
-      className="grid"
-      style={{
-        gridTemplateColumns: `repeat(${panels.length}, 1fr)`,
-        borderTop: "1px solid rgba(255,255,255,0.07)",
-      }}
-    >
-      {panels.map((p, idx) => (
-        <div
-          key={idx}
-          className="relative overflow-hidden flex flex-col justify-between p-3.5"
-          style={{
-            background: p.bg,
-            borderRight: idx < panels.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-            minHeight: 120,
-          }}
-        >
-          {/* big initials watermark */}
-          <div className="absolute inset-0 flex items-end justify-start overflow-hidden pointer-events-none">
-            <span className="font-black select-none leading-none" style={{ fontSize: 72, color: "rgba(255,255,255,0.035)", marginLeft: -8 }}>
-              {ecbInitials(p.name)}
-            </span>
+    <div className="w-full bg-white text-slate-900 border-t border-b border-slate-200 flex flex-col md:flex-row relative overflow-hidden select-none">
+      
+      {/* 1. BOWLER SECTION */}
+      {bowlerName && (
+        <div className="flex-1 flex items-stretch justify-between p-4 border-b md:border-b-0 md:border-r border-slate-100 relative bg-slate-50/60 min-h-[130px]">
+          <div className="flex flex-col justify-between h-full max-w-[55%] z-10 relative">
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-sans">
+                Bowling
+              </span>
+              <h4 className="text-sm font-black text-slate-900 mt-2 tracking-tight leading-tight break-words">
+                {bowlerName}
+              </h4>
+            </div>
+            <div className="mt-2">
+              <p className="text-xl font-black text-slate-900 leading-none">
+                {bowlerFigures}
+              </p>
+              <p className="text-[10px] text-slate-500 font-bold mt-1 whitespace-nowrap">
+                {bowlerOvers} ov · Eco {bowlerEco}
+              </p>
+            </div>
           </div>
-          <div className="relative">
-            <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: p.labelBg, color: p.labelColor }}>
-              {p.label}
-            </span>
-            {p.img && (
-              <div className="w-6 h-6 rounded-full overflow-hidden mt-1.5 border border-white/10 bg-white/5">
-                <img src={p.img} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = "none"; }} />
+
+          {/* Fixed Bowler Image Containment */}
+          {bowlerImg && (
+            <div className="absolute right-0 bottom-0 top-0 w-1/2 pointer-events-none overflow-hidden flex items-end justify-end z-0">
+              <img 
+                src={bowlerImg} 
+                alt="" 
+                className="h-[110%] w-auto max-w-full object-contain object-bottom object-right translate-y-1.5 filter drop-shadow-[-4px_2px_8px_rgba(0,0,0,0.05)]"
+                onError={e => { e.target.style.display = "none"; }} 
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. BATSMEN COMBINED GRID */}
+      <div className="flex-[2] flex flex-row relative bg-white min-h-[130px]">
+        
+        {/* STRIKER PANEL */}
+        {strikerName && (
+          <div className="flex-1 flex items-stretch justify-between p-4 border-r border-slate-100 relative bg-white">
+            <div className="flex flex-col justify-between h-full max-w-[55%] z-10 relative">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-2 py-0.5 rounded font-sans inline-flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" /> On Strike
+                </span>
+                <h4 className="text-sm font-black text-slate-900 mt-2 tracking-tight leading-tight break-words">
+                  {strikerName}
+                </h4>
+              </div>
+              <div className="mt-2">
+                <p className="text-xl font-black text-slate-900 leading-none">
+                  {strikerRuns} <span className="text-xs font-bold text-slate-400 font-sans">({strikerBalls})</span>
+                </p>
+                <p className="text-[10px] text-slate-500 font-bold mt-1 whitespace-nowrap">
+                  {[strikerFours > 0 && `${strikerFours}×4`, strikerSixes > 0 && `${strikerSixes}×6`, strikerSR && `SR ${strikerSR}`].filter(Boolean).join("  ")}
+                </p>
+              </div>
+            </div>
+
+            {/* Striker Cutout */}
+            {strikerImg && (
+              <div className="absolute right-0 bottom-0 top-0 w-1/2 pointer-events-none overflow-hidden flex items-end justify-end z-0">
+                <img 
+                  src={strikerImg} 
+                  alt="" 
+                  className="h-[115%] w-auto max-w-full object-contain object-bottom object-right translate-y-1 filter drop-shadow-[-4px_2px_6px_rgba(0,0,0,0.04)]"
+                  onError={e => { e.target.style.display = "none"; }} 
+                />
               </div>
             )}
-            <p className="text-[11px] font-black text-white mt-1.5 leading-tight truncate">{p.name}</p>
           </div>
-          <div className="relative mt-1">
-            <p className="text-lg font-black text-white leading-none">
-              {p.stat}
-              {p.statSuffix && <span className="text-sm text-white/35 ml-1 font-semibold">{p.statSuffix}</span>}
-            </p>
-            {p.sub && <p className="text-[9px] text-white/30 mt-0.5">{p.sub}</p>}
+        )}
+
+        {/* NON-STRIKER PANEL */}
+        {nonStrikerName && (
+          <div className="flex-1 flex items-stretch justify-between p-4 relative bg-slate-50/10">
+            <div className="flex flex-col justify-between h-full max-w-[55%] z-10 relative pl-2">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-sans">
+                  Non-Striker
+                </span>
+                <h4 className="text-sm font-black text-slate-900 mt-2 tracking-tight leading-tight break-words">
+                  {nonStrikerName}
+                </h4>
+              </div>
+              <div className="mt-2">
+                <p className="text-xl font-black text-slate-900 leading-none">
+                  {nonStrikerRuns} <span className="text-xs font-bold text-slate-400 font-sans">({nonStrikerBalls})</span>
+                </p>
+                <p className="text-[10px] text-slate-400 font-bold mt-1">—</p>
+              </div>
+            </div>
+
+            {/* Non-Striker Cutout */}
+            {nonStrikerImg && (
+              <div className="absolute right-0 bottom-0 top-0 w-1/2 pointer-events-none overflow-hidden flex items-end justify-end z-0">
+                <img 
+                  src={nonStrikerImg} 
+                  alt="" 
+                  className="h-[115%] w-auto max-w-full object-contain object-bottom object-right translate-y-1 filter drop-shadow-[-4px_2px_6px_rgba(0,0,0,0.04)]"
+                  onError={e => { e.target.style.display = "none"; }} 
+                />
+              </div>
+            )}
           </div>
+        )}
+
+        {/* Central Partnership Pill Indicator */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none hidden sm:flex flex-col items-center justify-center bg-white border border-slate-200/90 shadow-md rounded-xl px-2 py-1 min-w-[75px]">
+          <span className="text-[7px] font-black uppercase tracking-wider text-slate-400 leading-none">Partnership</span>
+          <span className="text-xs font-black text-slate-800 mt-0.5">
+            {parseInt(strikerRuns || 0) + parseInt(nonStrikerRuns || 0)}
+          </span>
         </div>
-      ))}
+
+      </div>
     </div>
   );
 }
-
 /* ── ECB over strip ── */
 function EcbOverStrip({ balls, bowlerName }) {
   const emptyCount = Math.max(0, 6 - balls.length);
@@ -643,6 +835,159 @@ function LiveChannelSwitcher({ sport, isLive, isFinished, result, mom, momRuns, 
 /* ═══════════════════════════════════════════════════════════════════════════
    BCCI MATCH CENTER — ECB style
 ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Skill badge for player role ── */
+function SkillBadge({ skill }) {
+  const cfg = {
+    "Batsman":       { bg: "rgba(59,130,246,0.18)",  color: "#93c5fd", label: "BAT" },
+    "All Rounder":   { bg: "rgba(139,92,246,0.18)",  color: "#c4b5fd", label: "ALL" },
+    "Bowler":        { bg: "rgba(239,68,68,0.18)",   color: "#fca5a5", label: "BWL" },
+    "Wicket Keeper": { bg: "rgba(245,158,11,0.18)",  color: "#fcd34d", label: "WK"  },
+  }[skill] || { bg: "rgba(100,116,139,0.18)", color: "#94a3b8", label: "—" };
+  return (
+    <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: cfg.bg, color: cfg.color }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+/* ── Single player card in the squad list ── */
+function SquadPlayerCard({ player }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const isCap = player.IsCaptain === "1";
+  const isVc  = player.IsViceCaptain === "1";
+  const isWk  = player.IsWK === "1";
+  const initials = (player.PlayerShortName || player.PlayerName || "").trim().split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.025] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      {/* Avatar */}
+      <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-white/10 bg-white/5 flex items-center justify-center">
+        {!imgFailed && player.PlayerImage
+          ? <img src={player.PlayerImage} alt="" className="w-full h-full object-cover" onError={() => setImgFailed(true)} />
+          : <span className="text-[10px] font-black text-white/30">{initials}</span>}
+      </div>
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[12px] font-bold text-white truncate">{(player.PlayerName || "").trim()}</span>
+          {isCap && <span className="text-[8px] font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">C</span>}
+          {isVc  && <span className="text-[8px] font-black text-sky-400 bg-sky-400/10 px-1.5 py-0.5 rounded">VC</span>}
+          {isWk  && <span className="text-[8px] font-black text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded">WK</span>}
+          <SkillBadge skill={player.PlayerSkill} />
+        </div>
+        <p className="text-[9px] text-white/30 mt-0.5 truncate">
+          {player.BattingType && <span>{player.BattingType}</span>}
+          {player.BattingType && player.BowlingProficiency && <span className="mx-1 text-white/15">·</span>}
+          {player.BowlingProficiency && <span>{player.BowlingProficiency}</span>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Squad panel for one team ── */
+function SquadPanel({ players, teamName, teamLogo, teamCode }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const batsmen    = players.filter(p => p.PlayerSkill === "Batsman");
+  const allRounders = players.filter(p => p.PlayerSkill === "All Rounder");
+  const keepers    = players.filter(p => p.PlayerSkill === "Wicket Keeper");
+  const bowlers    = players.filter(p => p.PlayerSkill === "Bowler");
+  const sections = [
+    { label: "Batsmen",       items: batsmen },
+    { label: "All Rounders",  items: allRounders },
+    { label: "Wicket Keepers",items: keepers },
+    { label: "Bowlers",       items: bowlers },
+  ].filter(s => s.items.length > 0);
+  return (
+    <div>
+      {/* Team header */}
+      <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)" }}>
+        <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center shrink-0">
+          {!imgFailed && teamLogo
+            ? <img src={teamLogo} alt="" className="w-full h-full object-contain p-1" onError={() => setImgFailed(true)} />
+            : <span className="text-xs font-black text-white/40">{teamCode?.slice(0,3) || "—"}</span>}
+        </div>
+        <div>
+          <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">{teamCode}</p>
+          <p className="text-[13px] font-black text-white leading-tight">{teamName}</p>
+        </div>
+        <span className="ml-auto text-[9px] font-black text-white/20 uppercase tracking-wider">{players.length} Players</span>
+      </div>
+      {sections.map(sec => (
+        <div key={sec.label}>
+          <div className="px-4 py-2" style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <span className="text-[8px] font-black text-white/25 uppercase tracking-[0.2em]">{sec.label}</span>
+          </div>
+          {sec.items.map((p, i) => <SquadPlayerCard key={p.PlayerID || i} player={p} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Match summary panel ── */
+function MatchSummaryPanel({ summary, isFinished }) {
+  const ms = summary?.postMatch?.[0] || summary?.liveMatch?.[0] || null;
+  if (!ms && !isFinished) return (
+    <p className="text-center text-white/25 text-xs py-12">Summary available after match ends.</p>
+  );
+  if (!ms) return (
+    <p className="text-center text-white/25 text-xs py-12">Match summary not yet available.</p>
+  );
+  const postHtml = ms.PostMatchCommentary || "";
+  const preHtml  = ms.PreMatchCommentary  || "";
+  return (
+    <div className="space-y-0">
+      {/* Quick result */}
+      {ms.Comments && (
+        <div className="px-5 py-4" style={{ background: "rgba(74,222,128,0.05)", borderBottom: "1px solid rgba(74,222,128,0.12)" }}>
+          <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Result</p>
+          <p className="text-sm font-black text-green-400">{ms.Comments}</p>
+        </div>
+      )}
+      {/* MOM */}
+      {ms.MOM && (
+        <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          {ms.MOMImage && (
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0">
+              <img src={ms.MOMImage} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display="none"; }} />
+            </div>
+          )}
+          <div>
+            <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest">Player of the Match</p>
+            <p className="text-sm font-black text-white">{ms.MOM}</p>
+            <div className="flex gap-3 mt-0.5">
+              {ms.MOMWicket && ms.MOMWicket !== "-" && <span className="text-[9px] text-white/35">{ms.MOMWicket} wkts</span>}
+              {ms.MOMRC && ms.MOMRC !== "-" && <span className="text-[9px] text-white/35">{ms.MOMRC} runs conceded</span>}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Post-match commentary */}
+      {postHtml && (
+        <div className="px-5 py-5">
+          <p className="text-[8px] font-black text-white/25 uppercase tracking-widest mb-3">Post Match</p>
+          <div
+            className="text-[12px] leading-relaxed text-white/60 space-y-3"
+            style={{ maxHeight: 480, overflowY: "auto" }}
+            dangerouslySetInnerHTML={{ __html: postHtml.replace(/<img[^>]*>/gi, "") }}
+          />
+        </div>
+      )}
+      {/* Pre-match commentary (collapsed if post exists) */}
+      {preHtml && !postHtml && (
+        <div className="px-5 py-5">
+          <p className="text-[8px] font-black text-white/25 uppercase tracking-widest mb-3">Pre Match</p>
+          <div
+            className="text-[12px] leading-relaxed text-white/60 space-y-3"
+            style={{ maxHeight: 480, overflowY: "auto" }}
+            dangerouslySetInnerHTML={{ __html: preHtml.replace(/<img[^>]*>/gi, "") }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BcciMatchCenter({ matchData, onMatchState }) {
   const [sc, setSc]           = useState(null);
   const [loading, setLoading] = useState(true);
@@ -651,6 +996,12 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   const [refreshing, setRefreshing] = useState(false);
   const [countdown, setCountdown]   = useState(30);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [highlights, setHighlights] = useState(null);   // array of all match videos
+  const [playerModal, setPlayerModal] = useState(null);  // { src, title }
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamingId, setStreamingId] = useState(null);  // id of clip being extracted
+  const [squad, setSquad]           = useState(null);
+  const [matchSummary, setMatchSummary] = useState(null);
   const matchRef = useRef(matchData);
   useEffect(() => { matchRef.current = matchData; }, [matchData]);
 
@@ -714,6 +1065,38 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   useEffect(() => {
     onMatchState?.({ isLive: !!isLive, isFinished: !!isFinished, result: resultComment, mom, momRuns, momWickets: momWkts, momImg });
   }, [isLive, isFinished, resultComment, mom, momRuns, momWkts, momImg]);
+  useEffect(() => {
+    if (!isFinished) return;
+    const smMatchId = rawMd?.SmMatchID || matchData?.SmMatchID || rawMd?.CompetitionID;
+    let cancelled = false;
+    (async () => {
+      const h = await fetchIndiaHighlights(smMatchId);
+      if (!cancelled) setHighlights(h);
+    })();
+    return () => { cancelled = true; };
+  }, [isFinished, rawMd?.MatchID]);
+
+  // Fetch squad data for this match
+  useEffect(() => {
+    if (!matchData?.MatchID) return;
+    let cancelled = false;
+    (async () => {
+      const s = await fetchBcciSquad(matchData.MatchID);
+      if (!cancelled) setSquad(s);
+    })();
+    return () => { cancelled = true; };
+  }, [matchData?.MatchID]);
+
+  // Fetch match summary (post-match/pre-match commentary)
+  useEffect(() => {
+    if (!matchData?.MatchID) return;
+    let cancelled = false;
+    (async () => {
+      const s = await fetchBcciMatchSummary(matchData.MatchID);
+      if (!cancelled) setMatchSummary(s);
+    })();
+    return () => { cancelled = true; };
+  }, [matchData?.MatchID]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -770,6 +1153,8 @@ function BcciMatchCenter({ matchData, onMatchState }) {
         matchTypeText={`${fmt} · ${rawMd?.MatchOrder || matchData.MatchOrder} · ${matchOvers} ov`}
         countdown={countdown} refreshing={refreshing} onRefresh={() => load()}
       >
+
+        
         {/* Live crease cards */}
         {isLive && rawMd?.CurrentStrikerName && (
           <EcbCreaseCards
@@ -796,12 +1181,160 @@ function BcciMatchCenter({ matchData, onMatchState }) {
         {isLive && overBalls.length > 0 && (
           <EcbOverStrip balls={overBalls} bowlerName={rawMd?.CurrentBowlerName} />
         )}
+{/* Result banner */}
+{isFinished && <EcbResultBanner resultText={resultComment} mom={mom} momRuns={momRuns} momWkts={momWkts} momImg={momImg} />}
 
-        {/* Result banner */}
-        {isFinished && <EcbResultBanner resultText={resultComment} mom={mom} momRuns={momRuns} momWkts={momWkts} momImg={momImg} />}
+{/* ── BCCI Multi-Video Highlights (FIFA-style scrollable list) ── */}
+{isFinished && highlights && highlights.length > 0 && (
+  <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+    {/* section header */}
+    <div className="flex items-center justify-between px-5 py-3">
+      <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: ECB_RED }}>
+        ▶ Match Videos · {highlights.length} clips
+      </p>
+    </div>
+    {/* horizontal scrollable clip strip */}
+    <div
+      className="flex gap-3 px-5 pb-4 overflow-x-auto"
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+    >
+      {highlights.map(vid => {
+        const isLoading = streamingId === vid.id && streamLoading;
+        const watchUrl  = vid.shortCode
+          ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
+          : vid.urlSegment
+          ? `https://www.bcci.tv/videos/${vid.urlSegment}`
+          : null;
+        const fmtDur = d => {
+          if (!d) return "";
+          const m = Math.floor(d / 60), s = d % 60;
+          return `${m}:${String(s).padStart(2,"0")}`;
+        };
+        return (
+          <button
+            key={vid.id}
+            disabled={streamLoading}
+            onClick={async () => {
+              if (!watchUrl || streamLoading) return;
+              setStreamingId(vid.id);
+              setStreamLoading(true);
+              try {
+                const res = await fetch(
+                  `${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`
+                );
+                const json = await res.json();
+                if (res.ok && json.success && json.url) {
+                  const params = new URLSearchParams({ url: json.url, title: vid.title });
+                  setPlayerModal({ src: `/player.html?${params}`, title: vid.title });
+                  setStreamLoading(false);
+                  setStreamingId(null);
+                  return;
+                }
+              } catch {}
+              setStreamLoading(false);
+              setStreamingId(null);
+              if (watchUrl) window.open(watchUrl, "_blank", "noopener,noreferrer");
+            }}
+            className="shrink-0 flex flex-col rounded-xl overflow-hidden text-left transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+            style={{
+              width: 160,
+              background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${ isLoading ? ECB_RED : "rgba(255,255,255,0.09)"}`,
+              boxShadow: isLoading ? `0 0 12px ${ECB_RED}44` : "none",
+              transition: "border 0.2s, box-shadow 0.2s, transform 0.15s",
+            }}
+          >
+            {/* thumbnail */}
+            <div className="relative w-full" style={{ height: 90 }}>
+              {vid.thumbnail ? (
+                <img src={vid.thumbnail} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-white/5" />
+              )}
+              {/* dark overlay + play/spinner */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                {isLoading ? (
+                  <div
+                    className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: `${ECB_RED}40`, borderTopColor: ECB_RED }}
+                  />
+                ) : (
+                  <div
+                    className="flex items-center justify-center rounded-full"
+                    style={{
+                      width: 30, height: 30,
+                      background: "rgba(0,0,0,0.55)",
+                      border: `1.5px solid rgba(255,255,255,0.35)`,
+                    }}
+                  >
+                    <PlayCircle size={16} className="text-white" />
+                  </div>
+                )}
+              </div>
+              {/* duration badge */}
+              {vid.duration > 0 && (
+                <span
+                  className="absolute bottom-1.5 right-1.5 text-[9px] font-black text-white px-1.5 py-0.5 rounded"
+                  style={{ background: "rgba(0,0,0,0.72)" }}
+                >
+                  {fmtDur(vid.duration)}
+                </span>
+              )}
+            </div>
+            {/* meta */}
+            <div className="px-2.5 py-2 flex flex-col gap-0.5">
+              <p className="text-[10px] font-bold text-white leading-snug line-clamp-2" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {vid.title}
+              </p>
+              {vid.views > 0 && (
+                <p className="text-[8px] text-white/30 font-medium">
+                  {(vid.views / 1000).toFixed(0)}K views
+                </p>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+)}
 
-        {/* Upcoming */}
-        {!isLive && !isFinished && !inn1Score && (
+{/* Fullscreen player modal */}
+{playerModal && (
+  <div
+    style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.96)",
+      display: "flex", flexDirection: "column",
+    }}
+  >
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0,
+    }}>
+      <span style={{ color: ECB_RED, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+        ▶ {playerModal.title}
+      </span>
+      <button
+        onClick={() => setPlayerModal(null)}
+        style={{
+          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+          color: "#fff", borderRadius: 8, width: 32, height: 32,
+          cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >×</button>
+    </div>
+    <iframe
+      src={playerModal.src}
+      style={{ flex: 1, width: "100%", border: "none" }}
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+      allowFullScreen
+    />
+  </div>
+)}
+
+{/* Upcoming */}
+{!isLive && !isFinished && !inn1Score && (
           <div className="px-5 py-6 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="text-[9px] font-black text-white/25 uppercase tracking-widest">Match starts</p>
             <p className="text-xl font-black text-white mt-1">{bcciFmtDate(rawMd?.MatchDate || matchData.MatchDate)}</p>
@@ -817,6 +1350,8 @@ function BcciMatchCenter({ matchData, onMatchState }) {
             { k: "overview",  l: "Overview"  },
             { k: "scorecard", l: "Scorecard" },
             { k: "bowling",   l: "Bowling"   },
+            { k: "squads",    l: "Squads"    },
+            { k: "summary",   l: "Summary"   },
           ]}
           active={tab} onChange={setTab} accent={ECB_RED}
         />
@@ -864,6 +1399,46 @@ function BcciMatchCenter({ matchData, onMatchState }) {
                 );
               })
             : <p className="text-center text-white/20 text-xs py-10">Bowling data not available</p>
+        )}
+
+        {tab === "squads" && (
+          squad
+            ? (
+              <div>
+                {/* Team A squad */}
+                {(squad.squadA?.length > 0 || squad.squadB?.length > 0) ? (
+                  <>
+                    {squad.squadA?.length > 0 && (
+                      <SquadPanel
+                        players={squad.squadA}
+                        teamName={squad.squadA[0]?.TeamName || "Team A"}
+                        teamCode={squad.squadA[0]?.TeamCode || ""}
+                        teamLogo={squad.squadA[0]?.TeamImage || null}
+                      />
+                    )}
+                    {/* Divider between teams */}
+                    {squad.squadA?.length > 0 && squad.squadB?.length > 0 && (
+                      <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "4px 0" }} />
+                    )}
+                    {squad.squadB?.length > 0 && (
+                      <SquadPanel
+                        players={squad.squadB}
+                        teamName={squad.squadB[0]?.TeamName || "Team B"}
+                        teamCode={squad.squadB[0]?.TeamCode || ""}
+                        teamLogo={squad.squadB[0]?.TeamImage || null}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <p className="text-center text-white/20 text-xs py-10">Squad data unavailable</p>
+                )}
+              </div>
+            )
+            : <p className="text-center text-white/20 text-xs py-10">Loading squad…</p>
+        )}
+
+        {tab === "summary" && (
+          <MatchSummaryPanel summary={matchSummary} isFinished={!!isFinished} />
         )}
       </EcbScorecardCard>
     </div>
@@ -1084,6 +1659,9 @@ function FifaMatchCenter({ matchId, onMatchState }) {
   const [refreshing, setRefreshing] = useState(false);
   const [countdown, setCountdown]   = useState(30);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [highlight, setHighlight]   = useState(null);
+  const [playerModal, setPlayerModal] = useState(null); // { src, title } when open
+  const [streamLoading, setStreamLoading] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -1104,7 +1682,7 @@ function FifaMatchCenter({ matchId, onMatchState }) {
 
   useEffect(() => {
     if (!match) return;
-    const status = getFifaStatus(match);
+    const status = getFifaStatus(match || {});
     const isLive = status === "live";
     const isDone = status === "finished";
     const hName  = fifaTeamName(match.Home);
@@ -1113,6 +1691,19 @@ function FifaMatchCenter({ matchId, onMatchState }) {
     const aWon   = isDone && match.AwayTeamScore > match.HomeTeamScore;
     const resultStr = isDone ? (hWon ? `${match.Home?.Abbreviation || hName} win` : aWon ? `${match.Away?.Abbreviation || aName} win` : "Draw") : "";
     onMatchState?.({ isLive, isFinished: isDone, result: resultStr, mom: "", momRuns: "", momWickets: "", momImg: "" });
+  }, [match]);
+
+   useEffect(() => {
+    if (!match) return;
+    if (getFifaStatus(match) !== "finished") return;
+    console.log("[fifa highlight debug] match object:", match); // inspect once for a stage-id field
+    const stageId = match.IdStage || FIFA_STAGE; // adjust key once confirmed from the log above
+    let cancelled = false;
+    (async () => {
+      const h = await fetchFifaHighlight(match.IdMatch, stageId);
+      if (!cancelled) setHighlight(h);
+    })();
+    return () => { cancelled = true; };
   }, [match]);
 
   const FIFA_GREEN = "#34d399";
@@ -1178,6 +1769,73 @@ function FifaMatchCenter({ matchId, onMatchState }) {
       >
         {/* Result banner */}
         {isDone && <EcbResultBanner resultText={resultStr} />}
+
+        {/* Highlights — click to scrape m3u8 → show fullscreen player modal */}
+        {isDone && (
+          <EcbHighlightCard
+            highlight={highlight}
+            accent={FIFA_GREEN}
+            onOpen={async () => {
+              if (!highlight?.watchPath) return;
+              if (streamLoading) return;
+              const watchUrl = `https://www.fifa.com${highlight.watchPath}`;
+              const title = `${hTeam?.Abbreviation || hName} vs ${aTeam?.Abbreviation || aName} · FIFA WC 2026`;
+              setStreamLoading(true);
+              try {
+                const res = await fetch(
+                  `${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`
+                );
+                const json = await res.json();
+                if (res.ok && json.success && json.url) {
+                  const params = new URLSearchParams({ url: json.url, title });
+                  setPlayerModal({ src: `/player.html?${params}`, title });
+                  setStreamLoading(false);
+                  return;
+                }
+              } catch {}
+              setStreamLoading(false);
+              // Fallback: open FIFA watch page directly
+              window.open(watchUrl, "_blank", "noopener,noreferrer");
+            }}
+            loading={streamLoading}
+          />
+        )}
+
+        {/* Fullscreen player modal */}
+        {playerModal && (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 9999,
+              background: "rgba(0,0,0,0.96)",
+              display: "flex", flexDirection: "column",
+            }}
+          >
+            {/* Top bar */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0,
+            }}>
+              <span style={{ color: FIFA_GREEN, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+                ▶ {playerModal.title}
+              </span>
+              <button
+                onClick={() => setPlayerModal(null)}
+                style={{
+                  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                  color: "#fff", borderRadius: 8, width: 32, height: 32,
+                  cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >×</button>
+            </div>
+            {/* Player iframe fills the rest */}
+            <iframe
+              src={playerModal.src}
+              style={{ flex: 1, width: "100%", border: "none" }}
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
 
         {/* Upcoming */}
         {isUp && (
