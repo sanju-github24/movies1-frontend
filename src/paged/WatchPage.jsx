@@ -5,6 +5,7 @@ import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
+import MbidadmBanner from "../components/MbidadmBanner";
 import {
   Loader2, Star, Play, ShieldCheck,
   ArrowLeft, List, MonitorPlay, Server,
@@ -916,6 +917,9 @@ if (!alive) return;
           </div>
         </div>
       </div>
+
+      {/* Centered high-impression ad banner */}
+      <MbidadmBanner />
 
       {/* ── MAIN CONTENT ── */}
       <main className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-20 z-10">
