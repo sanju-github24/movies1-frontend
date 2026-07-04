@@ -93,6 +93,49 @@ const _cache={};
 function getCached(k){const e=_cache[k];return(e&&Date.now()-e.ts<600000)?e.data:null;}
 function setCache(k,d){_cache[k]={data:d,ts:Date.now()};}
 
+// ─── HIGHLIGHT FETCHERS ───────────────────────────────────────────────────────
+const FIFA_VIDEOS_API="https://cxm-api.fifa.com/fifaplusweb/api/sections/matchdetails/videos";
+
+async function fetchFifaHighlight(matchId,stageId=FIFA_STAGE){
+  if(!matchId)return null;
+  const k=`hero_fifa_hl_v2_${matchId}`;
+  const cached=getCached(k);
+  if(cached!==null&&cached!==undefined)return cached;
+  try{
+    const url=`${FIFA_VIDEOS_API}?locale=en&competitionId=${FIFA_COMPETITION}&seasonId=${FIFA_SEASON}&stageId=${stageId}&matchId=${matchId}`;
+    const res=await fetch(url,{headers:{Accept:"application/json"}});
+    if(!res.ok)return null;
+    const json=await res.json();
+    const items=json?.vodVideosBaseCarousel?.items||[];
+    if(!items.length){setCache(k,null);return null;}
+    const vid=items.find(v=>!/sign language/i.test(v.title||""))||items[0];
+    const hl={title:vid.title,thumbnail:vid.image?.src||null,watchPath:vid.readMorePageUrl||null};
+    setCache(k,hl);return hl;
+  }catch{return null;}
+}
+
+async function fetchIndiaHighlights(smMatchId){
+  if(!smMatchId)return null;
+  const k=`hero_india_hl_v2_${smMatchId}`;
+  const cached=getCached(k);
+  if(cached!==null&&cached!==undefined)return cached;
+  try{
+    const res=await fetch(`${API_BASE}/api/bcci/highlight?smMatchId=${smMatchId}`);
+    if(!res.ok)return null;
+    const json=await res.json();
+    const videos=json.data||[];
+    if(!videos.length){setCache(k,null);return null;}
+    const mapped=videos.map(v=>({
+      id:v._id||v.id,
+      title:v.title||"Untitled",
+      thumbnail:v.thumbnail_image||v.imageUrl||v.imageBackup||null,
+      shortCode:v.short_code||null,
+      urlSegment:v.titleUrlSegment||null,
+    }));
+    setCache(k,mapped);return mapped;
+  }catch{return null;}
+}
+
 // ─── PULSING DOT ──────────────────────────────────────────────────────────────
 function PulsingDot({color="#ef4444",size=8}){
   return(
@@ -177,13 +220,57 @@ function CricketSlide({slide}){
   const fmtColor=isODI?"#f59e0b":isTest?"#ef4444":"#8b5cf6";
   const fmtBg=isODI?"rgba(245,158,11,0.15)":isTest?"rgba(239,68,68,0.15)":"rgba(139,92,246,0.15)";
   const fmtBorder=isODI?"rgba(245,158,11,0.3)":isTest?"rgba(239,68,68,0.3)":"rgba(139,92,246,0.3)";
-  const bgImg=resolveThumbnail(slide);
-  const isIndiaAfg=bgImg.includes("india-vs-afg");
+
+  // ── Highlight support ──────────────────────────────────────────────────────
+  const highlight=slide.highlight||null;
+  const bestClip=Array.isArray(highlight)
+    ?(highlight.find(v=>(v.title||"").toLowerCase().includes("match highlights"))||highlight[0])
+    :highlight;
+  const [playerModal,setPlayerModal]=useState(null);
+  const [streamLoading,setStreamLoading]=useState(false);
+
+  // Use highlight thumbnail as background when match is finished and highlight available
+  const fallbackBg=resolveThumbnail(slide);
+  const bgImg=(isFinished&&bestClip?.thumbnail)?bestClip.thumbnail:fallbackBg;
+  const isIndiaAfg=fallbackBg.includes("india-vs-afg");
   const base=isIndiaAfg?"#0a0008":"#0a0015";
   const btm=isIndiaAfg?"#06000a":"#030007";
 
+  const openHighlight=async(e)=>{
+    e.preventDefault();e.stopPropagation();
+    if(!bestClip||streamLoading)return;
+    const watchUrl=bestClip.shortCode
+      ?`https://www.bcci.tv/bccilink/videos/${bestClip.shortCode}`
+      :bestClip.urlSegment
+      ?`https://www.bcci.tv/videos/${bestClip.urlSegment}`
+      :null;
+    if(!watchUrl)return;
+    setStreamLoading(true);
+    try{
+      const res=await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+      const json=await res.json();
+      if(res.ok&&json.success&&json.url){
+        const params=new URLSearchParams({url:json.url,title:bestClip.title||"Watch"});
+        setPlayerModal({src:`/player.html?${params}`,title:bestClip.title||"Watch"});
+        setStreamLoading(false);return;
+      }
+    }catch{}
+    setStreamLoading(false);
+  };
+
   return(
     <div className="relative w-full h-full select-none">
+      {/* ── Fullscreen player modal ── */}
+      {playerModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.96)",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:"rgba(0,0,0,0.7)",flexShrink:0}}>
+            <span style={{color:fmtColor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.15em"}}>▶ {playerModal.title}</span>
+            <button onClick={()=>setPlayerModal(null)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          </div>
+          <iframe src={playerModal.src} style={{flex:1,width:"100%",border:"none"}} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+        </div>
+      )}
+
       <div className="absolute inset-0">
         <img src={bgImg} alt="" className="w-full h-full object-cover object-center animate-fade-in"/>
         <div className="absolute inset-0" style={{background:`linear-gradient(to right,${base} 0%,${base}d9 45%,transparent 100%)`}}/>
@@ -216,6 +303,12 @@ function CricketSlide({slide}){
             <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-purple-500/15 border-purple-500/30 text-purple-400 font-black uppercase tracking-widest"
               style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
               ✓ Completed
+            </span>
+          )}
+          {isFinished&&bestClip&&(
+            <span className="flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full border font-black uppercase tracking-widest"
+              style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(249,115,22,0.15)",borderColor:"rgba(249,115,22,0.3)",color:"#fb923c"}}>
+              ▶ Highlights
             </span>
           )}
           {isUpcoming&&(
@@ -271,21 +364,42 @@ function CricketSlide({slide}){
           {slide.venue&&<p className="text-gray-500 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>📍 {slide.venue}</p>}
           {slide.result&&<p className="font-black" style={{fontSize:"clamp(8px,2vw,11px)",color:isFinished?"#a78bfa":"#f59e0b"}}>{slide.result}</p>}
           {isLive&&slide.strikerName&&<p className="text-amber-400 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>★ {slide.strikerName} {slide.strikerRuns}({slide.strikerBalls})</p>}
+          {isFinished&&bestClip&&(
+            <p className="font-bold truncate" style={{fontSize:"clamp(8px,2vw,10px)",color:"#fb923c",maxWidth:"70%"}}>▶ {bestClip.title}</p>
+          )}
         </div>
 
         {/* ── CTA / footer ── */}
-        <Link to="/live-cricket-tv"
-          className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-          style={{
-            fontSize:"clamp(8px,2vw,13px)",
-            padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-            background:`linear-gradient(135deg,${fmtColor},${isODI?"#b45309":isTest?"#b91c1c":"#6d28d9"})`,
-            boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
-            color:"#fff",
-          }}>
-          <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-          {isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
-        </Link>
+        {isFinished&&bestClip?(
+          <button onClick={openHighlight} disabled={streamLoading}
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03] disabled:opacity-60"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:"linear-gradient(135deg,#f97316,#ea580c)",
+              boxShadow:"0 0 20px rgba(249,115,22,0.45),0 4px 12px rgba(0,0,0,0.4)",
+              color:"#fff",cursor:"pointer",border:"none",
+            }}>
+            {streamLoading
+              ?<div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{borderColor:"rgba(255,255,255,0.3)",borderTopColor:"#fff"}}/>
+              :<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            }
+            {streamLoading?"Loading…":"Watch Highlights"}
+          </button>
+        ):(
+          <Link to="/live-cricket-tv"
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:`linear-gradient(135deg,${fmtColor},${isODI?"#b45309":isTest?"#b91c1c":"#6d28d9"})`,
+              boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
+              color:"#fff",
+            }}>
+            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            {isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -300,10 +414,47 @@ function FootballSlide({slide}){
   const hWon=isFinished&&home.score>away.score;
   const aWon=isFinished&&away.score>home.score;
 
+  // ── Highlight support ──────────────────────────────────────────────────────
+  const highlight=slide.highlight||null;
+  const [playerModal,setPlayerModal]=useState(null);
+  const [streamLoading,setStreamLoading]=useState(false);
+
+  // Use highlight thumbnail (from FIFA API) as background for finished matches
+  const bgSrc=(isFinished&&highlight?.thumbnail)?highlight.thumbnail:"/fifa_2026.webp";
+
+  const openHighlight=async(e)=>{
+    e.preventDefault();e.stopPropagation();
+    if(!highlight||streamLoading)return;
+    const watchUrl=highlight.watchPath?`https://www.fifa.com${highlight.watchPath}`:null;
+    if(!watchUrl)return;
+    setStreamLoading(true);
+    try{
+      const res=await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+      const json=await res.json();
+      if(res.ok&&json.success&&json.url){
+        const params=new URLSearchParams({url:json.url,title:highlight.title||"Highlights"});
+        setPlayerModal({src:`/player.html?${params}`,title:highlight.title||"Highlights"});
+        setStreamLoading(false);return;
+      }
+    }catch{}
+    setStreamLoading(false);
+  };
+
   return(
     <div className="relative w-full h-full select-none">
+      {/* ── Fullscreen player modal ── */}
+      {playerModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.96)",display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:"rgba(0,0,0,0.7)",flexShrink:0}}>
+            <span style={{color:"#1ed596",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.15em"}}>▶ {playerModal.title}</span>
+            <button onClick={()=>setPlayerModal(null)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          </div>
+          <iframe src={playerModal.src} style={{flex:1,width:"100%",border:"none"}} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+        </div>
+      )}
+
       <div className="absolute inset-0">
-        <img src="/fifa_2026.webp" alt="" className="w-full h-full object-cover object-center animate-fade-in"/>
+        <img src={bgSrc} alt="" className="w-full h-full object-cover object-center animate-fade-in"/>
         <div className="absolute inset-0 bg-gradient-to-r from-[#001a0a] via-[#001a0a]/85 to-transparent"/>
         <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-[#000d05] to-transparent"/>
         <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#000d05] to-transparent"/>
@@ -335,6 +486,12 @@ function FootballSlide({slide}){
             <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-emerald-500/15 border-emerald-500/30 text-emerald-400 font-black uppercase tracking-widest"
               style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
               ✓ Full Time
+            </span>
+          )}
+          {isFinished&&highlight&&(
+            <span className="flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full border font-black uppercase tracking-widest"
+              style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(249,115,22,0.15)",borderColor:"rgba(249,115,22,0.3)",color:"#fb923c"}}>
+              ▶ Highlights
             </span>
           )}
           {isUpcoming&&(
@@ -386,21 +543,42 @@ function FootballSlide({slide}){
           {slide.venue&&<p className="text-gray-500 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>📍 {slide.venue}</p>}
           {isFinished&&<p className="font-black" style={{fontSize:"clamp(8px,2vw,11px)",color:"#4ade80"}}>{hWon?`${home.code} win`:aWon?`${away.code} win`:"Draw"} · FT {home.score}–{away.score}</p>}
           {isLive&&slide.minute&&<p className="font-black text-amber-400" style={{fontSize:"clamp(8px,2vw,11px)"}}>{slide.minute}' · Match in progress</p>}
+          {isFinished&&highlight&&(
+            <p className="font-bold truncate" style={{fontSize:"clamp(8px,2vw,10px)",color:"#fb923c",maxWidth:"70%"}}>▶ {highlight.title}</p>
+          )}
         </div>
 
         {/* ── CTA ── */}
-        <Link to="/live-cricket-tv"
-          className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-          style={{
-            fontSize:"clamp(8px,2vw,13px)",
-            padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-            background:"linear-gradient(135deg,#1ed596,#059669)",
-            boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
-            color:"#fff",
-          }}>
-          <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-          {isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
-        </Link>
+        {isFinished&&highlight?(
+          <button onClick={openHighlight} disabled={streamLoading}
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03] disabled:opacity-60"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:"linear-gradient(135deg,#f97316,#ea580c)",
+              boxShadow:"0 0 20px rgba(249,115,22,0.45),0 4px 12px rgba(0,0,0,0.4)",
+              color:"#fff",cursor:"pointer",border:"none",
+            }}>
+            {streamLoading
+              ?<div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{borderColor:"rgba(255,255,255,0.3)",borderTopColor:"#fff"}}/>
+              :<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            }
+            {streamLoading?"Loading…":"Watch Highlights"}
+          </button>
+        ):(
+          <Link to="/live-cricket-tv"
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:"linear-gradient(135deg,#1ed596,#059669)",
+              boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
+              color:"#fff",
+            }}>
+            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            {isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -458,7 +636,7 @@ export default function HeroSection(){
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v6";
+    const ck="hero_slides_v7";
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
@@ -518,6 +696,7 @@ export default function HeroSection(){
             matchFmt: bcciFmt(m.MatchType),
             venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
             result: m.Comments || m.Commentss || null,
+            smMatchId: m.SmMatchID || m.MatchID,  // used for highlight fetching
           });
         }
       }
@@ -654,6 +833,8 @@ export default function HeroSection(){
             dateLabel: fmtDateIST(m.Date),
             timeLabel: fmtIST(m.Date),
             countdown: status==="upcoming" ? countdownLabel(m.Date) : "",
+            fifaMatchId: m.IdMatch,                      // used for highlight fetching
+            fifaStageId: m.IdStage || FIFA_STAGE,        // used for highlight fetching
           };
         };
 
@@ -662,6 +843,23 @@ export default function HeroSection(){
         for(const m of fifaUp.slice(0,2)) upF.push(buildFifaSlide(m,"upcoming"));
       }
     }catch{}
+
+    // ── Fetch highlights for finished slides in parallel ──────────────────────
+    // Highlights show in the hero from the moment the match ends until the next
+    // live match of that tournament starts (the ordering below already handles
+    // suppressing finished slides when a live one exists).
+    await Promise.allSettled([
+      ...finC.map(s=>
+        fetchIndiaHighlights(s.smMatchId)
+          .then(h=>{if(h)s.highlight=h;})
+          .catch(()=>{})
+      ),
+      ...finF.map(s=>
+        fetchFifaHighlight(s.fifaMatchId,s.fifaStageId)
+          .then(h=>{if(h)s.highlight=h;})
+          .catch(()=>{})
+      ),
+    ]);
 
     // ── Order ──
     let ordered=[];
