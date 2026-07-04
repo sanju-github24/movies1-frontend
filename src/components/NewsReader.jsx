@@ -183,12 +183,49 @@ const NewsViewer = () => {
               </div>
             )}
 
-            {error && (
+            {/* ── Error / iframe fallback ──────────────────────────────────────
+                When our scraper can't extract the article (common for ESPNcricinfo
+                due to bot protections / JS rendering), we embed the original page
+                in a sandboxed iframe so the user always reads the full article.  */}
+            {!loading && error && articleUrl && (
+              <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden">
+                {/* Top strip */}
+                <div className="flex items-center justify-between px-5 py-3 bg-amber-500/10 border-b border-amber-500/20 gap-3 flex-wrap">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
+                      style={{ background: feedMeta.color }}
+                    >
+                      {feedMeta.label}
+                    </span>
+                    <span className="text-xs text-amber-300 font-semibold">
+                      Loading full article from {srcLabel}…
+                    </span>
+                  </div>
+                  <a
+                    href={articleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs font-bold border border-[#c5c107]/50 text-[#c5c107] px-3.5 py-1.5 rounded-full hover:bg-[#c5c107] hover:text-black transition"
+                  >
+                    Open original ↗
+                  </a>
+                </div>
+                {/* Iframe — renders the full original article */}
+                <iframe
+                  src={articleUrl}
+                  title="Article"
+                  className="w-full"
+                  style={{ height: "82vh", border: "none", background: "#fff" }}
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                  loading="lazy"
+                />
+              </div>
+            )}
+
+            {/* ── No URL provided ── */}
+            {!loading && error && !articleUrl && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-10 text-center">
-                <p className="text-red-400 text-sm mb-4">{error}</p>
-                <p className="text-gray-500 text-xs mb-6">
-                  Content couldn't be loaded from {srcLabel}.
-                </p>
                 <a
                   href={articleUrl}
                   target="_blank"
