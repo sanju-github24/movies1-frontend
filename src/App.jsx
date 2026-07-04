@@ -25,6 +25,7 @@ import AdminStories from "./paged/AdminStories";
 import AdScriptLoader from './components/AdScriptLoader';
 import AdPopup from './components/AdPopup';
 import PopAdsScript from './components/PopAdsScript';
+import MbidadmBanner from './components/MbidadmBanner';
 import Profile from "./paged/Profile";
 import UploadWatchHtml from './paged/UploadWatchHtml';
 import WatchPage from './paged/WatchPage';
@@ -195,6 +196,8 @@ const AppContent = () => {
         </>
       )}
 
+
+
       <Routes>
         <Route path="/"                       element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code"            element={<MovieDetail />} />
@@ -254,8 +257,10 @@ const AppContent = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {!(isPlayerPath || isLiveCricketPath || isLiveStreamPlayer) && (
+      {/* Bottom Ad slots and scripts for all pages except admin */}
+      {!isAdminPath && (
         <>
+          <MbidadmBanner key={`banner-bottom-${location.pathname}`} />
           <AdScriptLoader />
           <PopAdsScript />
           <AdPopup />
