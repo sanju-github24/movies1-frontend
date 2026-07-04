@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home } from "lucide-react";
+import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle } from "lucide-react";
 import HeroSection from "./HeroSection";
 
 function encodeMatchHash(payload) {
@@ -18,9 +18,22 @@ const FIFA_SEASON      = "285023";
 const FIFA_STAGE       = "289273";
 const WT20_SERIES_ID   = "12672";
 
+
+ 
 // ─── BCCI HELPERS ─────────────────────────────────────────────────────────────
-const BCCI_WOMENS_COMP_IDS = new Set([238]);
-function isIndiaMensMatch(m) { return !BCCI_WOMENS_COMP_IDS.has(Number(m.CompetitionID)); }
+// Known non-senior-men's competition IDs:
+// 238 = Women's internationals
+// 357, 358 = Women U19
+// 389, 390 = Women A / emerging
+// 393 = India A / A-tour (not senior men's)
+const BCCI_EXCLUDE_COMP_IDS = new Set([238, 357, 358, 389, 390, 393]);
+function isIndiaMensMatch(m) {
+  if (BCCI_EXCLUDE_COMP_IDS.has(Number(m.CompetitionID))) return false;
+  // Safety-net: filter any match whose name contains women/junior/A-team keywords
+  const name = (m.MatchName || "").toLowerCase();
+  if (/women|\bw19\b|wu19|under.?19|\bwomen\b|\.a\b| a vs | vs a |india a\b/i.test(m.MatchName || "")) return false;
+  return true;
+}
 function bcciFmt(type) {
   const MAP = { "One Day D/N":"ODI","One Day":"ODI","T20":"T20I","Test":"Test","Test D/N":"Test" };
   return MAP[type] || type || "MATCH";
@@ -41,6 +54,113 @@ function countdownLabel(dateStr) {
   const days = Math.round(hrs / 24);
   return `${days} DAY${days!==1?"S":""} TO GO`;
 }
+
+// ─── INDIA HIGHLIGHTS ─────────────────────────────────────────────────────────
+// Returns the FULL video list so we can show a FIFA-style multi-clip carousel.
+// Each item includes short_code → used as /bccilink/videos/{short_code} for streaming.
+
+async function fetchIndiaHighlights(smMatchId) {
+  if (!smMatchId) return null;
+  const k = `highlights_all_${smMatchId}`;
+  const cached = getCached(k);
+  if (cached !== undefined && cached !== null) return cached;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/bcci/highlight?smMatchId=${smMatchId}`);
+    if (!res.ok) {
+      console.warn("[highlight] backend responded", res.status, "for smMatchId", smMatchId);
+      return null;
+    }
+    const json = await res.json();
+    const videos = json.data || [];
+
+    if (!videos.length) {
+      console.warn("[highlight] no videos returned for smMatchId", smMatchId);
+      setCache(k, null);
+      return null;
+    }
+
+    // Map every video — preserve short_code for stream extraction
+    const mapped = videos.map(v => ({
+      id:        v._id || v.id,
+      title:     v.title || "Untitled",
+      thumbnail: v.thumbnail_image || v.imageUrl || v.imageBackup || null,
+      duration:  v.duration || 0,
+      views:     v.views_count || v.views || 0,
+      shortCode:  v.short_code || null,       // ← bccilink stream key
+      urlSegment: v.titleUrlSegment || null,  // ← fallback
+    }));
+
+    setCache(k, mapped);
+    return mapped;
+  } catch (e) {
+    console.error("[highlight] fetch failed for smMatchId", smMatchId, e);
+    return null;
+  }
+}
+
+// ─── FIFA HIGHLIGHTS ──────────────────────────────────────────────────────────
+const FIFA_VIDEOS_API = "https://cxm-api.fifa.com/fifaplusweb/api/sections/matchdetails/videos";
+
+async function fetchFifaHighlight(matchId, stageId = FIFA_STAGE) {
+  if (!matchId) return null;
+  const k = `fifa_highlight_${matchId}`;
+  const cached = getCached(k);
+  if (cached !== undefined && cached !== null) return cached;
+
+  try {
+    const url = `${FIFA_VIDEOS_API}?locale=en&competitionId=${FIFA_COMPETITION}&seasonId=${FIFA_SEASON}&stageId=${stageId}&matchId=${matchId}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const items = json?.vodVideosBaseCarousel?.items || [];
+    if (!items.length) { setCache(k, null); return null; }
+    const vid = items.find(v => !/sign language/i.test(v.title || "")) || items[0];
+    const highlight = {
+      title: vid.title,
+      thumbnail: vid.image?.src || null,
+      watchPath: vid.readMorePageUrl || null,
+    };
+    setCache(k, highlight);
+    return highlight;
+  } catch (e) {
+    console.error("[fifa highlight] fetch failed", matchId, e);
+    return null;
+  }
+}
+
+// ─── IPL HIGHLIGHTS ───────────────────────────────────────────────────────────
+// Fetches all highlight videos for one IPL 2026 match via the backend proxy.
+async function fetchIplMatchHighlights(smMatchId) {
+  if (!smMatchId) return null;
+  const k = `ipl_hl_${smMatchId}`;
+  const cached = getCached(k);
+  if (cached !== undefined && cached !== null) return cached;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/ipl/highlight-videos?smMatchId=${smMatchId}`);
+    if (!res.ok) { setCache(k, null); return null; }
+    const json = await res.json();
+    const vids = json.videos || [];
+    if (!vids.length) { setCache(k, null); return null; }
+    const mapped = vids.map(v => ({
+      id:             v.id,
+      title:          v.title || "Untitled",
+      thumbnail:      v.thumbnail || null,
+      duration:       v.duration || 0,
+      mediaId:        v.mediaId || null,
+      titleUrlSegment: v.titleUrlSegment || null,
+      shortCode:      v.shortCode || null,
+    }));
+    setCache(k, mapped);
+    return mapped;
+  } catch (e) {
+    console.error("[ipl highlight] fetch failed", smMatchId, e);
+    return null;
+  }
+}
+
+
 
 // ─── FIFA / MISC HELPERS ──────────────────────────────────────────────────────
 const ICC_FLAGS = {
@@ -168,7 +288,7 @@ function TeamBadge({ team, sport, size = 44 }) {
 }
 
 // ─── BCCI-STYLE MATCH CARD (shared: live / scheduled / finished, cricket + football) ──
-function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, away, venue, link, result, tossText }) {
+function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, away, venue, link, result, tossText, highlight }) {
   const isLive     = status === "live";
   const isFinished = status === "finished";
   const accent     = sport === "cricket" ? "#8b5cf6" : "#1ed596";
@@ -177,84 +297,199 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
   const showCricketScores = sport === "cricket" && (isLive || isFinished) && (home.score || away.score);
   const showFootballScores = sport === "football" && (isLive || isFinished) && home.score !== null && home.score !== undefined;
 
-  return (
-    <Link to={link || "/live-cricket-tv"}
-      className="flex rounded-2xl overflow-hidden border transition-all duration-200 active:scale-[0.98] hover:border-white/20"
-      style={{
-        borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
-        boxShadow: isLive ? `0 0 18px ${accent}22` : "none",
-      }}>
-      {/* side accent bar */}
-      <div className="w-1.5 shrink-0" style={{ background: accent }} />
+  const [playerModal, setPlayerModal] = useState(null); // { src } when open
+  const [streamLoading, setStreamLoading] = useState(false);
 
-      <div className="flex-1 bg-white/[0.02]">
-        {/* header strip */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] gap-2">
-          <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider truncate">
-            {matchLabel ? `${matchLabel} · ` : ""}{leagueLabel}
+  const openHighlight = async (e, vid) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!vid) return;
+
+    // Both cricket (BCCI) and football (FIFA) now go through the stream extractor
+    const watchUrl = sport === "football"
+      ? (vid.watchPath ? `https://www.fifa.com${vid.watchPath}` : null)
+      : vid.shortCode
+      ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
+      : vid.urlSegment
+      ? `https://www.bcci.tv/videos/${vid.urlSegment}`
+      : null;
+
+    if (!watchUrl || streamLoading) return;
+    setStreamLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`
+      );
+      const json = await res.json();
+      if (res.ok && json.success && json.url) {
+        const params = new URLSearchParams({ url: json.url, title: vid.title || "Watch" });
+        setPlayerModal({ src: `/player.html?${params}`, title: vid.title || "Watch" });
+        setStreamLoading(false);
+        return;
+      }
+    } catch {}
+    setStreamLoading(false);
+    // Stream extraction failed — do NOT open external browser.
+    // The user stays in-app; the button resets so they can retry.
+  };
+
+  // Pick the single "best" clip to show in the card footer
+  // For cricket: prefer match highlights, else first video
+  // For football: single highlight object
+  const bestClip = Array.isArray(highlight)
+    ? (highlight.find(v => (v.title || "").toLowerCase().includes("match highlights")) || highlight[0])
+    : highlight;
+
+  const fmtDur = d => {
+    if (!d) return "";
+    const m = Math.floor(d / 60), s = d % 60;
+    return `${m}:${String(s).padStart(2,"0")}`;
+  };
+
+ return (
+  <>
+    {/* Fullscreen player modal */}
+    {playerModal && (
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.96)",
+          display: "flex", flexDirection: "column",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0,
+        }}>
+          <span style={{ color: accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+            ▶ {playerModal.title || "Watch"}
           </span>
-          {isLive ? (
-            <span className="flex items-center gap-1 shrink-0">
-              <PulsingDot color="#ef4444" size={5}/>
-              <span className="text-[8px] font-black text-red-400 uppercase">Live</span>
+          <button
+            onClick={() => setPlayerModal(null)}
+            style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", borderRadius: 8, width: 32, height: 32,
+              cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >×</button>
+        </div>
+        <iframe
+          src={playerModal.src}
+          style={{ flex: 1, width: "100%", border: "none" }}
+          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    )}
+
+  <Link to={link || "/live-cricket-tv"}
+    className="flex rounded-2xl overflow-hidden border transition-all duration-200 active:scale-[0.98] hover:border-white/20"
+    style={{
+      borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
+      boxShadow: isLive ? `0 0 18px ${accent}22` : "none",
+    }}>
+    {/* side accent bar */}
+    <div className="w-1.5 shrink-0" style={{ background: accent }} />
+
+    <div className="flex-1 bg-white/[0.02]">
+      {/* header strip */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] gap-2">
+        <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider truncate">
+          {matchLabel ? `${matchLabel} · ` : ""}{leagueLabel}
+        </span>
+        {isLive ? (
+          <span className="flex items-center gap-1 shrink-0">
+            <PulsingDot color="#ef4444" size={5}/>
+            <span className="text-[8px] font-black text-red-400 uppercase">Live</span>
+          </span>
+        ) : isFinished ? (
+          <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
+        ) : (
+          <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>{statusLabel}</span>
+        )}
+      </div>
+
+      {/* teams: badge-over-name, BCCI style */}
+      <div className="flex items-center justify-between px-3 py-3 gap-2">
+        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+          <TeamBadge team={home} sport={sport} size={36}/>
+          <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: hWon ? "#4ade80" : "white" }}>
+            {home.code}
+          </span>
+          {showCricketScores && home.score && (
+            <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+              {home.score}{home.overs ? ` (${home.overs})` : ""}
             </span>
-          ) : isFinished ? (
-            <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
-          ) : (
-            <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>{statusLabel}</span>
+          )}
+          {showFootballScores && (
+            <span className="text-[12px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{home.score}</span>
           )}
         </div>
 
-        {/* teams: badge-over-name, BCCI style */}
-        <div className="flex items-center justify-between px-3 py-3 gap-2">
-          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-            <TeamBadge team={home} sport={sport} size={36}/>
-            <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: hWon ? "#4ade80" : "white" }}>
-              {home.code}
-            </span>
-            {showCricketScores && home.score && (
-              <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
-                {home.score}{home.overs ? ` (${home.overs})` : ""}
-              </span>
-            )}
-            {showFootballScores && (
-              <span className="text-[12px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{home.score}</span>
-            )}
-          </div>
-
-          <div className="shrink-0 text-center px-1">
-            {showFootballScores
-              ? <span className="text-[12px] font-black text-white/40">:</span>
-              : <span className="text-[10px] font-black text-gray-600">vs</span>}
-          </div>
-
-          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-            <TeamBadge team={away} sport={sport} size={36}/>
-            <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
-              {away.code}
-            </span>
-            {showCricketScores && away.score && (
-              <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
-                {away.score}{away.overs ? ` (${away.overs})` : ""}
-              </span>
-            )}
-            {showFootballScores && (
-              <span className="text-[12px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{away.score}</span>
-            )}
-          </div>
+        <div className="shrink-0 text-center px-1">
+          {showFootballScores
+            ? <span className="text-[12px] font-black text-white/40">:</span>
+            : <span className="text-[10px] font-black text-gray-600">vs</span>}
         </div>
 
-        {/* footer: venue / result / toss / match info */}
+        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+          <TeamBadge team={away} sport={sport} size={36}/>
+          <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
+            {away.code}
+          </span>
+          {showCricketScores && away.score && (
+            <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+              {away.score}{away.overs ? ` (${away.overs})` : ""}
+            </span>
+          )}
+          {showFootballScores && (
+            <span className="text-[12px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{away.score}</span>
+          )}
+        </div>
+      </div>
+
+      {/* footer: highlight clip OR venue/result/toss */}
+      {bestClip ? (
+        <button
+          onClick={e => openHighlight(e, bestClip)}
+          disabled={streamLoading}
+          className="w-full flex items-center gap-2.5 px-3 py-2 border-t border-white/[0.06] text-left hover:bg-white/[0.03] transition-colors disabled:opacity-70"
+        >
+          <div className="relative w-12 h-8 rounded-md overflow-hidden shrink-0 bg-white/5 border border-white/10">
+            {bestClip.thumbnail && (
+              <img src={bestClip.thumbnail} alt="" className="w-full h-full object-cover" />
+            )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              {streamLoading
+                ? <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${accent}40`, borderTopColor: accent }} />
+                : <PlayCircle size={14} className="text-white" />
+              }
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[8px] font-black uppercase tracking-wider" style={{ color: accent }}>
+              {streamLoading ? "Extracting stream…" : "Watch Highlights"}
+            </p>
+            <p className="text-[8px] text-gray-500 truncate">
+              {bestClip.title}
+              {Array.isArray(highlight) && highlight.length > 1 ? ` +${highlight.length - 1} more` : ""}
+            </p>
+          </div>
+        </button>
+      ) : (
         <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06] gap-2">
           <span className="text-[8px] text-gray-600 font-bold truncate">
             {result ? result : tossText ? `🪙 ${tossText}` : venue ? `📍 ${venue}` : ""}
           </span>
           <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>Match Info →</span>
         </div>
-      </div>
-    </Link>
-  );
+      )}
+    </div>
+  </Link>
+  </>
+);
 }
+
 
 // ─── LIVE NOW STRIP ───────────────────────────────────────────────────────────
 function LiveNowStrip() {
@@ -263,6 +498,8 @@ function LiveNowStrip() {
   const [indiaLive,      setIndiaLive]      = useState([]);
   const [indiaUpcoming,  setIndiaUpcoming]  = useState([]);
   const [indiaRecent,    setIndiaRecent]    = useState([]);
+  const [indiaHighlights, setIndiaHighlights] = useState({});
+  const [fifaHighlights, setFifaHighlights] = useState({});
 
   // ── Load WT20 ──────────────────────────────────────────────────────────────
   const loadWt20 = useCallback(async () => {
@@ -285,7 +522,7 @@ function LiveNowStrip() {
     if (cached) { setFifaAll(cached); return; }
     try {
       const url = `${FIFA_API_BASE}/calendar/matches?language=en&idCompetition=${FIFA_COMPETITION}&idSeason=${FIFA_SEASON}&idStage=${FIFA_STAGE}&count=400`;
-      const res = await fetch(url, { headers: { Accept:"application/json" } });
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
       if (!res.ok) return;
       const json = await res.json();
       setCache(k, json.Results || []); setFifaAll(json.Results || []);
@@ -329,12 +566,53 @@ function LiveNowStrip() {
     return () => clearInterval(t);
   }, []);
 
+
+useEffect(() => {
+  if (!indiaRecent.length) return;
+  let cancelled = false;
+  (async () => {
+    const targets = indiaRecent.slice(0, 2);
+    console.log("[highlight] indiaRecent sample:", targets[0]);
+    const results = await Promise.allSettled(
+      targets.map(m => fetchIndiaHighlights(m.SmMatchID || m.MatchID))
+    );
+    if (cancelled) return;
+    const next = {};
+    targets.forEach((m, i) => {
+      const r = results[i];
+      // Store the full array (or null) keyed by MatchID
+      if (r.status === "fulfilled" && r.value) next[m.MatchID] = r.value;
+    });
+    setIndiaHighlights(prev => ({ ...prev, ...next }));
+  })();
+  return () => { cancelled = true; };
+}, [indiaRecent]);
+
   // ── Classify FIFA ──────────────────────────────────────────────────────────
   const todayStr      = new Date().toISOString().slice(0, 10);
   const fifaLive      = fifaAll.filter(m => getFifaStatus(m) === "live");
   const fifaToday     = fifaAll.filter(m => new Date(m.Date).toISOString().slice(0,10) === todayStr && getFifaStatus(m) !== "live");
   const fifaUpcoming  = fifaAll.filter(m => getFifaStatus(m) === "upcoming").sort((a,b)=>new Date(a.Date)-new Date(b.Date));
   const fifaRecent    = fifaAll.filter(m => getFifaStatus(m) === "finished").sort((a,b)=>new Date(b.Date)-new Date(a.Date));
+
+useEffect(() => {
+  if (!fifaRecent.length) return;
+  let cancelled = false;
+  (async () => {
+    const targets = fifaRecent.slice(0, 4);
+    const results = await Promise.allSettled(
+      targets.map(m => fetchFifaHighlight(m.IdMatch, m.IdStage || FIFA_STAGE))
+    );
+    if (cancelled) return;
+    const next = {};
+    targets.forEach((m, i) => {
+      const r = results[i];
+      if (r.status === "fulfilled" && r.value) next[m.IdMatch] = r.value;
+    });
+    setFifaHighlights(prev => ({ ...prev, ...next }));
+  })();
+  return () => { cancelled = true; };
+}, [fifaRecent]);
 
   // ── Classify WT20 ──────────────────────────────────────────────────────────
   const wt20Live      = wt20All.filter(m => m.live);
@@ -539,6 +817,7 @@ link: `/match-center/${encodeMatchHash({
         result: m.Comments || m.Commentss || null,
         leagueLabel: m.CompetitionName || "India Cricket",
         venue: m.GroundName || "",
+        highlight: indiaHighlights[m.MatchID] || null,
         // AFTER
 link: `/match-center/${encodeMatchHash({
   sport: "cricket",
@@ -599,6 +878,7 @@ link: `/match-center/${encodeMatchHash({
         home, away,
         result: hWon ? `${home.code} win` : aWon ? `${away.code} win` : "Draw",
         leagueLabel: "FIFA WC 2026", matchLabel: group, venue: city,
+        highlight: fifaHighlights[m.IdMatch] || null,
         link: `/match-center/${encodeMatchHash({
   sport: "football",
   type: "fifa",
@@ -679,6 +959,734 @@ link: `/match-center/${encodeMatchHash({
   );
 }
 
+// ─── FIFA WC 2026 HIGHLIGHTS ROW (Hotstar-style) ─────────────────────────────
+function FifaHighlightCard2026({ match, highlight, onPlay, loading }) {
+  const FIFA_GREEN = "#34d399";
+  const hName = match.Home?.Abbreviation || match.Home?.TeamName?.find(x => x.Locale === "en-GB")?.Description || "";
+  const aName = match.Away?.Abbreviation || match.Away?.TeamName?.find(x => x.Locale === "en-GB")?.Description || "";
+  const hScore = match.HomeTeamScore;
+  const aScore = match.AwayTeamScore;
+  const hFlag = match.Home?.IdCountry ? `https://api.fifa.com/api/v3/picture/flags-sq-1/${match.Home.IdCountry}` : null;
+  const aFlag = match.Away?.IdCountry ? `https://api.fifa.com/api/v3/picture/flags-sq-1/${match.Away.IdCountry}` : null;
+  const hWon = hScore !== null && aScore !== null && hScore > aScore;
+  const aWon = hScore !== null && aScore !== null && aScore > hScore;
+  const thumb = highlight?.thumbnail || null;
+  const group = match.GroupName?.find(x => x.Locale === "en-GB")?.Description || "";
+
+  return (
+    <div
+      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
+      style={{
+        width: 220,
+        background: "#0d1117",
+        border: "1px solid rgba(52,211,153,0.12)",
+        transition: "transform 0.18s, box-shadow 0.18s",
+      }}
+      onClick={onPlay}
+    >
+      {/* Thumbnail */}
+      <div className="relative w-full" style={{ aspectRatio: "16/9", background: "#111" }}>
+        {thumb
+          ? <img src={thumb} alt="" className="w-full h-full object-cover" style={{ display: "block" }} />
+          : (
+            <div className="w-full h-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" }}>
+              <span style={{ fontSize: 32 }}>⚽</span>
+            </div>
+          )
+        }
+        {/* Dark overlay + play button */}
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.35)", transition: "background 0.18s" }}>
+          {loading
+            ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${FIFA_GREEN}40`, borderTopColor: FIFA_GREEN }} />
+            : (
+              <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.6)", border: `2px solid ${FIFA_GREEN}`, transition: "transform 0.15s" }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={FIFA_GREEN}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+              </div>
+            )
+          }
+        </div>
+        {/* FT badge */}
+        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+          style={{ background: "rgba(0,0,0,0.7)", color: FIFA_GREEN, border: `1px solid ${FIFA_GREEN}30` }}>FT</div>
+        {/* Group label */}
+        {group && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(0,0,0,0.7)", color: "rgba(255,255,255,0.6)" }}>{group.replace("Group ", "Grp ")}</div>
+        )}
+      </div>
+
+      {/* Score row */}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          {/* Home */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {hFlag && <img src={hFlag} alt="" className="w-7 h-7 rounded-md object-cover" />}
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: hWon ? "#4ade80" : "rgba(255,255,255,0.9)" }}>{hName}</span>
+            {hScore !== null && hScore !== undefined && (
+              <span className="text-[13px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{hScore}</span>
+            )}
+          </div>
+          {/* VS */}
+          <span className="text-[10px] font-black text-white/30 shrink-0">:</span>
+          {/* Away */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {aFlag && <img src={aFlag} alt="" className="w-7 h-7 rounded-md object-cover" />}
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.9)" }}>{aName}</span>
+            {aScore !== null && aScore !== undefined && (
+              <span className="text-[13px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{aScore}</span>
+            )}
+          </div>
+        </div>
+        {/* Title */}
+        {highlight?.title && (
+          <p className="text-[8px] text-gray-600 mt-1.5 truncate">{highlight.title}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FifaHighlightsRow() {
+  const FIFA_GREEN = "#34d399";
+  const [fifaAll, setFifaAll] = useState([]);
+  const [highlights, setHighlights] = useState({}); // matchId → { title, thumbnail, watchPath }
+  const [playerModal, setPlayerModal] = useState(null); // { src, title }
+  const [loadingId, setLoadingId] = useState(null);    // matchId being extracted
+
+  // Fetch all FIFA matches
+  useEffect(() => {
+    const k = "home_fifa_v2";
+    const cached = getCached(k);
+    if (cached) { setFifaAll(cached); return; }
+    (async () => {
+      try {
+        const url = `${FIFA_API_BASE}/calendar/matches?language=en&idCompetition=${FIFA_COMPETITION}&idSeason=${FIFA_SEASON}&idStage=${FIFA_STAGE}&count=400`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) return;
+        const json = await res.json();
+        const all = json.Results || [];
+        setCache(k, all);
+        setFifaAll(all);
+      } catch {}
+    })();
+  }, []);
+
+  // Finished matches sorted oldest → newest (all of them)
+  const finished = fifaAll
+    .filter(m => getFifaStatus(m) === "finished")
+    .sort((a, b) => new Date(a.Date) - new Date(b.Date));
+
+  // Fetch highlights for ALL finished matches (batched)
+  useEffect(() => {
+    if (!finished.length) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.allSettled(
+        finished.map(m => fetchFifaHighlight(m.IdMatch, m.IdStage || FIFA_STAGE))
+      );
+      if (cancelled) return;
+      const next = {};
+      finished.forEach((m, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled" && r.value) next[m.IdMatch] = r.value;
+      });
+      setHighlights(prev => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [finished.length]);
+
+  const handlePlay = async (match) => {
+    const h = highlights[match.IdMatch];
+    if (!h?.watchPath) return;
+    if (loadingId) return;
+    const watchUrl = `https://www.fifa.com${h.watchPath}`;
+    const hName = match.Home?.Abbreviation || "";
+    const aName = match.Away?.Abbreviation || "";
+    const title = `${hName} vs ${aName} · FIFA WC 2026`;
+    setLoadingId(match.IdMatch);
+    try {
+      const res = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+      const json = await res.json();
+      if (res.ok && json.success && json.url) {
+        const params = new URLSearchParams({ url: json.url, title });
+        setPlayerModal({ src: `/player.html?${params}`, title });
+        setLoadingId(null);
+        return;
+      }
+    } catch {}
+    setLoadingId(null);
+    // Stream extraction failed — stay in-app, do NOT open external browser.
+  };
+
+  if (!finished.length) return null;
+
+  return (
+    <div className="mt-8">
+      {/* Fullscreen player modal */}
+      {playerModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.97)",
+          display: "flex", flexDirection: "column",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 16px", background: "rgba(0,0,0,0.8)", flexShrink: 0,
+          }}>
+            <span style={{ color: FIFA_GREEN, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              ▶ {playerModal.title}
+            </span>
+            <button onClick={() => setPlayerModal(null)} style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", borderRadius: 8, width: 32, height: 32,
+              cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>×</button>
+          </div>
+          <iframe src={playerModal.src}
+            style={{ flex: 1, width: "100%", border: "none" }}
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 15 }}>⚽</span>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">FIFA WC 2026 · All Matches</span>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(52,211,153,0.12)", color: FIFA_GREEN, border: "1px solid rgba(52,211,153,0.2)" }}>
+            {finished.length} Played
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal scroll row */}
+      <div
+        className="flex gap-3 overflow-x-auto pb-3"
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(52,211,153,0.25) transparent",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {finished.map(match => (
+          <FifaHighlightCard2026
+            key={match.IdMatch}
+            match={match}
+            highlight={highlights[match.IdMatch] || null}
+            loading={loadingId === match.IdMatch}
+            onPlay={() => handlePlay(match)}
+          />
+        ))}
+      </div>
+
+      {/* Scroll hint fade-edge */}
+      <style>{`
+        .fifa-row::-webkit-scrollbar { height: 3px; }
+        .fifa-row::-webkit-scrollbar-thumb { background: rgba(52,211,153,0.2); border-radius: 2px; }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── INDIA MATCH HIGHLIGHTS ROW ───────────────────────────────────────────────
+function IndiaHighlightCard({ match, videos, onPlay, loadingId }) {
+  const INDIA_ACCENT = "#f59e0b"; // amber
+  const homeCode = match.HomeTeamCode || "IND";
+  const awayCode = match.AwayTeamCode || "";
+  const homeLogo = match.MatchHomeTeamLogo || null;
+  const awayLogo = match.MatchAwayTeamLogo || null;
+  const [hImgFail, setHImgFail] = useState(false);
+  const [aImgFail, setAImgFail] = useState(false);
+
+  // Prefer "match highlights" clip, else first video
+  const bestClip = Array.isArray(videos)
+    ? (videos.find(v => (v.title || "").toLowerCase().includes("match highlights")) || videos[0])
+    : null;
+
+  const thumb = bestClip?.thumbnail || null;
+  const isLoading = loadingId === (match.MatchID);
+
+  // Score strings
+  const homeIsFirst = String(match.FirstBattingTeamID) === String(match.HomeTeamID);
+  const inn1 = match["1FallScore"] ? `${match["1FallScore"]}/${match["1FallWickets"]}` : null;
+  const inn2 = match["2FallScore"] ? `${match["2FallScore"]}/${match["2FallWickets"]}` : null;
+  const homeScore = homeIsFirst ? inn1 : inn2;
+  const awayScore = homeIsFirst ? inn2 : inn1;
+
+  return (
+    <div
+      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
+      style={{
+        width: 220,
+        background: "#0d0e0f",
+        border: `1px solid rgba(245,158,11,0.12)`,
+        transition: "transform 0.18s, box-shadow 0.18s",
+      }}
+      onClick={() => bestClip && onPlay(match, bestClip)}
+    >
+      {/* Thumbnail */}
+      <div className="relative w-full" style={{ aspectRatio: "16/9", background: "#111" }}>
+        {thumb
+          ? <img src={thumb} alt="" className="w-full h-full object-cover" style={{ display: "block" }} />
+          : (
+            <div className="w-full h-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #1a0e00 0%, #2d1a00 50%, #1a0e00 100%)" }}>
+              <span style={{ fontSize: 32 }}>🏏</span>
+            </div>
+          )
+        }
+        {/* Overlay + play button */}
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.35)" }}>
+          {isLoading
+            ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: `${INDIA_ACCENT}40`, borderTopColor: INDIA_ACCENT }} />
+            : bestClip && (
+              <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.6)", border: `2px solid ${INDIA_ACCENT}` }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={INDIA_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+              </div>
+            )
+          }
+        </div>
+        {/* FT badge */}
+        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+          style={{ background: "rgba(0,0,0,0.7)", color: INDIA_ACCENT, border: `1px solid ${INDIA_ACCENT}30` }}>FT</div>
+        {/* Format badge */}
+        {match.MatchType && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(0,0,0,0.7)", color: "rgba(255,255,255,0.6)" }}>
+            {match.MatchType === "One Day D/N" || match.MatchType === "One Day" ? "ODI"
+              : match.MatchType === "T20" ? "T20I"
+              : match.MatchType?.replace(" D/N", "") || match.MatchType}
+          </div>
+        )}
+      </div>
+
+      {/* Score row */}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          {/* Home */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {homeLogo && !hImgFail
+              ? <img src={homeLogo} alt="" className="w-7 h-7 rounded-full object-contain bg-white/5" onError={() => setHImgFail(true)} />
+              : <span style={{ fontSize: 22 }}>🏏</span>
+            }
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: "rgba(255,255,255,0.9)" }}>{homeCode}</span>
+            {homeScore && <span className="text-[9px] font-bold text-white/50">{homeScore}</span>}
+          </div>
+          <span className="text-[10px] font-black text-white/30 shrink-0">vs</span>
+          {/* Away */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {awayLogo && !aImgFail
+              ? <img src={awayLogo} alt="" className="w-7 h-7 rounded-full object-contain bg-white/5" onError={() => setAImgFail(true)} />
+              : <span style={{ fontSize: 22 }}>🏏</span>
+            }
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: "rgba(255,255,255,0.9)" }}>{awayCode}</span>
+            {awayScore && <span className="text-[9px] font-bold text-white/50">{awayScore}</span>}
+          </div>
+        </div>
+        {bestClip?.title && (
+          <p className="text-[8px] text-gray-600 mt-1.5 truncate">{bestClip.title}</p>
+        )}
+        {!bestClip && (
+          <p className="text-[8px] text-gray-700 mt-1.5">Highlights loading…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IndiaHighlightsRow() {
+  const INDIA_ACCENT = "#f59e0b";
+  const [recentMatches, setRecentMatches] = useState([]);
+  const [highlights, setHighlights] = useState({}); // MatchID → video[]
+  const [playerModal, setPlayerModal] = useState(null);
+  const [loadingId, setLoadingId] = useState(null);
+
+  // Fetch recent India matches
+  useEffect(() => {
+    const k = "india_highlights_row_v3";
+    const cached = getCached(k);
+    if (cached) { setRecentMatches(cached); return; }
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/bcci/recent?count=30`);
+        if (!res.ok) return;
+        const json = await res.json();
+        // Keep only India men's matches (excludes women's competition IDs)
+        // Fetch 20 total so after filtering we reliably have 15 men's
+        const all = (json.recentMatches || json.postMatches || []).filter(isIndiaMensMatch).slice(0, 15);
+        setCache(k, all);
+        setRecentMatches(all);
+      } catch {}
+    })();
+  }, []);
+
+  // Fetch highlights for all recent matches
+  useEffect(() => {
+    if (!recentMatches.length) return;
+    let cancelled = false;
+    (async () => {
+      const targets = recentMatches.slice(0, 15);
+      const results = await Promise.allSettled(
+        targets.map(m => fetchIndiaHighlights(m.SmMatchID || m.MatchID))
+      );
+      if (cancelled) return;
+      const next = {};
+      targets.forEach((m, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled" && r.value) next[m.MatchID] = r.value;
+      });
+      setHighlights(prev => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [recentMatches.length]);
+
+  const handlePlay = async (match, vid) => {
+    if (loadingId) return;
+    const watchUrl = vid.shortCode
+      ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
+      : vid.urlSegment
+      ? `https://www.bcci.tv/videos/${vid.urlSegment}`
+      : null;
+    if (!watchUrl) return;
+    const title = vid.title || `${match.HomeTeamCode || "IND"} vs ${match.AwayTeamCode || ""} Highlights`;
+    setLoadingId(match.MatchID);
+    try {
+      const res = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+      const json = await res.json();
+      if (res.ok && json.success && json.url) {
+        const params = new URLSearchParams({ url: json.url, title });
+        setPlayerModal({ src: `/player.html?${params}`, title });
+        setLoadingId(null);
+        return;
+      }
+    } catch {}
+    setLoadingId(null);
+    // Stay in-app — do NOT open an external browser tab
+  };
+
+  // Show last 15 India men's recent matches
+  const displayMatches = recentMatches.slice(0, 15);
+
+  if (!displayMatches.length) return null;
+
+  return (
+    <div className="mt-8">
+      {/* Fullscreen player modal */}
+      {playerModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.97)",
+          display: "flex", flexDirection: "column",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 16px", background: "rgba(0,0,0,0.8)", flexShrink: 0,
+          }}>
+            <span style={{ color: INDIA_ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              ▶ {playerModal.title}
+            </span>
+            <button onClick={() => setPlayerModal(null)} style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", borderRadius: 8, width: 32, height: 32,
+              cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>×</button>
+          </div>
+          <iframe src={playerModal.src}
+            style={{ flex: 1, width: "100%", border: "none" }}
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 15 }}>🇮🇳</span>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">India Cricket · Highlights</span>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(245,158,11,0.12)", color: INDIA_ACCENT, border: "1px solid rgba(245,158,11,0.2)" }}>
+            {displayMatches.length} Matches
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal scroll row */}
+      <div
+        className="flex gap-3 overflow-x-auto pb-3"
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(245,158,11,0.25) transparent",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {displayMatches.map(match => (
+          <IndiaHighlightCard
+            key={match.MatchID}
+            match={match}
+            videos={highlights[match.MatchID] || null}
+            loadingId={loadingId}
+            onPlay={handlePlay}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── IPL 2026 HIGHLIGHT CARD ──────────────────────────────────────────────────
+function IplHighlightCard2026({ match, videos, onPlay, loadingId }) {
+  const IPL_ACCENT = "#f97316"; // IPL orange
+  const [t1Fail, setT1Fail] = useState(false);
+  const [t2Fail, setT2Fail] = useState(false);
+
+  // Prefer match-highlights clip, else first video
+  const bestClip = Array.isArray(videos)
+    ? (videos.find(v => (v.title || "").toLowerCase().includes("match highlight")) || videos[0])
+    : null;
+
+  const thumb = bestClip?.thumbnail || null;
+  const isLoading = loadingId === match.smMatchId;
+  const isCompleted = match.status === "completed";
+
+  return (
+    <div
+      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
+      style={{
+        width: 220,
+        background: "#0d0a00",
+        border: `1px solid rgba(249,115,22,0.15)`,
+        transition: "transform 0.18s, box-shadow 0.18s",
+        opacity: bestClip ? 1 : 0.75,
+      }}
+      onClick={() => bestClip && onPlay(match, bestClip)}
+    >
+      {/* Thumbnail */}
+      <div className="relative w-full" style={{ aspectRatio: "16/9", background: "#111" }}>
+        {thumb
+          ? <img src={thumb} alt="" className="w-full h-full object-cover" style={{ display: "block" }} />
+          : (
+            <div className="w-full h-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #1a0800 0%, #2d1200 50%, #1a0800 100%)" }}>
+              <span style={{ fontSize: 32 }}>🏏</span>
+            </div>
+          )
+        }
+        {/* Overlay + play */}
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.35)" }}>
+          {isLoading
+            ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: `${IPL_ACCENT}40`, borderTopColor: IPL_ACCENT }} />
+            : bestClip && (
+              <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,0.65)", border: `2px solid ${IPL_ACCENT}` }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={IPL_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+              </div>
+            )
+          }
+        </div>
+        {/* FT badge */}
+        {isCompleted && (
+          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(0,0,0,0.75)", color: IPL_ACCENT, border: `1px solid ${IPL_ACCENT}30` }}>FT</div>
+        )}
+        {/* Match label badge */}
+        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider"
+          style={{ background: "rgba(0,0,0,0.75)", color: "rgba(255,255,255,0.55)" }}>
+          {match.matchLabel && !/^\d+$/.test(match.matchLabel)
+            ? match.matchLabel.replace("Qualifier", "Q")
+            : `M${match.matchNum}`
+          }
+        </div>
+      </div>
+
+      {/* Score row */}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          {/* Team 1 */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {match.team1Logo && !t1Fail
+              ? <img src={match.team1Logo} alt="" className="w-7 h-7 rounded-full object-contain bg-white/5" onError={() => setT1Fail(true)} />
+              : <span style={{ fontSize: 22 }}>🏏</span>
+            }
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: "rgba(255,255,255,0.9)" }}>{match.team1}</span>
+            {match.score1 && <span className="text-[9px] font-bold text-white/50">{match.score1}</span>}
+          </div>
+          <span className="text-[10px] font-black shrink-0" style={{ color: `${IPL_ACCENT}60` }}>vs</span>
+          {/* Team 2 */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {match.team2Logo && !t2Fail
+              ? <img src={match.team2Logo} alt="" className="w-7 h-7 rounded-full object-contain bg-white/5" onError={() => setT2Fail(true)} />
+              : <span style={{ fontSize: 22 }}>🏏</span>
+            }
+            <span className="text-[10px] font-black uppercase truncate w-full text-center" style={{ color: "rgba(255,255,255,0.9)" }}>{match.team2}</span>
+            {match.score2 && <span className="text-[9px] font-bold text-white/50">{match.score2}</span>}
+          </div>
+        </div>
+        {/* clip title or result */}
+        {bestClip?.title
+          ? <p className="text-[8px] text-gray-600 mt-1.5 truncate">{bestClip.title}</p>
+          : isCompleted && match.result
+          ? <p className="text-[8px] text-gray-600 mt-1.5 truncate">{match.result}</p>
+          : isCompleted
+          ? <p className="text-[8px] text-gray-700 mt-1.5">Highlights loading…</p>
+          : <p className="text-[8px] mt-1.5" style={{ color: `${IPL_ACCENT}70` }}>{match.matchDate}</p>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─── IPL 2026 HIGHLIGHTS ROW ──────────────────────────────────────────────────
+function IplHighlightsRow() {
+  const IPL_ACCENT = "#f97316";
+  const [matches, setMatches]   = useState([]);  // all IPL 2026 matches
+  const [highlights, setHighlights] = useState({}); // smMatchId → videos[]
+  const [playerModal, setPlayerModal] = useState(null);
+  const [loadingId, setLoadingId]     = useState(null);
+
+  // Fetch all IPL 2026 matches
+  useEffect(() => {
+    const k = "ipl_2026_all_matches_fe";
+    const cached = getCached(k);
+    if (cached) { setMatches(cached); return; }
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/ipl/2026/all-matches`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const all = json.matches || [];
+        setCache(k, all);
+        setMatches(all);
+      } catch {}
+    })();
+  }, []);
+
+  // Completed matches, reversed (most recent first)
+  const completed = [...matches]
+    .filter(m => m.status === "completed")
+    .reverse();
+
+  // Lazy-fetch highlights for all completed matches
+  useEffect(() => {
+    if (!completed.length) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.allSettled(
+        completed.map(m => fetchIplMatchHighlights(m.smMatchId))
+      );
+      if (cancelled) return;
+      const next = {};
+      completed.forEach((m, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled" && r.value) next[m.smMatchId] = r.value;
+      });
+      setHighlights(prev => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [completed.length]);
+
+  const handlePlay = async (match, vid) => {
+    if (loadingId) return;
+    // Build the iplt20.com video page URL — index.py scrapes this to get the m3u8
+    // Format: https://www.iplt20.com/video/{id}/{titleUrlSegment}
+    const watchUrl = vid.id && vid.titleUrlSegment
+      ? `https://www.iplt20.com/video/${vid.id}/${vid.titleUrlSegment}`
+      : vid.id
+      ? `https://www.iplt20.com/video/${vid.id}`
+      : null;
+    if (!watchUrl) return;
+    const title = vid.title || `${match.team1} vs ${match.team2} · IPL 2026`;
+    setLoadingId(match.smMatchId);
+    try {
+      const res  = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+      const json = await res.json();
+      if (res.ok && json.success && json.url) {
+        const p = new URLSearchParams({ url: json.url, title });
+        setPlayerModal({ src: `/player.html?${p}`, title });
+        setLoadingId(null);
+        return;
+      }
+    } catch {}
+    setLoadingId(null);
+  };
+
+  if (!completed.length) return null;
+
+  return (
+    <div className="mt-8">
+      {/* Fullscreen player modal */}
+      {playerModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.97)",
+          display: "flex", flexDirection: "column",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 16px", background: "rgba(0,0,0,0.8)", flexShrink: 0,
+          }}>
+            <span style={{ color: IPL_ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              ▶ {playerModal.title}
+            </span>
+            <button onClick={() => setPlayerModal(null)} style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", borderRadius: 8, width: 32, height: 32,
+              cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>×</button>
+          </div>
+          <iframe src={playerModal.src}
+            style={{ flex: 1, width: "100%", border: "none" }}
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 15 }}>🏏</span>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">IPL 2026 · All Matches</span>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
+            style={{ background: "rgba(249,115,22,0.12)", color: IPL_ACCENT, border: "1px solid rgba(249,115,22,0.2)" }}>
+            {completed.length} Played
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal scroll row — newest match first */}
+      <div
+        className="flex gap-3 overflow-x-auto pb-3"
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(249,115,22,0.25) transparent",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {completed.map(match => (
+          <IplHighlightCard2026
+            key={match.smMatchId}
+            match={match}
+            videos={highlights[match.smMatchId] || null}
+            loadingId={loadingId}
+            onPlay={handlePlay}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── CHANNEL SHORTCUT ─────────────────────────────────────────────────────────
 function ChannelShortcut({ label, emoji, desc, color, bg, border, to }) {
   return (
@@ -738,6 +1746,15 @@ export default function Homeies({ searchTerm }) {
           <div className="mt-6">
             <LiveNowStrip/>
           </div>
+
+          {/* ── INDIA MATCH HIGHLIGHTS ── */}
+          <IndiaHighlightsRow/>
+
+          {/* ── IPL 2026 ALL MATCHES HIGHLIGHTS ── */}
+          <IplHighlightsRow/>
+
+          {/* ── FIFA WC 2026 ALL MATCHES HIGHLIGHTS ── */}
+          <FifaHighlightsRow/>
 
           {/* ── WATCH LIVE SHORTCUTS ── */}
           <div className="mt-8">
