@@ -1073,10 +1073,10 @@ function FifaHighlightsRow() {
     })();
   }, []);
 
-  // Finished matches sorted oldest → newest (all of them)
-  const finished = fifaAll
-    .filter(m => getFifaStatus(m) === "finished")
-    .sort((a, b) => new Date(a.Date) - new Date(b.Date));
+// Finished matches sorted newest → oldest (most recent first)
+const finished = fifaAll
+  .filter(m => getFifaStatus(m) === "finished")
+  .sort((a, b) => new Date(b.Date) - new Date(a.Date));
 
   // Fetch highlights for ALL finished matches (batched)
   useEffect(() => {
