@@ -46,6 +46,14 @@ import LiveChannelsUpload from './paged/LiveChannelsUpload';
 import LiveChannelsPage from './paged/LiveChannelsPage';
 import MatchCenter from './paged/MatchCenter';
 import NewsViewer from './components/NewsReader';
+
+// --- Music Feature Imports ---
+import HomeLandingPage from './paged/HomeLandingPage';
+import SearchResultsPage from './paged/SearchResultsPage';
+import TrackDetailPage from './paged/TrackDetailPage';
+import { MusicPlayerProvider } from './context/MusicPlayerContext';
+import PersistentMiniPlayer from './components/PersistentMiniPlayer';
+
 // ── Lockout Overlay ──
 const LockoutOverlay = () => {
   const [timeLeft, setTimeLeft] = useState(null);
@@ -165,6 +173,7 @@ const AppContent = () => {
   const isLiveStreamPlayer = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname);
   const isLiveCricketPath  = location.pathname === "/live-cricket";
   const isSportsPath       = location.pathname === "/sports";
+  const isMusicPath        = location.pathname.startsWith("/music");
   // NOTE: /live-stream is NOT hidden — navbar shows on Live TV page
 
   const hideNavbar =
@@ -175,7 +184,8 @@ const AppContent = () => {
     isAdminPath ||
     isLiveCricketPath ||
     isLiveStreamPlayer ||
-    isSportsPath;
+    isSportsPath ||
+    isMusicPath;
 
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
@@ -220,6 +230,12 @@ const AppContent = () => {
         <Route path="/match-center/:hash"     element={<MatchCenter />}
 />
         <Route path="/live-stream"            element={<LiveChannelsPage />} />
+
+        {/* ── Music Feature Routes ── */}
+        <Route path="/music"                  element={<HomeLandingPage />} />
+        <Route path="/music/search"           element={<SearchResultsPage />} />
+        <Route path="/music/track/:id"        element={<TrackDetailPage />} />
+
         <Route path="/profile"                element={
           <ProtectedRoute session={session} initialized={initialized}>
             <Profile />
@@ -266,10 +282,17 @@ const AppContent = () => {
           <AdPopup />
         </>
       )}
+
+      {/* Persistent music mini player — shows on all pages when minimized */}
+      <PersistentMiniPlayer />
     </div>
   );
 };
 
-const App = () => <AppContent />;
+const App = () => (
+  <MusicPlayerProvider>
+    <AppContent />
+  </MusicPlayerProvider>
+);
 
 export default App;
