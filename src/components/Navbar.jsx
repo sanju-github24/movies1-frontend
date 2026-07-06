@@ -3,9 +3,10 @@ import React, { useContext, useState, useEffect, useRef } from "react";
 import { Link, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
+import { useMusicPlayer } from "../context/MusicPlayerContext";
 import { 
   X, Search, Home, Clock3, MonitorPlay, 
-  Tv, User, Globe, Menu, ChevronDown, LogOut, Settings
+  Tv, User, Globe, Menu, ChevronDown, LogOut, Settings, Music
 } from "lucide-react";
 
 const WatchOptionsPopup = ({ onClose, onNavigate }) => (
@@ -45,6 +46,15 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
         >
           <Tv className="w-5 h-5 text-purple-500" />
           <span className="text-sm font-black">Live TV</span>
+        </button>
+      </li>
+      <li>
+        <button
+          onClick={() => { onNavigate("/music"); onClose(); }}
+          className="w-full text-left px-4 py-3 hover:bg-green-50 rounded-xl flex items-center gap-3 text-green-600 transition"
+        >
+          <Music className="w-5 h-5 text-green-500" />
+          <span className="text-sm font-black">Music</span>
         </button>
       </li>
     </ul>
@@ -100,6 +110,8 @@ const Navbar = () => {
     setShowWatchOptions(false);
   }, [location.pathname]);
 
+  const player = useMusicPlayer();
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.clear();
@@ -112,7 +124,12 @@ const Navbar = () => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      navigate(`/search?query=${encodeURIComponent(searchTerm)}`);
+      const isMusicMode = location.pathname.startsWith("/music") || !!(player?.currentTrack);
+      if (isMusicMode) {
+        navigate(`/music/search?find=${encodeURIComponent(searchTerm.trim())}`);
+      } else {
+        navigate(`/search?query=${encodeURIComponent(searchTerm.trim())}`);
+      }
       setMobileSearchOpen(false);
       setSearchTerm("");
     }
@@ -130,7 +147,7 @@ const Navbar = () => {
     return (name ? name[0] : session.user.email[0]).toUpperCase();
   };
 
-  const isWatchActive = showWatchOptions || ['/watch', '/sports', '/live-stream'].some(p => location.pathname.startsWith(p));
+  const isWatchActive = showWatchOptions || ['/watch', '/sports', '/live-stream', '/music'].some(p => location.pathname.startsWith(p));
 
   return (
     <nav className="w-full bg-blue-700 text-white sticky top-0 z-50 shadow-lg font-sans">
@@ -180,6 +197,12 @@ const Navbar = () => {
               <Link to="/live-stream" className="hover:text-blue-200 transition">Live TV</Link>
             </li>
             <li>
+              <Link to="/music" className="flex items-center gap-2 hover:text-green-300 transition">
+                <Music className="w-4 h-4" />
+                <span>Music</span>
+              </Link>
+            </li>
+            <li>
               <Link to="/blogs" className="hover:text-blue-200 transition">Blogs</Link>
             </li>
             <li>
@@ -193,7 +216,7 @@ const Navbar = () => {
           >
             <input
               type="text"
-              placeholder="Search..."
+              placeholder={location.pathname.startsWith("/music") || !!(player?.currentTrack) ? "Search songs, albums..." : "Search..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-transparent w-full text-sm outline-none placeholder:text-white/50 group-focus-within:placeholder:text-gray-400 group-focus-within:text-black"
@@ -272,7 +295,7 @@ const Navbar = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search movies, series, TMDB IDs..."
+                placeholder={location.pathname.startsWith("/music") || !!(player?.currentTrack) ? "Search songs, albums, artists..." : "Search movies, series, TMDB IDs..."}
                 className="w-full bg-white/10 border border-white/10 rounded-2xl py-5 px-6 text-xl outline-none focus:border-blue-500 transition-all text-white font-bold"
               />
               <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 p-3 rounded-xl shadow-lg">
@@ -317,6 +340,11 @@ const Navbar = () => {
               <li>
                 <Link to="/live-stream" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-purple-50 rounded-xl transition">
                   <Tv size={20} className="text-purple-600" /> Live TV
+                </Link>
+              </li>
+              <li>
+                <Link to="/music" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-green-50 rounded-xl transition">
+                  <Music size={20} className="text-green-600" /> Music
                 </Link>
               </li>
               <li>
@@ -384,7 +412,7 @@ const Navbar = () => {
           </button>
         </div>
 
-        {/* Watch — opens popup with Movies, Live Sports, Live TV */}
+        {/* Watch — opens popup with Movies, Live Sports, Live TV, Music */}
         <div className="relative" ref={watchButtonRef}>
           <button
             onClick={() => setShowWatchOptions(prev => !prev)}
