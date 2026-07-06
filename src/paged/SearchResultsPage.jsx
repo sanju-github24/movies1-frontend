@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import MusicNavbar from '../components/MusicNavbar';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
+import { musicApi } from '../utils/api';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from any string — no CORS, instant, unique per slug
@@ -79,7 +80,7 @@ export default function SearchResultsPage() {
     const cached = sessionStorage.getItem(cacheKey(query));
     if (cached) { try { setResults(JSON.parse(cached)); setLoading(false); return; } catch(_) { sessionStorage.removeItem(cacheKey(query)); } }
     setLoading(true); setError(null);
-    fetch(`/api/songs/search?q=${encodeURIComponent(query.trim())}`)
+    musicApi(`/api/songs/search?q=${encodeURIComponent(query.trim())}`)
       .then(r => { if (!r.ok) throw new Error('Failed to fetch results'); return r.json(); })
       .then(d => {
         const r = { songs: d.songs||[], albums: d.albums||[], artists: d.artists||[], metadata: d.metadata||{} };
