@@ -136,6 +136,22 @@ export default function TrackDetailPage() {
     return () => window.removeEventListener('resize', fn);
   }, []);
 
+  // ── Reset states on ID transition ─────────────────────────────────
+  useEffect(() => {
+    const entry = player?.trackCache?.[id] || {};
+    setTrackData(entry.trackData || null);
+    setYtPreview(entry.ytPreview || null);
+    setError(null);
+    setYtReady(false);
+    
+    // If the track is not already cached, set loading to true
+    if (!entry.trackData?.success) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+  }, [id]);
+
   // ── Initialize trackData from active context if maximizing ─────
   useEffect(() => {
     if (isAlreadyPlaying && !trackData && player?.currentTrack) {
