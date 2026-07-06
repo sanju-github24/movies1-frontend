@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2, Youtube, Maximize2, Volume2, VolumeX } from 'lucide-react';
+import { musicApi } from '../utils/api';
 
 /**
  * MiniYouTubePlayer
@@ -25,7 +26,7 @@ export default function MiniYouTubePlayer({ trackTitle, trackArtist, trackPoster
     if (!trackTitle) return;
     setState('loading'); setVideoId(null);
     const q = [trackTitle, trackArtist].filter(Boolean).join(' ');
-    fetch(`/api/songs/youtube-preview?q=${encodeURIComponent(q)}`)
+    musicApi(`/api/songs/youtube-preview?q=${encodeURIComponent(q)}`)
       .then(r => r.json())
       .then(d => {
         if (d.videoId) {
