@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MusicNavbar from '../components/MusicNavbar';
+import { musicApi } from '../utils/api';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
 
@@ -201,7 +202,7 @@ export default function HomeLandingPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('/api/songs/homepage')
+    musicApi('/api/songs/homepage')
       .then(res => {
         if (!res.ok) throw new Error('Failed to retrieve songs homepage data from scraper backend');
         return res.json();
