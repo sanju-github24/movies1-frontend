@@ -7,6 +7,7 @@ import {
   Volume2, VolumeX, Loader2, SkipBack, SkipForward, User,
   Minus, MoreHorizontal, X, ChevronDown
 } from 'lucide-react';
+import { musicApi } from '../utils/api';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from string
@@ -173,7 +174,7 @@ export default function TrackDetailPage() {
       ? `/api/songs/track?resolve=${encodeURIComponent(id.replace(/-/g, ' '))}`
       : `/api/songs/track?id=${encodeURIComponent(id)}`;
 
-    fetch(endpoint)
+    musicApi(endpoint)
       .then(r => { if (!r.ok) throw new Error('Failed to fetch track'); return r.json(); })
       .then(d => {
         if (!d.success || !d.stream_url) throw new Error(d.error || 'Stream URL could not be resolved.');
@@ -215,7 +216,7 @@ export default function TrackDetailPage() {
     if (ytPreview) return;
     const title  = trackData.metadata.title  || '';
     const singer = trackData.metadata.singer || '';
-    fetch(`/api/songs/youtube-preview?q=${encodeURIComponent(`${title} ${singer}`.trim())}`)
+    musicApi(`/api/songs/youtube-preview?q=${encodeURIComponent(`${title} ${singer}`.trim())}`)
       .then(r => r.json())
       .then(d => {
         if (d.videoId) {
@@ -236,7 +237,7 @@ export default function TrackDetailPage() {
       if (cached?.length > 0) return;
 
       setArtistRecsLoading(prev => ({ ...prev, [singer]: true }));
-      fetch(`/api/songs/singer?name=${encodeURIComponent(singer)}`)
+      musicApi(`/api/songs/singer?name=${encodeURIComponent(singer)}`)
         .then(r => r.json())
         .then(d => {
           const filtered = (d.songs || []).filter(s => s.id !== id).slice(0, 15);
