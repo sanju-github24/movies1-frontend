@@ -276,7 +276,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const p_videasy = "nextEpisode=true&autoplayNextEpisode=true&episodeSelector=true&overlay=true&color=3B82F6";
 
     switch (serverId) {
-      case "imdb_reader": { const omegaId = imdb || tmdb; if (omegaId) src = `https://piexe411qok.com/play/${omegaId}`; break; }
+      case "imdb_reader": { const omegaId = imdb || tmdb; if (omegaId) src = `https://gemma416okl.com/play/${omegaId}`; break; }
       case "vidify":  if (tmdb) src = TV ? `https://player.vidify.top/embed/tv/${tmdb}/${s}/${e}?${p_vidify}`   : `https://player.vidify.top/embed/movie/${tmdb}?${p_vidify}`;   break;
       case "videasy": if (tmdb) src = TV ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}?${p_videasy}` : `https://player.videasy.net/movie/${tmdb}?${p_videasy}`; break;
       case "vidup":   if (id)   src = TV ? `https://vidup.to/tv/${id}/${s}/${e}?autoPlay=true`            : `https://vidup.to/movie/${id}?autoPlay=true`;            break;
@@ -1081,6 +1081,8 @@ if (!alive) return;
             </div>
           </div>
         )}
+
+        
 
         {/* Downloads */}
         {movieMeta.download_links?.length > 0 && (
