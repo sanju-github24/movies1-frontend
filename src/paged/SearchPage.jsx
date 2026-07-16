@@ -14,6 +14,75 @@ const formatLanguageCount = (langs) => {
   return `${langArray.length} Languages`;
 };
 
+/* ── Advanced search: filters + ID detection ── */
+const SEARCH_LANGS = [
+  { code: "", label: "All Languages" },
+  { code: "ta", label: "Tamil" },
+  { code: "te", label: "Telugu" },
+  { code: "ml", label: "Malayalam" },
+  { code: "kn", label: "Kannada" },
+  { code: "hi", label: "Hindi" },
+  { code: "en", label: "English" },
+];
+const SEARCH_TYPES = [
+  { value: "all", label: "All" },
+  { value: "movie", label: "Movies" },
+  { value: "tv", label: "Series" },
+];
+const LANG_DISPLAY_MAP = { ta: "Tamil", te: "Telugu", ml: "Malayalam", kn: "Kannada", hi: "Hindi", en: "English" };
+const IMDB_ID_RE = /^tt\d{5,}$/i;
+const TMDB_ID_RE = /^\d{2,}$/;
+
+/* Map a /api/tmdb-search list item to the card/movie shape used on this page */
+const tmdbItemToMovie = (t) => {
+  const trailerKey = t.trailer_key || null;
+  return {
+    id: `tmdb-${t.tmdb_id}`,
+    title: t.title,
+    slug: t.slug || String(t.tmdb_id),
+    poster: t.poster_url,
+    cover_poster: t.cover_poster_url || t.poster_url,
+    description: t.description,
+    imdb_rating: t.imdb_rating,
+    year: t.year,
+    genres: t.genres || [],
+    language: [t.language_display || t.original_language],
+    title_logo: t.title_logo || null,
+    tmdb_id: t.tmdb_id,
+    imdb_id: null,
+    content_type: t.content_type,
+    episodes: [],
+    trailer_codes: trailerKey,
+    trailer_key: trailerKey,
+    isTmdbOnly: true,
+  };
+};
+
+/* Map a /api/tmdb-details response to the card/movie shape used on this page */
+const tmdbDetailsToMovie = (d) => {
+  const trailerKey = d.trailer_key_original_language || d.trailer_key || null;
+  return {
+    id: `tmdb-${d.tmdb_id}`,
+    title: d.title,
+    slug: d.slug,
+    poster: d.poster_url,
+    cover_poster: d.cover_poster_url,
+    description: d.description,
+    imdb_rating: d.imdb_rating,
+    year: d.year,
+    genres: d.genres || [],
+    language: [LANG_DISPLAY_MAP[d.original_language] || d.original_language],
+    title_logo: d.title_logo_english || d.title_logo || null,
+    imdb_id: d.imdb_id,
+    tmdb_id: d.tmdb_id,
+    content_type: d.content_type,
+    episodes: d.episodes || [],
+    trailer_codes: trailerKey,
+    trailer_key: trailerKey,
+    isTmdbOnly: true,
+  };
+};
+
 const saveRecentlyWatched = (movie) => {
   if (!movie || !movie.slug) return;
   try {
@@ -323,6 +392,8 @@ const CardTitleStrip = ({ movie }) => {
 const SearchPage = () => {
   const { backendUrl } = useContext(AppContext);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState("all");   // all | movie | tv
+  const [searchLang, setSearchLang] = useState("");      // "" = all languages
   const [recentMovies, setRecentMovies] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -444,18 +515,30 @@ const SearchPage = () => {
     fetchInitialData();
   }, [enrichListInBackground]);
 
-  /* ── Debounced search ── */
+  /* ── Debounced search (re-runs when the type/language filters change) ── */
   useEffect(() => {
+    const q = searchQuery.trim();
     const t = setTimeout(() => {
-      if (searchQuery.trim().length > 2) performUnifiedSearch(searchQuery);
+      if (q.length > 2 || IMDB_ID_RE.test(q) || TMDB_ID_RE.test(q)) performUnifiedSearch(q);
       else setSearchResults([]);
     }, 500);
     return () => clearTimeout(t);
-  }, [searchQuery]);
+  }, [searchQuery, searchType, searchLang]);
 
   const performUnifiedSearch = async (query) => {
     setIsSearching(true);
     try {
+      // ── Exact lookup by IMDb ID (tt1234567) or TMDB ID (numeric) ──
+      if (IMDB_ID_RE.test(query) || TMDB_ID_RE.test(query)) {
+        const params = IMDB_ID_RE.test(query)
+          ? { imdbId: query }
+          : { tmdbId: query, contentType: searchType === "all" ? undefined : searchType };
+        const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params }).catch(() => null);
+        setSearchResults(res?.data?.success ? [tmdbDetailsToMovie(res.data.data)] : []);
+        return;
+      }
+
+      // ── Text search: local library + TMDB multi-result search ──
       const dbPromise = supabase
         .from("watch_html")
         .select("*")
@@ -463,63 +546,36 @@ const SearchPage = () => {
         .limit(12);
 
       const tmdbPromise = axios
-        .get(`${backendUrl}/api/tmdb-details`, { params: { title: query } })
+        .get(`${backendUrl}/api/tmdb-search`, {
+          params: {
+            query,
+            type: searchType === "all" ? "multi" : searchType,
+            lang: searchLang || undefined,
+          },
+        })
         .catch(() => null);
 
       const [dbResponse, tmdbResponse] = await Promise.all([dbPromise, tmdbPromise]);
-      let finalResults = [...(dbResponse.data || [])];
 
-      if (tmdbResponse?.data?.success) {
-        const tmdb = tmdbResponse.data.data;
-        const trailerKey = tmdb.trailer_key_original_language || tmdb.trailer_key || null;
-        const titleLogo = tmdb.title_logo_english || tmdb.title_logo || null;
-
-        const tmdbFormatted = {
-          id: `tmdb-${tmdb.tmdb_id}`,
-          title: tmdb.title,
-          slug: tmdb.slug,
-          poster: tmdb.poster_url,
-          cover_poster: tmdb.cover_poster_url,
-          description: tmdb.description,
-          imdb_rating: tmdb.imdb_rating,
-          year: tmdb.year,
-          genres: tmdb.genres,
-          language: [tmdb.original_language],
-          title_logo: titleLogo,
-          imdb_id: tmdb.imdb_id,
-          tmdb_id: tmdb.tmdb_id,
-          content_type: tmdb.content_type,
-          episodes: tmdb.episodes || [],
-          trailer_codes: trailerKey,
-          trailer_key: trailerKey,
-          isTmdbOnly: true,
-        };
-
-        // If the movie already exists in DB results, merge TMDB enrichment into it
-        const existingIdx = finalResults.findIndex(
-          (m) => m.title?.toLowerCase().trim() === tmdbFormatted.title?.toLowerCase().trim()
-        );
-
-        if (existingIdx !== -1) {
-          // Patch the DB result with TMDB trailer + language + logo if missing
-          finalResults[existingIdx] = {
-            ...finalResults[existingIdx],
-            title_logo: finalResults[existingIdx].title_logo || titleLogo,
-            trailer_codes: finalResults[existingIdx].trailer_codes || trailerKey,
-            trailer_key: finalResults[existingIdx].trailer_key || trailerKey,
-            language: finalResults[existingIdx].language || [tmdb.original_language],
-          };
-          // Cache this so background enrichment also benefits
-          const cacheKey = finalResults[existingIdx].slug || finalResults[existingIdx].imdb_id || finalResults[existingIdx].title;
-          tmdbCache.current[cacheKey] = {
-            title_logo: titleLogo,
-            trailer_codes: trailerKey,
-            language: [tmdb.original_language],
-          };
-        } else {
-          finalResults.push(tmdbFormatted);
+      // Local results, narrowed by the chosen type/language where known
+      let finalResults = (dbResponse.data || []).filter((m) => {
+        if (searchType !== "all" && m.content_type && m.content_type !== searchType) return false;
+        if (searchLang) {
+          const langs = (Array.isArray(m.language) ? m.language : [m.language]).filter(Boolean);
+          const target = LANG_DISPLAY_MAP[searchLang];
+          if (langs.length > 0 && !langs.includes(target) && !langs.includes(searchLang)) return false;
         }
-      }
+        return true;
+      });
+
+      // Append TMDB results that aren't already in the local library
+      const localTitles = new Set(finalResults.map((m) => m.title?.toLowerCase().trim()).filter(Boolean));
+      (tmdbResponse?.data?.results || []).forEach((t) => {
+        const key = (t.title || "").toLowerCase().trim();
+        if (!key || localTitles.has(key)) return;
+        localTitles.add(key);
+        finalResults.push(tmdbItemToMovie(t));
+      });
 
       setSearchResults(finalResults);
 
@@ -566,7 +622,7 @@ const SearchPage = () => {
           <input
             autoFocus
             type="text"
-            placeholder="Search our database and global library..."
+            placeholder="Search by title, IMDb ID (tt1234567) or TMDB ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-20 pl-16 pr-12 bg-[#16181f] border border-white/5 rounded-2xl text-2xl outline-none focus:ring-4 focus:ring-blue-500/20 transition-all placeholder:text-gray-600 shadow-2xl"
@@ -580,6 +636,40 @@ const SearchPage = () => {
             </button>
           )}
         </div>
+
+        {/* ── Type + Language filters ── */}
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          {SEARCH_TYPES.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setSearchType(value)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                searchType === value
+                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="w-px h-5 bg-white/10 mx-1" />
+          {SEARCH_LANGS.map(({ code, label }) => (
+            <button
+              key={code || "all"}
+              onClick={() => setSearchLang(code)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                searchLang === code
+                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 px-1 text-[10px] text-gray-600 font-bold uppercase tracking-widest">
+          Tip: paste an IMDb ID (tt1234567) or TMDB ID (603) for an exact match
+        </p>
       </div>
 
       <div className="max-w-7xl mx-auto">
