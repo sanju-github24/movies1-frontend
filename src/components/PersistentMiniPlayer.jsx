@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, ChevronUp } from 'lucide-react';
 import { useMusicPlayer } from '../context/MusicPlayerContext';
 
 export default function PersistentMiniPlayer() {
   const player = useMusicPlayer();
   const navigate = useNavigate();
+  const location = useLocation();
   const [hov, setHov] = useState(false);
 
   if (!player?.currentTrack || !player?.isMinimized) return null;
+
+  // A session restored from a previous visit only surfaces on music pages.
+  // Once the user hits play (or starts a new track) it behaves like a live
+  // session again and follows them across the site.
+  const isMusicPage = location.pathname.startsWith('/music');
+  if (player.isRestoredSession && !isMusicPage) return null;
 
   const { currentTrack, isPlaying, currentTime, duration, togglePlay, close, setIsMinimized } = player;
   const progress = duration ? (currentTime / duration) * 100 : 0;
