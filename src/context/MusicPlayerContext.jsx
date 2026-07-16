@@ -22,6 +22,10 @@ export function MusicPlayerProvider({ children }) {
   const [volume,       setVolume]       = useState(0.8);
   const [isMuted,      setIsMuted]      = useState(false);
   const [isMinimized,  setIsMinimized]  = useState(false);
+  // True when the current track was restored from a previous visit (localStorage)
+  // rather than actively played this session. A restored session's mini player is
+  // only shown on /music pages; it becomes a live session once the user plays it.
+  const [isRestoredSession, setIsRestoredSession] = useState(false);
 
   // Ref mirrors currentTrack so event handlers never have stale closures
   const currentTrackRef = useRef(null);
@@ -35,9 +39,11 @@ export function MusicPlayerProvider({ children }) {
       const audio = audioRef.current;
       const resumeTime = saved.currentTime || 0;
       if (saved.volume != null) audio.volume = saved.volume;
-      // Restore state so mini-player shows the track
+      // Restore state so mini-player shows the track (music pages only,
+      // until the user actually resumes playback)
       setCurrentTrack(saved);
       setIsMinimized(true);
+      setIsRestoredSession(true);
       // Load audio but don't play; seek once buffered
       audio.src = saved.streamUrl;
       audio.load();
@@ -66,7 +72,8 @@ export function MusicPlayerProvider({ children }) {
       } catch (_) {}
     };
     const onLoadedMeta    = () => setDuration(audio.duration || 0);
-    const onPlay          = () => setIsPlaying(true);
+    // Playing makes a restored session live again (mini player everywhere)
+    const onPlay          = () => { setIsPlaying(true); setIsRestoredSession(false); };
     const onPause         = () => setIsPlaying(false);
     const onEnded         = () => { setIsPlaying(false); setCurrentTime(0); };
     const onVolumeChange  = () => { setVolume(audio.volume); setIsMuted(audio.muted); };
@@ -100,6 +107,7 @@ export function MusicPlayerProvider({ children }) {
     setDuration(0);
     setIsPlaying(false);
     setIsMinimized(false);
+    setIsRestoredSession(false);
 
     // Load new source
     audio.pause();
@@ -156,6 +164,10 @@ export function MusicPlayerProvider({ children }) {
     setCurrentTime(0);
     setDuration(0);
     setIsMinimized(false);
+    setIsRestoredSession(false);
+    // User dismissed the player — forget the saved session so it does not
+    // reappear on the next reload or visit.
+    try { localStorage.removeItem('music_session'); } catch (_) {}
   }, []);
 
   const [trackCache, setTrackCache] = useState({});
@@ -193,6 +205,7 @@ export function MusicPlayerProvider({ children }) {
     volume,
     isMuted,
     isMinimized, setIsMinimized,
+    isRestoredSession,
     audioRef,
     trackCache,
     updateTrackCache,
