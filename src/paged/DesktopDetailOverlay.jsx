@@ -1,6 +1,120 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Play, Volume2, VolumeX, Star, Info, Plus, ChevronDown, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate } from "react-router-dom";
+
+const formatLanguage = (langs) => {
+  const langArray = Array.isArray(langs) ? langs : [langs];
+  if (langArray.length <= 1) return langArray[0] || "Unknown";
+  return `${langArray.length} Languages`;
+};
+
+/* ── Home-row style animated related titles row ──
+   Mirrors the GenreRow cards on the watchlist home: poster → cover crossfade,
+   hover expand, trailer preview after 2s, gradient info + Watch Now. */
+const RelatedRow = ({ movies, onSelect }) => {
+  const rowRef = useRef(null);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(false);
+  const [hoveredId, setHoveredId] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
+  const timerRef = useRef(null);
+
+  const handleMouseEnter = (id) => {
+    setHoveredId(id);
+    timerRef.current = setTimeout(() => setShowTrailer(true), 2000);
+  };
+  const handleMouseLeave = () => {
+    setHoveredId(null);
+    setShowTrailer(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  };
+
+  const checkScroll = () => {
+    if (!rowRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = rowRef.current;
+    setShowLeft(scrollLeft > 10);
+    setShowRight(scrollLeft + clientWidth < scrollWidth - 10);
+  };
+
+  const scroll = (dir) => rowRef.current?.scrollBy({ left: dir === "left" ? -320 : 320, behavior: "smooth" });
+
+  useEffect(() => {
+    checkScroll();
+    const el = rowRef.current;
+    el?.addEventListener("scroll", checkScroll);
+    window.addEventListener("resize", checkScroll);
+    return () => { el?.removeEventListener("scroll", checkScroll); window.removeEventListener("resize", checkScroll); };
+  }, [movies]);
+
+  return (
+    <div className="relative group/row">
+      {showLeft && (
+        <button onClick={() => scroll("left")}
+          className="absolute left-[-10px] top-0 bottom-0 z-[560] flex items-center justify-center w-10 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-r-xl opacity-0 group-hover/row:opacity-100">◀</button>
+      )}
+      <div ref={rowRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-12 pt-4 px-1">
+        {movies.map((m) => {
+          const cardId = m.id || m.slug;
+          const isHovered = hoveredId === cardId;
+          return (
+            <div
+              key={cardId}
+              className="group relative flex-none w-36 h-56 border border-white/5 rounded-xl cursor-pointer transition-all duration-500 ease-out hover:z-[555] hover:scale-110 hover:w-72 hover:shadow-[0_20px_50px_rgba(0,0,0,1)] bg-gray-900"
+              onMouseEnter={() => handleMouseEnter(cardId)}
+              onMouseLeave={handleMouseLeave}
+              onClick={() => onSelect(m)}
+            >
+              <img src={m.poster || m.poster_url || "/default-poster.jpg"} alt={m.title}
+                className={`absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-300 ${isHovered ? "opacity-0" : "opacity-100"}`} />
+              <img src={m.cover_poster || m.poster || m.poster_url} alt={m.title}
+                className={`absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-500 ${isHovered && !showTrailer ? "opacity-100" : "opacity-0"}`} />
+              {isHovered && showTrailer && m.trailer_key && (
+                <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-xl">
+                  <div className="w-full h-full scale-[1.6] pointer-events-none">
+                    <iframe src={`https://www.youtube.com/embed/${m.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${m.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                      className="w-full h-full" frameBorder="0" allow="autoplay" />
+                  </div>
+                  <div className="absolute top-3 left-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm">
+                    <span className="text-[7px] font-black text-white/90 uppercase tracking-[0.2em]">Trailer</span>
+                  </div>
+                </div>
+              )}
+              {m.content_type === "tv" && (
+                <div className="absolute top-2 left-2 z-30 px-1.5 py-0.5 bg-purple-600/90 backdrop-blur-md rounded text-[7px] font-black uppercase text-white tracking-tighter">
+                  SERIES
+                </div>
+              )}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/60 to-transparent flex flex-col justify-end p-4 rounded-xl pointer-events-none group-hover:pointer-events-auto z-40">
+                {m.title_logo ? (
+                  <img src={m.title_logo} className="h-8 w-auto object-contain mb-2 self-start" alt="" />
+                ) : (
+                  <div className="text-xs font-black text-white mb-2 truncate uppercase">{m.title || m.slug}</div>
+                )}
+                <div className="flex items-center gap-2 text-[9px] font-bold text-gray-300 mb-2">
+                  <span className="text-blue-400 uppercase font-black">{formatLanguage(m.language)}</span>
+                  {m.imdbRating && (
+                    <span className="flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {m.imdbRating}
+                    </span>
+                  )}
+                  {m.year && <span>{m.year}</span>}
+                </div>
+                <button className="w-full py-1.5 bg-white text-black text-[9px] font-extrabold rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
+                  <Play className="w-3 h-3 fill-current" />
+                  {m.content_type === "tv" ? "STREAM SERIES" : "WATCH NOW"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {showRight && (
+        <button onClick={() => scroll("right")}
+          className="absolute right-[-10px] top-0 bottom-0 z-[560] flex items-center justify-center w-10 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-l-xl opacity-0 group-hover/row:opacity-100">▶</button>
+      )}
+    </div>
+  );
+};
 
 const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMuted, setIsMuted }) => {
   const [showTrailer, setShowTrailer] = useState(false);
@@ -28,8 +142,10 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
   };
 
   const handlePlayClick = () => {
-    navigate(`/watch/${movie.slug}`);
-    onClose(); 
+    // Route through onNavigate so TMDB items carry their payload in location.state
+    if (onNavigate) onNavigate(movie);
+    else navigate(`/watch/${movie.slug}`);
+    onClose();
   };
 
   return (
@@ -159,25 +275,10 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
 
           {relatedMovies.length > 0 && (
             <div className="mt-20">
-              <h4 className="text-xl font-black text-white uppercase tracking-tighter italic mb-8">
+              <h4 className="text-xl font-black text-white uppercase tracking-tighter italic mb-4 border-l-4 border-blue-600 pl-3">
                 Recommended <span className="text-blue-600">Titles</span>
               </h4>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {relatedMovies.map((m) => (
-                  <div key={m.id || m.slug} className="group cursor-pointer" onClick={() => onNavigate(m)}>
-                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden border border-white/5 bg-gray-900 shadow-xl transition-all duration-500 group-hover:scale-105 group-hover:border-blue-500/30">
-                      <img src={m.poster || m.poster_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt={m.title} />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                         <Play size={24} className="text-white fill-current" />
-                      </div>
-                    </div>
-                    <span className="mt-3 text-[11px] font-black text-gray-500 truncate uppercase block group-hover:text-white transition-colors">
-                      {m.title || m.slug}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <RelatedRow movies={relatedMovies} onSelect={onNavigate} />
             </div>
           )}
           
