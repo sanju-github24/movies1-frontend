@@ -75,6 +75,20 @@ const LANG_DISPLAY = {
   hi: "Hindi", en: "English"
 };
 
+// All languages we fetch TMDB content for (movies + TV + per-language trending)
+const REGIONAL_LANG_CODES = ["ta", "te", "ml", "kn", "hi", "en"];
+
+// Display name → code (for turning the user's profile language choices into TMDB codes)
+const LANG_NAME_TO_CODE = {
+  Tamil: "ta", Telugu: "te", Malayalam: "ml", Kannada: "kn", Hindi: "hi", English: "en"
+};
+
+// Resolve user's chosen language names to codes; empty/unknown → all languages
+const resolveLangCodes = (langNames) => {
+  const codes = (langNames || []).map(n => LANG_NAME_TO_CODE[n]).filter(Boolean);
+  return codes.length > 0 ? codes : REGIONAL_LANG_CODES;
+};
+
 /* ===== Detect content type robustly from TMDB item ===== */
 // A TMDB item is TV if: explicit content_type="tv", has first_air_date/name (TV fields),
 // or was fetched from a ?type=tv endpoint (flagged as _isTv).
@@ -265,7 +279,7 @@ const HOTSTAR_NUMBER_OVERLAYS = [
   "https://img10.hotstar.com/image/upload/f_auto,q_90,w_128/discovery/PROD/top-10-overlays/version-1/LTR/overlay-10.png",
 ];
 
-const TrendingNumbersRow = ({ movies, onSelect }) => {
+const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 10 }) => {
   const rowRef = useRef(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
@@ -285,7 +299,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
   return (
     <div className="mb-16 w-full max-w-7xl px-4 mx-auto overflow-visible">
       <h2 className="text-xl font-bold text-gray-200 mb-10 px-2 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
-        <TrendingUp className="w-5 h-5 text-blue-500" /> Top 10 Today
+        <TrendingUp className="w-5 h-5 text-blue-500" /> {title}
       </h2>
 
       <div className="relative group/row">
@@ -294,7 +308,7 @@ const TrendingNumbersRow = ({ movies, onSelect }) => {
           className="flex overflow-x-auto scrollbar-hide scroll-smooth pt-2 pb-16 px-2"
           style={{ gap: "52px" }}
         >
-          {movies.slice(0, 10).map((movie, index) => (
+          {movies.slice(0, limit).map((movie, index) => (
            <div
   key={movie.id}
   className="relative flex-none cursor-pointer group"
@@ -517,12 +531,17 @@ const WatchListPage = () => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [userLangs, setUserLangs] = useState([]);
+  // Committed language choices that drive TMDB fetching (only updated on save,
+  // not while the user is still toggling options in the popup)
+  const [fetchLangs, setFetchLangs] = useState([]);
+  const [authChecked, setAuthChecked] = useState(false);
   const [showLangPopup, setShowLangPopup] = useState(false);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroMovies, setHeroMovies] = useState([]);
   const [trendingMovies, setTrendingMovies] = useState([]);
+  const [langTrending, setLangTrending] = useState({}); // { "Tamil": [top 5 movies], ... }
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [resumeRefresh, setResumeRefresh] = useState(0);
@@ -551,7 +570,9 @@ const WatchListPage = () => {
       setSession(s);
       const langs = s?.user?.user_metadata?.languages || [];
       setUserLangs(langs);
+      setFetchLangs(langs);
       if (s?.user && !s.user.user_metadata?.hasSelectedLanguage) setShowLangPopup(true);
+      setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => subscription.unsubscribe();
@@ -566,28 +587,39 @@ const WatchListPage = () => {
       const { error } = await supabase.auth.updateUser({ data: { languages: userLangs, hasSelectedLanguage: true } });
       if (error) throw error;
       setShowLangPopup(false);
+      setFetchLangs(userLangs); // triggers a TMDB refetch scoped to the chosen languages
     } catch (e) { console.error(e); }
   };
 
   /* ─── Fetch TMDB regional movies ── */
-  const fetchTmdbMovies = async (localMovies) => {
+  // selectedLangNames: user's profile languages (e.g. ["Kannada"]). If set, only
+  // those languages are fetched from TMDB; otherwise all supported languages.
+  const fetchTmdbMovies = async (localMovies, selectedLangNames = []) => {
     if (!backendUrl) return [];
 
     const localTitles = new Set(localMovies.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
     const localSlugs  = new Set(localMovies.map(m => m.slug?.toLowerCase()).filter(Boolean));
 
-    // Each entry: [url, isTv] — we tag TV endpoints so buildTmdbMovie can detect type
-    const endpoints = [
-      [`${backendUrl}/api/tmdb-regional?lang=ta&type=movie&page=1`, false],
-      [`${backendUrl}/api/tmdb-regional?lang=te&type=movie&page=1`, false],
-      [`${backendUrl}/api/tmdb-regional?lang=ml&type=movie&page=1`, false],
-      [`${backendUrl}/api/tmdb-regional?lang=kn&type=movie&page=1`, false],
-      [`${backendUrl}/api/tmdb-regional?lang=hi&type=movie&page=1`, false],
-      [`${backendUrl}/api/tmdb-regional?lang=ta&type=tv&page=1`,    true ],  // Tamil TV
-      [`${backendUrl}/api/tmdb-regional?lang=te&type=tv&page=1`,    true ],  // Telugu TV
-      [`${backendUrl}/api/tmdb-regional?lang=hi&type=tv&page=1`,    true ],  // Hindi TV
-      [`${backendUrl}/api/tmdb-trending`,                            false],  // has mixed; content_type field from backend
-    ];
+    const codes = resolveLangCodes(selectedLangNames);
+
+    // Fewer selected languages → dig deeper into TMDB pages so the genre rows
+    // still get as many titles as possible. Page 1 is enriched (logos/trailers);
+    // deeper pages skip enrichment so they load fast. min_votes=10 surfaces far
+    // more titles for smaller languages (Kannada, Malayalam, ...).
+    const moviePages = codes.length === 1 ? [1, 2, 3, 4, 5] : codes.length <= 3 ? [1, 2, 3, 4] : [1, 2, 3];
+    const tvPages    = codes.length <= 3 ? [1, 2, 3] : [1, 2];
+
+    // Each entry: [url, isTv] — we tag TV endpoints so buildTmdbMovie can detect type.
+    const endpoints = [];
+    codes.forEach(code => {
+      moviePages.forEach(p => endpoints.push([
+        `${backendUrl}/api/tmdb-regional?lang=${code}&type=movie&page=${p}&min_votes=10${p === 1 ? "" : "&enrich=0"}`, false
+      ]));
+      tvPages.forEach(p => endpoints.push([
+        `${backendUrl}/api/tmdb-regional?lang=${code}&type=tv&page=${p}&min_votes=10${p === 1 ? "" : "&enrich=0"}`, true
+      ]));
+    });
+    endpoints.push([`${backendUrl}/api/tmdb-trending`, false]);  // has mixed; content_type field from backend
 
     const results = [];
     const responses = await Promise.allSettled(
@@ -616,6 +648,58 @@ const WatchListPage = () => {
       unique.push(buildTmdbMovie(t));
     }
     return unique;
+  };
+
+  /* ─── Background-enrich TMDB movies that came from bulk (enrich=0) pages ──
+     Fetches title logos + trailer keys in chunks and patches them into state,
+     so genre-row hovers and the detail overlay show logos instead of bare text. */
+  const enrichTmdbBatch = async (items) => {
+    if (!backendUrl || items.length === 0) return;
+    const CHUNK = 25;
+    for (let i = 0; i < items.length; i += CHUNK) {
+      const chunk = items.slice(i, i + CHUNK);
+      try {
+        const res = await axios.post(`${backendUrl}/api/tmdb-enrich`,
+          chunk.map(m => ({ tmdb_id: m.tmdb_id, content_type: m.content_type })));
+        const byId = new Map((res.data?.results || []).map(e => [String(e.tmdb_id), e]));
+        if (byId.size === 0) continue;
+        const patch = (m) => {
+          if (m.source !== "tmdb" || !m.tmdb_id) return m;
+          const e = byId.get(String(m.tmdb_id));
+          if (!e || (!e.title_logo && !e.trailer_key)) return m;
+          const upd = {
+            title_logo:  m.title_logo  || e.title_logo  || null,
+            trailer_key: m.trailer_key || e.trailer_key || null,
+          };
+          return { ...m, ...upd, tmdbPayload: m.tmdbPayload ? { ...m.tmdbPayload, ...upd } : m.tmdbPayload };
+        };
+        setAllMovies(prev => prev.map(patch));
+        setTrendingMovies(prev => prev.map(patch));
+        setHeroMovies(prev => prev.map(patch));
+        setSelectedMovie(prev => (prev ? patch(prev) : prev));
+      } catch (_) { /* enrichment is best-effort */ }
+    }
+  };
+
+  /* ─── Fetch Top 5 trending per language from TMDB ── */
+  // Only fetches the user's chosen languages (all languages when none chosen).
+  const fetchLangTrending = async (selectedLangNames = []) => {
+    if (!backendUrl) return {};
+    const codes = resolveLangCodes(selectedLangNames);
+    const responses = await Promise.allSettled(
+      codes.map(code =>
+        axios.get(`${backendUrl}/api/tmdb-trending-language?lang=${code}&type=movie&limit=5`)
+      )
+    );
+    const map = {};
+    responses.forEach((r, idx) => {
+      if (r.status !== "fulfilled") return;
+      const list = r.value.data?.results || [];
+      if (list.length === 0) return;
+      const langName = LANG_DISPLAY[codes[idx]] || codes[idx].toUpperCase();
+      map[langName] = list.map(t => buildTmdbMovie(t));
+    });
+    return map;
   };
 
   /* ─── Main data fetch ── */
@@ -653,12 +737,21 @@ const WatchListPage = () => {
 
         setMovies(merged);
 
-        const tmdb = await fetchTmdbMovies(merged);
+        const [tmdb, langTrendingMap] = await Promise.all([
+          fetchTmdbMovies(merged, fetchLangs),
+          fetchLangTrending(fetchLangs),
+        ]);
+        setLangTrending(langTrendingMap);
         const combined = [...merged, ...tmdb];
         setAllMovies(combined);
 
+        // When the user picked languages, keep hero/trending fills within them
+        const inChosenLangs = (m) =>
+          fetchLangs.length === 0 ||
+          (Array.isArray(m.language) ? m.language : [m.language]).some(l => fetchLangs.includes(l));
+
         const adminHero = merged.filter(m => m.show_on_hero === true).slice(0, 3);
-        const tmdbWithAssets = tmdb.filter(m => m.title_logo || m.trailer_key);
+        const tmdbWithAssets = tmdb.filter(m => (m.title_logo || m.trailer_key) && inChosenLangs(m));
         const tmdbHero = tmdbWithAssets.sort(() => 0.5 - Math.random()).slice(0, 4);
         const localOthers = merged.filter(m => !adminHero.some(a => a.id === m.id));
         const localExtra = localOthers.sort(() => 0.5 - Math.random()).slice(0, 2);
@@ -666,10 +759,13 @@ const WatchListPage = () => {
 
         const manualTrending = merged.filter(m => m.is_trending === true).slice(0, 10);
         const autoFill = combined
-          .filter(m => !manualTrending.some(t => t.id === m.id))
+          .filter(m => !manualTrending.some(t => t.id === m.id) && inChosenLangs(m))
           .sort(() => 0.5 - Math.random())
           .slice(0, 10 - manualTrending.length);
         setTrendingMovies([...manualTrending, ...autoFill]);
+
+        // Fire-and-forget: fill in logos/trailers for the bulk-fetched pages
+        enrichTmdbBatch(tmdb.filter(m => !m.title_logo && !m.trailer_key && m.tmdb_id));
 
         syncTodaysUploads(merged);
       } catch (err) {
@@ -678,8 +774,11 @@ const WatchListPage = () => {
         setLoading(false);
       }
     };
+    // Wait for the auth check so we know the user's saved languages before
+    // hitting TMDB; refetch whenever the committed language choice changes.
+    if (!authChecked) return;
     fetchMovies();
-  }, [backendUrl]);
+  }, [backendUrl, authChecked, fetchLangs.join("|")]);
 
   const syncTodaysUploads = async (list) => {
     const todayStr = new Date().toISOString().split("T")[0];
@@ -726,6 +825,11 @@ const WatchListPage = () => {
   /* ─── When a movie card is clicked ── */
   const handleMovieSelect = (movie) => {
     setSelectedMovie(movie);
+    // Not-yet-enriched TMDB movie: fetch its logo + trailer right away so the
+    // detail overlay shows the title treatment instead of plain text.
+    if (movie.source === "tmdb" && movie.tmdb_id && !movie.title_logo && !movie.trailer_key) {
+      enrichTmdbBatch([movie]);
+    }
   };
 
   /* ─── Navigate to watch page ── */
@@ -1078,12 +1182,37 @@ const WatchListPage = () => {
               </div>
             )}
 
-            {Object.entries(groupedByBackendGenre).map(([genreName, list], index) => (
-              <React.Fragment key={genreName}>
-                <GenreRow title={genreName} movies={list} onSelect={handleMovieSelect} />
-                {index === 0 && <TrendingNumbersRow movies={trendingMovies} onSelect={handleMovieSelect} />}
-              </React.Fragment>
-            ))}
+            {(() => {
+              // Genre rows with the Top 10 row after the first, then a per-language
+              // "Top 5" trending row woven in after every second genre row.
+              const langRows = Object.entries(langTrending).filter(
+                ([langName]) => userLangs.length === 0 || userLangs.includes(langName)
+              );
+              let langIdx = 0;
+              const blocks = [];
+              const pushLangRow = () => {
+                const [langName, langMovies] = langRows[langIdx++];
+                blocks.push(
+                  <TrendingNumbersRow
+                    key={`top5-${langName}`}
+                    title={`Top 5 in ${langName}`}
+                    limit={5}
+                    movies={langMovies}
+                    onSelect={handleMovieSelect}
+                  />
+                );
+              };
+              Object.entries(groupedByBackendGenre).forEach(([genreName, list], index) => {
+                blocks.push(<GenreRow key={genreName} title={genreName} movies={list} onSelect={handleMovieSelect} />);
+                if (index === 0) {
+                  blocks.push(<TrendingNumbersRow key="top-10-today" movies={trendingMovies} onSelect={handleMovieSelect} />);
+                } else if (index % 2 === 0 && langIdx < langRows.length) {
+                  pushLangRow();
+                }
+              });
+              while (langIdx < langRows.length) pushLangRow();
+              return blocks;
+            })()}
           </main>
         </>
       )}
