@@ -50,6 +50,25 @@ const saveRecentlyWatched = (movie) => {
   }
 };
 
+/* ── Advanced search: filters + ID detection ── */
+const SEARCH_LANGS = [
+  { code: "", label: "All Languages" },
+  { code: "ta", label: "Tamil" },
+  { code: "te", label: "Telugu" },
+  { code: "ml", label: "Malayalam" },
+  { code: "kn", label: "Kannada" },
+  { code: "hi", label: "Hindi" },
+  { code: "en", label: "English" },
+];
+const SEARCH_TYPES = [
+  { value: "all", label: "All" },
+  { value: "movie", label: "Movies" },
+  { value: "tv", label: "Series" },
+];
+const LANG_DISPLAY_MAP = { ta: "Tamil", te: "Telugu", ml: "Malayalam", kn: "Kannada", hi: "Hindi", en: "English" };
+const IMDB_ID_RE = /^tt\d{5,}$/i;
+const TMDB_ID_RE = /^\d{2,}$/;
+
 /* ====== Title Logo component ====== */
 const TitleDisplay = ({ movie, className = "", textClassName = "" }) => {
   const [logoError, setLogoError] = useState(false);
@@ -374,6 +393,8 @@ const SearchResults = () => {
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchType, setSearchType] = useState("all");   // all | movie | tv
+  const [searchLang, setSearchLang] = useState("");      // "" = all languages
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isMuted, setIsMuted] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
@@ -490,7 +511,8 @@ const SearchResults = () => {
     setLoading(true);
 
     try {
-      const isTmdbId = /^\d+$/.test(query.trim());
+      const isImdbId = IMDB_ID_RE.test(query.trim());
+      const isTmdbId = TMDB_ID_RE.test(query.trim());
 
       const [moviesRes, watchRes] = await Promise.all([
         supabase.from("movies").select("*"),
@@ -499,9 +521,20 @@ const SearchResults = () => {
 
       const resultsMap = new Map();
 
+      // Narrow local results by the chosen type/language where those fields exist
+      const matchesFilters = (m) => {
+        if (searchType !== "all" && m.content_type && m.content_type !== searchType) return false;
+        if (searchLang) {
+          const langs = (Array.isArray(m.language) ? m.language : [m.language]).filter(Boolean);
+          const target = LANG_DISPLAY_MAP[searchLang];
+          if (langs.length > 0 && !langs.includes(target) && !langs.includes(searchLang)) return false;
+        }
+        return true;
+      };
+
       // --- 1. Local Streaming Results (watch_html) ---
       (watchRes.data || [])
-        .filter((w) => w.title?.toLowerCase().includes(query))
+        .filter((w) => w.title?.toLowerCase().includes(query) && matchesFilters(w))
         .forEach((w) => {
           const titleKey = w.title.toLowerCase().trim();
           const safeSlug = w.slug || generateSlug(w.title);
@@ -521,7 +554,7 @@ const SearchResults = () => {
 
       // --- 2. Local Download Results (movies) ---
       (moviesRes.data || [])
-        .filter((m) => m.title?.toLowerCase().includes(query))
+        .filter((m) => m.title?.toLowerCase().includes(query) && matchesFilters(m))
         .forEach((m) => {
           const titleKey = m.title.toLowerCase().trim();
           if (!resultsMap.has(titleKey)) {
@@ -542,12 +575,29 @@ const SearchResults = () => {
 
       // --- 3. TMDB API Fallback & Discovery ---
       try {
-        const params = isTmdbId ? { tmdbId: query.trim() } : { title: query.trim() };
-        const tmdbRes = await axios.get(`${backendUrl}/api/tmdb-details`, { params });
+        let tmdbList = [];
+        if (isImdbId || isTmdbId) {
+          // Exact lookup by IMDb ID (tt…) or TMDB ID (numeric)
+          const params = isImdbId
+            ? { imdbId: query.trim() }
+            : { tmdbId: query.trim(), contentType: searchType === "all" ? undefined : searchType };
+          const tmdbRes = await axios.get(`${backendUrl}/api/tmdb-details`, { params });
+          if (tmdbRes.data.success) {
+            tmdbList = Array.isArray(tmdbRes.data.data) ? tmdbRes.data.data : [tmdbRes.data.data];
+          }
+        } else {
+          // Multi-result search, honouring the type + language filters
+          const tmdbRes = await axios.get(`${backendUrl}/api/tmdb-search`, {
+            params: {
+              query: query.trim(),
+              type: searchType === "all" ? "multi" : searchType,
+              lang: searchLang || undefined,
+            },
+          });
+          if (tmdbRes.data.success) tmdbList = tmdbRes.data.results || [];
+        }
 
-        if (tmdbRes.data.success) {
-          const tmdbList = Array.isArray(tmdbRes.data.data) ? tmdbRes.data.data : [tmdbRes.data.data];
-
+        {
           tmdbList.forEach((t) => {
             const movieTitle = t.title || t.name || "";
             const titleKey = movieTitle.toLowerCase().trim();
@@ -571,7 +621,12 @@ const SearchResults = () => {
                 genres: t.genres || [],
                 title_logo: t.title_logo_english || t.title_logo || null,
                 trailer_codes: t.trailer_key_original_language || t.trailer_key || null,
-                language: t.original_language ? [t.original_language] : null,
+                trailer_key: t.trailer_key_original_language || t.trailer_key || null,
+                language: t.language_display
+                  ? [t.language_display]
+                  : t.original_language
+                    ? [LANG_DISPLAY_MAP[t.original_language] || t.original_language]
+                    : null,
               };
 
               resultsMap.set(titleKey, {
@@ -606,7 +661,7 @@ const SearchResults = () => {
   useEffect(() => {
     fetchResults();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, searchType, searchLang]);
 
   const handleCardClick = (item) => {
     const shaped = toMovieShape(item);
@@ -637,6 +692,40 @@ const SearchResults = () => {
         <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter italic">
           Search Results <span className="text-blue-500">"{prettyQuery}"</span>
         </h1>
+
+        {/* ── Type + Language filters ── */}
+        <div className="flex flex-wrap items-center gap-2 mt-6">
+          {SEARCH_TYPES.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setSearchType(value)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                searchType === value
+                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="w-px h-5 bg-white/10 mx-1" />
+          {SEARCH_LANGS.map(({ code, label }) => (
+            <button
+              key={code || "all"}
+              onClick={() => setSearchLang(code)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                searchLang === code
+                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[10px] text-gray-600 font-bold uppercase tracking-widest">
+          Tip: paste an IMDb ID (tt1234567) or TMDB ID (603) for an exact match
+        </p>
       </div>
 
       <div className="max-w-7xl mx-auto">
