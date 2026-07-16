@@ -13,6 +13,7 @@ import EmailVerify from './paged/EmailVerify';
 import ResetPassword from './paged/ResetPassword';
 import MovieDetail from './paged/MovieDetail';
 import SearchResults from './paged/SearchResults';
+import SearchPage from './paged/SearchPage';
 import CategoryPage from './components/CategoryPage';
 import LatestUploads from './components/LatestUploads';
 import { AppContext } from './context/AppContext';
@@ -220,6 +221,7 @@ const AppContent = () => {
         <Route path="/auth"                   element={session ? <Navigate to="/watch" /> : <AuthPage />} />
         <Route path="/update-password"        element={<UpdatePassword />} />
         <Route path="/watch"                  element={<WatchListPage />} />
+        <Route path="/watch/search"           element={<SearchPage />} />
         <Route path="/watch/:slug/*"          element={<WatchPage />} />
         <Route path="/player/:slug?"          element={<VideoPlayerPage />} />
         <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
