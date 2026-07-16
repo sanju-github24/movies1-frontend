@@ -56,7 +56,9 @@ export default function SearchResultsPage() {
   const isDirectListing = query.startsWith('album:') || query.startsWith('artist:');
   const listingType     = query.startsWith('album:') ? 'Album' : 'Artist';
   const rawSlug         = query.split(':', 2)[1] || '';
-  const listingName     = rawSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  // Prefer the real name scraped from the listing page; fall back to the slug
+  const listingName     = results.metadata?.title
+    || rawSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   // Derive color from query slug (instant, no CORS)
   const { base: baseRgb, light: lightRgb } = useMemo(() => deriveRgbFromStr(rawSlug || query), [rawSlug, query]);
@@ -85,7 +87,14 @@ export default function SearchResultsPage() {
       .then(d => {
         const r = { songs: d.songs||[], albums: d.albums||[], artists: d.artists||[], metadata: d.metadata||{} };
         setResults(r);
-        try { sessionStorage.setItem(cacheKey(query), JSON.stringify(r)); } catch(_) {}
+        // Only cache non-empty results — caching a failed/empty scrape would
+        // keep the page stuck rendering nothing on every revisit.
+        const count = r.songs.length + r.albums.length + r.artists.length;
+        if (count > 0) {
+          try { sessionStorage.setItem(cacheKey(query), JSON.stringify(r)); } catch(_) {}
+        } else {
+          try { sessionStorage.removeItem(cacheKey(query)); } catch(_) {}
+        }
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
