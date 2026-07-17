@@ -186,10 +186,12 @@ export default function TrackDetailPage() {
     setShowDotsMenu(false);
 
     // ── THE CRITICAL PATH CORRECTION ──
-    // Gaana tracks are namespaced "gaana:<seokey>" — pass the id straight through
-    // so the backend routes to the Gaana (HLS) extractor. Otherwise, check if the
+    // Gaana tracks are namespaced "gaana__<seokey>" (underscores, not a colon —
+    // a colon in the URL path is rejected/mis-routed by many CDNs/hosts). Pass
+    // the id straight through so the backend routes to the Gaana (HLS) extractor.
+    // "gaana:" is still accepted for older cached ids. Otherwise, check if the
     // route ID contains un-parsed search markers from a fallback card click.
-    const isGaana = id.startsWith('gaana:');
+    const isGaana = id.startsWith('gaana__') || id.startsWith('gaana:');
     const isLooseQuery = !isGaana && !id.includes('-mp3-song') && !id.includes('.html');
     const endpoint = isGaana
       ? `/api/songs/track?id=${encodeURIComponent(id)}`
@@ -348,8 +350,8 @@ export default function TrackDetailPage() {
   // Gaana tracks stream over HLS and are play-only — they carry no downloads,
   // so every download affordance is gated on this rather than on the source.
   const hasDownloads = !!(trackData?.downloads && Object.keys(trackData.downloads).length > 0);
-  // Clean title fallback (strips the "gaana:" namespace and slug hyphens).
-  const titleFallback = id.replace(/^gaana:/, '').replace(/-/g, ' ');
+  // Clean title fallback (strips the gaana namespace and slug hyphens).
+  const titleFallback = id.replace(/^gaana__/, '').replace(/^gaana:/, '').replace(/-/g, ' ');
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
