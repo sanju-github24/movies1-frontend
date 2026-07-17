@@ -7,7 +7,7 @@ import {
   Volume2, VolumeX, Loader2, SkipBack, SkipForward, User,
   Minus, MoreHorizontal, X, ChevronDown
 } from 'lucide-react';
-import { musicApi } from '../utils/api';
+import { musicApi, backendUrl } from '../utils/api';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from string
@@ -111,7 +111,9 @@ export default function TrackDetailPage() {
     return singerStr
       .split(/,|\band\b|&/i)
       .map(s => s.trim())
-      .filter(s => s.length > 0);
+      // Drop placeholder artists so we never render a "More by Unknown" section
+      // or fetch recommendations for a meaningless name.
+      .filter(s => s.length > 0 && !/^(unknown(\s+artist)?|various\s+artists?|n\/?a)$/i.test(s));
   }, [trackData?.metadata?.singer]);
 
   // YouTube preview status — seeded from cache too
@@ -184,11 +186,16 @@ export default function TrackDetailPage() {
     setShowDotsMenu(false);
 
     // ── THE CRITICAL PATH CORRECTION ──
-    // Check if the current route ID payload contains un-parsed search markers from a JioSaavn fallback card click
-    const isLooseQuery = !id.includes('-mp3-song') && !id.includes('.html');
-    const endpoint = isLooseQuery
-      ? `/api/songs/track?resolve=${encodeURIComponent(id.replace(/-/g, ' '))}`
-      : `/api/songs/track?id=${encodeURIComponent(id)}`;
+    // Gaana tracks are namespaced "gaana:<seokey>" — pass the id straight through
+    // so the backend routes to the Gaana (HLS) extractor. Otherwise, check if the
+    // route ID contains un-parsed search markers from a fallback card click.
+    const isGaana = id.startsWith('gaana:');
+    const isLooseQuery = !isGaana && !id.includes('-mp3-song') && !id.includes('.html');
+    const endpoint = isGaana
+      ? `/api/songs/track?id=${encodeURIComponent(id)}`
+      : isLooseQuery
+        ? `/api/songs/track?resolve=${encodeURIComponent(id.replace(/-/g, ' '))}`
+        : `/api/songs/track?id=${encodeURIComponent(id)}`;
 
     musicApi(endpoint)
       .then(r => { if (!r.ok) throw new Error('Failed to fetch track'); return r.json(); })
@@ -204,13 +211,19 @@ export default function TrackDetailPage() {
         const meta = d.metadata || {};
         const seed = meta.cover_image || id || '';
         const { base, light } = deriveRgbFromStr(seed);
+        // Gaana streams are HLS from a tokenized CDN — route them through the
+        // backend proxy so the browser gets clean, same-origin, CORS-friendly
+        // segments instead of failing mid-song on a direct CDN fetch.
+        const streamUrl = isGaana
+          ? `${backendUrl}/api/gaana/hls?url=${encodeURIComponent(d.stream_url)}`
+          : d.stream_url;
         if (!isAlreadyPlaying) {
           player?.loadTrack({
             id,
-            title:     meta.title   || id.replace(/-/g,' '),
+            title:     meta.title   || titleFallback,
             artist:    meta.singer  || 'Unknown Artist',
             poster:    meta.cover_image || '',
-            streamUrl: d.stream_url,
+            streamUrl,
             lightRgb:  light,
             baseRgb:   base,
           });
@@ -231,7 +244,10 @@ export default function TrackDetailPage() {
     // Already cached? Skip network call.
     if (ytPreview) return;
     const title  = trackData.metadata.title  || '';
-    const singer = trackData.metadata.singer || '';
+    const rawSinger = trackData.metadata.singer || '';
+    // Don't feed a placeholder artist into the background-video search — it drags
+    // the query off-topic and returns an unrelated clip.
+    const singer = /^(unknown(\s+artist)?|various\s+artists?|n\/?a)$/i.test(rawSinger.trim()) ? '' : rawSinger;
     musicApi(`/api/songs/youtube-preview?q=${encodeURIComponent(`${title} ${singer}`.trim())}`)
       .then(r => r.json())
       .then(d => {
@@ -256,7 +272,15 @@ export default function TrackDetailPage() {
       musicApi(`/api/songs/singer?name=${encodeURIComponent(singer)}`)
         .then(r => r.json())
         .then(d => {
-          const filtered = (d.songs || []).filter(s => s.id !== id).slice(0, 15);
+          // Dedupe by id — the singer endpoint slugifies titles, so different
+          // YouTube results can collapse to the same id and trip React's
+          // "two children with the same key" warning.
+          const seen = new Set();
+          const filtered = (d.songs || []).filter(s => {
+            if (s.id === id || seen.has(s.id)) return false;
+            seen.add(s.id);
+            return true;
+          }).slice(0, 15);
           // Atomic update: uses functional setState inside — safe for parallel fetches
           player?.addArtistRec(id, singer, filtered);
           setArtistRecsLoading(prev => ({ ...prev, [singer]: false }));
@@ -320,6 +344,12 @@ export default function TrackDetailPage() {
   const coverSrc  = metadata.cover_image || '';
   const colorSeed = coverSrc || id || '';
   const { base: baseRgb, light: lightRgb } = useMemo(() => deriveRgbFromStr(colorSeed), [colorSeed]);
+
+  // Gaana tracks stream over HLS and are play-only — they carry no downloads,
+  // so every download affordance is gated on this rather than on the source.
+  const hasDownloads = !!(trackData?.downloads && Object.keys(trackData.downloads).length > 0);
+  // Clean title fallback (strips the "gaana:" namespace and slug hyphens).
+  const titleFallback = id.replace(/^gaana:/, '').replace(/-/g, ' ');
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
@@ -478,7 +508,7 @@ export default function TrackDetailPage() {
                 </div>
               ) : (
                 <div className="rec-scroll" style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:8 }}>
-                  {songs.map(s => <RecommendCard key={s.id} track={s} baseRgb={baseRgb} lightRgb={lightRgb} navigate={navigate} />)}
+                  {songs.map((s, i) => <RecommendCard key={`${s.id}-${i}`} track={s} baseRgb={baseRgb} lightRgb={lightRgb} navigate={navigate} />)}
                 </div>
               )}
             </div>
@@ -611,7 +641,7 @@ export default function TrackDetailPage() {
                   </div>
                   <div style={{ flex:1, minWidth:200 }}>
                     <p style={{ fontSize:10, fontWeight:900, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(255,255,255,0.32)', marginBottom:8 }}>{metadata.album?'Album Track':'Single'}</p>
-                    <h1 style={{ fontSize:'clamp(22px,5vw,40px)', fontWeight:900, lineHeight:1.1, margin:'0 0 10px', color:'white' }}>{metadata.title||id.replace(/-/g,' ')}</h1>
+                    <h1 style={{ fontSize:'clamp(22px,5vw,40px)', fontWeight:900, lineHeight:1.1, margin:'0 0 10px', color:'white' }}>{metadata.title||titleFallback}</h1>
                     {metadata.singer && <p style={{ fontSize:15, fontWeight:600, color:`rgb(${lightRgb})`, marginBottom:5 }}>{metadata.singer}</p>}
                     {metadata.album  && <p style={{ fontSize:13, color:'rgba(255,255,255,0.32)', fontWeight:500 }}>{metadata.album}</p>}
                     <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:18, marginTop:14 }}>
@@ -655,8 +685,9 @@ export default function TrackDetailPage() {
                       </button>
                       <button style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.28)', display:'flex' }}><SkipForward size={20}/></button>
                     </div>
-                    {/* Desktop download button (replaces HQ badge) */}
-                    <DownloadMenu />
+                    {/* Desktop download button — hidden for play-only (Gaana) tracks;
+                        keep a spacer so the play button stays centered. */}
+                    {hasDownloads ? <DownloadMenu /> : <div style={{ width:28, flexShrink:0 }} />}
                   </div>
                   {/* Desktop download list as fallback buttons */}
                   {trackData?.downloads && Object.keys(trackData.downloads).length > 0 && (
@@ -731,9 +762,9 @@ export default function TrackDetailPage() {
                     <Minus size={15} style={{ color:`rgb(${lightRgb})` }} />
                     Minimize Player
                   </button>
-                  <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'2px 0' }} />
-                  {/* Download options inside dots menu */}
-                  {trackData?.downloads && Object.entries(trackData.downloads).map(([bitrate, dlUrl]) => (
+                  {/* Download options inside dots menu — omitted for play-only (Gaana) tracks */}
+                  {hasDownloads && <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'2px 0' }} />}
+                  {hasDownloads && Object.entries(trackData.downloads).map(([bitrate, dlUrl]) => (
                     <button key={bitrate} onClick={() => { setShowDotsMenu(false); triggerDownload(dlUrl, bitrate); }}
                       style={{ width:'100%', padding:'11px 16px', textAlign:'left', background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.85)', display:'flex', alignItems:'center', gap:10, transition:'background 0.12s' }}
                       onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.06)'}
@@ -778,10 +809,10 @@ export default function TrackDetailPage() {
                 {/* Title row with inline download button */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18, position:'relative' }}>
                   <div style={{ flex:1, minWidth:0, paddingRight:10 }}>
-                    <h1 style={{ fontSize:24, fontWeight:900, letterSpacing:'-0.02em', color:'white', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{metadata.title||id.replace(/-/g,' ')}</h1>
+                    <h1 style={{ fontSize:24, fontWeight:900, letterSpacing:'-0.02em', color:'white', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{metadata.title||titleFallback}</h1>
                     <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', fontWeight:500, margin:'4px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{metadata.singer||'Unknown Artist'}</p>
                   </div>
-                  <DownloadMenu />
+                  {hasDownloads && <DownloadMenu />}
                 </div>
 
                 {/* Seek bar */}
@@ -807,14 +838,18 @@ export default function TrackDetailPage() {
                   </button>
 
                   <button style={{ background:'none', border:'none', color:'white', cursor:'pointer' }}><SkipForward size={24} style={{fill:'white'}}/></button>
-                  {/* Download replaces repeat/shuffle */}
-                  <div ref={null}>
-                    <button onClick={() => setShowDlMenu(v=>!v)}
-                      style={{ background:'none', border:'none', color:`rgb(${lightRgb})`, cursor:'pointer', display:'flex', padding:2 }}
-                      title="Download">
-                      <Download size={20} />
-                    </button>
-                  </div>
+                  {/* Download replaces repeat/shuffle — hidden for play-only (Gaana) tracks */}
+                  {hasDownloads ? (
+                    <div>
+                      <button onClick={() => setShowDlMenu(v=>!v)}
+                        style={{ background:'none', border:'none', color:`rgb(${lightRgb})`, cursor:'pointer', display:'flex', padding:2 }}
+                        title="Download">
+                        <Download size={20} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ width:24 }} />
+                  )}
                 </div>
 
                 {/* Volume row */}
