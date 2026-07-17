@@ -53,10 +53,10 @@ export function MusicPlayerProvider({ children }) {
       // giving up after a few attempts (hls.js defaults stop after ~3 nudges).
       const hls = new Hls({
         enableWorker: true,
-        backBufferLength: 90,
-        maxBufferLength: 300,               // seconds buffered ahead (default 30)
-        maxMaxBufferLength: 600,
-        maxBufferSize: 100 * 1000 * 1000,   // ~100 MB cap — a whole song fits easily
+        backBufferLength: 30,
+        maxBufferLength: 60,                // ~1 min ahead — smooth, but doesn't
+        maxMaxBufferLength: 120,            // pull the whole song through the
+        maxBufferSize: 30 * 1000 * 1000,   // proxy at once (keeps backend RAM low)
         maxBufferHole: 0.5,                 // skip tiny gaps between segments
         highBufferWatchdogPeriod: 1,
         nudgeMaxRetry: 20,                  // keep nudging past stalls (default 3)
