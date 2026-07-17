@@ -5,6 +5,9 @@ import { musicApi } from '../utils/api';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
 
+// Sentinel for the "everything" chip — a language will never be named this.
+const ALL_LANGUAGES = '__all__';
+
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from any string — instant, no CORS
 // ─────────────────────────────────────────────────────────────────────────
@@ -132,7 +135,7 @@ function TrackCard({ track, navigate, setPreview }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Section (horizontal scroll strip)
 // ─────────────────────────────────────────────────────────────────────────
-function CategorySection({ name, tracks, navigate, setPreview }) {
+function CategorySection({ name, tracks, navigate, setPreview, onSeeAll }) {
   const { base, light } = useMemo(() => deriveRgbFromStr(name), [name]);
 
   return (
@@ -164,7 +167,7 @@ function CategorySection({ name, tracks, navigate, setPreview }) {
           </span>
         </div>
         <button
-          onClick={() => {/* future: see all */}}
+          onClick={onSeeAll}
           style={{
             display: 'flex', alignItems: 'center', gap: 2,
             fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
@@ -194,11 +197,15 @@ function CategorySection({ name, tracks, navigate, setPreview }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Sections arrive as "Trending in <Language>"; the chips show just the language.
+const sectionLanguage = (name) => name.replace(/^Trending in\s+/i, '');
+
 export default function HomeLandingPage() {
   const [categories, setCategories] = useState({});
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
   const [preview,    setPreview]    = useState(null);
+  const [activeLang, setActiveLang] = useState(ALL_LANGUAGES);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -357,17 +364,59 @@ export default function HomeLandingPage() {
               </div>
             )}
 
+            {/* ── Language filter ───────────────────────────────────── */}
+            {/* Eight sections is a lot to scroll past to reach the last one, so
+                let a language be picked directly. */}
+            <div
+              className="home-scroll"
+              style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, marginBottom: 22 }}
+            >
+              {[ALL_LANGUAGES, ...Object.keys(categories).map(sectionLanguage)].map(lang => {
+                const active = activeLang === lang;
+                const label  = lang === ALL_LANGUAGES ? 'All' : lang;
+                const { light } = deriveRgbFromStr(lang === ALL_LANGUAGES ? 'all' : `Trending in ${lang}`);
+                return (
+                  <button
+                    key={lang}
+                    onClick={() => setActiveLang(lang)}
+                    aria-pressed={active}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 14px', borderRadius: 20,
+                      fontSize: 11, fontWeight: 800, letterSpacing: '0.06em',
+                      textTransform: 'uppercase', cursor: 'pointer',
+                      color: active ? '#000' : `rgba(${light}, 0.85)`,
+                      background: active ? `rgb(${light})` : `rgba(${light}, 0.1)`,
+                      border: `1px solid rgba(${light}, ${active ? 1 : 0.22})`,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: active ? '#000' : `rgb(${light})`,
+                      opacity: active ? 0.45 : 1,
+                    }} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* ── Category sections ─────────────────────────────────── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-              {Object.entries(categories).map(([categoryName, tracks]) => (
-                <CategorySection
-                  key={categoryName}
-                  name={categoryName}
-                  tracks={tracks}
-                  navigate={navigate}
-                  setPreview={setPreview}
-                />
-              ))}
+              {Object.entries(categories)
+                .filter(([name]) => activeLang === ALL_LANGUAGES || sectionLanguage(name) === activeLang)
+                .map(([categoryName, tracks]) => (
+                  <CategorySection
+                    key={categoryName}
+                    name={categoryName}
+                    tracks={tracks}
+                    navigate={navigate}
+                    setPreview={setPreview}
+                    onSeeAll={() => setActiveLang(sectionLanguage(categoryName))}
+                  />
+                ))}
             </div>
           </>
         )}
