@@ -1893,7 +1893,7 @@ export default function MatchCenter() {
     const p = hash ? decodeMatchHash(hash) : null;
     if (!p?.type || !p?.matchId) return;
     let cancelled = false;
-    fetch(`${API_BASE}/api/match/resolve?type=${encodeURIComponent(p.type)}&id=${encodeURIComponent(p.matchId)}`)
+    fetch(`${API_BASE}/api/match-resolve?type=${encodeURIComponent(p.type)}&id=${encodeURIComponent(p.matchId)}`)
       .then(r => r.json())
       .then(j => { if (!cancelled && j?.ok && j.slug) setCanonicalSlug(j.slug); })
       .catch(() => {});
@@ -1905,7 +1905,7 @@ export default function MatchCenter() {
     if (!slug) return;
     let cancelled = false;
     setResolved(null); setResolveError(false);
-    fetch(`${API_BASE}/api/match/resolve?slug=${encodeURIComponent(slug)}`)
+    fetch(`${API_BASE}/api/match-resolve?slug=${encodeURIComponent(slug)}`)
       .then(r => r.json())
       .then(j => {
         if (cancelled) return;

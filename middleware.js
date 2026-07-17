@@ -7,9 +7,10 @@
 // on. prerender-node is configured on the API server, but pages are served from
 // here, so it never ran on anything Google actually fetches.
 //
-// Bots get HTML rendered by prerender.io; humans are untouched and still get the
-// SPA. Scoped by `matcher` to the sections we publish for search — sports, match
-// centre, blogs and music.
+// Bots get HTML rendered by our own /api/render — the API host already runs a
+// Chromium, so this does prerender.io's job without the subscription. Humans are
+// untouched and still get the SPA. Scoped by `matcher` to the sections we
+// publish for search — sports, match centre, blogs and music.
 
 export const config = {
   // Only these paths, and never static assets (anything with a file extension).
@@ -26,19 +27,23 @@ export const config = {
 // also don't run JS and otherwise show a blank card.
 const BOT_UA = /googlebot|bingbot|yandex(bot)?|duckduckbot|slurp|baiduspider|applebot|petalbot|twitterbot|facebookexternalhit|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|embedly|quora link preview|redditbot|pinterest/i;
 
+// Where the self-hosted renderer lives. Same host as the rest of the API.
+const RENDER_ORIGIN = process.env.VITE_BACKEND_URL || 'https://movies1-backend.onrender.com';
+
 export default async function middleware(request) {
   const ua = request.headers.get('user-agent') || '';
   if (!BOT_UA.test(ua)) return; // Fall through to the normal SPA response.
 
-  const token = process.env.PRERENDER_TOKEN;
-  if (!token) return; // Not configured — better to serve the SPA than to fail.
-
   const url = new URL(request.url);
-  const target = `https://service.prerender.io/${url.origin}${url.pathname}${url.search}`;
+  const page = `${url.origin}${url.pathname}${url.search}`;
+  const target = `${RENDER_ORIGIN}/api/render?url=${encodeURIComponent(page)}`;
 
   try {
+    // The renderer sheds load with a 503 when it's already busy, and cold-starts
+    // a browser on the first hit, so give it room before giving up.
     const res = await fetch(target, {
-      headers: { 'X-Prerender-Token': token, 'User-Agent': ua },
+      headers: { 'User-Agent': ua },
+      signal: AbortSignal.timeout(30000),
     });
     // Anything other than a clean render: fall through rather than hand a bot an
     // error page, which is worse for indexing than the shell.
