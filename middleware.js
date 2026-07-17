@@ -13,7 +13,13 @@
 
 export const config = {
   // Only these paths, and never static assets (anything with a file extension).
-  matcher: ['/sports/:path*', '/match-center/:path*', '/blogs/:path*', '/music/:path*'],
+  matcher: [
+    '/sports/:path*',
+    '/match/:path*',        // the slug URLs the sitemap lists — the ones that must render
+    '/match-center/:path*', // legacy hash links
+    '/blogs/:path*',
+    '/music/:path*',
+  ],
 };
 
 // Search engines plus the link-preview fetchers (WhatsApp/Twitter/etc.), which

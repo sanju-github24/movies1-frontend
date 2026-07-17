@@ -1874,9 +1874,47 @@ function FifaMatchCenter({ matchId, onMatchState }) {
    MAIN PAGE
 ═══════════════════════════════════════════════════════════════════════════ */
 export default function MatchCenter() {
-  const { hash } = useParams();
+  // Two ways in. /match/:slug is the readable, stable URL — the one in the
+  // sitemap and the one a person or Google sees. /match-center/:hash is the old
+  // base64 link, kept working so anything already shared still opens.
+  const { hash, slug } = useParams();
   const navigate  = useNavigate();
-  const payload   = hash ? decodeMatchHash(hash) : null;
+
+  const [resolved,      setResolved]      = useState(null);
+  const [resolveError,  setResolveError]  = useState(false);
+  const [canonicalSlug, setCanonicalSlug] = useState(slug || null);
+  const payload = hash ? decodeMatchHash(hash) : resolved;
+
+  // A hash link and its slug are the same match, so point the hash at the slug
+  // as canonical — otherwise Google sees two URLs for one fixture and splits
+  // whatever ranking either earns.
+  useEffect(() => {
+    if (slug) { setCanonicalSlug(slug); return; }
+    const p = hash ? decodeMatchHash(hash) : null;
+    if (!p?.type || !p?.matchId) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/api/match/resolve?type=${encodeURIComponent(p.type)}&id=${encodeURIComponent(p.matchId)}`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled && j?.ok && j.slug) setCanonicalSlug(j.slug); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [hash, slug]);
+
+  // A slug carries only the id, so the fixture has to be looked up.
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    setResolved(null); setResolveError(false);
+    fetch(`${API_BASE}/api/match/resolve?slug=${encodeURIComponent(slug)}`)
+      .then(r => r.json())
+      .then(j => {
+        if (cancelled) return;
+        if (j?.ok && j.payload) setResolved(j.payload);
+        else setResolveError(true);
+      })
+      .catch(() => { if (!cancelled) setResolveError(true); });
+    return () => { cancelled = true; };
+  }, [slug]);
 
   const [matchState, setMatchState] = useState({
     isLive: false, isFinished: false,
@@ -1891,6 +1929,15 @@ export default function MatchCenter() {
     ? "radial-gradient(ellipse 50% 28% at 50% 0%,rgba(52,211,153,0.1) 0%,transparent 50%)"
     : "radial-gradient(ellipse 50% 28% at 50% 0%,rgba(0,27,78,0.5) 0%,transparent 50%)";
 
+  // A slug still being looked up isn't a broken link — don't flash an error at
+  // the reader, or hand a crawler one while the fixture is still loading.
+  if (slug && !payload && !resolveError) return (
+    <div className="min-h-screen bg-[#080808] text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
+      <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/50 animate-spin" />
+      <p className="text-sm text-gray-500">Loading match…</p>
+    </div>
+  );
+
   if (!payload) return (
     <div className="min-h-screen bg-[#080808] text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
       <AlertCircle size={32} className="text-red-500/40" />
@@ -1902,6 +1949,9 @@ export default function MatchCenter() {
   // Scores and fixtures are facts, and this is the page people search for by
   // team name — but it inherits index.html's site-wide title without this, so it
   // tells Google it's a movie download page.
+  // Prefer the slug URL everywhere Google reads a URL; fall back to whatever
+  // route we're actually on until the slug resolves.
+  const canonicalPath = canonicalSlug ? `/match/${canonicalSlug}` : `/match-center/${hash}`;
   const matchTitle = `${payload.homeCode} vs ${payload.awayCode}`;
   const league     = payload.leagueLabel || (isFootball ? 'FIFA World Cup 2026' : 'Cricket');
   const seoTitle   = `${matchTitle} — Live Score, Scorecard & Result | ${league}`;
@@ -1912,18 +1962,18 @@ export default function MatchCenter() {
       <Helmet prioritizeSeoTags>
         <title>{seoTitle}</title>
         <meta name="description" content={seoDesc} />
-        <link rel="canonical" href={absUrl(`/match-center/${hash}`)} />
+        <link rel="canonical" href={absUrl(canonicalPath)} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
-        <meta property="og:url" content={absUrl(`/match-center/${hash}`)} />
+        <meta property="og:url" content={absUrl(canonicalPath)} />
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">{jsonLd({
           '@context': 'https://schema.org',
           '@type': 'SportsEvent',
           name: `${matchTitle} — ${league}`,
           description: seoDesc,
-          url: absUrl(`/match-center/${hash}`),
+          url: absUrl(canonicalPath),
           sport: isFootball ? 'Football' : 'Cricket',
           eventStatus: matchState.isLive
             ? 'https://schema.org/EventScheduled'

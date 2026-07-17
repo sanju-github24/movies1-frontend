@@ -165,7 +165,10 @@ const AppContent = () => {
   // ── Navbar/CategoryBar hide logic ──
   const hidePaths = [
     "/login", "/auth", "/verify-account", "/reset-password",
-    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv","/match-center"
+    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv","/match-center",
+    // Same page as /match-center, reached by its slug URL — hide the same chrome
+    // so the two routes don't render differently.
+    "/match"
   ];
   const isBlogViewerPath   = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath        = /^\/watch(\/[^/]+)?$/.test(location.pathname);
@@ -229,6 +232,10 @@ const AppContent = () => {
         <Route path="/search-torrent"         element={<TorrentSearch />} />
         <Route path="/sports"                 element={<Homeies />} />
         <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
+        {/* Readable, stable match URL — what the sitemap lists and Google indexes. */}
+        <Route path="/match/:slug"            element={<MatchCenter />} />
+        {/* Legacy base64 link, kept so shared URLs still open; it canonicalises
+            itself to the /match/:slug version. */}
         <Route path="/match-center/:hash"     element={<MatchCenter />}
 />
         <Route path="/live-stream"            element={<LiveChannelsPage />} />
