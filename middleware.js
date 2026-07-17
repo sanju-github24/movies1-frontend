@@ -35,12 +35,31 @@ export default async function middleware(request) {
 
   // Probe: ?__mw=1 answers from the middleware itself, so we can tell "not
   // running" apart from "running and falling through" — they look identical from
-  // outside otherwise.
-  if (new URL(request.url).searchParams.get('__mw') === '1') {
-    return new Response(
-      JSON.stringify({ middleware: 'alive', botDetected: BOT_UA.test(ua), ua: ua.slice(0, 60) }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
+  // outside otherwise. ?__mw=render reports what the renderer actually said,
+  // which is the only way to see a failure the fall-through would swallow.
+  const probe = new URL(request.url).searchParams.get('__mw');
+  if (probe === '1' || probe === 'render') {
+    const info = { middleware: 'alive', botDetected: BOT_UA.test(ua), renderOrigin: RENDER_ORIGIN };
+    if (probe === 'render') {
+      const u = new URL(request.url);
+      u.searchParams.delete('__mw');
+      const page = `${u.origin}${u.pathname}${u.search}`;
+      const target = `${RENDER_ORIGIN}/api/render?url=${encodeURIComponent(page)}`;
+      info.target = target;
+      const t0 = Date.now();
+      try {
+        const r = await fetch(target, { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(30000) });
+        info.status = r.status;
+        info.ms = Date.now() - t0;
+        info.bodyPreview = (await r.text()).slice(0, 120);
+      } catch (e) {
+        info.ms = Date.now() - t0;
+        info.fetchError = `${e.name}: ${e.message}`;
+      }
+    }
+    return new Response(JSON.stringify(info), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (!BOT_UA.test(ua)) return; // Fall through to the normal SPA response.
