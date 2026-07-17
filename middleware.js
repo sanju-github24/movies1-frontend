@@ -32,6 +32,17 @@ const RENDER_ORIGIN = process.env.VITE_BACKEND_URL || 'https://movies1-backend.o
 
 export default async function middleware(request) {
   const ua = request.headers.get('user-agent') || '';
+
+  // Probe: ?__mw=1 answers from the middleware itself, so we can tell "not
+  // running" apart from "running and falling through" — they look identical from
+  // outside otherwise.
+  if (new URL(request.url).searchParams.get('__mw') === '1') {
+    return new Response(
+      JSON.stringify({ middleware: 'alive', botDetected: BOT_UA.test(ua), ua: ua.slice(0, 60) }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
   if (!BOT_UA.test(ua)) return; // Fall through to the normal SPA response.
 
   const url = new URL(request.url);
