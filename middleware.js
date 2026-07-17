@@ -69,11 +69,13 @@ export default async function middleware(request) {
   const target = `${RENDER_ORIGIN}/api/render?url=${encodeURIComponent(page)}`;
 
   try {
-    // The renderer sheds load with a 503 when it's already busy, and cold-starts
-    // a browser on the first hit, so give it room before giving up.
+    // Deliberately NOT forwarding the crawler's User-Agent. The API sits behind
+    // Cloudflare, which blocks bot UAs outright: the identical request answers
+    // 200 as a browser and 503 as Googlebot. Forwarding it meant every real
+    // crawl was rejected while every test of mine passed.
     const res = await fetch(target, {
-      headers: { 'User-Agent': ua },
-      signal: AbortSignal.timeout(30000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SelfHostedPrerender/1.0)' },
+      signal: AbortSignal.timeout(25000),
     });
     // Anything other than a clean render: fall through rather than hand a bot an
     // error page, which is worse for indexing than the shell.
