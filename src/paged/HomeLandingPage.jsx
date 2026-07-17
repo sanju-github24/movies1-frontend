@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { absUrl } from '../utils/seo';
 import MusicNavbar from '../components/MusicNavbar';
 import { musicApi } from '../utils/api';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
@@ -227,6 +229,19 @@ export default function HomeLandingPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#09090f', color: 'white', display: 'flex', flexDirection: 'column' }}>
+      {/* Otherwise this inherits index.html's site-wide movie-download title. */}
+      <Helmet prioritizeSeoTags>
+        <title>Trending Songs by Language — Hindi, Tamil, Telugu, Punjabi & More</title>
+        <meta
+          name="description"
+          content="Trending songs across Hindi, English, Punjabi, Tamil, Telugu, Kannada, Malayalam and Marathi, updated daily."
+        />
+        <link rel="canonical" href={absUrl('/music')} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Trending Songs by Language" />
+        <meta property="og:url" content={absUrl('/music')} />
+      </Helmet>
+
       <MusicNavbar />
 
       <style>{`

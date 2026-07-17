@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import { absUrl, jsonLd } from "../utils/seo";
 import {
   ArrowLeft, RefreshCw, Trophy, Star, AlertCircle,
   Tv2, Signal, Maximize2, PlayCircle
@@ -1897,8 +1899,42 @@ export default function MatchCenter() {
     </div>
   );
 
+  // Scores and fixtures are facts, and this is the page people search for by
+  // team name — but it inherits index.html's site-wide title without this, so it
+  // tells Google it's a movie download page.
+  const matchTitle = `${payload.homeCode} vs ${payload.awayCode}`;
+  const league     = payload.leagueLabel || (isFootball ? 'FIFA World Cup 2026' : 'Cricket');
+  const seoTitle   = `${matchTitle} — Live Score, Scorecard & Result | ${league}`;
+  const seoDesc    = `${matchTitle} live score and full scorecard for ${league}. Ball-by-ball updates, innings breakdown, squads and match result.`;
+
   return (
     <div className="min-h-screen bg-[#050810] text-white font-sans overflow-x-hidden">
+      <Helmet prioritizeSeoTags>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDesc} />
+        <link rel="canonical" href={absUrl(`/match-center/${hash}`)} />
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDesc} />
+        <meta property="og:url" content={absUrl(`/match-center/${hash}`)} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json">{jsonLd({
+          '@context': 'https://schema.org',
+          '@type': 'SportsEvent',
+          name: `${matchTitle} — ${league}`,
+          description: seoDesc,
+          url: absUrl(`/match-center/${hash}`),
+          sport: isFootball ? 'Football' : 'Cricket',
+          eventStatus: matchState.isLive
+            ? 'https://schema.org/EventScheduled'
+            : 'https://schema.org/EventScheduled',
+          competitor: [
+            { '@type': 'SportsTeam', name: payload.homeCode },
+            { '@type': 'SportsTeam', name: payload.awayCode },
+          ],
+        })}</script>
+      </Helmet>
+
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: ambientBg }} />
 
       {/* Header */}

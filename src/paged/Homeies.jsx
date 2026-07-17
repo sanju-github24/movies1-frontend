@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle } from "lucide-react";
 import HeroSection from "./HeroSection";
+import { absUrl, jsonLd } from "../utils/seo";
 
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -1746,6 +1748,35 @@ function TournamentBadge({ emoji, name, subtitle, color, bg, border, to }) {
 export default function Homeies({ searchTerm }) {
   return (
     <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
+      {/* Without this the page inherits index.html's site-wide title, so a live
+          scores page announces itself to Google as a movie download site and can
+          never rank for what it actually is. */}
+      <Helmet prioritizeSeoTags>
+        <title>Live Cricket Scores, IPL Points Table & Match Schedule</title>
+        <meta
+          name="description"
+          content="Live cricket scores, ball-by-ball updates, full scorecards, points tables and fixtures for IPL, international cricket and the FIFA World Cup."
+        />
+        <link rel="canonical" href={absUrl('/sports')} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Live Cricket Scores, IPL Points Table & Match Schedule" />
+        <meta
+          property="og:description"
+          content="Live scores, scorecards, points tables and fixtures for IPL, international cricket and the FIFA World Cup."
+        />
+        <meta property="og:url" content={absUrl('/sports')} />
+        <meta name="twitter:card" content="summary_large_image" />
+        {/* Breadcrumbs give Google the site's shape and can show under the result. */}
+        <script type="application/ld+json">{jsonLd({
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: absUrl('/') },
+            { '@type': 'ListItem', position: 2, name: 'Sports', item: absUrl('/sports') },
+          ],
+        })}</script>
+      </Helmet>
+
       <div className="fixed inset-0 pointer-events-none z-0"
         style={{background:"radial-gradient(ellipse 70% 28% at 50% 0%, rgba(80,40,160,0.12) 0%, transparent 55%)"}}/>
 
