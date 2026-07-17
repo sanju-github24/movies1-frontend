@@ -1597,24 +1597,40 @@ function IplHighlightsRow() {
 
   const handlePlay = async (match, vid) => {
     if (loadingId) return;
-    // Build the iplt20.com video page URL — index.py scrapes this to get the m3u8
-    // Format: https://www.iplt20.com/video/{id}/{titleUrlSegment}
-    const watchUrl = vid.id && vid.titleUrlSegment
-      ? `https://www.iplt20.com/video/${vid.id}/${vid.titleUrlSegment}`
-      : vid.id
-      ? `https://www.iplt20.com/video/${vid.id}`
-      : null;
-    if (!watchUrl) return;
     const title = vid.title || `${match.team1} vs ${match.team2} · IPL 2026`;
     setLoadingId(match.smMatchId);
+
+    const openPlayer = (url) => {
+      const p = new URLSearchParams({ url, title });
+      setPlayerModal({ src: `/player.html?${p}`, title });
+      setLoadingId(null);
+    };
+
     try {
-      const res  = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
-      const json = await res.json();
-      if (res.ok && json.success && json.url) {
-        const p = new URLSearchParams({ url: json.url, title });
-        setPlayerModal({ src: `/player.html?${p}`, title });
-        setLoadingId(null);
-        return;
+      // The highlights feed already gives us the Brightcove id, which resolves
+      // straight to a manifest. Don't build an iplt20.com/video/{id} URL to be
+      // scraped: that page is a StayLive SPA carrying no video id, and the id in
+      // it is a CMS id, not a Brightcove one — nothing can resolve it.
+      if (vid.mediaId || vid.shortCode) {
+        const q = new URLSearchParams();
+        if (vid.mediaId) q.set("mediaId", vid.mediaId);
+        if (vid.shortCode) q.set("shortCode", vid.shortCode);
+        const res  = await fetch(`${API_BASE}/api/ipl/stream?${q}`);
+        const json = await res.json();
+        if (res.ok && json.ok && json.url) return openPlayer(json.url);
+      }
+
+      // Anything without a Brightcove id (e.g. a StayLive-hosted video) still
+      // goes through the extractor.
+      const watchUrl = vid.id && vid.titleUrlSegment
+        ? `https://www.iplt20.com/video/${vid.id}/${vid.titleUrlSegment}`
+        : vid.id
+        ? `https://www.iplt20.com/video/${vid.id}`
+        : null;
+      if (watchUrl) {
+        const res  = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+        const json = await res.json();
+        if (res.ok && json.success && json.url) return openPlayer(json.url);
       }
     } catch {}
     setLoadingId(null);

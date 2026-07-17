@@ -570,7 +570,7 @@ function dob(s){if(!s)return'';try{let t=s.replace(/-/g,'+').replace(/_/g,'/');w
  * Key fix: removed `url.includes('playlist')` — far too broad and incorrectly
  * routes many MP4 URLs (e.g. YouTube-style) into the HLS path.
  */
-function detectUrlType(url) {
+function detectUrlType(url, _depth = 0) {
   if (!url) return 'mp4';
 
   // Strip query string for extension checks only
@@ -579,6 +579,17 @@ function detectUrlType(url) {
   // 1. Custom proxy intercept — treat as native video
   if (url.includes('/stream?fileId=') || url.includes('/stream/')) {
     return 'proxy';
+  }
+
+  // 1b. Manifest proxies (/api/mux/hls, /api/gaana/hls) carry the real URL in
+  // ?url=. The proxy path has no .m3u8 extension of its own, so judge by what
+  // it wraps — otherwise a proxied manifest reads as 'mp4' and the native
+  // player chokes on it. Depth-guarded against a self-referential ?url=.
+  if (_depth < 3 && /\/(hls|seg)$/i.test(clean) && url.includes('?')) {
+    try {
+      const inner = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('url');
+      if (inner && inner !== url) return detectUrlType(inner, _depth + 1);
+    } catch (_) { /* fall through to the checks below */ }
   }
 
   // 2. DASH — check before HLS because some DASH manifests are on /hls/ CDN paths
