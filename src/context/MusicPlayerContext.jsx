@@ -8,9 +8,24 @@ export function useMusicPlayer() {
 }
 
 // Gaana tracks stream over HLS (.m3u8); Pendujatt tracks are plain MP3 files.
-// The backend HLS proxy path is also treated as HLS regardless of extension.
-const isHlsUrl = (url) =>
-  typeof url === 'string' && (/\.m3u8(\?|#|$)/i.test(url) || /\/api\/gaana\/hls\b/i.test(url));
+// Everything music-side goes through the backend proxy (the CDNs need their own
+// site's Referer), so the proxy path alone says nothing about the format: it may
+// wrap an HLS manifest or a plain audio file, e.g. a JioSaavn .mp4. Judge by
+// what it wraps, or hls.js gets handed an MP4 and the track never plays.
+const isHlsUrl = (url) => {
+  if (typeof url !== 'string') return false;
+  if (/\.m3u8(\?|#|$)/i.test(url)) return true;
+  if (/\/api\/(gaana|mux)\/hls\b/i.test(url)) {
+    try {
+      const inner = new URL(url, window.location.href).searchParams.get('url');
+      // No ?url= to inspect — assume a manifest, as the path name implies.
+      return inner ? /\.m3u8(\?|#|$)/i.test(inner) : true;
+    } catch (_) {
+      return true;
+    }
+  }
+  return false;
+};
 
 export function MusicPlayerProvider({ children }) {
   // ── Single persistent native Audio element — never unmounts ──
