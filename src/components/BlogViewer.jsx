@@ -1,6 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { supabase } from "../utils/supabaseClient";
+import { absUrl, jsonLd } from "../utils/seo";
+
+// Blog bodies are HTML. Strip it down to a plain sentence or two for the meta
+// description — Google shows this text, so tags leaking in look broken.
+function excerpt(html, max = 155) {
+  if (!html) return "";
+  const text = String(html)
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= max) return text;
+  // Cut on a word boundary rather than mid-word.
+  return `${text.slice(0, text.lastIndexOf(" ", max) || max).trim()}…`;
+}
+
+// First image in the body, used as the share/preview image when nothing better.
+function firstImage(html) {
+  const m = String(html || "").match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
 
 const BlogViewer = () => {
   const { slug } = useParams();
@@ -83,8 +106,39 @@ const BlogViewer = () => {
   if (error) return <div className="text-red-500 text-center py-6">{error}</div>;
   if (!blog) return <div className="text-gray-400 text-center py-6">Loading blog...</div>;
 
+  const blogUrl  = absUrl(`/blogs/${slug}`);
+  const blogDesc = excerpt(blog.content);
+  const blogImg  = blog.cover_poster || blog.thumbnail_url || blog.poster || firstImage(blog.content);
+
   return (
     <div className="min-h-screen bg-[#ebebeb] text-[#222] font-['Roboto']">
+      {/* This is original writing — the one thing here that can genuinely rank —
+          but without this it inherited index.html's site-wide title, so every
+          post looked like the same movie download page to Google. */}
+      <Helmet prioritizeSeoTags>
+        <title>{blog.title}</title>
+        {blogDesc && <meta name="description" content={blogDesc} />}
+        <link rel="canonical" href={blogUrl} />
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={blog.title} />
+        {blogDesc && <meta property="og:description" content={blogDesc} />}
+        <meta property="og:url" content={blogUrl} />
+        {blogImg && <meta property="og:image" content={blogImg} />}
+        {blog.created_at && <meta property="article:published_time" content={new Date(blog.created_at).toISOString()} />}
+        <meta name="twitter:card" content={blogImg ? 'summary_large_image' : 'summary'} />
+        <script type="application/ld+json">{jsonLd({
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: blog.title,
+          ...(blogDesc && { description: blogDesc }),
+          ...(blogImg && { image: [blogImg] }),
+          ...(blog.created_at && { datePublished: new Date(blog.created_at).toISOString() }),
+          ...(blog.updated_at && { dateModified: new Date(blog.updated_at).toISOString() }),
+          mainEntityOfPage: { '@type': 'WebPage', '@id': blogUrl },
+          ...(Array.isArray(blog.tags) && blog.tags.length && { keywords: blog.tags.join(', ') }),
+        })}</script>
+      </Helmet>
+
       {/* Header */}
       <header className="bg-[#464646] shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 flex justify-between items-center h-[70px]">
