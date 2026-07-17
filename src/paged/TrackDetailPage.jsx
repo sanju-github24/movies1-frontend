@@ -186,14 +186,15 @@ export default function TrackDetailPage() {
     setShowDotsMenu(false);
 
     // ── THE CRITICAL PATH CORRECTION ──
-    // Gaana tracks are namespaced "gaana__<seokey>" (underscores, not a colon —
-    // a colon in the URL path is rejected/mis-routed by many CDNs/hosts). Pass
-    // the id straight through so the backend routes to the Gaana (HLS) extractor.
-    // "gaana:" is still accepted for older cached ids. Otherwise, check if the
-    // route ID contains un-parsed search markers from a fallback card click.
-    const isGaana = id.startsWith('gaana__') || id.startsWith('gaana:');
-    const isLooseQuery = !isGaana && !id.includes('-mp3-song') && !id.includes('.html');
-    const endpoint = isGaana
+    // Streaming tracks are namespaced "<source>__<id>" (underscores, not a colon
+    // — a colon in the URL path is rejected/mis-routed by many CDNs/hosts). Pass
+    // the id straight through so the backend routes it to that source's
+    // extractor. Search returns "saavn__" ids now; "gaana__"/"gaana:" still
+    // arrive from older links and caches. Otherwise, check if the route ID
+    // contains un-parsed search markers from a fallback card click.
+    const isStreamingId = id.startsWith('saavn__') || id.startsWith('gaana__') || id.startsWith('gaana:');
+    const isLooseQuery = !isStreamingId && !id.includes('-mp3-song') && !id.includes('.html');
+    const endpoint = isStreamingId
       ? `/api/songs/track?id=${encodeURIComponent(id)}`
       : isLooseQuery
         ? `/api/songs/track?resolve=${encodeURIComponent(id.replace(/-/g, ' '))}`
@@ -213,10 +214,11 @@ export default function TrackDetailPage() {
         const meta = d.metadata || {};
         const seed = meta.cover_image || id || '';
         const { base, light } = deriveRgbFromStr(seed);
-        // Gaana streams are HLS from a tokenized CDN — route them through the
-        // backend proxy so the browser gets clean, same-origin, CORS-friendly
-        // segments instead of failing mid-song on a direct CDN fetch.
-        const streamUrl = isGaana
+        // These CDNs only serve their own site's Referer — JioSaavn answers 403
+        // without one — so route the stream through the backend proxy, which
+        // sends the right headers and re-serves it same-origin with CORS. The
+        // proxy passes audio files straight through and only rewrites manifests.
+        const streamUrl = isStreamingId
           ? `${backendUrl}/api/gaana/hls?url=${encodeURIComponent(d.stream_url)}`
           : d.stream_url;
         if (!isAlreadyPlaying) {
@@ -350,8 +352,10 @@ export default function TrackDetailPage() {
   // Gaana tracks stream over HLS and are play-only — they carry no downloads,
   // so every download affordance is gated on this rather than on the source.
   const hasDownloads = !!(trackData?.downloads && Object.keys(trackData.downloads).length > 0);
-  // Clean title fallback (strips the gaana namespace and slug hyphens).
-  const titleFallback = id.replace(/^gaana__/, '').replace(/^gaana:/, '').replace(/-/g, ' ');
+  // Clean title fallback (strips the source namespace and slug hyphens). Only
+  // shows until metadata lands; a JioSaavn id is opaque, so it reads as noise
+  // rather than a title — better than leaving "saavn__" on screen either way.
+  const titleFallback = id.replace(/^(saavn|gaana)__/, '').replace(/^gaana:/, '').replace(/-/g, ' ');
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
