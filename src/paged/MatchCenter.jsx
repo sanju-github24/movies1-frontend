@@ -1704,7 +1704,31 @@ function HighlightsStrip({ highlights, accent = ECB_RED }) {
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamingId, setStreamingId]   = useState(null);
 
-  if (!highlights?.length) return null;
+  // null means still loading, [] means the feed genuinely has none. Rendering
+  // nothing for both is indistinguishable from the section being broken, which
+  // is exactly how this looked when the clips didn't appear — say which it is.
+  if (highlights === null) {
+    return (
+      <EcbScorecardCard>
+        <p className="text-center text-white/20 text-xs py-8">Loading highlights…</p>
+      </EcbScorecardCard>
+    );
+  }
+  if (!highlights.length) {
+    return (
+      <EcbScorecardCard>
+        <p className="text-center text-white/20 text-xs py-8">No highlights available for this match</p>
+      </EcbScorecardCard>
+    );
+  }
+
+  // The full-match highlights are what people come for; the feed lists them
+  // among dozens of pitch reports and interviews, in upload order, so it can
+  // sit well off the right edge of a horizontal strip. Put it first.
+  const ordered = [...highlights].sort((a, b) => {
+    const score = v => /match\s*highlight/i.test(v.title || "") ? 0 : 1;
+    return score(a) - score(b);
+  });
 
   const fmtDur = d => {
     if (!d) return "";
@@ -1753,11 +1777,11 @@ function HighlightsStrip({ highlights, accent = ECB_RED }) {
       <EcbScorecardCard>
         <div className="flex items-center justify-between px-5 py-3.5">
           <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: accent }}>
-            ▶ Match Videos · {highlights.length} clip{highlights.length === 1 ? "" : "s"}
+            ▶ Match Videos · {ordered.length} clip{ordered.length === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex gap-3 px-5 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-          {highlights.map(vid => {
+          {ordered.map(vid => {
             const isLoading = streamingId === vid.id && streamLoading;
             return (
               <button
@@ -1951,6 +1975,9 @@ function IplMatchCenter({ matchId, matchData, onMatchState }) {
         )}
       </EcbHero>
 
+      {/* Highlights lead, scorecard follows underneath. */}
+      <HighlightsStrip highlights={highlights} accent={ECB_RED} />
+
       <EcbScorecardCard>
         <EcbTabBar
           tabs={[
@@ -2052,8 +2079,6 @@ function IplMatchCenter({ matchId, matchData, onMatchState }) {
         )}
       </EcbScorecardCard>
 
-      {/* Highlights sit below the scorecard, per the match centre's layout. */}
-      <HighlightsStrip highlights={highlights} accent={ECB_RED} />
     </div>
   );
 }
