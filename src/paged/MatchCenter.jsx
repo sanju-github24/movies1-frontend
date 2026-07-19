@@ -1694,6 +1694,390 @@ function BcciMatchCenter({ matchData, onMatchState }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   HIGHLIGHTS STRIP
+   Self-contained: owns its player modal so it can be dropped anywhere. The
+   India centre keeps its own inline copy inside the hero; this one sits below
+   the scorecard, which is where the IPL centre wants it.
+═══════════════════════════════════════════════════════════════════════════ */
+function HighlightsStrip({ highlights, accent = ECB_RED }) {
+  const [playerModal, setPlayerModal]   = useState(null);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamingId, setStreamingId]   = useState(null);
+
+  if (!highlights?.length) return null;
+
+  const fmtDur = d => {
+    if (!d) return "";
+    const m = Math.floor(d / 60), s = d % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
+
+  // The IPL feed hands back a Brightcove id that resolves straight to a
+  // manifest, so use it. Don't build an iplt20.com/video/{id} URL to scrape:
+  // that page is a StayLive SPA carrying no video id, and the id in it is a
+  // CMS id, not a Brightcove one — same reasoning as the homepage row.
+  async function play(vid) {
+    if (streamLoading) return;
+    setStreamingId(vid.id); setStreamLoading(true);
+
+    const open = url => {
+      const p = new URLSearchParams({ url, title: vid.title });
+      setPlayerModal({ src: `/player.html?${p}`, title: vid.title });
+      setStreamLoading(false); setStreamingId(null);
+    };
+
+    try {
+      if (vid.mediaId || vid.shortCode) {
+        const q = new URLSearchParams();
+        if (vid.mediaId)   q.set("mediaId", vid.mediaId);
+        if (vid.shortCode) q.set("shortCode", vid.shortCode);
+        const res  = await fetch(`${API_BASE}/api/ipl/stream?${q}`);
+        const json = await res.json();
+        if (res.ok && json.ok && json.url) return open(json.url);
+      }
+      // Anything without a Brightcove id still goes through the extractor.
+      const watchUrl = vid.id && vid.titleUrlSegment
+        ? `https://www.iplt20.com/video/${vid.id}/${vid.titleUrlSegment}`
+        : vid.id ? `https://www.iplt20.com/video/${vid.id}` : null;
+      if (watchUrl) {
+        const res  = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
+        const json = await res.json();
+        if (res.ok && json.success && json.url) return open(json.url);
+      }
+    } catch { /* nothing playable — leave the tile idle rather than navigating away */ }
+    setStreamLoading(false); setStreamingId(null);
+  }
+
+  return (
+    <>
+      <EcbScorecardCard>
+        <div className="flex items-center justify-between px-5 py-3.5">
+          <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: accent }}>
+            ▶ Match Videos · {highlights.length} clip{highlights.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="flex gap-3 px-5 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {highlights.map(vid => {
+            const isLoading = streamingId === vid.id && streamLoading;
+            return (
+              <button
+                key={vid.id}
+                disabled={streamLoading}
+                onClick={() => play(vid)}
+                className="shrink-0 flex flex-col rounded-xl overflow-hidden text-left transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+                style={{
+                  width: 160,
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${isLoading ? accent : "rgba(255,255,255,0.09)"}`,
+                  boxShadow: isLoading ? `0 0 12px ${accent}44` : "none",
+                }}
+              >
+                <div className="relative w-full" style={{ height: 90 }}>
+                  {vid.thumbnail
+                    ? <img src={vid.thumbnail} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-white/5" />}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    {isLoading
+                      ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+                             style={{ borderColor: `${accent}40`, borderTopColor: accent }} />
+                      : <PlayCircle size={26} className="text-white" />}
+                  </div>
+                  {vid.duration > 0 && (
+                    <span className="absolute bottom-1 right-1 text-[9px] font-black text-white px-1.5 py-0.5 rounded"
+                          style={{ background: "rgba(0,0,0,0.7)" }}>
+                      {fmtDur(vid.duration)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] font-bold text-white/80 px-2.5 py-2 leading-snug line-clamp-2">{vid.title}</p>
+              </button>
+            );
+          })}
+        </div>
+      </EcbScorecardCard>
+
+      {playerModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
+            <span style={{ color: accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              ▶ {playerModal.title}
+            </span>
+            <button
+              onClick={() => setPlayerModal(null)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}
+            >×</button>
+          </div>
+          <iframe
+            src={playerModal.src}
+            style={{ flex: 1, width: "100%", border: "none" }}
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IPL MATCH CENTER
+   IPL fixtures had no match centre at all — the router only handled bcci,
+   wt20 and fifa, so every /match/...-ipl-<id> page rendered a bare header.
+   The scoring feed is the same shape as the international one, so the innings
+   selector, scorecard and ball-by-ball are shared; only the summary feed and
+   the team metadata differ.
+═══════════════════════════════════════════════════════════════════════════ */
+function IplMatchCenter({ matchId, matchData, onMatchState }) {
+  const [ms, setMs]           = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab]         = useState("overview");
+  const [highlights, setHighlights] = useState(null);
+  const [heroImage, setHeroImage]   = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/match/${encodeURIComponent(matchId)}/summary`);
+      const j = await r.json();
+      let s = j?.data?.MatchSummary ?? j?.data ?? null;
+      if (Array.isArray(s)) s = s[0] || null;
+      setMs(s);
+    } catch { /* the hero falls back to the fixture we were handed */ }
+    finally { setLoading(false); }
+  }, [matchId]);
+
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
+
+  const { innings: feedInnings, error: inningsError } = useInnings("ipl", matchId, false);
+
+  const [selInn, setSelInn] = useState(null);
+  const touchedInn = useRef(false);
+  useEffect(() => {
+    if (touchedInn.current || !feedInnings?.length) return;
+    setSelInn(feedInnings[feedInnings.length - 1].number);
+  }, [feedInnings]);
+  const pickInn = useCallback(n => { touchedInn.current = true; setSelInn(n); }, []);
+  const activeInn = feedInnings?.find(i => i.number === selInn) || feedInnings?.[0] || null;
+
+  const isFinished = String(ms?.IsMatchEnd) === "1" || !!ms?.WinningTeamID;
+  const isLive     = !isFinished && !!ms?.["1Summary"];
+  const result     = (ms?.Comments || "").trim();
+
+  // IPL video lives on apiipl.iplt20.com, not on the BCCI content API the
+  // India centre uses. Not gated on the match being finished: the feed carries
+  // pre-match content too — pitch reports, interviews — which is worth showing
+  // while a match is still on.
+  useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/ipl/highlight-videos?smMatchId=${encodeURIComponent(matchId)}`);
+        const j = await r.json();
+        if (!cancelled && j?.ok) setHighlights(j.videos || []);
+      } catch { /* no highlights section */ }
+    })();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  // The BCCI photo API has no IPL library, so the hero keeps its gradient.
+  useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/cricket/photo?smMatchId=${encodeURIComponent(matchId)}&tournament=ipl`);
+        const j = await r.json();
+        if (!cancelled && j?.ok && j.photo?.url) setHeroImage(j.photo.url);
+      } catch { /* gradient only */ }
+    })();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  useEffect(() => {
+    onMatchState?.({
+      isLive, isFinished, result,
+      mom: ms?.MOM || "", momRuns: "", momWickets: "", momImg: "",
+    });
+  }, [isLive, isFinished, result, ms?.MOM]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-32 gap-4">
+      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "rgba(207,20,43,0.2)", borderTopColor: ECB_RED }} />
+      <p className="text-xs text-white/30 font-semibold uppercase tracking-widest">Loading match data</p>
+    </div>
+  );
+
+  // "201/9 (20.0 Overs)" — the hero wants the score and the overs apart.
+  const splitSummary = s => {
+    if (!s) return null;
+    const m = String(s).match(/^([\d/]+)\s*\((.+)\)\s*$/);
+    return m ? { score: m[1], overs: m[2] } : { score: String(s), overs: "" };
+  };
+  const inn1 = splitSummary(ms?.["1Summary"]);
+  const inn2 = splitSummary(ms?.["2Summary"]);
+
+  // Scores are keyed by batting order, so the hero's two columns have to be the
+  // batting sides, not home/away — otherwise a chasing home team shows the
+  // opposition's total.
+  const homeId = String(ms?.HomeTeamID || "");
+  const codeFor = id => (String(id) === homeId ? ms?.HomeTeamCode : ms?.AwayTeamCode) || "";
+  const firstCode  = codeFor(ms?.FirstBattingTeamID)  || (matchData?.HomeTeamName || "").slice(0, 3).toUpperCase();
+  const secondCode = codeFor(ms?.SecondBattingTeamID) || (matchData?.AwayTeamName || "").slice(0, 3).toUpperCase();
+
+  return (
+    <div className="space-y-4">
+      <EcbHero
+        homeCode={firstCode}  homeName={ms?.FirstBattingTeam  || matchData?.HomeTeamName}
+        homeLogo={ms?.FirstBattingTeamLogo || null}
+        awayCode={secondCode} awayName={ms?.SecondBattingTeam || matchData?.AwayTeamName}
+        awayLogo={ms?.SecondBattingTeamLogo || null}
+        homeInnings={inn1 ? [inn1] : []}
+        awayInnings={inn2 ? [inn2] : []}
+        heroImage={heroImage}
+        isLive={isLive} isFinished={isFinished} isUpcoming={!isLive && !isFinished}
+        statusText={result || ms?.ChasingText || ""}
+        tossText={ms?.TossDetails || ""}
+        seriesText={ms?.CompetitionName || "Indian Premier League"}
+        venueText={ms?.GroundName || matchData?.GroundName}
+        matchTypeText={ms?.MatchOrder || matchData?.MatchOrder}
+        accentColor={ECB_RED}
+      >
+        {!isLive && !isFinished && !inn1 && (
+          <div className="px-5 py-6 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-[9px] font-black text-white/25 uppercase tracking-widest">Match starts</p>
+            <p className="text-xl font-black text-white mt-1">{ms?.MatchDate || matchData?.MatchDate}</p>
+            {matchData?.MatchTime && <p className="text-[11px] text-white/35 mt-0.5">{matchData.MatchTime} IST</p>}
+          </div>
+        )}
+      </EcbHero>
+
+      <EcbScorecardCard>
+        <EcbTabBar
+          tabs={[
+            { k: "overview",   l: "Overview"     },
+            { k: "scorecard",  l: "Scorecard"    },
+            { k: "bowling",    l: "Bowling"      },
+            { k: "ballbyball", l: "Ball by Ball" },
+          ]}
+          active={tab} onChange={setTab} accent={ECB_RED}
+        />
+
+        {tab === "overview" && (
+          <div>
+            <EcbStatRow label="Match"  value={ms?.MatchName || ms?.MatchOrder || matchData?.MatchOrder} />
+            <EcbStatRow label="Venue"  value={ms?.GroundName || matchData?.GroundName} />
+            {ms?.TossDetails && <EcbStatRow label="Toss" value={ms.TossDetails} />}
+            {inn1 && <EcbStatRow label={`${firstCode} — 1st Inn`}  value={inn1.score} sub={inn1.overs} />}
+            {inn2 && <EcbStatRow label={`${secondCode} — 2nd Inn`} value={inn2.score} sub={inn2.overs} />}
+            {isLive && ms?.RequiredRunRate && <EcbStatRow label="Required RR" value={ms.RequiredRunRate} color="#4ade80" />}
+            {result && <EcbStatRow label="Result" value={result} />}
+            {ms?.MOM && <EcbStatRow label="Player of the Match" value={ms.MOM} />}
+            <EcbStatRow label="Date" value={ms?.MatchDate || matchData?.MatchDate} />
+          </div>
+        )}
+
+        {tab === "scorecard" && (
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {(() => {
+              const rows = buildIplBattingRows(
+                (activeInn?.BattingCard || []).filter(b => b.PlayingOrder != null || Number(b.Balls) > 0),
+              );
+              if (!rows.length) return (
+                <p className="text-center text-white/20 text-xs py-10">
+                  {feedInnings === null ? "Loading scorecard…" : inningsError ? "Scorecard unavailable" : "No innings played yet"}
+                </p>
+              );
+              const ex = activeInn?.Extras?.[0] || {};
+              const fow = activeInn?.FallOfWickets || [];
+              return (
+                <>
+                  <EcbSectionHeader label={`${ex.BattingTeamName || `Innings ${selInn}`} · Batting`} />
+                  <EcbBattingTable rows={rows} />
+                  {ex.TotalExtras !== undefined && (
+                    <EcbStatRow label="Extras" value={ex.TotalExtras}
+                      sub={`b ${ex.Byes || 0} · lb ${ex.LegByes || 0} · w ${ex.Wides || 0} · nb ${ex.NoBalls || 0}`} />
+                  )}
+                  {ex.Total && <EcbStatRow label="Total" value={ex.Total} sub={ex.CurrentRunRate ? `RR ${ex.CurrentRunRate}` : undefined} />}
+                  {fow.length > 0 && (
+                    <>
+                      <EcbSectionHeader label="Fall of wickets" />
+                      <div className="px-5 py-3.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                        {fow.map((w, i) => (
+                          <span key={i} className="text-[11px] text-white/40">
+                            <span className="font-mono font-black text-white/70">{w.Score}</span> {w.PlayerName}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {tab === "bowling" && (
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {(() => {
+              const rows = buildIplBowlingRows(
+                (activeInn?.BowlingCard || []).filter(b => Number(b.TotalLegalBallsBowled) > 0 || parseFloat(b.Overs) > 0),
+              );
+              if (!rows.length) return (
+                <p className="text-center text-white/20 text-xs py-10">
+                  {feedInnings === null ? "Loading bowling…" : inningsError ? "Bowling data unavailable" : "No overs bowled yet"}
+                </p>
+              );
+              const ex = activeInn?.Extras?.[0] || {};
+              return (
+                <>
+                  <EcbSectionHeader label={`${ex.BowlingTeamName || `Innings ${selInn}`} · Bowling`} />
+                  <EcbBowlingTable rows={rows} />
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {tab === "ballbyball" && (
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {feedInnings === null
+              ? <p className="text-center text-white/20 text-xs py-10">Loading…</p>
+              : selInn
+                ? <BallByBall type="ipl" matchId={matchId} inning={selInn} />
+                : <p className="text-center text-white/20 text-xs py-10">No deliveries bowled yet</p>}
+          </div>
+        )}
+      </EcbScorecardCard>
+
+      {/* Highlights sit below the scorecard, per the match centre's layout. */}
+      <HighlightsStrip highlights={highlights} accent={ECB_RED} />
+    </div>
+  );
+}
+
+/* The feed shape is shared with the India centre, but those builders are
+   scoped inside that component, so the IPL centre carries its own. */
+function buildIplBattingRows(batting) {
+  return (batting || []).map(b => ({
+    name: (b.PlayerName || "—").trim(),
+    isNotOut: (b.OutDesc || "").toLowerCase() === "not out",
+    dismissal: b.OutDesc || "—",
+    runs: b.Runs, balls: b.Balls, fours: b.Fours, sixes: b.Sixes, sr: b.StrikeRate,
+  }));
+}
+
+function buildIplBowlingRows(bowling) {
+  return (bowling || []).map(b => ({
+    name: (b.PlayerName || "—").trim(),
+    isCurrent: false,
+    overs: b.Overs, maidens: b.Maidens, runs: b.Runs, wickets: b.Wickets, eco: b.Economy,
+  }));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    WT20 MATCH CENTER — ECB style
 ═══════════════════════════════════════════════════════════════════════════ */
 function Wt20MatchCenter({ matchId, onMatchState }) {
@@ -2283,6 +2667,9 @@ export default function MatchCenter() {
         {/* Match centers */}
         {payload.sport === "cricket" && payload.type === "bcci" && payload.matchData && (
           <BcciMatchCenter matchData={payload.matchData} onMatchState={setMatchState} />
+        )}
+        {payload.sport === "cricket" && payload.type === "ipl" && payload.matchId && (
+          <IplMatchCenter matchId={payload.matchId} matchData={payload.matchData} onMatchState={setMatchState} />
         )}
         {payload.sport === "cricket" && payload.type === "wt20" && payload.matchId && (
           <Wt20MatchCenter matchId={payload.matchId} onMatchState={setMatchState} />
