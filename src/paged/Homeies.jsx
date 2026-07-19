@@ -1445,7 +1445,32 @@ function IndiaHighlightsRow() {
 }
 
 // ─── IPL 2026 HIGHLIGHT CARD ──────────────────────────────────────────────────
-function IplHighlightCard2026({ match, videos, onPlay, loadingId }) {
+// Clicking a match opens its match centre, the same as an India card does. It
+// used to play the best clip straight from the card, which skipped the
+// scorecard entirely — there was no route to an IPL match centre at all.
+// Highlights are still one tap away: they sit below the scorecard there.
+function iplMatchCenterLink(match) {
+  return `/match-center/${encodeMatchHash({
+    sport: "cricket",
+    type: "ipl",
+    matchId: String(match.smMatchId),
+    homeCode: match.team1 || "",
+    awayCode: match.team2 || "",
+    leagueLabel: "Indian Premier League 2026",
+    matchData: {
+      MatchID: match.smMatchId,
+      CompetitionName: "Indian Premier League 2026",
+      MatchOrder: match.matchNum ? `Match ${match.matchNum}` : "",
+      MatchDate: match.matchDate,
+      MatchTime: match.time,
+      GroundName: match.venue,
+      HomeTeamName: match.team1,
+      AwayTeamName: match.team2,
+    },
+  })}`;
+}
+
+function IplHighlightCard2026({ match, videos, loadingId }) {
   const IPL_ACCENT = "#f97316"; // IPL orange
   const [t1Fail, setT1Fail] = useState(false);
   const [t2Fail, setT2Fail] = useState(false);
@@ -1460,16 +1485,18 @@ function IplHighlightCard2026({ match, videos, onPlay, loadingId }) {
   const isCompleted = match.status === "completed";
 
   return (
-    <div
-      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
+    <Link
+      to={iplMatchCenterLink(match)}
+      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group block"
       style={{
         width: 220,
         background: "#0d0a00",
         border: `1px solid rgba(249,115,22,0.15)`,
         transition: "transform 0.18s, box-shadow 0.18s",
-        opacity: bestClip ? 1 : 0.75,
+        // No longer dimmed when there's no clip: the card now leads to a
+        // scorecard, which is worth opening either way.
+        opacity: 1,
       }}
-      onClick={() => bestClip && onPlay(match, bestClip)}
     >
       {/* Thumbnail */}
       <div className="relative w-full" style={{ aspectRatio: "16/9", background: "#111" }}>
@@ -1544,7 +1571,7 @@ function IplHighlightCard2026({ match, videos, onPlay, loadingId }) {
           : <p className="text-[8px] mt-1.5" style={{ color: `${IPL_ACCENT}70` }}>{match.matchDate}</p>
         }
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -1553,8 +1580,6 @@ function IplHighlightsRow() {
   const IPL_ACCENT = "#f97316";
   const [matches, setMatches]   = useState([]);  // all IPL 2026 matches
   const [highlights, setHighlights] = useState({}); // smMatchId → videos[]
-  const [playerModal, setPlayerModal] = useState(null);
-  const [loadingId, setLoadingId]     = useState(null);
 
   // Fetch all IPL 2026 matches
   useEffect(() => {
@@ -1597,78 +1622,12 @@ function IplHighlightsRow() {
     return () => { cancelled = true; };
   }, [completed.length]);
 
-  const handlePlay = async (match, vid) => {
-    if (loadingId) return;
-    const title = vid.title || `${match.team1} vs ${match.team2} · IPL 2026`;
-    setLoadingId(match.smMatchId);
-
-    const openPlayer = (url) => {
-      const p = new URLSearchParams({ url, title });
-      setPlayerModal({ src: `/player.html?${p}`, title });
-      setLoadingId(null);
-    };
-
-    try {
-      // The highlights feed already gives us the Brightcove id, which resolves
-      // straight to a manifest. Don't build an iplt20.com/video/{id} URL to be
-      // scraped: that page is a StayLive SPA carrying no video id, and the id in
-      // it is a CMS id, not a Brightcove one — nothing can resolve it.
-      if (vid.mediaId || vid.shortCode) {
-        const q = new URLSearchParams();
-        if (vid.mediaId) q.set("mediaId", vid.mediaId);
-        if (vid.shortCode) q.set("shortCode", vid.shortCode);
-        const res  = await fetch(`${API_BASE}/api/ipl/stream?${q}`);
-        const json = await res.json();
-        if (res.ok && json.ok && json.url) return openPlayer(json.url);
-      }
-
-      // Anything without a Brightcove id (e.g. a StayLive-hosted video) still
-      // goes through the extractor.
-      const watchUrl = vid.id && vid.titleUrlSegment
-        ? `https://www.iplt20.com/video/${vid.id}/${vid.titleUrlSegment}`
-        : vid.id
-        ? `https://www.iplt20.com/video/${vid.id}`
-        : null;
-      if (watchUrl) {
-        const res  = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
-        const json = await res.json();
-        if (res.ok && json.success && json.url) return openPlayer(json.url);
-      }
-    } catch {}
-    setLoadingId(null);
-  };
 
   if (!completed.length) return null;
 
   return (
     <div className="mt-8">
       {/* Fullscreen player modal */}
-      {playerModal && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9999,
-          background: "rgba(0,0,0,0.97)",
-          display: "flex", flexDirection: "column",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "10px 16px", background: "rgba(0,0,0,0.8)", flexShrink: 0,
-          }}>
-            <span style={{ color: IPL_ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-              ▶ {playerModal.title}
-            </span>
-            <button onClick={() => setPlayerModal(null)} style={{
-              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
-              color: "#fff", borderRadius: 8, width: 32, height: 32,
-              cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
-            }}>×</button>
-          </div>
-          <iframe src={playerModal.src}
-            style={{ flex: 1, width: "100%", border: "none" }}
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      )}
 
       {/* Section header */}
       <div className="flex items-center justify-between mb-4">
@@ -1696,8 +1655,6 @@ function IplHighlightsRow() {
             key={match.smMatchId}
             match={match}
             videos={highlights[match.smMatchId] || null}
-            loadingId={loadingId}
-            onPlay={handlePlay}
           />
         ))}
       </div>
