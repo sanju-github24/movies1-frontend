@@ -316,15 +316,30 @@ function EcbHero({
   statusText, tossText, seriesText, venueText,
   matchTypeText, countdown, refreshing, onRefresh,
   accentColor,
-  
+  heroImage,   // match photo, used as a backdrop behind the teams
+
   children, // slot: live players / over strip / result / upcoming
 }) {
   const navy = accentColor
     ? `linear-gradient(160deg, #001836 0%, #000D22 60%, #000810 100%)`
     : `linear-gradient(160deg, ${ECB_NAVY} 0%, #000D28 60%, #000810 100%)`;
 
+  // The photo sits under the existing gradient rather than replacing it —
+  // scores and team names have to stay legible over whatever was shot that
+  // day, and a bright crowd frame would swallow white text on its own.
+  const bg = heroImage
+    ? `linear-gradient(160deg, rgba(0,10,32,0.93) 0%, rgba(0,8,24,0.95) 55%, rgba(0,8,16,0.99) 100%), url(${heroImage})`
+    : navy;
+
   return (
-    <div className="overflow-hidden rounded-3xl" style={{ background: navy, border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div
+      className="overflow-hidden rounded-3xl"
+      style={{
+        background: bg,
+        backgroundSize: heroImage ? "cover" : undefined,
+        backgroundPosition: heroImage ? "center 30%" : undefined,
+        border: "1px solid rgba(255,255,255,0.08)",
+      }}>
 
       {/* Series / venue bar */}
       <div className="flex items-center justify-between px-5 py-3 gap-2 flex-wrap" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
@@ -1217,6 +1232,22 @@ function BcciMatchCenter({ matchData, onMatchState }) {
 
   const activeInn = feedInnings?.find(i => i.number === selInn) || feedInnings?.[0] || null;
 
+  // Match photo for the hero backdrop. Same id the highlights use.
+  const [heroImage, setHeroImage] = useState(null);
+  const photoId = rawMd?.SmMatchID || matchData?.SmMatchID || matchData?.MatchID;
+  useEffect(() => {
+    if (!photoId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/cricket/photo?smMatchId=${encodeURIComponent(photoId)}`);
+        const j = await r.json();
+        if (!cancelled && j?.ok && j.photo?.url) setHeroImage(j.photo.url);
+      } catch { /* the hero has a gradient without it */ }
+    })();
+    return () => { cancelled = true; };
+  }, [photoId]);
+
   useEffect(() => {
     onMatchState?.({ isLive: !!isLive, isFinished: !!isFinished, result: resultComment, mom, momRuns, momWickets: momWkts, momImg });
   }, [isLive, isFinished, resultComment, mom, momRuns, momWkts, momImg]);
@@ -1300,6 +1331,7 @@ function BcciMatchCenter({ matchData, onMatchState }) {
         awayLogo={teamLogo(secondBatId)}  awayFlag={secondTeamMeta.flag}
         homeInnings={inn1Score ? [inn1Score] : []}
         awayInnings={inn2Score ? [inn2Score] : []}
+        heroImage={heroImage}
         isLive={!!isLive} isFinished={!!isFinished}
         statusText={isLive ? (chasingText || "") : ""}
         tossText={tossText}
