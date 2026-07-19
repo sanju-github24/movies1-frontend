@@ -715,6 +715,141 @@ function EcbSectionHeader({ label }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   INNINGS + BALL-BY-BALL
+   The scorecard used to come from getMatchCenterDetails, which now answers 200
+   with an empty body — so every innings tab read "not available". These pull
+   from the scoring feed the scoreboard itself uses, via our own API.
+
+   Scorecard and commentary are fetched separately on purpose: a full ODI is
+   ~34 KB of scorecard against ~190 KB of ball-by-ball prose, so the commentary
+   only loads when someone actually opens that tab.
+═══════════════════════════════════════════════════════════════════════════ */
+function useInnings(type, matchId, isTest) {
+  const [innings, setInnings] = useState(null);
+  const [error, setError]     = useState(null);
+
+  const reload = useCallback(async () => {
+    if (!matchId || !type) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/cricket/innings?type=${type}&id=${encodeURIComponent(matchId)}${isTest ? "&test=1" : ""}`);
+      const j = await r.json();
+      // The old path failed by returning {ok:false} with HTTP 200, so the
+      // caller's `if (!json)` guard never fired and the error sailed through as
+      // data. Check the flag, not just the status.
+      if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+      setInnings(j.innings || []); setError(null);
+    } catch (e) { setError(e.message); setInnings([]); }
+  }, [type, matchId, isTest]);
+
+  useEffect(() => { reload(); }, [reload]);
+  // Track the live score without re-pulling commentary.
+  useEffect(() => { const t = setInterval(reload, 30000); return () => clearInterval(t); }, [reload]);
+
+  return { innings, error, reload };
+}
+
+/* Innings selector — one pill per innings, so a Test shows all four. */
+function InningsSelector({ innings, active, onChange }) {
+  if (!innings?.length) return null;
+  return (
+    <div className="flex gap-2 px-5 py-3.5 overflow-x-auto" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      {innings.map(inn => {
+        const ex = inn.Extras?.[0] || {};
+        const on = inn.number === active;
+        return (
+          <button
+            key={inn.number}
+            onClick={() => onChange(inn.number)}
+            className="shrink-0 px-3.5 py-2 rounded-xl text-left transition-colors"
+            style={{
+              background: on ? "rgba(207,20,43,0.14)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${on ? "rgba(207,20,43,0.5)" : "rgba(255,255,255,0.08)"}`,
+            }}
+          >
+            <span className="block text-[9px] font-black uppercase tracking-widest" style={{ color: on ? ECB_RED : "rgba(255,255,255,0.3)" }}>
+              {ex.BattingTeamName || `Innings ${inn.number}`}
+            </span>
+            <span className="block text-sm font-black text-white mt-0.5">{ex.Total || "—"}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* One delivery's chip label: extras have to be read off their own flags,
+   because a wide's Runs field carries the penalty run, not "wd". */
+function ballChipLabel(b) {
+  if (b.IsWicket === "1") return "W";
+  if (b.IsWide === "1")   return "WD";
+  if (b.IsNoBall === "1") return "NB";
+  return String(b.ActualRuns ?? b.BallRuns ?? "0");
+}
+
+function BallByBall({ type, matchId, inning }) {
+  const [overs, setOvers]     = useState(null);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOvers(null); setError(null);
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/cricket/balls?type=${type}&id=${encodeURIComponent(matchId)}&inning=${inning}`);
+        const j = await r.json();
+        if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+        if (!cancelled) setOvers(j.overs || []);
+      } catch (e) { if (!cancelled) setError(e.message); }
+    })();
+    return () => { cancelled = true; };
+  }, [type, matchId, inning]);
+
+  if (error)  return <p className="text-center text-white/20 text-xs py-10">Ball-by-ball unavailable</p>;
+  if (!overs) return <p className="text-center text-white/20 text-xs py-10">Loading commentary…</p>;
+  if (!overs.length) return <p className="text-center text-white/20 text-xs py-10">No deliveries bowled yet</p>;
+
+  return (
+    <div>
+      {overs.map(ov => (
+        <div key={ov.overNo} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="flex items-center justify-between gap-3 px-5 py-3" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <div className="min-w-0">
+              <span className="text-[10px] font-black text-white uppercase tracking-widest">Over {ov.overNo}</span>
+              {ov.bowler && <span className="text-[10px] text-white/30 ml-2 truncate">{ov.bowler}</span>}
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-[10px] text-white/35">
+                {ov.runs} run{ov.runs === 1 ? "" : "s"}{ov.wickets ? ` · ${ov.wickets} wkt` : ""}
+              </span>
+              {ov.scoreAfter && <span className="text-xs font-black text-white font-mono">{ov.scoreAfter}</span>}
+            </div>
+          </div>
+
+          <div className="px-5 py-3 flex items-center gap-2 overflow-x-auto">
+            {ov.balls.map((b, i) => <EcbBallChip key={i} label={ballChipLabel(b)} />)}
+          </div>
+
+          <div className="px-5 pb-3.5 space-y-1.5">
+            {ov.balls.map((b, i) => {
+              const text = b.Commentry || b.NewCommentry;
+              if (!text) return null;
+              return (
+                <p key={i} className="text-[11px] leading-relaxed text-white/45">
+                  <span className="font-mono font-black text-white/70 mr-1.5">
+                    {(b.CommentOver || "").replace(/^Over\s*/i, "")}
+                  </span>
+                  {text}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Scorecard wrapper card ── */
 function EcbScorecardCard({ children }) {
   return (
@@ -1062,7 +1197,25 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   const momRuns = rawMd?.MOMRuns || "";
   const momWkts = rawMd?.MOMWicket || "";
   const momImg  = rawMd?.MOMImage || "";
+  // Kept as a fallback only: getMatchCenterDetails stopped returning a body, so
+  // in practice this is empty and the scoring feed below is what renders.
   const scorecardInn  = sc?.scorecardData?.innings || sc?.innings || [];
+
+  const isTestMatch = /test/i.test(rawMd?.MatchType || matchData.MatchType || "");
+  const { innings: feedInnings, error: inningsError } =
+    useInnings("bcci", matchData?.MatchID, isTestMatch);
+
+  // Default to the innings being played, and follow it when a new one starts —
+  // but never override a reader who has picked one themselves.
+  const [selInn, setSelInn] = useState(null);
+  const touchedInn = useRef(false);
+  useEffect(() => {
+    if (touchedInn.current || !feedInnings?.length) return;
+    setSelInn(feedInnings[feedInnings.length - 1].number);
+  }, [feedInnings]);
+  const pickInn = useCallback(n => { touchedInn.current = true; setSelInn(n); }, []);
+
+  const activeInn = feedInnings?.find(i => i.number === selInn) || feedInnings?.[0] || null;
 
   useEffect(() => {
     onMatchState?.({ isLive: !!isLive, isFinished: !!isFinished, result: resultComment, mom, momRuns, momWickets: momWkts, momImg });
@@ -1349,11 +1502,12 @@ function BcciMatchCenter({ matchData, onMatchState }) {
       <EcbScorecardCard>
         <EcbTabBar
           tabs={[
-            { k: "overview",  l: "Overview"  },
-            { k: "scorecard", l: "Scorecard" },
-            { k: "bowling",   l: "Bowling"   },
-            { k: "squads",    l: "Squads"    },
-            { k: "summary",   l: "Summary"   },
+            { k: "overview",   l: "Overview"     },
+            { k: "scorecard",  l: "Scorecard"    },
+            { k: "bowling",    l: "Bowling"      },
+            { k: "ballbyball", l: "Ball by Ball" },
+            { k: "squads",     l: "Squads"       },
+            { k: "summary",    l: "Summary"      },
           ]}
           active={tab} onChange={setTab} accent={ECB_RED}
         />
@@ -1374,33 +1528,93 @@ function BcciMatchCenter({ matchData, onMatchState }) {
         )}
 
         {tab === "scorecard" && (
-          scorecardInn.length > 0
-            ? scorecardInn.map((inn, idx) => {
-                const rows = buildBattingRows(inn.batting || inn.BattingCard || []);
-                if (!rows.length) return null;
-                return (
-                  <div key={idx}>
-                    <EcbSectionHeader label={`Innings ${idx + 1} · Batting`} />
-                    <EcbBattingTable rows={rows} />
-                  </div>
-                );
-              })
-            : <p className="text-center text-white/20 text-xs py-10">Detailed scorecard not available</p>
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {(() => {
+              // A batting card lists the whole XI, including players who never
+              // came in — showing eleven rows where five batted reads as a bug.
+              const card = activeInn?.BattingCard
+                || scorecardInn[(selInn || 1) - 1]?.batting
+                || scorecardInn[(selInn || 1) - 1]?.BattingCard;
+              const rows = buildBattingRows(
+                (card || []).filter(b => b.PlayingOrder != null || Number(b.Balls) > 0),
+              );
+              if (!rows.length) {
+                return <p className="text-center text-white/20 text-xs py-10">
+                  {feedInnings === null ? "Loading scorecard…"
+                    : inningsError ? "Scorecard unavailable" : "No innings played yet"}
+                </p>;
+              }
+              const ex = activeInn?.Extras?.[0] || {};
+              const fow = activeInn?.FallOfWickets || [];
+              return (
+                <>
+                  <EcbSectionHeader label={`${ex.BattingTeamName || `Innings ${selInn}`} · Batting`} />
+                  <EcbBattingTable rows={rows} />
+                  {ex.TotalExtras !== undefined && (
+                    <EcbStatRow
+                      label="Extras"
+                      value={ex.TotalExtras}
+                      sub={`b ${ex.Byes || 0} · lb ${ex.LegByes || 0} · w ${ex.Wides || 0} · nb ${ex.NoBalls || 0}`}
+                    />
+                  )}
+                  {ex.Total && <EcbStatRow label="Total" value={ex.Total} sub={ex.CurrentRunRate ? `RR ${ex.CurrentRunRate}` : undefined} />}
+                  {fow.length > 0 && (
+                    <>
+                      <EcbSectionHeader label="Fall of wickets" />
+                      <div className="px-5 py-3.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                        {fow.map((w, i) => (
+                          <span key={i} className="text-[11px] text-white/40">
+                            <span className="font-mono font-black text-white/70">{w.Score}</span> {w.PlayerName}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </div>
         )}
 
         {tab === "bowling" && (
-          scorecardInn.length > 0
-            ? scorecardInn.map((inn, idx) => {
-                const rows = buildBowlingRows(inn.bowling || inn.BowlingCard || []);
-                if (!rows.length) return null;
-                return (
-                  <div key={idx}>
-                    <EcbSectionHeader label={`Innings ${idx + 1} · Bowling`} />
-                    <EcbBowlingTable rows={rows} />
-                  </div>
-                );
-              })
-            : <p className="text-center text-white/20 text-xs py-10">Bowling data not available</p>
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {(() => {
+              const card = activeInn?.BowlingCard
+                || scorecardInn[(selInn || 1) - 1]?.bowling
+                || scorecardInn[(selInn || 1) - 1]?.BowlingCard;
+              // Bowling cards carry the full fielding side; drop anyone who
+              // hasn't bowled a ball.
+              const rows = buildBowlingRows(
+                (card || []).filter(b => Number(b.TotalLegalBallsBowled) > 0 || parseFloat(b.Overs) > 0),
+              );
+              if (!rows.length) {
+                return <p className="text-center text-white/20 text-xs py-10">
+                  {feedInnings === null ? "Loading bowling…"
+                    : inningsError ? "Bowling data unavailable" : "No overs bowled yet"}
+                </p>;
+              }
+              const ex = activeInn?.Extras?.[0] || {};
+              return (
+                <>
+                  <EcbSectionHeader label={`${ex.BowlingTeamName || `Innings ${selInn}`} · Bowling`} />
+                  <EcbBowlingTable rows={rows} />
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {tab === "ballbyball" && (
+          <div>
+            <InningsSelector innings={feedInnings} active={selInn} onChange={pickInn} />
+            {feedInnings === null
+              ? <p className="text-center text-white/20 text-xs py-10">Loading…</p>
+              : selInn
+                ? <BallByBall type="bcci" matchId={matchData.MatchID} inning={selInn} />
+                : <p className="text-center text-white/20 text-xs py-10">No deliveries bowled yet</p>}
+          </div>
         )}
 
         {tab === "squads" && (
