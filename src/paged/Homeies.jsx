@@ -1724,20 +1724,36 @@ function TournamentBadge({ emoji, name, subtitle, color, bg, border, to }) {
 // ─── HOMEIES PAGE ─────────────────────────────────────────────────────────────
 // ─── ICC HIGHLIGHTS ROW (backend mints Akamai token + proxies; plays via Shaka) ──
 function IccHighlightsRow() {
+  const PAGE = 8;
   const [videos, setVideos]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [modal, setModal]     = useState(null);   // { src, title }
   const [loadingId, setLoadingId] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    fetch(`${API_BASE}/api/icc/highlights`)
+    fetch(`${API_BASE}/api/icc/highlights?offset=0&limit=${PAGE}`)
       .then(r => r.json())
-      .then(j => { if (alive && j.success) setVideos(j.videos || []); })
+      .then(j => { if (alive && j.success) { setVideos(j.videos || []); setHasMore(!!j.hasMore); } })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const j = await fetch(`${API_BASE}/api/icc/highlights?offset=${videos.length}&limit=${PAGE}`).then(r => r.json());
+      if (j && j.success) {
+        setVideos(prev => [...prev, ...(j.videos || []).filter(v => !prev.some(p => p.uuid === v.uuid))]);
+        setHasMore(!!j.hasMore);
+      }
+    } catch {}
+    setLoadingMore(false);
+  };
 
   const play = async (v) => {
     if (loadingId) return;
@@ -1796,6 +1812,19 @@ function IccHighlightsRow() {
         ) : (
           <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width:240, height:135+52 }}/>
         ))}
+
+        {!loading && hasMore && (
+          <button onClick={loadMore} disabled={loadingMore}
+            className="shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed transition-all duration-200 hover:bg-white/[0.04] active:scale-95"
+            style={{ width:150, height:135+52, borderColor:"rgba(34,211,238,0.35)", background:"rgba(34,211,238,0.04)" }}>
+            {loadingMore
+              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
+              : <ChevronRight size={22} style={{ color: ACCENT }}/>}
+            <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: ACCENT }}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );
