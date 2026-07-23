@@ -8,6 +8,46 @@ import {
 } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
 
+// ── FanCode match → live stream channel (cricket match centers) ──────────────
+const FANCODE_FEED = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
+function fcBestVariant(masterText) {
+  if (!masterText) return "";
+  const L = masterText.split("\n"); let best = { r: -1, u: "" };
+  for (let i = 0; i < L.length; i++) {
+    const m = /RESOLUTION=\d+x(\d+)/i.exec(L[i]);
+    if (m) { const r = +m[1], u = (L[i + 1] || "").trim(); if (u && !u.startsWith("#") && r > best.r) best = { r, u }; }
+  }
+  return best.u;
+}
+// If this match is LIVE on FanCode, returns a channel object for the player switcher.
+function useFancodeMatch(homeName, awayName) {
+  const [ch, setCh] = useState(null);
+  useEffect(() => {
+    const h = (homeName || "").toLowerCase().trim(), a = (awayName || "").toLowerCase().trim();
+    if (h.length < 3 || a.length < 3) { setCh(null); return; }
+    let alive = true;
+    fetch(`${FANCODE_FEED}?_=${Date.now()}`).then(r => r.json()).then(j => {
+      if (!alive) return;
+      const m = (j.matches || []).find(x => {
+        if ((x.status || "").toUpperCase() !== "LIVE" || !x.auto_streams || !x.auto_streams[0]) return false;
+        const hay = `${x.title} ${(x.team || []).map(t => t.name).join(" ")}`.toLowerCase();
+        return hay.includes(h) && hay.includes(a);
+      });
+      if (m) {
+        const url = fcBestVariant(m.auto_streams[0].auto);
+        if (url) { setCh({
+          id: "fancode-live", name: "FanCode", sub: "Live", useIcon: false, logo: "/fancode.svg",
+          color: "#ec1c24", glow: "rgba(236,28,36,0.3)", border: "rgba(236,28,36,0.25)", bg: "rgba(236,28,36,0.06)",
+          url: `/player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(m.title)}`,
+        }); return; }
+      }
+      setCh(null);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [homeName, awayName]);
+  return ch;
+}
+
 const API_BASE      = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
 const FIFA_API_BASE = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
@@ -916,11 +956,14 @@ function ResultPopup({ result, mom, momRuns, momWickets, momImg, sport }) {
   );
 }
 
-function LivePlayer({ sport }) {
-  const channels = sport === "football" ? FOOTBALL_CHANNELS : CRICKET_CHANNELS;
+function LivePlayer({ sport, fancodeChannel }) {
+  const base = sport === "football" ? FOOTBALL_CHANNELS : CRICKET_CHANNELS;
+  const channels = fancodeChannel ? [fancodeChannel, ...base] : base;
   const [active, setActive] = useState(channels[0]);
   const [switching, setSwitching] = useState(false);
   const playerRef = useRef(null);
+  // When the FanCode stream for this match resolves (async), auto-select it.
+  useEffect(() => { if (fancodeChannel) setActive(fancodeChannel); }, [fancodeChannel]);
   const switchTo = (ch) => {
     if (ch.id === active.id) return;
     setSwitching(true);
@@ -978,8 +1021,9 @@ function LivePlayer({ sport }) {
   );
 }
 
-function LiveChannelSwitcher({ sport, isLive, isFinished, result, mom, momRuns, momWickets, momImg }) {
-  if (isLive) return <LivePlayer sport={sport} />;
+function LiveChannelSwitcher({ sport, isLive, isFinished, result, mom, momRuns, momWickets, momImg, homeName, awayName }) {
+  const fancodeChannel = useFancodeMatch(homeName, awayName);   // hook must run unconditionally
+  if (isLive) return <LivePlayer sport={sport} fancodeChannel={fancodeChannel} />;
   if (isFinished) return <ResultPopup result={result} mom={mom} momRuns={momRuns} momWickets={momWickets} momImg={momImg} sport={sport} />;
   return null;
 }
@@ -2685,6 +2729,8 @@ export default function MatchCenter() {
               momRuns={matchState.momRuns}
               momWickets={matchState.momWickets}
               momImg={matchState.momImg}
+              homeName={payload.matchData?.HomeTeamName || payload.homeCode}
+              awayName={payload.matchData?.AwayTeamName || payload.awayCode}
             />
           </div>
         )}
