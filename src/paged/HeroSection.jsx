@@ -53,6 +53,45 @@ function countdownLabel(dateStr) {
   return `${days} DAY${days!==1?"S":""} TO GO`;
 }
 
+// ─── FANCODE (DOCTOR_STRANGE feed) ────────────────────────────────────────────
+// We cross-check each BCCI men's match against FanCode's live/scheduled list.
+// If the same match is LIVE on FanCode, we use FanCode's match thumbnail in the hero.
+const FANCODE_JSON = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
+
+async function fetchFancodeMatches() {
+  const k = "hero_fancode_v1";
+  const cached = getCached(k);
+  if (cached !== null && cached !== undefined) return cached;
+  try {
+    const res = await fetch(`${FANCODE_JSON}?_=${Date.now()}`);
+    if (!res.ok) { setCache(k, []); return []; }
+    const json = await res.json();
+    const matches = (json.matches || []).map(m => ({
+      title: (m.title || "").toLowerCase(),
+      status: (m.status || "").toUpperCase(),        // LIVE | NOT_STARTED | COMPLETED
+      teams: (m.team || []).map(t => (t.name || "").toLowerCase()),
+      // Match thumbnail for the hero background. BG_IMAGE / APP / image are the
+      // reliable cms-media match cards; TATAPLAY/CLOUDFARE 404 for many matches.
+      thumb: (m.image_cdn && (m.image_cdn.BG_IMAGE || m.image_cdn.APP)) || m.image
+             || (m.image_cdn && m.image_cdn.TATAPLAY) || null,
+    }));
+    setCache(k, matches);
+    return matches;
+  } catch { setCache(k, []); return []; }
+}
+
+// Find a MEN's FanCode match for the two given team names (women's excluded).
+function fcMatchForMens(fcList, homeName, awayName) {
+  const h = (homeName || "").toLowerCase().trim();
+  const a = (awayName || "").toLowerCase().trim();
+  if (h.length < 3 || a.length < 3) return null;
+  return fcList.find(fc => {
+    if (fc.title.includes("women")) return false; // BCCI men's → skip women's feeds
+    const hay = `${fc.title} ${fc.teams.join(" ")}`;
+    return hay.includes(h) && hay.includes(a);
+  }) || null;
+}
+
 // ─── FIFA / ICC HELPERS ───────────────────────────────────────────────────────
 const ICC_FLAGS = {
   ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",SL:"🇱🇰",AUS:"🇦🇺",IND:"🇮🇳",AFG:"🇦🇫",SA:"🇿🇦",
@@ -86,6 +125,21 @@ function buildSide({ code, name, logo, score, overs }) {
     score: score || null,
     overs: overs || null,
   };
+}
+
+// Derive a team code from an (optional) code and the team NAME — never defaults
+// to "IND", so away tours (e.g. India in Zimbabwe) don't mislabel the home team.
+const TEAM_NAME_TO_CODE = {
+  "india":"IND","zimbabwe":"ZIM","australia":"AUS","england":"ENG","pakistan":"PAK",
+  "sri lanka":"SL","south africa":"SA","new zealand":"NZ","west indies":"WI",
+  "bangladesh":"BAN","afghanistan":"AFG","ireland":"IRE","netherlands":"NED",
+  "nepal":"NEP","scotland":"SCO","namibia":"NAM","oman":"OMA","united states":"USA","uae":"UAE",
+};
+function teamCode(code, name) {
+  if (code) return code;
+  const n = (name || "").trim();
+  if (!n) return "—";
+  return TEAM_NAME_TO_CODE[n.toLowerCase()] || n.slice(0, 3).toUpperCase();
 }
 
 // ─── CACHE ────────────────────────────────────────────────────────────────────
@@ -229,9 +283,14 @@ function CricketSlide({slide}){
   const [playerModal,setPlayerModal]=useState(null);
   const [streamLoading,setStreamLoading]=useState(false);
 
-  // Use highlight thumbnail as background when match is finished and highlight available
+  // Background priority:
+  //  1. FanCode thumbnail when the match is live on FanCode,
+  //  2. highlight thumbnail for finished matches,
+  //  3. static fallback by teams.
   const fallbackBg=resolveThumbnail(slide);
-  const bgImg=(isFinished&&bestClip?.thumbnail)?bestClip.thumbnail:fallbackBg;
+  const bgImg=slide.fancodeThumb
+    ? slide.fancodeThumb
+    : (isFinished&&bestClip?.thumbnail)?bestClip.thumbnail:fallbackBg;
   const isIndiaAfg=fallbackBg.includes("india-vs-afg");
   const base=isIndiaAfg?"#0a0008":"#0a0015";
   const btm=isIndiaAfg?"#06000a":"#030007";
@@ -272,10 +331,15 @@ function CricketSlide({slide}){
       )}
 
       <div className="absolute inset-0">
-        <img src={bgImg} alt="" className="w-full h-full object-cover object-center animate-fade-in"/>
-        <div className="absolute inset-0" style={{background:`linear-gradient(to right,${base} 0%,${base}d9 45%,transparent 100%)`}}/>
-        <div className="absolute bottom-0 left-0 right-0 h-36" style={{background:`linear-gradient(to top,${btm},transparent)`}}/>
-        <div className="absolute top-0 left-0 right-0 h-16" style={{background:`linear-gradient(to bottom,${btm},transparent)`}}/>
+        <img src={bgImg} alt="" className="w-full h-full object-cover animate-fade-in"
+          style={{objectPosition:"center 22%"}}
+          onError={(e)=>{ if(e.currentTarget.src!==fallbackBg){ e.currentTarget.onerror=null; e.currentTarget.src=fallbackBg; } }}/>
+        {/* Cinematic scrim: readable text at bottom-left, subject stays vivid on the right */}
+        <div className="absolute inset-0" style={{background:`linear-gradient(105deg, ${base} 0%, ${base}f2 26%, ${base}99 46%, transparent 72%)`}}/>
+        <div className="absolute bottom-0 left-0 right-0" style={{height:"62%",background:`linear-gradient(to top, ${btm} 4%, ${btm}cc 32%, transparent 100%)`}}/>
+        <div className="absolute top-0 left-0 right-0 h-24" style={{background:`linear-gradient(to bottom, ${btm}e6, transparent)`}}/>
+        {/* Soft vignette for depth */}
+        <div className="absolute inset-0 pointer-events-none" style={{boxShadow:"inset 0 0 140px 40px rgba(0,0,0,0.55)"}}/>
       </div>
       <CricketHeroBg away={away}/>
 
@@ -454,10 +518,11 @@ function FootballSlide({slide}){
       )}
 
       <div className="absolute inset-0">
-        <img src={bgSrc} alt="" className="w-full h-full object-cover object-center animate-fade-in"/>
-        <div className="absolute inset-0 bg-gradient-to-r from-[#001a0a] via-[#001a0a]/85 to-transparent"/>
-        <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-[#000d05] to-transparent"/>
-        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#000d05] to-transparent"/>
+        <img src={bgSrc} alt="" className="w-full h-full object-cover animate-fade-in" style={{objectPosition:"center 22%"}}/>
+        <div className="absolute inset-0" style={{background:"linear-gradient(105deg, #001a0a 0%, rgba(0,26,10,0.95) 26%, rgba(0,26,10,0.6) 46%, transparent 72%)"}}/>
+        <div className="absolute bottom-0 left-0 right-0" style={{height:"62%",background:"linear-gradient(to top, #000d05 4%, rgba(0,13,5,0.8) 32%, transparent 100%)"}}/>
+        <div className="absolute top-0 left-0 right-0 h-24" style={{background:"linear-gradient(to bottom, rgba(0,13,5,0.9), transparent)"}}/>
+        <div className="absolute inset-0 pointer-events-none" style={{boxShadow:"inset 0 0 140px 40px rgba(0,0,0,0.55)"}}/>
       </div>
       <FootballHeroBg/>
 
@@ -636,11 +701,14 @@ export default function HeroSection(){
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v7";
+    const ck="hero_slides_v8";
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
     const liveC=[],finC=[],upC=[],liveF=[],finF=[],upF=[];
+
+    // FanCode feed (DOCTOR_STRANGE) — used to detect if a BCCI match is live there.
+    const fcList = await fetchFancodeMatches();
 
     // ── BCCI ──
     try{
@@ -657,15 +725,16 @@ export default function HeroSection(){
           const inn1 = m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]}` : null;
           const inn2 = m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]}` : null;
           const home = buildSide({
-            code: m.HomeTeamCode, name: m.HomeTeamName, logo: m.MatchHomeTeamLogo,
+            code: teamCode(m.HomeTeamCode, m.HomeTeamName), name: m.HomeTeamName, logo: m.MatchHomeTeamLogo,
             score: homeIsFirst ? inn1 : inn2,
             overs: homeIsFirst ? m["1FallOvers"] : m["2FallOvers"],
           });
           const away = buildSide({
-            code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo,
+            code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo,
             score: homeIsFirst ? inn2 : inn1,
             overs: homeIsFirst ? m["2FallOvers"] : m["1FallOvers"],
           });
+          const fcLive = fcMatchForMens(fcList, m.HomeTeamName, m.AwayTeamName);
           liveC.push({
             id:`bcci-live-${m.MatchID}`, sport:"cricket", status:"live",
             home, away,
@@ -677,6 +746,10 @@ export default function HeroSection(){
             strikerName: m.CurrentStrikerName || null,
             strikerRuns: m.StrikerRuns ?? null,
             strikerBalls: m.StrikerBalls ?? null,
+            // If this match exists on FanCode (scheduled OR live), use FanCode's
+            // real match thumbnail instead of the generic fallback.
+            fancodeThumb: fcLive ? fcLive.thumb : null,
+            fancodeLive: !!(fcLive && fcLive.status === "LIVE"),
           });
         }
       }
@@ -687,8 +760,8 @@ export default function HeroSection(){
           const homeIsFirst = m.FirstBattingTeamID && String(m.FirstBattingTeamID)===String(m.HomeTeamID);
           const inn1 = m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]}` : null;
           const inn2 = m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]}` : null;
-          const home = buildSide({ code: m.HomeTeamCode, name: m.HomeTeamName, logo: m.MatchHomeTeamLogo, score: homeIsFirst ? inn1 : inn2 });
-          const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
+          const home = buildSide({ code: teamCode(m.HomeTeamCode, m.HomeTeamName), name: m.HomeTeamName, logo: m.MatchHomeTeamLogo, score: homeIsFirst ? inn1 : inn2 });
+          const away = buildSide({ code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
           finC.push({
             id:`bcci-fin-${m.MatchID}`, sport:"cricket", status:"finished",
             home, away,
@@ -704,10 +777,14 @@ export default function HeroSection(){
       if(upRes.status==="fulfilled"&&upRes.value.ok){
         const j=await upRes.value.json();
         for(const m of (j.upcomingMatches||[]).filter(isIndiaMensMatch).slice(0,2)){
-          const home = buildSide({ code: m.HomeTeamCode, name: m.HomeTeamName, logo: m.MatchHomeTeamLogo });
-          const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo });
-          upC.push({
-            id:`bcci-up-${m.MatchID}`, sport:"cricket", status:"upcoming",
+          const home = buildSide({ code: teamCode(m.HomeTeamCode, m.HomeTeamName), name: m.HomeTeamName, logo: m.MatchHomeTeamLogo });
+          const away = buildSide({ code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo });
+          // A scheduled BCCI match that is already LIVE on FanCode → promote to live
+          // (route into liveC so ordering treats it as live) and use FanCode's thumbnail.
+          const fcUp = fcMatchForMens(fcList, m.HomeTeamName, m.AwayTeamName);
+          const fcNowLive = !!(fcUp && fcUp.status === "LIVE");
+          const upSlide = {
+            id:`bcci-up-${m.MatchID}`, sport:"cricket", status: fcNowLive ? "live" : "upcoming",
             home, away,
             tournament: m.CompetitionName || "India Cricket",
             matchFmt: bcciFmt(m.MatchType),
@@ -715,7 +792,11 @@ export default function HeroSection(){
             dateLabel: bcciFmtDate(m.MatchDate),
             timeLabel: bcciFmtTime(m.CustomMatchTime || m.MatchTime || ""),
             countdown: countdownLabel(m.MatchDate),
-          });
+            // Present on FanCode (scheduled or live) → use its real thumbnail.
+            fancodeThumb: fcUp ? fcUp.thumb : null,
+            fancodeLive: fcNowLive,
+          };
+          if (fcNowLive) liveC.push(upSlide); else upC.push(upSlide);
         }
       }
     }catch{}

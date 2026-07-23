@@ -4,7 +4,7 @@
 // When upcoming: nothing rendered
 
 import { useState, useRef, useEffect } from "react";
-import { Tv2, Maximize2, AlertCircle, Trophy, Star } from "lucide-react";
+import { Tv2, Maximize2, AlertCircle, Trophy, Star, ChevronDown } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
 
 function PulsingDot({ color }) {
@@ -112,6 +112,18 @@ function LivePlayer({ sport }) {
   const [switching, setSwitching] = useState(false);
   const playerRef = useRef(null);
 
+  // Group channels by provider (Star Sports, Willow, FanCode, Sony, …), preserving order.
+  const groups = [];
+  const _gm = {};
+  channels.forEach((ch) => {
+    const g = ch.group || ch.name;
+    if (!_gm[g]) { _gm[g] = { name: g, items: [] }; groups.push(_gm[g]); }
+    _gm[g].items.push(ch);
+  });
+
+  // Which provider dropdown is expanded (only one open at a time).
+  const [openGroup, setOpenGroup] = useState(active.group || groups[0]?.name);
+
   const switchTo = (ch) => {
     if (ch.id === active.id) return;
     setSwitching(true);
@@ -182,10 +194,10 @@ function LivePlayer({ sport }) {
           </div>
         </div>
 
-        {/* ── Right channel list ── */}
+        {/* ── Right channel list — one dropdown per provider ── */}
         <div
           className="flex flex-col border-l border-white/[0.07] overflow-y-auto shrink-0"
-          style={{ width: 96, background: "rgba(255,255,255,0.02)" }}
+          style={{ width: 124, background: "rgba(255,255,255,0.02)" }}
         >
           <div className="px-2 pt-2 pb-1.5 border-b border-white/[0.06]">
             <p className="text-[7px] font-black text-gray-700 uppercase tracking-widest text-center">
@@ -193,47 +205,90 @@ function LivePlayer({ sport }) {
             </p>
           </div>
 
-          <div className="flex flex-col gap-0.5 p-1.5 flex-1">
-            {channels.map((ch) => {
-              const isActive = active.id === ch.id;
+          <div className="flex flex-col gap-1 p-1.5 flex-1">
+            {groups.map((g) => {
+              const isOpen = openGroup === g.name;
+              const groupActive = g.items.some((c) => c.id === active.id);
+              const gColor = g.items[0].color;
               return (
-                <button
-                  key={ch.id}
-                  onClick={() => switchTo(ch)}
-                  className="flex flex-col items-center gap-1.5 px-1.5 py-2 rounded-xl border transition-all duration-200 active:scale-95 w-full"
+                <div
+                  key={g.name}
+                  className="rounded-xl overflow-hidden"
                   style={{
-                    background: isActive ? ch.bg : "transparent",
-                    borderColor: isActive ? ch.border : "transparent",
-                    boxShadow: isActive ? `0 0 10px ${ch.glow}` : "none",
+                    border: `1px solid ${groupActive ? g.items[0].border : "rgba(255,255,255,0.06)"}`,
+                    background: groupActive ? g.items[0].bg : "rgba(255,255,255,0.015)",
                   }}
                 >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
-                    style={{
-                      background: isActive ? `${ch.color}15` : "rgba(255,255,255,0.05)",
-                      border: `1px solid ${isActive ? ch.border : "rgba(255,255,255,0.07)"}`,
-                    }}
+                  {/* Provider dropdown header */}
+                  <button
+                    onClick={() => setOpenGroup(isOpen ? null : g.name)}
+                    className="w-full flex items-center justify-between gap-1 px-2 py-2 transition-colors"
+                    style={{ background: isOpen ? "rgba(255,255,255,0.03)" : "transparent" }}
                   >
-                    {ch.useIcon
-                      ? <Tv2 size={14} style={{ color: isActive ? ch.color : "#4b5563" }} />
-                      : <img
-                          src={ch.logo}
-                          alt=""
-                          className="w-full h-full object-contain p-0.5"
-                          style={{ filter: isActive ? "none" : "grayscale(100%) brightness(0.35)" }}
-                        />
-                    }
-                  </div>
-                  <span
-                    className="text-[8px] font-black uppercase leading-tight text-center"
-                    style={{ color: isActive ? ch.color : "#4b5563" }}
-                  >
-                    {ch.sub}
-                  </span>
-                  {isActive && (
-                    <div className="w-4 h-0.5 rounded-full" style={{ background: ch.color }} />
+                    <span
+                      className="text-[8px] font-black uppercase tracking-wider truncate text-left"
+                      style={{ color: groupActive ? gColor : "#9ca3af" }}
+                    >
+                      {g.name}
+                    </span>
+                    <ChevronDown
+                      size={11}
+                      className="shrink-0 transition-transform duration-200"
+                      style={{
+                        color: groupActive ? gColor : "#6b7280",
+                        transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      }}
+                    />
+                  </button>
+
+                  {/* Channels inside this provider */}
+                  {isOpen && (
+                    <div className="flex flex-col gap-0.5 p-1 pt-0">
+                      {g.items.map((ch) => {
+                        const isActive = active.id === ch.id;
+                        return (
+                          <button
+                            key={ch.id}
+                            onClick={() => switchTo(ch)}
+                            className="flex items-center gap-2 px-1.5 py-1.5 rounded-lg border transition-all duration-200 active:scale-95 w-full"
+                            style={{
+                              background: isActive ? ch.bg : "transparent",
+                              borderColor: isActive ? ch.border : "transparent",
+                              boxShadow: isActive ? `0 0 8px ${ch.glow}` : "none",
+                            }}
+                          >
+                            <div
+                              className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+                              style={{
+                                background: isActive ? `${ch.color}15` : "rgba(255,255,255,0.05)",
+                                border: `1px solid ${isActive ? ch.border : "rgba(255,255,255,0.07)"}`,
+                              }}
+                            >
+                              {ch.useIcon
+                                ? <Tv2 size={13} style={{ color: isActive ? ch.color : "#4b5563" }} />
+                                : <img
+                                    src={ch.logo}
+                                    alt=""
+                                    className="w-full h-full object-contain p-0.5"
+                                    style={{ filter: isActive ? "none" : "grayscale(100%) brightness(0.35)" }}
+                                  />
+                              }
+                            </div>
+                            <span
+                              className="text-[8px] font-black uppercase leading-tight text-left flex-1 truncate"
+                              style={{ color: isActive ? ch.color : "#6b7280" }}
+                            >
+                              {ch.sub}
+                            </span>
+                            {isActive && (
+                              <PulsingDot color={ch.color} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

@@ -1,9 +1,13 @@
 // channels.js — single source of truth for all live stream channels
 // Import from here in both LiveCricketTV.jsx and MatchCenter.jsx
+//
+// Each channel has a `group` field. LiveChannelSwitcher renders one collapsible
+// dropdown per group (Star Sports, Willow, FanCode, Sony, …).
 
 export const CRICKET_CHANNELS = [
   {
     id: "star-english", name: "Star Sports-1", sub: "English HD",
+    group: "Star Sports",
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "ENGLISH", useIcon: false,
     logo: "/star-sports-1.jpg",
@@ -12,6 +16,7 @@ export const CRICKET_CHANNELS = [
   },
   {
     id: "star-hindi", name: "Star Sports", sub: "Hindi HD",
+    group: "Star Sports",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "HINDI", useIcon: false,
     logo: "/star-sports-1-hindi.jpg",
@@ -20,6 +25,7 @@ export const CRICKET_CHANNELS = [
   },
   {
     id: "star-sports-1-kannada", name: "Star Sports", sub: "Kannada HD",
+    group: "Star Sports",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "KANNADA", useIcon: false,
     logo: "/star-sports-1-kannada.jpg",
@@ -28,6 +34,7 @@ export const CRICKET_CHANNELS = [
   },
   {
     id: "star-sports-1-tamil", name: "Star Sports", sub: "Tamil HD",
+    group: "Star Sports",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TAMIL", useIcon: false,
     logo: "/star-sports-1-tamil.jpg",
@@ -36,6 +43,7 @@ export const CRICKET_CHANNELS = [
   },
   {
     id: "star-sports-1-telugu", name: "Star Sports", sub: "Telugu HD",
+    group: "Star Sports",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TELUGU", useIcon: false,
     logo: "/star-sports-1-telugu.jpg",
@@ -44,6 +52,7 @@ export const CRICKET_CHANNELS = [
   },
   {
     id: "Willow-Sports", name: "Willow TV", sub: "English",
+    group: "Willow",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "ENGLISH", useIcon: false,
     logo: "/willow.svg",
@@ -51,7 +60,19 @@ export const CRICKET_CHANNELS = [
     desc: "Willow Sports — Live cricket in English",
   },
   {
+    id: "fancode-live", name: "FanCode", sub: "Live",
+    group: "FanCode",
+    color: "#ec1c24", glow: "rgba(236,28,36,0.3)", border: "rgba(236,28,36,0.25)",
+    bg: "rgba(236,28,36,0.06)", tag: "LIVE", useIcon: false,
+    logo: "/fancode.svg",
+    // Permanent FanCode Live channel — chid=fc_live always resolves to whatever
+    // FanCode match is currently live (fresh signed token on every open).
+    url: "https://m3u8-player-ashen.vercel.app/?sid=7cswis4w7cn1&chid=FRttXFtDHQ&t=g-emhBJmCgNJIxIWWVESYhcHDAFTLkEQYlQTAxobEhYSZ11YHQQ&lg=GwxGQEEPV0UeGARWVFFcVhcODEEQF18fQV4RBgUaA1VHQF5aGQ4aQBAVQR1fUBwDCEAgNB9GQRgoKyJBAxZV",
+    desc: "FanCode — always plays the current live match",
+  },
+  {
     id: "sony-ten-1", name: "Sony Ten 1", sub: "English",
+    group: "Sony",
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "ENGLISH", useIcon: false,
     logo: "/sony-ten-1.png",
@@ -63,6 +84,7 @@ export const CRICKET_CHANNELS = [
 export const FOOTBALL_CHANNELS = [
   {
     id: "sports18-english", name: "Sports18", sub: "English",
+    group: "Sports18",
     color: "#1ed596", glow: "rgba(30,213,150,0.3)", border: "rgba(30,213,150,0.25)",
     bg: "rgba(30,213,150,0.06)", tag: "ENG", useIcon: true,
     logo: "",
@@ -71,6 +93,7 @@ export const FOOTBALL_CHANNELS = [
   },
   {
     id: "sports18-2", name: "Sports18 2", sub: "English",
+    group: "Sports18",
     color: "#1ed596", glow: "rgba(30,213,150,0.3)", border: "rgba(30,213,150,0.25)",
     bg: "rgba(30,213,150,0.06)", tag: "ENG", useIcon: true,
     logo: "",
@@ -79,6 +102,7 @@ export const FOOTBALL_CHANNELS = [
   },
   {
     id: "koora-city", name: "Koora City", sub: "English",
+    group: "Koora City",
     color: "#a78bfa", glow: "rgba(167,139,250,0.3)", border: "rgba(167,139,250,0.25)",
     bg: "rgba(167,139,250,0.06)", tag: "ENG", useIcon: true,
     logo: "",
@@ -87,6 +111,7 @@ export const FOOTBALL_CHANNELS = [
   },
   {
     id: "sports18-usa", name: "Sports18", sub: "USA Feed",
+    group: "Sports18",
     color: "#a78bfa", glow: "rgba(167,139,250,0.3)", border: "rgba(167,139,250,0.25)",
     bg: "rgba(167,139,250,0.06)", tag: "USA", useIcon: true,
     logo: "",

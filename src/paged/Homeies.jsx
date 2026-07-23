@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle } from "lucide-react";
+import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays } from "lucide-react";
 import HeroSection from "./HeroSection";
 import { absUrl, jsonLd } from "../utils/seo";
 
@@ -194,6 +194,23 @@ function buildSide({ code, name, logo, score, overs }) {
   };
 }
 
+// Resolve a short team code from an (optional) code and the team NAME.
+// NEVER defaults to "IND" — for away tours (e.g. India in Zimbabwe) the home
+// team is Zimbabwe, so a hardcoded IND fallback mismatches the logo.
+const TEAM_NAME_TO_CODE = {
+  "india":"IND","zimbabwe":"ZIM","australia":"AUS","england":"ENG","pakistan":"PAK",
+  "sri lanka":"SL","south africa":"SA","new zealand":"NZ","west indies":"WI",
+  "bangladesh":"BAN","afghanistan":"AFG","ireland":"IRE","netherlands":"NED",
+  "nepal":"NEP","scotland":"SCO","namibia":"NAM","oman":"OMA","united states":"USA",
+  "united states of america":"USA","uae":"UAE","canada":"CAN","malaysia":"MAS",
+};
+function teamCode(code, name) {
+  if (code) return code;
+  const n = (name || "").trim();
+  if (!n) return "—";
+  return TEAM_NAME_TO_CODE[n.toLowerCase()] || n.slice(0, 3).toUpperCase();
+}
+
 // ─── CACHE ────────────────────────────────────────────────────────────────────
 const _cache = {};
 function getCached(k) { const e=_cache[k]; return (e&&Date.now()-e.ts<600000)?e.data:null; }
@@ -234,11 +251,12 @@ function TopNav() {
             const isActive = to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(to.split("?")[0]);
             return (
               <Link key={to} to={to}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                aria-current={isActive ? "page" : undefined}
+                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all duration-200 hover:text-white hover:bg-white/[0.06]"
                 style={{
-                  background: isActive ? "rgba(139,92,246,0.15)" : "transparent",
-                  color: isActive ? "#c4b5fd" : "#6b7280",
-                  boxShadow: isActive ? "0 0 12px rgba(139,92,246,0.15)" : "none",
+                  background: isActive ? "rgba(139,92,246,0.16)" : "transparent",
+                  color: isActive ? "#c4b5fd" : "#8b8fa3",
+                  boxShadow: isActive ? "0 0 14px rgba(139,92,246,0.2)" : "none",
                 }}>
                 {icon}
                 <span className="hidden sm:inline">{label}</span>
@@ -385,11 +403,13 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
     )}
 
   <Link to={link || "/live-cricket-tv"}
-    className="flex rounded-2xl overflow-hidden border transition-all duration-200 active:scale-[0.98] hover:border-white/20"
+    className="group/card flex rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 hover:border-white/25"
     style={{
       borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
-      boxShadow: isLive ? `0 0 18px ${accent}22` : "none",
-    }}>
+      boxShadow: isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)",
+    }}
+    onMouseEnter={e=>{ e.currentTarget.style.boxShadow = isLive ? `0 8px 28px ${accent}33` : "0 8px 24px rgba(0,0,0,0.45)"; }}
+    onMouseLeave={e=>{ e.currentTarget.style.boxShadow = isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)"; }}>
     {/* side accent bar */}
     <div className="w-1.5 shrink-0" style={{ background: accent }} />
 
@@ -631,13 +651,13 @@ useEffect(() => {
     // India live
     ...indiaLive.map(m => {
       const home = buildSide({
-        code: m.HomeTeamCode || m.FirstBattingTeamCode || "IND",
+        code: teamCode(m.HomeTeamCode || m.FirstBattingTeamCode, m.HomeTeamName),
         name: m.HomeTeamName,
         logo: m.MatchHomeTeamLogo,
         score: m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]}` : null,
       });
       const away = buildSide({
-        code: m.AwayTeamCode || m.SecondBattingTeamCode || "",
+        code: teamCode(m.AwayTeamCode || m.SecondBattingTeamCode, m.AwayTeamName),
         name: m.AwayTeamName,
         logo: m.MatchAwayTeamLogo,
         score: m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]}` : null,
@@ -652,8 +672,8 @@ useEffect(() => {
 link: `/match-center/${encodeMatchHash({
   sport: "cricket",
   type: "bcci",
-  homeCode: m.HomeTeamCode || m.FirstBattingTeamCode || "IND",
-  awayCode: m.AwayTeamCode || m.SecondBattingTeamCode || "",
+  homeCode: teamCode(m.HomeTeamCode || m.FirstBattingTeamCode, m.HomeTeamName),
+  awayCode: teamCode(m.AwayTeamCode || m.SecondBattingTeamCode, m.AwayTeamName),
   leagueLabel: m.CompetitionName || "India Cricket",
   matchData: {
     MatchID: m.MatchID,
@@ -723,8 +743,8 @@ link: `/match-center/${encodeMatchHash({
   const scheduledCards = [
     // India upcoming (next 2)
     ...indiaUpcoming.slice(0, 2).map(m => {
-      const home = buildSide({ code: m.HomeTeamCode || "IND", name: m.HomeTeamName, logo: m.MatchHomeTeamLogo });
-      const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo });
+      const home = buildSide({ code: teamCode(m.HomeTeamCode, m.HomeTeamName), name: m.HomeTeamName, logo: m.MatchHomeTeamLogo });
+      const away = buildSide({ code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo });
       return {
         id: `ind-up-${m.MatchID}`,
         sport: "cricket",
@@ -736,8 +756,8 @@ link: `/match-center/${encodeMatchHash({
         link: `/match-center/${encodeMatchHash({
   sport: "cricket",
   type: "bcci",
-  homeCode: m.HomeTeamCode || "IND",
-  awayCode: m.AwayTeamCode || "",
+  homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
+  awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
   leagueLabel: m.CompetitionName || "India Cricket",
   matchData: {
     MatchID: m.MatchID,
@@ -811,8 +831,8 @@ link: `/match-center/${encodeMatchHash({
       const homeIsFirst = String(m.FirstBattingTeamID) === String(m.HomeTeamID);
       const inn1 = m["1FallScore"] ? `${m["1FallScore"]}/${m["1FallWickets"]} (${m["1FallOvers"]} ov)` : null;
       const inn2 = m["2FallScore"] ? `${m["2FallScore"]}/${m["2FallWickets"]} (${m["2FallOvers"]} ov)` : null;
-      const home = buildSide({ code: m.HomeTeamCode || "IND", name: m.HomeTeamName, logo: m.MatchHomeTeamLogo, score: homeIsFirst ? inn1 : inn2 });
-      const away = buildSide({ code: m.AwayTeamCode, name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
+      const home = buildSide({ code: teamCode(m.HomeTeamCode, m.HomeTeamName), name: m.HomeTeamName, logo: m.MatchHomeTeamLogo, score: homeIsFirst ? inn1 : inn2 });
+      const away = buildSide({ code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
       return {
         id: `ind-fin-${m.MatchID}`, sport: "cricket", status: "finished",
         home, away,
@@ -824,8 +844,8 @@ link: `/match-center/${encodeMatchHash({
 link: `/match-center/${encodeMatchHash({
   sport: "cricket",
   type: "bcci",
-  homeCode: m.HomeTeamCode || "IND",
-  awayCode: m.AwayTeamCode || "",
+  homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
+  awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
   leagueLabel: m.CompetitionName || "India Cricket",
   matchData: {
     MatchID: m.MatchID,
@@ -928,7 +948,7 @@ link: `/match-center/${encodeMatchHash({
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span style={{fontSize:13}}>📅</span>
+              <CalendarDays size={13} className="text-violet-400"/>
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
                 {showLive ? "Next Up" : "Today & Upcoming"}
               </span>
@@ -1198,8 +1218,8 @@ const finished = fifaAll
 // ─── INDIA MATCH HIGHLIGHTS ROW ───────────────────────────────────────────────
 function IndiaHighlightCard({ match, videos, onPlay, loadingId }) {
   const INDIA_ACCENT = "#f59e0b"; // amber
-  const homeCode = match.HomeTeamCode || "IND";
-  const awayCode = match.AwayTeamCode || "";
+  const homeCode = teamCode(match.HomeTeamCode, match.HomeTeamName);
+  const awayCode = teamCode(match.AwayTeamCode, match.AwayTeamName);
   const homeLogo = match.MatchHomeTeamLogo || null;
   const awayLogo = match.MatchAwayTeamLogo || null;
   const [hImgFail, setHImgFail] = useState(false);
@@ -1358,7 +1378,7 @@ function IndiaHighlightsRow() {
       ? `https://www.bcci.tv/videos/${vid.urlSegment}`
       : null;
     if (!watchUrl) return;
-    const title = vid.title || `${match.HomeTeamCode || "IND"} vs ${match.AwayTeamCode || ""} Highlights`;
+    const title = vid.title || `${teamCode(match.HomeTeamCode, match.HomeTeamName)} vs ${teamCode(match.AwayTeamCode, match.AwayTeamName)} Highlights`;
     setLoadingId(match.MatchID);
     try {
       const res = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(watchUrl)}`);
