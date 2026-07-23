@@ -1722,6 +1722,85 @@ function TournamentBadge({ emoji, name, subtitle, color, bg, border, to }) {
 }
 
 // ─── HOMEIES PAGE ─────────────────────────────────────────────────────────────
+// ─── ICC HIGHLIGHTS ROW (backend mints Akamai token + proxies; plays via Shaka) ──
+function IccHighlightsRow() {
+  const [videos, setVideos]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal]     = useState(null);   // { src, title }
+  const [loadingId, setLoadingId] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/icc/highlights`)
+      .then(r => r.json())
+      .then(j => { if (alive && j.success) setVideos(j.videos || []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const play = async (v) => {
+    if (loadingId) return;
+    setLoadingId(v.uuid);
+    try {
+      const j = await fetch(`${API_BASE}/api/icc/play?videoId=${encodeURIComponent(v.uuid)}`).then(r => r.json());
+      if (j.success && j.manifestUrl) {
+        const params = new URLSearchParams({ url: j.manifestUrl, title: v.title || "ICC Highlights" });
+        setModal({ src: `/player.html?${params}`, title: v.title || "ICC Highlights" });
+      }
+    } catch {}
+    setLoadingId(null);
+  };
+
+  if (!loading && videos.length === 0) return null;
+  const ACCENT = "#22d3ee"; // cyan
+
+  return (
+    <div className="mt-8">
+      {modal && (
+        <div style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.96)", display:"flex", flexDirection:"column" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:"rgba(0,0,0,0.7)", flexShrink:0 }}>
+            <span style={{ color:ACCENT, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.15em" }}>▶ {modal.title}</span>
+            <button onClick={() => setModal(null)} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"#fff", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16 }}>×</button>
+          </div>
+          <iframe src={modal.src} style={{ flex:1, width:"100%", border:"none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Trophy size={13} style={{ color: ACCENT }}/>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">ICC Highlights</span>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
+            style={{ background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.25)", color:ACCENT }}>World Cup</span>
+        </div>
+      </div>
+
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth:"thin" }}>
+        {(loading ? Array.from({length:5}) : videos).map((v, i) => v ? (
+          <button key={v.uuid} onClick={() => play(v)}
+            className="group/icc shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25"
+            style={{ width:240, background:"rgba(255,255,255,0.02)" }}>
+            <div className="relative" style={{ width:240, height:135, background:"#0a0a15" }}>
+              <img src={v.image} alt="" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.opacity=0; }}/>
+              <div className="absolute inset-0 flex items-center justify-center" style={{ background:"rgba(0,0,0,0.25)" }}>
+                {loadingId === v.uuid
+                  ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
+                  : <PlayCircle size={34} className="text-white/90 group-hover/icc:scale-110 transition-transform"/>}
+              </div>
+            </div>
+            <div className="p-2.5">
+              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{v.title}</p>
+            </div>
+          </button>
+        ) : (
+          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width:240, height:135+52 }}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Homeies({ searchTerm }) {
   return (
     <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
@@ -1770,6 +1849,9 @@ export default function Homeies({ searchTerm }) {
           <div className="mt-6">
             <LiveNowStrip/>
           </div>
+
+          {/* ── ICC HIGHLIGHTS (World Cup match highlights) ── */}
+          <IccHighlightsRow/>
 
           {/* ── INDIA MATCH HIGHLIGHTS ── */}
           <IndiaHighlightsRow/>
