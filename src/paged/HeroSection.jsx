@@ -1,6 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
+import { encodeMatchHash } from "../utils/matchHash";
+
+// Build a specific match-center link so the hero "Watch Live" goes to the match,
+// not the generic live-cricket page.
+const mcLink = (payload) => `/match-center/${encodeMatchHash(payload)}`;
+function bcciLink(m, home, away) {
+  return mcLink({
+    sport: "cricket", type: "bcci",
+    homeCode: home?.code || m.HomeTeamCode, awayCode: away?.code || m.AwayTeamCode,
+    leagueLabel: m.CompetitionName || "India Cricket",
+    matchData: {
+      MatchID: m.MatchID, CompetitionID: m.CompetitionID, MatchOrder: m.MatchOrder,
+      CompetitionName: m.CompetitionName, HomeTeamName: m.HomeTeamName, AwayTeamName: m.AwayTeamName,
+      MatchHomeTeamLogo: m.MatchHomeTeamLogo, MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+      HomeTeamCode: m.HomeTeamCode, AwayTeamCode: m.AwayTeamCode, MatchType: m.MatchType,
+      GroundName: m.GroundName, SmMatchID: m.SmMatchID,
+    },
+  });
+}
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const FIFA_API_BASE    = "https://api.fifa.com/api/v3";
@@ -451,7 +470,7 @@ function CricketSlide({slide}){
             {streamLoading?"Loading…":"Watch Highlights"}
           </button>
         ):(
-          <Link to="/live-cricket-tv"
+          <Link to={slide.link || "/live-cricket-tv"}
             className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
             style={{
               fontSize:"clamp(8px,2vw,13px)",
@@ -631,7 +650,7 @@ function FootballSlide({slide}){
             {streamLoading?"Loading…":"Watch Highlights"}
           </button>
         ):(
-          <Link to="/live-cricket-tv"
+          <Link to={slide.link || "/live-cricket-tv"}
             className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
             style={{
               fontSize:"clamp(8px,2vw,13px)",
@@ -701,7 +720,7 @@ export default function HeroSection(){
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v8";
+    const ck="hero_slides_v9";
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
@@ -737,6 +756,7 @@ export default function HeroSection(){
           const fcLive = fcMatchForMens(fcList, m.HomeTeamName, m.AwayTeamName);
           liveC.push({
             id:`bcci-live-${m.MatchID}`, sport:"cricket", status:"live",
+            link: bcciLink(m, home, away),
             home, away,
             tournament: m.CompetitionName || "India Cricket",
             matchFmt: bcciFmt(m.MatchType),
@@ -764,6 +784,7 @@ export default function HeroSection(){
           const away = buildSide({ code: teamCode(m.AwayTeamCode, m.AwayTeamName), name: m.AwayTeamName, logo: m.MatchAwayTeamLogo, score: homeIsFirst ? inn2 : inn1 });
           finC.push({
             id:`bcci-fin-${m.MatchID}`, sport:"cricket", status:"finished",
+            link: bcciLink(m, home, away),
             home, away,
             tournament: m.CompetitionName || "India Cricket",
             matchFmt: bcciFmt(m.MatchType),
@@ -785,6 +806,7 @@ export default function HeroSection(){
           const fcNowLive = !!(fcUp && fcUp.status === "LIVE");
           const upSlide = {
             id:`bcci-up-${m.MatchID}`, sport:"cricket", status: fcNowLive ? "live" : "upcoming",
+            link: bcciLink(m, home, away),
             home, away,
             tournament: m.CompetitionName || "India Cricket",
             matchFmt: bcciFmt(m.MatchType),
@@ -841,6 +863,7 @@ export default function HeroSection(){
 
           liveC.push({
             id:`wt20-live-${m.match_id}`, sport:"cricket", status:"live",
+            link: mcLink({ sport:"cricket", type:"wt20", matchId:m.match_id, homeCode:m.teama_short||"", awayCode:m.teamb_short||"", leagueLabel:"ICC WT20 WC 2026" }),
             home, away,
             tournament:"ICC WT20 WC 2026", matchFmt:"T20I",
             venue: m.venue || "England",
@@ -858,6 +881,7 @@ export default function HeroSection(){
           const away = buildSide({ code: m.teamb_short, name: m.teamb_display_name });
           finC.push({
             id:`wt20-fin-${m.match_id}`, sport:"cricket", status:"finished",
+            link: mcLink({ sport:"cricket", type:"wt20", matchId:m.match_id, homeCode:m.teama_short||"", awayCode:m.teamb_short||"", leagueLabel:"ICC WT20 WC 2026" }),
             home, away,
             tournament:"ICC WT20 WC 2026", matchFmt:"T20I",
             venue: m.venue || "England",
@@ -870,6 +894,7 @@ export default function HeroSection(){
           const away = buildSide({ code: m.teamb_short, name: m.teamb_display_name });
           upC.push({
             id:`wt20-up-${m.match_id}`, sport:"cricket", status:"upcoming",
+            link: mcLink({ sport:"cricket", type:"wt20", matchId:m.match_id, homeCode:m.teama_short||"", awayCode:m.teamb_short||"", leagueLabel:"ICC WT20 WC 2026" }),
             home, away,
             tournament:"ICC WT20 WC 2026", matchFmt:"T20I",
             venue: m.venue || "England",
@@ -906,6 +931,7 @@ export default function HeroSection(){
           });
           return {
             id:`fifa-${m.IdMatch}`, sport:"football", status,
+            link: mcLink({ sport:"football", type:"fifa", matchId:m.IdMatch, homeCode:fifaAbbr(m.Home)||"—", awayCode:fifaAbbr(m.Away)||"—", leagueLabel:"FIFA WC 2026" }),
             home, away,
             tournament:"FIFA World Cup 2026™",
             group: fifaGroupName(m),
