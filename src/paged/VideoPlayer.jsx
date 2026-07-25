@@ -42,7 +42,8 @@ const VideoPlayer = ({
   logoUrl = "",
   quality = "",
   imdbRating = "0.0", // Prop passed from parent movieMeta
-  year = ""           // Prop passed from parent movieMeta
+  year = "",          // Prop passed from parent movieMeta
+  onProgress          // optional (currentTime, duration) callback for resume/continue-watching
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -67,11 +68,16 @@ const VideoPlayer = ({
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [currentSubtitleId, setCurrentSubtitleId] = useState(-1);
   const [externalSubUrl, setExternalSubUrl] = useState(null);
-  const [showSettings, setShowSettings] = useState(null); 
+  const [showSettings, setShowSettings] = useState(null);
+  const [selectedSeason, setSelectedSeason] = useState(null); // season tab in the episodes panel
 
   // Normalization
   const currentIndex = Number(currentEpisodeIndex);
   const hasNextEpisode = Array.isArray(episodes) && currentIndex < episodes.length - 1;
+  const epSeason = (ep, i) => ep.season_number || ep.season || 1;
+  const seasonNumbers = [...new Set((episodes || []).map((e) => e.season_number || e.season || 1))].sort((a, b) => a - b);
+  const currentSeason = episodes[currentIndex]?.season_number || episodes[currentIndex]?.season || 1;
+  const activeSeason = selectedSeason != null ? selectedSeason : currentSeason;
   const nextEpData = hasNextEpisode ? episodes[currentIndex + 1] : null;
 
   // New Feature: Auto-Play Logic
@@ -186,7 +192,11 @@ const VideoPlayer = ({
       }}
     >
       <video ref={videoRef} className="w-full h-full object-contain cursor-pointer bg-black" onClick={togglePlay} playsInline autoPlay
-        onTimeUpdate={() => setCurrentTime(videoRef.current.currentTime)}
+        onTimeUpdate={() => {
+          const v = videoRef.current; if (!v) return;
+          setCurrentTime(v.currentTime);
+          if (onProgress) onProgress(v.currentTime, v.duration);
+        }}
         onLoadedMetadata={() => setDuration(videoRef.current.duration)}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => { setIsBuffering(false); setIsPlaying(true); }}
@@ -212,113 +222,107 @@ const VideoPlayer = ({
         </div>
       )}
 
-      {/* --- REFINED DYNAMIC EPISODES OVERLAY (SMOOTH SCROLL) --- */}
+      {/* --- EPISODES PANEL — right-docked, season-separated (not full-screen) --- */}
       {showSettings === 'episodes' && (
-        <div className="absolute inset-0 bg-black/95 backdrop-blur-3xl z-[150] flex flex-col p-6 sm:p-12 animate-in fade-in duration-500" onClick={() => setShowSettings(null)}>
-          <div className="max-w-6xl mx-auto w-full h-full flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-10 shrink-0">
-              <div className="flex flex-col gap-1 text-left">
-                 <h2 className="text-3xl sm:text-5xl font-black uppercase italic tracking-tighter text-white">Episodes</h2>
-                 <div className="flex items-center gap-3">
-                    <span className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em]">Deployment Queue</span>
-                    <span className="w-1 h-1 bg-gray-600 rounded-full"/>
-                    <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">{episodes.length} SEGMENTS</span>
-                 </div>
-              </div>
-              <button onClick={() => setShowSettings(null)} className="p-4 bg-white/5 border border-white/10 rounded-full hover:bg-red-600 transition-all shadow-xl"><CloseIcon size={28}/></button>
+        <div className="absolute top-0 right-0 bottom-0 z-[150] w-full sm:w-[400px] bg-black/92 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-[-16px_0_48px_rgba(0,0,0,0.6)] animate-in slide-in-from-right duration-300">
+          <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
+            <div className="min-w-0">
+              <h2 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">Episodes</h2>
+              <span className="block text-gray-400 text-[10px] font-bold uppercase tracking-widest truncate mt-1">{title}</span>
             </div>
+            <button onClick={() => setShowSettings(null)} className="p-2 bg-white/5 border border-white/10 rounded-full hover:bg-red-600 transition-all shrink-0"><CloseIcon size={20}/></button>
+          </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-4">
-              {episodes.map((ep, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => { onEpisodeClick(ep, i); setShowSettings(null); }}
-                  className={`w-full group relative flex flex-col md:flex-row items-center gap-8 p-6 rounded-[2.5rem] transition-all border ${currentIndex === i ? 'bg-blue-600/20 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)]' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+          {/* Season tabs (horizontal) */}
+          {seasonNumbers.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto p-3 border-b border-white/10 shrink-0 scrollbar-hide">
+              {seasonNumbers.map((sn) => (
+                <button
+                  key={sn}
+                  onClick={() => setSelectedSeason(sn)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all ${activeSeason === sn ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
                 >
-                  <div className="relative shrink-0 w-full md:w-72 aspect-video rounded-[1.5rem] overflow-hidden bg-gray-900 border border-white/10 shadow-2xl">
-                    <img src={ep.cover_poster || ep.poster || '/api/placeholder/400/225'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60" alt=""/>
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Play size={40} fill="white"/>
-                    </div>
-                    {currentIndex === i && (
-                        <div className="absolute inset-0 bg-blue-600/40 flex flex-col items-center justify-center gap-2">
-                             <Activity className="animate-pulse" size={32}/>
-                             <span className="text-[10px] font-black uppercase tracking-widest">Active Link</span>
-                        </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 flex flex-col items-start text-left gap-3 overflow-hidden">
-                    <div className="flex items-center gap-4">
-                        <span className="text-blue-500 text-xs font-black uppercase tracking-[0.2em]">S{ep.season_number || ep.season || 1} : E{ep.episodeNumberInSeason || ep.episode || (i+1)}</span>
-                        <div className="flex items-center gap-1.5 text-gray-500 text-[10px] font-bold">
-                            <Clock size={12}/> {ep.duration ? `${ep.duration}m` : 'Syncing'}
-                        </div>
-                    </div>
-                    <h4 className="text-xl md:text-2xl font-black uppercase italic tracking-tight group-hover:text-blue-400 transition-colors line-clamp-1">{ep.title || `Segment ${i + 1}`}</h4>
-                    <p className="text-gray-400 text-xs md:text-sm font-medium leading-relaxed line-clamp-2 max-w-2xl">
-                        {ep.description || "Synchronizing narrative data. Ready for visual injection into the Quantum node."}
-                    </p>
-                  </div>
+                  Season {sn}
                 </button>
               ))}
             </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+            {episodes
+              .map((ep, i) => ({ ep, i }))
+              .filter(({ ep, i }) => epSeason(ep, i) === activeSeason)
+              .map(({ ep, i }) => (
+                <button
+                  key={i}
+                  onClick={() => { onEpisodeClick(ep, i); setShowSettings(null); }}
+                  className={`w-full group flex gap-3 p-2 rounded-xl text-left transition-all border ${currentIndex === i ? 'bg-blue-600/20 border-blue-500' : 'border-transparent hover:bg-white/5'}`}
+                >
+                  <div className="relative w-28 shrink-0 aspect-video rounded-lg overflow-hidden bg-gray-900 border border-white/10">
+                    <img src={ep.cover_poster || ep.poster || '/api/placeholder/400/225'} className="w-full h-full object-cover" alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    <span className="absolute left-1 top-1 text-[9px] font-black bg-black/70 px-1.5 py-0.5 rounded">E{ep.episodeNumberInSeason || ep.episode || (i + 1)}</span>
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Play size={20} fill="white"/></div>
+                    {currentIndex === i && <div className="absolute inset-0 bg-blue-600/40 flex items-center justify-center"><Activity className="animate-pulse" size={18}/></div>}
+                  </div>
+                  <div className="flex-1 min-w-0 py-0.5">
+                    <h4 className={`text-sm font-bold line-clamp-1 ${currentIndex === i ? 'text-blue-400' : 'text-white'}`}>{ep.title || `Episode ${i + 1}`}</h4>
+                    <p className="text-gray-500 text-[11px] leading-snug line-clamp-2 mt-0.5">{ep.description || ''}</p>
+                  </div>
+                </button>
+              ))}
           </div>
         </div>
       )}
 
-      {/* --- STANDARD SETTINGS (INTACT) --- */}
+      {/* --- SETTINGS — compact panel docked bottom-right (no full-screen overlay) --- */}
       {showSettings && showSettings !== 'episodes' && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setShowSettings(null)}>
-          <div className="w-full max-w-sm bg-gray-950 border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/5 pb-4 shrink-0">
-              <h3 className="text-lg font-black uppercase tracking-widest text-blue-500">{showSettings}</h3>
-              <button onClick={() => setShowSettings(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><CloseIcon size={20}/></button>
+        <>
+          <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
+          <div className="absolute bottom-24 right-6 z-[100] w-64 max-w-[80vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in slide-in-from-bottom-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality" }[showSettings] || showSettings}</h3>
+              <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
             </div>
-            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div className="max-h-72 overflow-y-auto custom-scrollbar py-1">
               {showSettings === 'subs' && (
                 <>
-                  <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center justify-between p-4 rounded-2xl ${currentSubtitleId === -1 ? 'bg-blue-600' : 'hover:bg-white/5'}`}>
-                    <span className="font-black uppercase text-xs tracking-widest">Off</span>
-                    {currentSubtitleId === -1 && <Check size={16}/>}
+                  <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                    <span className="text-sm font-medium">Off</span>{currentSubtitleId === -1 && <Check size={16} className="text-blue-400"/>}
                   </button>
                   {subtitleTracks.map((t, i) => (
-                    <button key={i} onClick={() => changeSubtitles(i)} className={`w-full flex items-center justify-between p-4 rounded-2xl ${currentSubtitleId === i ? 'bg-blue-600' : 'hover:bg-white/5'}`}>
-                      <span className="font-black uppercase text-xs tracking-widest">{getLanguageName(t)}</span>
-                      {currentSubtitleId === i && <Check size={16}/>}
+                    <button key={i} onClick={() => changeSubtitles(i)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                      <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentSubtitleId === i && <Check size={16} className="text-blue-400"/>}
                     </button>
                   ))}
-                  <label className="w-full flex items-center justify-center gap-3 p-5 rounded-2xl border-2 border-dashed border-white/10 hover:border-blue-500/50 cursor-pointer mt-4 group transition-all">
-                    <UploadCloud size={20} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                    <span className="font-black uppercase text-[10px]">Import .VTT</span>
+                  <label className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 cursor-pointer text-white/70 hover:text-white transition-all">
+                    <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.vtt)</span>
                     <input type="file" accept=".vtt" className="hidden" onChange={handleSubtitleUpload} />
                   </label>
                 </>
               )}
-              {showSettings === 'quality' && levels.map((l, i) => (
-                <button key={i} onClick={() => { hlsRef.current.currentLevel = i; setShowSettings(null); }} className={`w-full flex items-center justify-between p-4 rounded-2xl ${currentLevel === i ? 'bg-blue-600' : 'hover:bg-white/5'}`}>
-                  <span className="font-black uppercase text-xs tracking-widest">{l.height}p HD</span>
-                  {currentLevel === i && <Check size={16}/>}
+              {showSettings === 'quality' && (levels.length ? levels.map((l, i) => (
+                <button key={i} onClick={() => { hlsRef.current.currentLevel = i; setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentLevel === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium">{l.height}p</span>{currentLevel === i && <Check size={16} className="text-blue-400"/>}
                 </button>
-              ))}
-              {showSettings === 'audio' && audioTracks.map((t, i) => (
-                <button key={i} onClick={() => { hlsRef.current.audioTrack = i; setShowSettings(null); }} className={`w-full flex items-center justify-between p-4 rounded-2xl ${currentAudioTrackId === i ? 'bg-blue-600' : 'hover:bg-white/5'}`}>
-                  <span className="font-black uppercase text-xs tracking-widest">{getLanguageName(t)}</span>
-                  {currentAudioTrackId === i && <Check size={16}/>}
+              )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
+              {showSettings === 'audio' && (audioTracks.length ? audioTracks.map((t, i) => (
+                <button key={i} onClick={() => { hlsRef.current.audioTrack = i; setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
-              ))}
+              )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* --- HUD: TOP --- */}
       <div className={`absolute top-0 inset-x-0 p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <div className="flex items-center gap-5">
-          <button onClick={onBackClick} className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-blue-600 transition-all active:scale-90 shadow-2xl"><ChevronLeft size={28} /></button>
-          <div className="flex flex-col text-left">
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-1">Neural Core Node</span>
-            <h1 className="text-xl md:text-3xl font-black uppercase italic truncate max-w-sm md:max-w-xl drop-shadow-2xl">{title}</h1>
+          <button onClick={onBackClick} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
+          <div className="flex flex-col text-left min-w-0">
+            {logoUrl
+              ? <img src={logoUrl} alt={title} className="h-8 md:h-11 max-w-[220px] md:max-w-md object-contain drop-shadow-2xl" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              : <h1 className="text-lg md:text-2xl font-bold truncate max-w-xs md:max-w-xl drop-shadow-2xl">{title}</h1>}
           </div>
         </div>
       </div>
@@ -333,8 +337,8 @@ const VideoPlayer = ({
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
       <div className={`absolute bottom-0 inset-x-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <div className="relative group/progress mb-8">
-            <div className="flex justify-end text-[11px] font-black mb-3 px-1 text-blue-400 uppercase tracking-widest">
-                {/* RUNNING NUMBER HIDDEN FOR PREMIUM LOOK */}
+            <div className="flex justify-between text-[11px] font-semibold mb-3 px-1 text-white/70">
+                <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
             </div>
             {/* THICK tactile progress bar */}
@@ -356,8 +360,8 @@ const VideoPlayer = ({
 
             {hasNextEpisode && (
                 <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} className="p-3 bg-blue-600/20 border border-blue-500/40 rounded-xl hover:bg-blue-600 transition-all text-white flex items-center gap-2 group shadow-xl">
-                    <SkipForward size={22} fill="currentColor" />
-                    <span className="hidden md:inline text-[9px] font-black uppercase tracking-widest">Inject Next Segment</span>
+                    <SkipForward size={20} fill="currentColor" />
+                    <span className="hidden md:inline text-xs font-semibold">Next Episode</span>
                 </button>
             )}
             
@@ -372,14 +376,14 @@ const VideoPlayer = ({
           <div className="flex items-center gap-5">
             {episodes.length > 0 && (
                 <button onClick={() => setShowSettings('episodes')} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-blue-600 transition-all text-white flex items-center gap-3 shadow-lg group">
-                    <ListVideo size={24} className="group-hover:scale-110 transition-transform" />
-                    <span className="hidden md:inline text-[9px] font-black uppercase tracking-[0.2em]">Deployment Queue</span>
+                    <ListVideo size={22} className="group-hover:scale-110 transition-transform" />
+                    <span className="hidden md:inline text-xs font-semibold">Episodes</span>
                 </button>
             )}
-            <button onClick={() => setShowSettings('subs')} className={`p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all ${currentSubtitleId !== -1 ? 'text-blue-500' : 'text-gray-400'}`}><Captions size={24} /></button>
-            <button onClick={() => setShowSettings('audio')} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-gray-400"><Music size={24} /></button>
-            <button onClick={() => setShowSettings('quality')} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-gray-400"><Layers size={24} /></button>
-            <button onClick={handleFullscreen} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-blue-600 transition-all shadow-xl"><Maximize size={24} /></button>
+            <button onClick={() => setShowSettings('subs')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions size={22} /></button>
+            <button onClick={() => setShowSettings('audio')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music size={22} /></button>
+            <button onClick={() => setShowSettings('quality')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers size={22} /></button>
+            <button onClick={handleFullscreen} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white"><Maximize size={22} /></button>
           </div>
         </div>
       </div>

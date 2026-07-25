@@ -124,7 +124,9 @@ const Navbar = () => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      const isMusicMode = location.pathname.startsWith("/music") || !!(player?.currentTrack);
+      // Only the music section searches songs. Everywhere else (home included)
+      // searches movies — a song playing in the mini-player must not hijack it.
+      const isMusicMode = location.pathname.startsWith("/music");
       if (isMusicMode) {
         navigate(`/music/search?find=${encodeURIComponent(searchTerm.trim())}`);
       } else {

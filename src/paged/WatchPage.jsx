@@ -115,6 +115,7 @@ const ServerBadge = ({ server, isActive, onClick, compact = false }) => {
 
 /* ===== Server color classes for grid ===== */
 const SRV_COLOR = {
+  mx:          "text-green-400  bg-green-500/10  border-green-500/30  hover:border-green-500/60",
   imdb_reader: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20 hover:border-yellow-500/50",
   embed:       "text-indigo-400 bg-indigo-500/10 border-indigo-500/20 hover:border-indigo-500/50",
   vidify:      "text-purple-400 bg-purple-500/10 border-purple-500/20 hover:border-purple-500/50",
@@ -128,8 +129,59 @@ const SRV_COLOR = {
 /* ===================================================================
    buildServers — derives available server list from meta
 =================================================================== */
+// MX Player content worker (search works from any IP). Used to detect whether a
+// TMDB/library title also exists on MX so it can be offered as the top server.
+const MX_WORKER = "https://silent-scene-b9bb.sanjusanjay0444.workers.dev";
+const mxNorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const MX_STOP = new Set(["the", "a", "an", "of", "and", "in", "on", "to", "is", "hindi", "tamil", "telugu", "kannada", "malayalam", "season", "part"]);
+const mxToks = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => w.length > 1 && !MX_STOP.has(w));
+// Distinctive-token overlap ratio (0..1) between two titles.
+const mxScore = (a, b) => {
+  const A = new Set(mxToks(a)), B = new Set(mxToks(b));
+  if (!A.size || !B.size) return 0;
+  let shared = 0; A.forEach((t) => { if (B.has(t)) shared++; });
+  return shared / Math.min(A.size, B.size);
+};
+// Find the MX match for a title → { webUrl, id, type }. Uses id (some items omit
+// webUrl) and fuzzy token matching (MX often retitles, e.g. "Story" vs "Mystery").
+const lookupMx = async (title, isTV) => {
+  if (!title) return null;
+  try {
+    // Strip punctuation from the query — MX's search returns only trailers/junk for
+    // titles with ":" etc. ("Bhay: The Gaurav Tiwari Story" → nothing; cleaned → the show).
+    const query = title.replace(/[^a-zA-Z0-9\s]+/g, " ").replace(/\s+/g, " ").trim();
+    const r = await fetch(`${MX_WORKER}/?search=${encodeURIComponent(query)}`);
+    const d = await r.json();
+    const items = (d?.sections || []).flatMap((s) => s.items || [])
+      .filter((it) => it && it.title && it.id && (it.type === "movie" || it.type === "tvshow")); // no trailers/shorts
+    const want = mxNorm(title);
+    const wantToks = new Set(mxToks(title));
+    // 1) Exact normalized title, preferring the right kind.
+    let pick = items.find((it) => mxNorm(it.title) === want && (it.type === "tvshow") === !!isTV)
+            || items.find((it) => mxNorm(it.title) === want);
+    // 2) Fuzzy across ALL kinds (kind is only a tie-breaker, so a momentarily-wrong
+    //    isTV can't hide the match). Needs ≥2 shared distinctive tokens + ≥0.6 ratio,
+    //    so "Story"/"Mystery" match but unrelated titles don't.
+    if (!pick) {
+      const scored = items
+        .map((it) => ({
+          it,
+          s: mxScore(title, it.title),
+          shared: mxToks(it.title).filter((t) => wantToks.has(t)).length,
+          kind: (it.type === "tvshow") === !!isTV ? 1 : 0,
+        }))
+        .filter((x) => x.s >= 0.6 && (x.shared >= 2 || (wantToks.size <= 1 && x.s === 1)))
+        .sort((a, b) => b.kind - a.kind || b.s - a.s || b.shared - a.shared);
+      if (scored[0]) pick = scored[0].it;
+    }
+    return pick ? { webUrl: pick.webUrl || null, id: pick.id, type: pick.type } : null;
+  } catch (e) { return null; }
+};
+
 const buildServers = (meta, eps = []) => {
   const srv = [];
+  // MX Player FIRST — when the title exists on MX, prefer its free real HD stream.
+  if (meta.mx_web_url || meta.mx_id) srv.push({ id:"mx", name:"MX Player", label:"Free HD", icon:<Zap size={14}/> });
   // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
   srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
   if (meta.html_code || eps.some(e => e.html))
@@ -169,6 +221,7 @@ const WatchHtmlPage = () => {
 
   const [showOverlay,       setShowOverlay      ] = useState(false);
   const [finalSource,       setFinalSource      ] = useState(null);
+  const [mxResolving,       setMxResolving      ] = useState(false);
   const [sourceType,        setSourceType       ] = useState(null);
   const [videoTitle,        setVideoTitle       ] = useState(routeSlug);
   const [currentOverlayEp,  setCurrentOverlayEp ] = useState(null);
@@ -248,12 +301,22 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 }, [backendUrl]);
   
 
+  /* ── MX Player: resolve the real stream on the backend, then play it in the
+     StreamX iframe. Series go to the dedicated /mx-watch page (all seasons). ── */
+  // All MX playback (movies + series) goes through /mx-watch → the native
+  // VideoPlayer (hls.js), for one consistent player everywhere.
+  const playMx = useCallback(() => {
+    if (!movieMeta?.mx_web_url && !movieMeta?.mx_id) return;
+    navigate("/mx-watch", { state: { webUrl: movieMeta.mx_web_url, mxId: movieMeta.mx_id, mxType: movieMeta.mx_type, title: movieMeta.title } });
+  }, [movieMeta, navigate]);
+
   /* ── handlePlayAction ── */
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
     if (!movieMeta) return;
 
     const serverId = forceServer || activeServer?.id || availableServers[0]?.id;
     const ep       = manualEp || currentOverlayEp;
+    if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
 
     const imdb = (movieMeta.imdb_id || "").trim();
     const tmdb = String(movieMeta.tmdb_id || movieMeta.id || "");
@@ -304,7 +367,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       setVideoTitle(label);
       setShowOverlay(true);
     }
-  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug]);
+  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx]);
 
   const handleServerSwitch = (server) => {
     setActiveServer(server);
@@ -364,6 +427,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
             download_links: stateMovie.download_links || [],
             video_url:    stateMovie.video_url || null,
             html_code:    stateMovie.html_code || null,
+            mx_web_url:   stateMovie.mxWebUrl || stateMovie.mx_web_url || null,
           };
 
           eps = Array.isArray(stateMovie.episodes) ? stateMovie.episodes : [];
@@ -536,6 +600,26 @@ if (!alive) return;
     return () => { alive = false; };
   }, [routeSlug, backendUrl, fetchFullTmdb, fetchTmdbEpisodes, location.state]);
 
+  /* ── MX "no miss" — once a title loads (any path), check MX and, if found,
+       add MX Player as the FIRST/preferred server. Runs regardless of how the
+       page was reached (search click, refresh, direct URL). ── */
+  useEffect(() => {
+    if (!movieMeta || movieMeta.mx_web_url || movieMeta.mx_id) return;
+    let alive = true;
+    (async () => {
+      const isTV = movieMeta.content_type === "tv" || episodes.length > 0;
+      const mx = await lookupMx(movieMeta.title, isTV);
+      if (!alive || !mx) return;
+      const meta2 = { ...movieMeta, mx_web_url: mx.webUrl, mx_id: mx.id, mx_type: mx.type };
+      setMovieMeta(meta2);
+      const srv2 = buildServers(meta2, episodes);
+      setAvailableServers(srv2);
+      // Make MX the default/active server so "Stream Now" opens MX directly.
+      setActiveServer(srv2[0]);
+    })();
+    return () => { alive = false; };
+  }, [movieMeta?.title, movieMeta?.content_type, movieMeta?.mx_web_url, movieMeta?.mx_id, episodes.length]);
+
   /* ── Loading ── */
   if (loading) return (
     <div className="min-h-screen bg-[#070709] flex flex-col items-center justify-center gap-6">
@@ -570,6 +654,12 @@ if (!alive) return;
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-[#070709] text-white pb-24 font-sans overflow-x-hidden">
+      {mxResolving && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+          <Loader2 className="animate-spin text-blue-500" size={40} />
+          <p className="text-sm text-white/70">Preparing MX Player stream…</p>
+        </div>
+      )}
 
       {/* ── OVERLAY PLAYER ── */}
       {showOverlay && (
@@ -996,6 +1086,7 @@ if (!alive) return;
                   {openDropdown === i && (
                     <div className="mt-2 p-3 rounded-2xl bg-[#0a0a0d] border border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-2">
                      {[
+                        ...(movieMeta.mx_web_url || movieMeta.mx_id ? [{ id:"mx", label:"MX Player", color:"green" }] : []),
                         { id:"imdb_reader", label:"Omega",      color:"yellow" },
                         { id:"embed",       label:"Multi Audio", color:"indigo" },
                         { id:"vidify",      label:"Vidify",     color:"purple" },
@@ -1009,6 +1100,7 @@ if (!alive) return;
                         return true;
                       }).map(srv => {
                         const cc = {
+                          green: "bg-green-500/10 text-green-400 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/15",
                           yellow:"bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:border-yellow-500/40 hover:bg-yellow-500/15",
                           indigo:"bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/40 hover:bg-indigo-500/15",
                           purple:"bg-purple-500/10 text-purple-400 border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/15",

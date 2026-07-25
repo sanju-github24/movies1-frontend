@@ -7,6 +7,10 @@ import { Loader2, Play, X, TrendingUp, Globe, ListVideo, Volume2, VolumeX, Chevr
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 
+// MX Player content worker (Cloudflare). Search metadata works from any IP; the
+// real stream is resolved in-app on the MX watch page (/mx-watch).
+const MX_WORKER = "https://silent-scene-b9bb.sanjusanjay0444.workers.dev";
+
 /* ====== Helpers ====== */
 const formatLanguageCount = (langs) => {
   const langArray = Array.isArray(langs) ? langs : [langs];
@@ -577,6 +581,51 @@ const SearchPage = () => {
         finalResults.push(tmdbItemToMovie(t));
       });
 
+      // ── MX Player (free) — movie + series results ──
+      try {
+        const mxRes = await axios.get(`${MX_WORKER}/`, { params: { search: query } });
+        const resultByTitle = new Map(finalResults.map((m) => [m.title?.toLowerCase().trim(), m]));
+        (mxRes.data?.sections || []).flatMap((s) => s.items || [])
+          .filter((it) => it && it.title && it.webUrl && (it.type === "movie" || it.type === "tvshow"))
+          .forEach((it) => {
+            const key = it.title.toLowerCase().trim();
+            const existing = resultByTitle.get(key);
+            if (existing) {
+              // Same title already found via library/TMDB — attach MX URL so it
+              // becomes an "MX Player" server on the watch page (nothing missing).
+              if (!existing.mxWebUrl) existing.mxWebUrl = it.webUrl;
+              return;
+            }
+            if (localTitles.has(key)) return;
+            localTitles.add(key);
+            const mxEntry = {
+              id: `mx-${it.id}`,
+              title: it.title,
+              slug: `mx-${it.id}`,
+              poster: it.poster,                                  // portrait poster
+              cover_poster: it.banner || it.thumb || it.poster,   // landscape backdrop
+              title_logo: it.logo || null,                        // MX title logo
+              preview: it.preview || null,                        // MX hover-preview clip
+              language: it.languages || null,
+              genres: it.genres || null,
+              description: it.description || null,
+              year: it.year,
+              source: "mxplayer",
+              mxWebUrl: it.webUrl || null,
+              mxId: it.id,
+              mxType: it.type,
+              meta: it.type === "tvshow"
+                ? (it.seasons ? `MX Player · ${it.seasons} Season${it.seasons > 1 ? "s" : ""}` : "MX Player · Series")
+                : "MX Player",
+              isTmdbOnly: true, // skip background enrichment
+            };
+            finalResults.push(mxEntry);
+            resultByTitle.set(key, mxEntry);
+          });
+      } catch (e) {
+        console.warn("MX Player search unavailable");
+      }
+
       setSearchResults(finalResults);
 
       // Background-enrich any remaining DB results that still lack trailer/language/logo
@@ -601,6 +650,12 @@ const SearchPage = () => {
 
   const handleNavigate = (movie) => {
     saveRecentlyWatched(movie);
+    // MX Player results open the in-SPA MX watch page (resolves + plays natively).
+    if (movie.source === "mxplayer" && (movie.mxWebUrl || movie.mxId)) {
+      setSelectedMovie(null);
+      navigate("/mx-watch", { state: { webUrl: movie.mxWebUrl, mxId: movie.mxId, mxType: movie.mxType, title: movie.title, image: movie.poster || movie.cover_poster } });
+      return;
+    }
     navigate(`/watch/${movie.slug}`, { state: { movie } });
     setSelectedMovie(null);
   };

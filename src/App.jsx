@@ -32,6 +32,7 @@ import UploadWatchHtml from './paged/UploadWatchHtml';
 import WatchPage from './paged/WatchPage';
 import AdminMembers from "./paged/AdminMembers";
 import WatchListPage from "./paged/WatchListPage";
+import MXWatch from "./paged/MXWatch";
 import AdminUp4streamFiles from './components/AdminUp4streamFiles';
 import VideoPlayerPage from './paged/VideoPlayerPage';
 import LiveCricket from './paged/LiveCricket';
@@ -224,6 +225,7 @@ const AppContent = () => {
         <Route path="/auth"                   element={session ? <Navigate to="/watch" /> : <AuthPage />} />
         <Route path="/update-password"        element={<UpdatePassword />} />
         <Route path="/watch"                  element={<WatchListPage />} />
+        <Route path="/mx-watch"               element={<MXWatch />} />
         <Route path="/watch/search"           element={<SearchPage />} />
         <Route path="/watch/:slug/*"          element={<WatchPage />} />
         <Route path="/player/:slug?"          element={<VideoPlayerPage />} />

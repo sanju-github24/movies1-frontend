@@ -277,6 +277,51 @@
 
     /* permanent badge */
     .perm-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);border-radius:12px;padding:3px 8px;font-size:.65rem;font-weight:700;color:#4ade80;margin-top:6px}
+
+    /* ══ PAUSE INFO OVERLAY (Netflix-style) ══ */
+    #pauseInfo{position:absolute;inset:0;z-index:6;display:none;flex-direction:column;justify-content:center;padding:0 8vw;pointer-events:none;
+      background:linear-gradient(90deg,rgba(0,0,0,.88) 0%,rgba(0,0,0,.6) 45%,rgba(0,0,0,.15) 100%)}
+    #pauseInfo.on{display:flex;animation:piFade .45s ease}
+    @keyframes piFade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    #piKicker{font-size:.78rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:10px}
+    #piTitle{font-size:clamp(1.8rem,4.6vw,3.6rem);font-weight:700;color:#fff;line-height:1.05;letter-spacing:-.02em;max-width:62%;text-shadow:0 2px 18px rgba(0,0,0,.6)}
+    #piMeta{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+    .pi-badge{font-size:.74rem;font-weight:700;color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:4px;padding:2px 8px;letter-spacing:.03em}
+    .pi-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.4)}
+    .pi-chip{font-size:.9rem;font-weight:600;color:rgba(255,255,255,.85)}
+    #piEpLabel{font-size:.9rem;font-weight:700;color:#1fb8ff}
+    #piDesc{margin-top:16px;font-size:1rem;line-height:1.55;color:rgba(255,255,255,.78);max-width:46%;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+    #piHint{margin-top:22px;font-size:.8rem;color:rgba(255,255,255,.4);display:flex;align-items:center;gap:8px}
+    #piHint svg{width:26px;height:26px;fill:rgba(255,255,255,.55)}
+    @media(max-width:640px){#pauseInfo{padding:0 6vw;background:linear-gradient(0deg,rgba(0,0,0,.9),rgba(0,0,0,.4))}#piTitle{max-width:100%}#piDesc{max-width:100%;-webkit-line-clamp:3;font-size:.9rem}}
+
+    /* ══ EPISODES PANEL ══ */
+    #epsBtn{display:none}
+    #epsPanel{position:absolute;top:0;right:0;bottom:0;width:min(420px,92vw);z-index:40;background:rgba(10,10,16,.97);backdrop-filter:blur(20px);border-left:1px solid rgba(255,255,255,.1);
+      transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column;box-shadow:-16px 0 48px rgba(0,0,0,.7)}
+    #epsPanel.open{transform:none}
+    .ep-head{display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .ep-head h3{font-size:1rem;font-weight:700;color:#fff}
+    .ep-head .ep-sub{font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px}
+    .ep-close{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:4px;border-radius:50%;display:flex;transition:all .15s}
+    .ep-close:hover{background:rgba(255,255,255,.1);color:#fff}
+    #epsList{flex:1;overflow-y:auto;padding:8px}
+    #epsList::-webkit-scrollbar{width:5px}
+    #epsList::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+    .ep-card{display:flex;gap:12px;padding:9px;border-radius:10px;cursor:pointer;transition:background .15s;align-items:center}
+    .ep-card:hover{background:rgba(255,255,255,.07)}
+    .ep-card.playing{background:rgba(31,184,255,.12);border:1px solid rgba(31,184,255,.3)}
+    .ep-thumb{position:relative;width:112px;height:63px;flex-shrink:0;border-radius:7px;overflow:hidden;background:#1a1a1a}
+    .ep-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .ep-thumb .ep-num{position:absolute;left:5px;top:4px;font-size:.66rem;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 6px;border-radius:4px}
+    .ep-thumb .ep-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s}
+    .ep-card:hover .ep-thumb .ep-play{opacity:1}
+    .ep-nowbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#1fb8ff;display:none}
+    .ep-card.playing .ep-nowbar{display:block}
+    .ep-info{min-width:0;flex:1}
+    .ep-title{font-size:.84rem;font-weight:600;color:#fff;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .ep-card.playing .ep-title{color:#1fb8ff}
+    .ep-desc{font-size:.72rem;color:rgba(255,255,255,.42);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   </style>
 </head>
 <body>
@@ -402,6 +447,38 @@
   <video id="video" preload="metadata" playsinline></video>
   <div id="clickZone"></div>
 
+  <!-- Netflix-style info shown while paused -->
+  <div id="pauseInfo">
+    <div id="piKicker">You're watching</div>
+    <div id="piTitle"></div>
+    <div id="piMeta">
+      <span class="pi-badge" id="piRating" style="display:none"></span>
+      <span id="piEpLabel" style="display:none"></span>
+      <span class="pi-chip" id="piYear" style="display:none"></span>
+      <span class="pi-dot" id="piDot1" style="display:none"></span>
+      <span class="pi-chip" id="piDur" style="display:none"></span>
+    </div>
+    <div id="piDesc" style="display:none"></div>
+    <div id="piHint">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      Tap to resume
+    </div>
+  </div>
+
+  <!-- Episodes side panel (shown when playing a show) -->
+  <div id="epsPanel">
+    <div class="ep-head">
+      <div>
+        <h3 id="epsShowTitle">Episodes</h3>
+        <div class="ep-sub" id="epsSub"></div>
+      </div>
+      <button class="ep-close" onclick="toggleEpsPanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </div>
+    <div id="epsList"></div>
+  </div>
+
   <div class="sflash" id="sfl"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg><span>-10s</span></div>
   <div class="sflash" id="sfr"><svg viewBox="0 0 24 24"><path d="M18 6h-2v12h2zm-3.5 6L6 6v12z"/></svg><span>+10s</span></div>
   <div id="cAnim"><svg id="cSvg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
@@ -448,6 +525,10 @@
       </button>
     </div>
     <div class="top-R">
+      <button class="top-btn" id="epsBtn" onclick="toggleEpsPanel()">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-9 12V6l7 4-7 4z"/></svg>
+        <span class="lbl">Episodes</span>
+      </button>
       <div class="menu-wrap" id="audioWrap" style="display:none">
         <button class="top-btn" id="audioBtn">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
@@ -775,6 +856,10 @@ let isLiveStream=false;
 let _edgeCache=0,_edgeTS=0,_jumping=false;
 const LIVE_THRESH=12,DELAY_SHOW=6;
 let _lastUrl=null,_lastTitle=null,_lastDrm=null;
+// Show / episode metadata (drives the pause overlay + episodes panel)
+let META={title:'',rating:'',year:'',dur:'',desc:'',poster:'',showTitle:'',eps:[],epIndex:0};
+// Element handles for the episodes panel + pause overlay (DOM exists — script is at body end)
+const epsBtn=$('epsBtn'),epsPanel=$('epsPanel'),epsList=$('epsList'),pauseInfo=$('pauseInfo');
 
 // Track native video event listeners so we can cleanly remove them
 let _mp4Listeners = {};
@@ -1184,6 +1269,8 @@ async function loadVideo(url, title, asGuest=false, drm=null){
 
   _lastUrl=url; _lastTitle=title; _lastDrm=drm;
   vidTitle.textContent=title||'Now Playing';
+  if(!META.title) META.title=title||'';
+  syncPauseInfo();
 
   LS.style.display='none';
   spin.classList.add('on');
@@ -1612,6 +1699,21 @@ function goBack(){
 (async function checkParams(){
   const q=new URLSearchParams(location.search);
 
+  parseMeta(q);
+  // Auto-fetch an episode list (e.g. from the MX worker) so the switcher appears
+  // even when the show is launched with just its stream URL. Non-blocking.
+  const epsrc=q.get('epsrc');
+  if(epsrc && !META.eps.length) loadEpsFrom(epsrc);
+  // If episodes were supplied, boot straight into the current episode.
+  if(META.eps.length && !q.get('url') && !q.get('src') && !q.get('chid') && !q.get('bundle')){
+    const cur=META.eps[META.epIndex]||META.eps[0];
+    if(cur&&cur.u){
+      const label=(META.showTitle?META.showTitle+' · ':'')+(cur.t||'Episode '+(META.epIndex+1));
+      loadVideo(cur.u,label,false,null);
+      return;
+    }
+  }
+
   const bundleRaw=q.get('bundle');
   if(bundleRaw){await handleBundleParam(bundleRaw);return;}
 
@@ -1670,14 +1772,132 @@ function goBack(){
 })();
 
 // ══════════════════════════════════════════════════════════
+// SHOW METADATA · PAUSE INFO · EPISODES
+// ══════════════════════════════════════════════════════════
+// Read metadata + episode list from URL params. All optional & backward-compat.
+//   rating, year, dur, desc, poster, show  → pause-overlay info
+//   eps  = JSON array [{t:title, u:playUrl, p:poster, n:label, d:desc}]
+//   ep   = index of the episode currently playing (default 0)
+function parseMeta(q){
+  META.rating=q.get('rating')||'';
+  META.year=q.get('year')||'';
+  META.dur=q.get('dur')||'';
+  META.desc=q.get('desc')||'';
+  META.poster=q.get('poster')||'';
+  META.showTitle=q.get('show')||'';
+  const epsRaw=q.get('eps');
+  if(epsRaw){
+    try{ const arr=JSON.parse(epsRaw); if(Array.isArray(arr)) META.eps=arr; }catch(e){ console.warn('bad eps param',e); }
+  }
+  META.epIndex=parseInt(q.get('ep')||'0',10)||0;
+  if(META.eps.length){
+    epsBtn.style.display='flex';
+    const cur=META.eps[META.epIndex];
+    if(cur&&cur.d&&!META.desc) META.desc=cur.d;
+    renderEpisodes();
+  }
+}
+
+// Fetch an episode list from a URL (e.g. MX worker ?episodes=<id>) and populate
+// the switcher — lets a show "just work" when launched with only its stream.
+// Response shape: { eps:[{t,u,p,n,d}], currentIndex, show }.
+async function loadEpsFrom(url){
+  if(!url||META.eps.length)return;
+  try{
+    const r=await fetch(url);
+    const d=await r.json();
+    const list=(d&&(d.eps||d.episodes))||[];
+    if(Array.isArray(list)&&list.length){
+      META.eps=list;
+      META.epIndex=typeof d.currentIndex==='number'?d.currentIndex:0;
+      if(d.show&&!META.showTitle) META.showTitle=d.show;
+      const cur=META.eps[META.epIndex];
+      if(cur&&cur.d&&!META.desc) META.desc=cur.d;
+      epsBtn.style.display='flex';
+      renderEpisodes();
+      syncPauseInfo();
+    }
+  }catch(e){ console.warn('epsrc fetch failed',e); }
+}
+
+function renderEpisodes(){
+  $('epsShowTitle').textContent=META.showTitle||META.title||'Episodes';
+  $('epsSub').textContent=META.eps.length+' episode'+(META.eps.length>1?'s':'');
+  epsList.innerHTML='';
+  META.eps.forEach((ep,i)=>{
+    const card=document.createElement('div');
+    card.className='ep-card'+(i===META.epIndex?' playing':'');
+    const num=ep.n||('E'+(i+1));
+    card.innerHTML=`
+      <div class="ep-thumb">
+        ${ep.p?`<img src="${ep.p}" loading="lazy" onerror="this.style.display='none'"/>`:''}
+        <span class="ep-num">${num}</span>
+        <div class="ep-play"><svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="ep-nowbar"></div>
+      </div>
+      <div class="ep-info">
+        <div class="ep-title">${ep.t||('Episode '+(i+1))}</div>
+        ${ep.d?`<div class="ep-desc">${ep.d}</div>`:''}
+      </div>`;
+    card.onclick=()=>switchEpisode(i);
+    epsList.appendChild(card);
+  });
+}
+
+function switchEpisode(i){
+  if(i<0||i>=META.eps.length)return;
+  const ep=META.eps[i];
+  if(!ep||!ep.u)return;
+  META.epIndex=i;
+  META.title=ep.t||META.title;
+  if(ep.d) META.desc=ep.d;
+  if(ep.p) META.poster=ep.p;
+  renderEpisodes();
+  syncPauseInfo();
+  epsPanel.classList.remove('open');
+  const label=(META.showTitle?META.showTitle+' · ':'')+(ep.t||('Episode '+(i+1)));
+  loadVideo(ep.u,label,false,null);
+  showToast('▶ '+(ep.n?ep.n+' — ':'')+(ep.t||'Episode '+(i+1)),2400);
+}
+
+function toggleEpsPanel(){
+  if(epsPanel.classList.contains('open')){epsPanel.classList.remove('open')}
+  else{epsPanel.classList.add('open');showUI()}
+}
+
+// Fill the pause overlay from current META (called on load + episode switch)
+function syncPauseInfo(){
+  const cur=META.eps[META.epIndex];
+  $('piTitle').textContent=META.showTitle||META.title||'Now Playing';
+  const setChip=(id,val,disp='inline')=>{const el=$(id);if(val){el.textContent=val;el.style.display=disp}else{el.style.display='none'}};
+  setChip('piRating',META.rating);
+  // episode label (only when playing a show)
+  const epLabel=(META.eps.length&&cur)?((cur.n?cur.n+'  ':'')+(cur.t||'')):'';
+  setChip('piEpLabel',epLabel);
+  setChip('piYear',META.year);
+  setChip('piDur',META.dur);
+  $('piDot1').style.display=(META.year&&META.dur)?'inline-block':'none';
+  setChip('piDesc',META.desc,'block');
+}
+
+// Show / hide the Netflix-style pause overlay (VOD only, not live)
+function showPauseInfo(){ if(isLiveStream)return; syncPauseInfo(); pauseInfo.classList.add('on'); }
+function hidePauseInfo(){ pauseInfo.classList.remove('on'); }
+
+// ══════════════════════════════════════════════════════════
 // PLAY / PAUSE / OVERLAYS
 // ══════════════════════════════════════════════════════════
 function togglePlay(){if(vid.paused)vid.play().catch(()=>{});else vid.pause()}
 clickZone.addEventListener('click',togglePlay);
 playBtn.addEventListener('click',e=>{e.stopPropagation();togglePlay()});
-vid.addEventListener('play',()=>{pPath.setAttribute('d',P.pause);cSvg.querySelector('path').setAttribute('d',P.pause);pop(cAnim);schedHide()});
-vid.addEventListener('pause',()=>{pPath.setAttribute('d',P.play);cSvg.querySelector('path').setAttribute('d',P.play);pop(cAnim);showUI();clearTimeout(hideT)});
-vid.addEventListener('ended',()=>{pPath.setAttribute('d',P.play);showUI();if(SROLE==='host')endHostSession()});
+vid.addEventListener('play',()=>{pPath.setAttribute('d',P.pause);cSvg.querySelector('path').setAttribute('d',P.pause);pop(cAnim);hidePauseInfo();schedHide()});
+vid.addEventListener('pause',()=>{pPath.setAttribute('d',P.play);cSvg.querySelector('path').setAttribute('d',P.play);pop(cAnim);showUI();clearTimeout(hideT);showPauseInfo()});
+vid.addEventListener('ended',()=>{
+  pPath.setAttribute('d',P.play);showUI();
+  // Auto-advance to the next episode when a show is playing
+  if(META.eps.length&&META.epIndex<META.eps.length-1){switchEpisode(META.epIndex+1);return}
+  if(SROLE==='host')endHostSession();
+});
 
 // ══════════════════════════════════════════════════════════
 // SKIP / VOLUME / PROGRESS

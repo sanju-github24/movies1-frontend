@@ -5,6 +5,21 @@ import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
 import { Loader2, Play, X, Clock3, TrendingUp, Volume2, VolumeX, UserCircle, CheckCircle2 } from "lucide-react";
 import axios from "axios";
+import Hls from "hls.js";
+
+// Muted looping HLS trailer for the hero (MX trailers are .m3u8, not YouTube).
+function HlsTrailer({ src, muted }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const v = ref.current;
+    if (!v || !src) return;
+    let hls;
+    if (v.canPlayType("application/vnd.apple.mpegurl")) { v.src = src; }
+    else if (Hls.isSupported()) { hls = new Hls({ enableWorker: true }); hls.loadSource(src); hls.attachMedia(v); }
+    return () => { if (hls) hls.destroy(); };
+  }, [src]);
+  return <video ref={ref} autoPlay loop playsInline muted={muted} className="w-full h-full object-cover" />;
+}
 import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
 import DesktopDetailOverlay from "./DesktopDetailOverlay";
@@ -757,6 +772,32 @@ const WatchListPage = () => {
         const localExtra = localOthers.sort(() => 0.5 - Math.random()).slice(0, 2);
         setHeroMovies([...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
 
+        // Prepend MX Player's current spotlight (6 slides, with HLS trailers).
+        (async () => {
+          try {
+            const mxRes = await axios.get(`${backendUrl}/api/mx/hero`, { timeout: 30000 });
+            const mxSlides = (mxRes.data?.slides || []).map((s, i) => ({
+              id: `mxhero-${s.mxId || i}`,
+              slug: `mxhero-${s.mxId || i}`,
+              title: s.title,
+              cover_poster: s.backdrop || s.poster,
+              poster: s.poster || s.backdrop,
+              title_logo: s.logo || null,
+              language: (s.languages && s.languages.length) ? s.languages : ["Hindi"],
+              genres: s.genres || [],
+              description: s.subTitle || (s.genres || []).slice(0, 3).join(" · "),
+              content_type: s.mxType === "tvshow" ? "tv" : "movie",
+              trailer_key: null,
+              mx_trailer: s.trailer || null,
+              mx_web_url: s.webUrl || null,
+              mx_id: s.mxId || null,
+              mx_type: s.mxType || null,
+              source: "mxplayer",
+            }));
+            if (mxSlides.length) setHeroMovies((prev) => [...mxSlides, ...prev].slice(0, 13));
+          } catch (e) { console.warn("MX hero unavailable"); }
+        })();
+
         const manualTrending = merged.filter(m => m.is_trending === true).slice(0, 10);
         const autoFill = combined
           .filter(m => !manualTrending.some(t => t.id === m.id) && inChosenLangs(m))
@@ -835,6 +876,12 @@ const WatchListPage = () => {
   /* ─── Navigate to watch page ── */
   const handleNavigateToWatch = (movie) => {
     saveRecentlyWatched(movie);
+
+    // MX Player hero slides open the in-SPA MX watch page (VideoPlayer.jsx).
+    if (movie.source === "mxplayer" && (movie.mx_web_url || movie.mx_id)) {
+      navigate("/mx-watch", { state: { webUrl: movie.mx_web_url, mxId: movie.mx_id, mxType: movie.mx_type, title: movie.title } });
+      return;
+    }
 
     if (movie.source === "tmdb") {
       // Prefer the rich nested payload, but fall back to rebuilding it from
@@ -955,7 +1002,7 @@ const WatchListPage = () => {
     if (isMobile) {
       slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
     } else {
-      if (!currentHero?.trailer_key) {
+      if (!currentHero?.trailer_key && !currentHero?.mx_trailer) {
         slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
       } else {
         trailerTimer = setTimeout(() => { if (window.scrollY < 400) setHeroTrailerActive(true); }, 2000);
@@ -1081,7 +1128,18 @@ const WatchListPage = () => {
                 return (
                   <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
                     <img src={liveMovieData.cover_poster}
-                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
+                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && (liveMovieData.trailer_key || liveMovieData.mx_trailer) && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
+                    {idx === currentSlide && heroTrailerActive && liveMovieData.mx_trailer && !isMobile && (
+                      <div className="absolute inset-0 bg-black overflow-hidden">
+                        <div className="relative w-full h-full scale-[1.35] pointer-events-none">
+                          <HlsTrailer src={liveMovieData.mx_trailer} muted={isMuted} />
+                        </div>
+                        <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
+                          className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90">
+                          {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                        </button>
+                      </div>
+                    )}
                     {idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile && (
                       <div className="absolute inset-0 bg-black overflow-hidden">
                         <div className="relative w-full h-full scale-[1.35] pointer-events-none">
@@ -1162,7 +1220,7 @@ const WatchListPage = () => {
                   {continueList.map(({ movie, time }) => {
                     const progressPercent = Math.min(100, (time / (movie.runtime ? movie.runtime * 60 : 7200)) * 100);
                     return (
-                      <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => navigate(`/watch/${movie.slug}`)}>
+                      <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => movie.source === "mxplayer" && movie.mxWebUrl ? navigate("/mx-watch", { state: { webUrl: movie.mxWebUrl, title: movie.title, image: movie.cover_poster || movie.poster } }) : navigate(`/watch/${movie.slug}`)}>
                         <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl group-hover:scale-105 transition-all">
                           <img src={movie.cover_poster || movie.poster || "/default-cover.jpg"} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={movie.title} />
                           <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
