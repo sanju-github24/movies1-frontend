@@ -230,11 +230,12 @@ function PulsingDot({ color="#ef4444", size=7 }) {
 function TopNav() {
   const loc = useLocation();
 
+  const logoIcon = (src, alt) => <img src={src} alt={alt} style={{ height: 18, width: "auto", maxWidth: 42, objectFit: "contain" }}/>;
   const navItems = [
     { to: "/",                 label: "Home", icon: <Home size={14}/> },
-    { to: "/tournament/bcci",  label: "BCCI", icon: <span style={{fontSize:13}}>🇮🇳</span> },
-    { to: "/tournament/icc",   label: "ICC",  icon: <span style={{fontSize:13}}>🏆</span> },
-    { to: "/tournament/ipl",   label: "IPL",  icon: <span style={{fontSize:13}}>🏏</span> },
+    { to: "/tournament/bcci",  label: "BCCI", icon: logoIcon("/logos/bcci.png", "BCCI") },
+    { to: "/tournament/icc",   label: "ICC",  icon: logoIcon("/logos/icc.png", "ICC") },
+    { to: "/tournament/ipl",   label: "IPL",  icon: logoIcon("/logos/ipl.png", "IPL") },
     { to: "/watch",            label: "Watch", icon: <Tv2 size={14}/> },
   ];
 
@@ -1705,12 +1706,14 @@ function ChannelShortcut({ label, emoji, desc, color, bg, border, to }) {
 }
 
 // ─── TOURNAMENT BADGE ─────────────────────────────────────────────────────────
-function TournamentBadge({ emoji, name, subtitle, color, bg, border, to }) {
+function TournamentBadge({ emoji, logo, name, subtitle, color, bg, border, to }) {
   return (
     <Link to={to} className="flex flex-col gap-2 rounded-2xl border p-4 transition-all active:scale-[0.97] hover:border-white/20"
       style={{background:bg, borderColor:border}}>
       <div className="flex items-center justify-between">
-        <span style={{fontSize:28}}>{emoji}</span>
+        {logo
+          ? <img src={logo} alt={name} style={{height:34, width:"auto", maxWidth:96, objectFit:"contain"}}/>
+          : <span style={{fontSize:28}}>{emoji}</span>}
         <ChevronRight size={14} style={{color}}/>
       </div>
       <div>
@@ -1988,9 +1991,9 @@ async function fetchIplHi() {
 }
 
 const TOURNAMENTS = {
-  bcci: { name: "BCCI", full: "Team India · Men's International", tag: "Every match highlight, straight from bcci.tv", accent: "#38bdf8", emoji: "🇮🇳", fetchHi: fetchBcciHi, Row: BcciHighlightsRow },
-  icc:  { name: "ICC",  full: "ICC World Cup", tag: "Tournament match highlights", accent: "#22d3ee", emoji: "🏆", fetchHi: fetchIccHi, Row: IccHighlightsRow },
-  ipl:  { name: "IPL",  full: "Indian Premier League 2026", tag: "Every game's highlights", accent: "#f59e0b", emoji: "🏏", fetchHi: fetchIplHi, Row: IplHighlightsRow },
+  bcci: { name: "BCCI", full: "Team India · Men's International", tag: "Every match highlight, straight from bcci.tv", accent: "#38bdf8", logo: "/logos/bcci.png", fetchHi: fetchBcciHi, Row: BcciHighlightsRow, scorecards: true },
+  icc:  { name: "ICC",  full: "ICC World Cup", tag: "Tournament match highlights", accent: "#22d3ee", logo: "/logos/icc.png", fetchHi: fetchIccHi, Row: IccHighlightsRow },
+  ipl:  { name: "IPL",  full: "Indian Premier League 2026", tag: "Every game's highlights", accent: "#f59e0b", logo: "/logos/ipl.png", fetchHi: fetchIplHi, Row: IplHighlightsRow },
 };
 
 function HighlightThumb({ item, accent, big, onPlay }) {
@@ -2009,6 +2012,147 @@ function HighlightThumb({ item, accent, big, onPlay }) {
         {item.date && <p className="text-[9px] text-white/50 mt-1 font-semibold uppercase tracking-wider">{item.date}</p>}
       </div>
     </button>
+  );
+}
+
+// ── BCCI scorecards: recent matches with scores, grouped by series/tour ──
+async function fetchBcciScorecards() {
+  const j = await fetch(`${API_BASE}/api/bcci/recent?count=30`).then(r => r.json()).catch(() => ({}));
+  const ms = j.recentMatches || [];
+  return ms
+    .filter(m => /post|result|complete|end/i.test(m.MatchStatus || "") && (m.FirstBattingSummary || m.SecondBattingSummary))
+    .map(m => ({
+      id: m.MatchID,
+      series: (m.CompetitionName || "").trim(),
+      compId: m.CompetitionID,
+      format: m.MatchTypeName || m.MatchType || "",
+      name: m.MatchName || "",
+      date: m.MatchDateNew || m.MatchDate || "",
+      ground: m.GroundName || m.city || "",
+      result: (m.Comments || "").replace(/\s+/g, " ").trim(),
+      mom: m.MOM || "",
+      a: { code: m.FirstBattingTeamCode || "", name: m.FirstBattingTeamName || "", score: m.FirstBattingSummary || "—" },
+      b: { code: m.SecondBattingTeamCode || "", name: m.SecondBattingTeamName || "", score: m.SecondBattingSummary || "—" },
+    }));
+}
+
+const FORMAT_COLOR = { T20: "#f59e0b", ODI: "#38bdf8", TEST: "#ef4444", "T20I": "#f59e0b" };
+function TeamRow({ t, win }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-1">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="inline-flex items-center justify-center shrink-0 rounded-md text-[9px] font-black text-white/90" style={{ width: 30, height: 20, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>{t.code || "?"}</span>
+        <span className={`text-[12px] truncate ${win ? "font-black text-white" : "font-semibold text-white/70"}`}>{t.name}</span>
+      </div>
+      <span className={`text-[12px] font-mono shrink-0 ${win ? "font-black text-white" : "font-semibold text-white/60"}`}>{t.score}</span>
+    </div>
+  );
+}
+function ScoreCard({ sc, style }) {
+  const fmt = (sc.format || "").toUpperCase();
+  const fc = FORMAT_COLOR[fmt] || "#94a3b8";
+  const aWin = /won/i.test(sc.result) && sc.result.toLowerCase().includes((sc.a.name || "").toLowerCase());
+  const bWin = /won/i.test(sc.result) && sc.result.toLowerCase().includes((sc.b.name || "").toLowerCase());
+  return (
+    <div className="rounded-2xl border border-white/[0.08] p-3.5 flex flex-col" style={{ background: "rgba(255,255,255,0.02)", ...style }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider" style={{ color: fc, background: `${fc}1f`, border: `1px solid ${fc}44` }}>{fmt || "MATCH"}</span>
+        <span className="text-[9px] text-white/35 font-bold uppercase tracking-wider">{sc.date}</span>
+      </div>
+      <TeamRow t={sc.a} win={aWin}/>
+      <TeamRow t={sc.b} win={bWin}/>
+      {sc.result && <p className="text-[10px] font-bold mt-2 pt-2 border-t border-white/[0.06]" style={{ color: "#4ade80" }}>{sc.result}</p>}
+      {sc.mom && <p className="text-[9px] text-white/40 mt-1 font-semibold">🏅 {sc.mom}</p>}
+    </div>
+  );
+}
+
+function BcciScorecardSection({ accent }) {
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openSeries, setOpenSeries] = useState(null);   // series name
+
+  useEffect(() => {
+    let alive = true;
+    fetchBcciScorecards().then(c => { if (alive) setCards(c); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  if (loading) return <div className="mt-8 h-24 rounded-2xl bg-white/[0.03] animate-pulse"/>;
+  if (!cards.length) return null;
+
+  // Group by series (skip un-named); keep insertion (recency) order.
+  const groups = [];
+  const byName = {};
+  for (const c of cards) {
+    if (!c.series) continue;
+    if (!byName[c.series]) { byName[c.series] = { series: c.series, format: c.format, matches: [] }; groups.push(byName[c.series]); }
+    byName[c.series].matches.push(c);
+  }
+  const openGroup = groups.find(g => g.series === openSeries);
+
+  return (
+    <>
+      {/* Series modal */}
+      {openGroup && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.9)", display: "flex", flexDirection: "column", padding: "0" }} onClick={() => setOpenSeries(null)}>
+          <div className="mx-auto w-full max-w-2xl h-full overflow-y-auto p-4 sm:p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 py-2" style={{ background: "rgba(0,0,0,0.9)" }}>
+              <div>
+                <h3 className="text-base font-black text-white">{openGroup.series}</h3>
+                <p className="text-[11px] font-bold" style={{ color: accent }}>{openGroup.matches.length} matches</p>
+              </div>
+              <button onClick={() => setOpenSeries(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
+              {openGroup.matches.map(sc => <ScoreCard key={sc.id} sc={sc}/>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ROW 1: Series / Tours (grouped) ── */}
+      {groups.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy size={13} style={{ color: accent }}/>
+            <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Series & Tours</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+            {groups.map(g => {
+              const fmt = (g.format || "").toUpperCase();
+              const fc = FORMAT_COLOR[fmt] || accent;
+              const teams = [...new Set(g.matches.flatMap(m => [m.a.code, m.b.code]).filter(Boolean))];
+              return (
+                <button key={g.series} onClick={() => setOpenSeries(g.series)}
+                  className="shrink-0 rounded-2xl border border-white/[0.08] p-4 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25 flex flex-col justify-between"
+                  style={{ width: 250, minHeight: 118, background: `linear-gradient(135deg, ${accent}12 0%, rgba(255,255,255,0.02) 60%)` }}>
+                  <div>
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider" style={{ color: fc, background: `${fc}1f`, border: `1px solid ${fc}44` }}>{fmt}</span>
+                    <p className="text-[12px] font-black text-white leading-snug mt-2" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.series}</p>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[10px] font-bold text-white/45">{teams.join(" · ")}</span>
+                    <span className="text-[10px] font-black" style={{ color: accent }}>{g.matches.length} {g.matches.length > 1 ? "matches" : "match"} ›</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ROW 2: Top 5 recent India matches (scorecards) ── */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDays size={13} style={{ color: accent }}/>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Matches</span>
+        </div>
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+          {cards.slice(0, 5).map(sc => <ScoreCard key={sc.id} sc={sc} style={{ width: 290, flexShrink: 0 }}/>)}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -2067,7 +2211,7 @@ export function TournamentPage() {
       <main className="relative z-10 pb-24 max-w-5xl mx-auto px-4 sm:px-6">
         {/* ── Title ── */}
         <div className="pt-6 pb-1 flex items-center gap-3">
-          <span className="text-3xl">{cfg.emoji}</span>
+          <img src={cfg.logo} alt={cfg.name} style={{ height: 48, width: "auto", maxWidth: 120, objectFit: "contain" }}/>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-white leading-none">{cfg.name} <span className="text-white/40 font-bold">Highlights</span></h1>
             <p className="text-[11px] font-semibold mt-1" style={{ color: cfg.accent }}>{cfg.full}</p>
@@ -2095,8 +2239,10 @@ export function TournamentPage() {
           </div>
         )}
 
-        {/* ── RECENT MATCHES (5) ── */}
-        {!loading && recent.length > 0 && (
+        {/* ── SCORECARDS: series/tours (grouped) + recent-match scorecards ── */}
+        {cfg.scorecards ? (
+          <BcciScorecardSection accent={cfg.accent}/>
+        ) : (!loading && recent.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-3">
               <CalendarDays size={13} style={{ color: cfg.accent }}/>
@@ -2110,7 +2256,7 @@ export function TournamentPage() {
               ))}
             </div>
           </div>
-        )}
+        ))}
 
         {/* ── FULL FEED (Load More) ── */}
         <Row/>
@@ -2209,11 +2355,11 @@ export default function Homeies({ searchTerm }) {
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Tournaments</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <TournamentBadge emoji="🇮🇳" name="BCCI" subtitle="Team India · Highlights"
+              <TournamentBadge logo="/logos/bcci.png" name="BCCI" subtitle="Team India · Highlights"
                 color="#38bdf8" bg="rgba(56,189,248,0.06)" border="rgba(56,189,248,0.18)" to="/tournament/bcci"/>
-              <TournamentBadge emoji="🏆" name="ICC" subtitle="World Cup · Highlights"
+              <TournamentBadge logo="/logos/icc.png" name="ICC" subtitle="World Cup · Highlights"
                 color="#22d3ee" bg="rgba(34,211,238,0.06)" border="rgba(34,211,238,0.18)" to="/tournament/icc"/>
-              <TournamentBadge emoji="🏏" name="IPL" subtitle="2026 · Match Highlights"
+              <TournamentBadge logo="/logos/ipl.png" name="IPL" subtitle="2026 · Match Highlights"
                 color="#f59e0b" bg="rgba(245,158,11,0.06)" border="rgba(245,158,11,0.18)" to="/tournament/ipl"/>
             </div>
           </div>

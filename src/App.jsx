@@ -178,6 +178,7 @@ const AppContent = () => {
   const isLiveStreamPlayer = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname);
   const isLiveCricketPath  = location.pathname === "/live-cricket";
   const isSportsPath       = location.pathname === "/sports";
+  const isTournamentPath   = location.pathname.startsWith("/tournament");
   const isMusicPath        = location.pathname.startsWith("/music");
   // NOTE: /live-stream is NOT hidden — navbar shows on Live TV page
 
@@ -190,6 +191,7 @@ const AppContent = () => {
     isLiveCricketPath ||
     isLiveStreamPlayer ||
     isSportsPath ||
+    isTournamentPath ||
     isMusicPath;
 
   const handleNavigate = (name) => {
