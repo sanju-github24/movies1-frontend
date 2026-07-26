@@ -1830,6 +1830,116 @@ function IccHighlightsRow() {
   );
 }
 
+// ─── BCCI MATCH HIGHLIGHTS ─────────────────────────────────────────────────
+// The full men's-international highlights feed from bcci.tv (the /videoslist
+// endpoint the site's own "Load More" button hits). One click = the next page;
+// keeps loading until the last page, then the button disappears. Backend parses
+// + persists each page (Supabase) exactly like the ICC row. Clips are plain
+// .mp4 (data-video-url), so playback is instant — no resolve step.
+function BcciHighlightsRow() {
+  const [videos, setVideos]   = useState([]);
+  const [page, setPage]       = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [modal, setModal]     = useState(null);   // { src, title }
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/bcci/highlights?page=1`)
+      .then(r => r.json())
+      .then(j => { if (alive && j.success) { setVideos(j.videos || []); setHasMore(!!j.hasMore); setPage(1); } })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      const j = await fetch(`${API_BASE}/api/bcci/highlights?page=${next}`).then(r => r.json());
+      if (j && j.success) {
+        setVideos(prev => [...prev, ...(j.videos || []).filter(v => !prev.some(p => p.id === v.id))]);
+        setHasMore(!!j.hasMore);
+        setPage(next);
+      }
+    } catch {}
+    setLoadingMore(false);
+  };
+
+  const play = (v) => {
+    if (!v.video_url) return;
+    const params = new URLSearchParams({ url: v.video_url, title: v.title || "Match Highlights" });
+    setModal({ src: `/player.html?${params}`, title: v.title || "Match Highlights" });
+  };
+
+  if (!loading && videos.length === 0) return null;
+  const ACCENT = "#38bdf8"; // BCCI blue
+
+  return (
+    <div className="mt-8">
+      {modal && (
+        <div style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.96)", display:"flex", flexDirection:"column" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:"rgba(0,0,0,0.7)", flexShrink:0 }}>
+            <span style={{ color:ACCENT, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.15em" }}>▶ {modal.title}</span>
+            <button onClick={() => setModal(null)} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"#fff", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16 }}>×</button>
+          </div>
+          <iframe src={modal.src} style={{ flex:1, width:"100%", border:"none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Trophy size={13} style={{ color: ACCENT }}/>
+          <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">BCCI Match Highlights</span>
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
+            style={{ background:"rgba(56,189,248,0.12)", border:"1px solid rgba(56,189,248,0.25)", color:ACCENT }}>Team India</span>
+        </div>
+      </div>
+
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth:"thin" }}>
+        {(loading ? Array.from({length:5}) : videos).map((v, i) => v ? (
+          <button key={v.id || i} onClick={() => play(v)}
+            className="group/bcci shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25"
+            style={{ width:240, background:"rgba(255,255,255,0.02)" }}>
+            <div className="relative" style={{ width:240, height:135, background:"#0a0a15" }}>
+              <img src={v.image} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.opacity=0; }}/>
+              <div className="absolute inset-0 flex items-center justify-center" style={{ background:"rgba(0,0,0,0.25)" }}>
+                <PlayCircle size={34} className="text-white/90 group-hover/bcci:scale-110 transition-transform"/>
+              </div>
+              {v.duration && (
+                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
+                  style={{ background:"rgba(0,0,0,0.75)" }}>{v.duration.replace(/\s*mins?$/i,"")}</span>
+              )}
+            </div>
+            <div className="p-2.5">
+              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{v.title}</p>
+              {v.date && <p className="text-[9px] text-white/40 mt-1 font-semibold uppercase tracking-wider">{v.date}</p>}
+            </div>
+          </button>
+        ) : (
+          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width:240, height:135+64 }}/>
+        ))}
+
+        {!loading && hasMore && (
+          <button onClick={loadMore} disabled={loadingMore}
+            className="shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed transition-all duration-200 hover:bg-white/[0.04] active:scale-95"
+            style={{ width:150, height:135+64, borderColor:"rgba(56,189,248,0.35)", background:"rgba(56,189,248,0.04)" }}>
+            {loadingMore
+              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
+              : <ChevronRight size={22} style={{ color: ACCENT }}/>}
+            <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: ACCENT }}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Homeies({ searchTerm }) {
   return (
     <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
@@ -1881,6 +1991,9 @@ export default function Homeies({ searchTerm }) {
 
           {/* ── ICC HIGHLIGHTS (World Cup match highlights) ── */}
           <IccHighlightsRow/>
+
+          {/* ── BCCI MATCH HIGHLIGHTS (full feed, Load More) ── */}
+          <BcciHighlightsRow/>
 
           {/* ── INDIA MATCH HIGHLIGHTS ── */}
           <IndiaHighlightsRow/>
