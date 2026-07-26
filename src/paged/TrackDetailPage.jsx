@@ -534,8 +534,9 @@ export default function TrackDetailPage() {
         <div style={{ position:'fixed', top:0, left:0, width:'100vw', height:'100vh', zIndex:0, overflow:'hidden', pointerEvents:'none' }}>
           <iframe
             src={`https://www.youtube.com/embed/${ytPreview.videoId}?enablejsapi=1&autoplay=1&mute=1&start=${ytPreview.startSeconds}&controls=0&showinfo=0&rel=0&loop=1&playlist=${ytPreview.videoId}&playsinline=1`}
-            style={{ position:'absolute', top:'50%', left:'50%', width:'100vw', height:'56.25vw', minHeight:'100vh', minWidth:'177.78vh', transform:'translate(-50%,-50%) scale(1.15)', border:'none', opacity: ytReady ? (isMobile ? 0.42 : 0.28) : 0, transition:'opacity 0.8s ease' }}
+            style={{ position:'absolute', top:'50%', left:'50%', width:'100vw', height:'56.25vw', minHeight:'100vh', minWidth:'177.78vh', transform:'translate(-50%,-50%) scale(1.15)', border:'none', opacity: ytReady ? (isMobile ? 0.42 : 0.28) : 0, transition:'opacity 0.8s ease', pointerEvents:'none' }}
             allow="autoplay; encrypted-media"
+            tabIndex={-1}
           />
           <div style={{ position:'absolute', inset:0, background: isMobile
             ? `linear-gradient(180deg, rgba(${baseRgb},0.25) 0%, rgba(9,9,15,0.78) 65%, #09090f 100%)`
@@ -632,7 +633,7 @@ export default function TrackDetailPage() {
             </button>
           </div>
 
-          <div style={{ position:'relative', zIndex:10, flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'20px 28px 80px' }}>
+          <div style={{ position:'relative', zIndex:10, flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'56px 28px 80px' }}>
             {loading ? <LoadingSpinner /> : error ? <ErrorView /> : (
               <div style={{ width:'100%', maxWidth:900 }}>
                 {/* Cover + Info side-by-side */}
