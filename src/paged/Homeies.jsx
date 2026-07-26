@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays } from "lucide-react";
 import HeroSection from "./HeroSection";
@@ -231,10 +231,11 @@ function TopNav() {
   const loc = useLocation();
 
   const navItems = [
-    { to: "/",              label: "Home",      icon: <Home size={14}/> },
-    { to: "/live-cricket-tv", label: "Cricket", icon: <span style={{fontSize:13}}>🏏</span> },
-    { to: "/live-cricket-tv?tab=football", label: "Football", icon: <span style={{fontSize:13}}>⚽</span> },
-    { to: "/watch",         label: "Watch",     icon: <Tv2 size={14}/> },
+    { to: "/",                 label: "Home", icon: <Home size={14}/> },
+    { to: "/tournament/bcci",  label: "BCCI", icon: <span style={{fontSize:13}}>🇮🇳</span> },
+    { to: "/tournament/icc",   label: "ICC",  icon: <span style={{fontSize:13}}>🏆</span> },
+    { to: "/tournament/ipl",   label: "IPL",  icon: <span style={{fontSize:13}}>🏏</span> },
+    { to: "/watch",            label: "Watch", icon: <Tv2 size={14}/> },
   ];
 
   return (
@@ -1940,6 +1941,193 @@ function BcciHighlightsRow() {
   );
 }
 
+// ─── TOURNAMENT PAGES (BCCI / ICC / IPL) ────────────────────────────────────
+// Each nav tournament opens its own page: a hero showcasing the 4 most-recent
+// highlights, a "Recent Matches" strip (5), then the full highlights feed with
+// Load More. Every item normalises to { id,title,image,date,duration,resolve() }
+// where resolve() returns a ready player.html src (async where a stream needs
+// minting — ICC mints a manifest, IPL resolves a bccilink).
+async function fetchBcciHi() {
+  const j = await fetch(`${API_BASE}/api/bcci/highlights?page=1`).then(r => r.json()).catch(() => ({}));
+  return (j.videos || []).map(v => ({
+    id: v.id, title: v.title, image: v.image, date: v.date, duration: v.duration,
+    resolve: async () => `/player.html?${new URLSearchParams({ url: v.video_url, title: v.title || "Highlights" })}`,
+  }));
+}
+async function fetchIccHi() {
+  const j = await fetch(`${API_BASE}/api/icc/highlights?offset=0&limit=8`).then(r => r.json()).catch(() => ({}));
+  return (j.videos || []).map(v => ({
+    id: v.uuid, title: v.title, image: v.image, date: "", duration: "",
+    resolve: async () => {
+      const p = await fetch(`${API_BASE}/api/icc/play?videoId=${encodeURIComponent(v.uuid)}`).then(r => r.json()).catch(() => ({}));
+      return p.success && p.manifestUrl ? `/player.html?${new URLSearchParams({ url: p.manifestUrl, title: v.title || "ICC Highlights" })}` : null;
+    },
+  }));
+}
+async function fetchIplHi() {
+  const j = await fetch(`${API_BASE}/api/ipl/2026/all-matches`).then(r => r.json()).catch(() => ({}));
+  const arr = j.matches || j.data || (Array.isArray(j) ? j : []);
+  const done = arr.filter(m => m.status === "completed").reverse().slice(0, 6);
+  const lists = await Promise.allSettled(done.map(m => fetchIplMatchHighlights(m.smMatchId)));
+  const items = [];
+  lists.forEach(r => {
+    if (r.status === "fulfilled" && Array.isArray(r.value)) {
+      r.value.slice(0, 2).forEach(v => {
+        if (!v.shortCode) return;
+        items.push({
+          id: v.id || v.shortCode, title: v.title, image: v.thumbnail, date: "", duration: "",
+          resolve: async () => {
+            const gs = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(`https://www.bcci.tv/bccilink/videos/${v.shortCode}`)}`).then(x => x.json()).catch(() => ({}));
+            return gs.success && gs.url ? `/player.html?${new URLSearchParams({ url: gs.url, title: v.title || "IPL Highlights" })}` : null;
+          },
+        });
+      });
+    }
+  });
+  return items;
+}
+
+const TOURNAMENTS = {
+  bcci: { name: "BCCI", full: "Team India · Men's International", tag: "Every match highlight, straight from bcci.tv", accent: "#38bdf8", emoji: "🇮🇳", fetchHi: fetchBcciHi, Row: BcciHighlightsRow },
+  icc:  { name: "ICC",  full: "ICC World Cup", tag: "Tournament match highlights", accent: "#22d3ee", emoji: "🏆", fetchHi: fetchIccHi, Row: IccHighlightsRow },
+  ipl:  { name: "IPL",  full: "Indian Premier League 2026", tag: "Every game's highlights", accent: "#f59e0b", emoji: "🏏", fetchHi: fetchIplHi, Row: IplHighlightsRow },
+};
+
+function HighlightThumb({ item, accent, big, onPlay }) {
+  return (
+    <button onClick={() => onPlay(item)}
+      className="group/th relative shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:border-white/25"
+      style={{ width: "100%", height: "100%", background: "#0a0a15" }}>
+      <img src={item.image} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover/th:scale-105" onError={(e) => { e.currentTarget.style.opacity = 0; }}/>
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.85) 100%)" }}/>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <PlayCircle size={big ? 52 : 30} className="text-white/90 group-hover/th:scale-110 transition-transform"/>
+      </div>
+      <div className="absolute left-0 right-0 bottom-0 p-3">
+        {item.duration && <span className="inline-block mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold text-white" style={{ background: `${accent}cc` }}>{item.duration.replace(/\s*mins?$/i, "")}</span>}
+        <p className={`font-black text-white leading-tight ${big ? "text-sm" : "text-[11px]"}`} style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.title}</p>
+        {item.date && <p className="text-[9px] text-white/50 mt-1 font-semibold uppercase tracking-wider">{item.date}</p>}
+      </div>
+    </button>
+  );
+}
+
+export function TournamentPage() {
+  const { slug } = useParams();
+  const cfg = TOURNAMENTS[slug] || TOURNAMENTS.bcci;
+  const [items, setItems]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal]   = useState(null);   // { src, title }
+  const [busy, setBusy]     = useState(false);
+  const Row = cfg.Row;
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setItems([]);
+    cfg.fetchHi().then(list => { if (alive) setItems(list || []); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [slug]);
+
+  const onPlay = async (it) => {
+    if (busy) return;
+    setBusy(true);
+    try { const src = await it.resolve(); if (src) setModal({ src, title: it.title }); }
+    catch {} finally { setBusy(false); }
+  };
+
+  const featured = items.slice(0, 4);   // hero: 1 big + 3 thumbs
+  const recent   = items.slice(0, 5);   // recent matches strip
+
+  return (
+    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
+      <Helmet prioritizeSeoTags>
+        <title>{`${cfg.name} Match Highlights — ${cfg.full}`}</title>
+        <meta name="description" content={`Watch the latest ${cfg.name} match highlights. ${cfg.tag}.`}/>
+        <link rel="canonical" href={absUrl(`/tournament/${slug}`)}/>
+      </Helmet>
+
+      <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 70% 30% at 50% 0%, ${cfg.accent}22 0%, transparent 55%)` }}/>
+      <TopNav/>
+
+      {busy && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${cfg.accent}55`, borderTopColor: cfg.accent }}/>
+        </div>
+      )}
+      {modal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
+            <span style={{ color: cfg.accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
+            <button onClick={() => setModal(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
+          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+        </div>
+      )}
+
+      <main className="relative z-10 pb-24 max-w-5xl mx-auto px-4 sm:px-6">
+        {/* ── Title ── */}
+        <div className="pt-6 pb-1 flex items-center gap-3">
+          <span className="text-3xl">{cfg.emoji}</span>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white leading-none">{cfg.name} <span className="text-white/40 font-bold">Highlights</span></h1>
+            <p className="text-[11px] font-semibold mt-1" style={{ color: cfg.accent }}>{cfg.full}</p>
+          </div>
+        </div>
+
+        {/* ── HERO: 4 recent highlights (1 featured + 3) ── */}
+        {loading ? (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ height: 320 }}>
+            <div className="sm:col-span-2 rounded-2xl bg-white/[0.03] animate-pulse"/>
+            <div className="hidden sm:grid grid-rows-3 gap-3">{[0,1,2].map(i => <div key={i} className="rounded-xl bg-white/[0.03] animate-pulse"/>)}</div>
+          </div>
+        ) : featured.length ? (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ minHeight: 320 }}>
+            <div className="sm:col-span-2" style={{ height: 320 }}>
+              <HighlightThumb item={featured[0]} accent={cfg.accent} big onPlay={onPlay}/>
+            </div>
+            <div className="grid grid-rows-3 gap-3" style={{ height: 320 }}>
+              {featured.slice(1, 4).map(it => <HighlightThumb key={it.id} item={it} accent={cfg.accent} onPlay={onPlay}/>)}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-white/40 text-xs font-bold">
+            No highlights available yet — check back after the next match.
+          </div>
+        )}
+
+        {/* ── RECENT MATCHES (5) ── */}
+        {!loading && recent.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays size={13} style={{ color: cfg.accent }}/>
+              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Matches</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+              {recent.map(it => (
+                <div key={`r-${it.id}`} className="shrink-0" style={{ width: 220, height: 150 }}>
+                  <HighlightThumb item={it} accent={cfg.accent} onPlay={onPlay}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── FULL FEED (Load More) ── */}
+        <Row/>
+
+        <div className="mt-10 pb-4">
+          <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-4 py-3 flex items-center gap-3">
+            <span className="text-lg">📡</span>
+            <p className="text-[10px] text-gray-600 font-bold leading-relaxed">
+              Highlights are sourced from official {cfg.name} feeds. Use Chrome and disable ad-blocker if a clip doesn't load.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export default function Homeies({ searchTerm }) {
   return (
     <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
@@ -1995,14 +2183,8 @@ export default function Homeies({ searchTerm }) {
           {/* ── BCCI MATCH HIGHLIGHTS (full feed, Load More) ── */}
           <BcciHighlightsRow/>
 
-          {/* ── INDIA MATCH HIGHLIGHTS ── */}
-          <IndiaHighlightsRow/>
-
           {/* ── IPL 2026 ALL MATCHES HIGHLIGHTS ── */}
           <IplHighlightsRow/>
-
-          {/* ── FIFA WC 2026 ALL MATCHES HIGHLIGHTS ── */}
-          <FifaHighlightsRow/>
 
           {/* ── WATCH LIVE SHORTCUTS ── */}
           <div className="mt-8">
@@ -2012,11 +2194,11 @@ export default function Homeies({ searchTerm }) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ChannelShortcut label="Cricket Live TV" emoji="🏏"
-                desc="Star Sports 1 · English & Hindi · ICC WT20 WC 2026"
+                desc="Star Sports 1 · English & Hindi · Live matches"
                 color="#8b5cf6" bg="rgba(139,92,246,0.05)" border="rgba(139,92,246,0.15)" to="/live-cricket-tv"/>
-              <ChannelShortcut label="Football Live TV" emoji="⚽"
-                desc="Sports18 · FIFA World Cup 2026 · English & Hindi"
-                color="#1ed596" bg="rgba(30,213,150,0.05)" border="rgba(30,213,150,0.15)" to="/live-cricket-tv"/>
+              <ChannelShortcut label="Match Center" emoji="📊"
+                desc="Live scores, scorecards & schedules"
+                color="#38bdf8" bg="rgba(56,189,248,0.05)" border="rgba(56,189,248,0.15)" to="/live-cricket-tv"/>
             </div>
           </div>
 
@@ -2026,15 +2208,13 @@ export default function Homeies({ searchTerm }) {
               <Trophy size={13} className="text-amber-400"/>
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Tournaments</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <TournamentBadge emoji="🏏" name="ICC WT20 WC 2026" subtitle="England · Jun–Jul 2026"
-                color="#8b5cf6" bg="rgba(139,92,246,0.06)" border="rgba(139,92,246,0.15)" to="/live-cricket-tv"/>
-              <TournamentBadge emoji="⚽" name="FIFA WC 2026™" subtitle="USA · Canada · Mexico"
-                color="#1ed596" bg="rgba(30,213,150,0.06)" border="rgba(30,213,150,0.15)" to="/live-cricket-tv"/>
-              <TournamentBadge emoji="🇮🇳" name="India Cricket" subtitle="ODI vs Afghanistan"
-                color="#f59e0b" bg="rgba(245,158,11,0.05)" border="rgba(245,158,11,0.12)" to="/live-cricket-tv"/>
-              <TournamentBadge emoji="📅" name="Fixtures" subtitle="All schedules"
-                color="#60a5fa" bg="rgba(96,165,250,0.05)" border="rgba(96,165,250,0.12)" to="/live-cricket-tv"/>
+            <div className="grid grid-cols-3 gap-3">
+              <TournamentBadge emoji="🇮🇳" name="BCCI" subtitle="Team India · Highlights"
+                color="#38bdf8" bg="rgba(56,189,248,0.06)" border="rgba(56,189,248,0.18)" to="/tournament/bcci"/>
+              <TournamentBadge emoji="🏆" name="ICC" subtitle="World Cup · Highlights"
+                color="#22d3ee" bg="rgba(34,211,238,0.06)" border="rgba(34,211,238,0.18)" to="/tournament/icc"/>
+              <TournamentBadge emoji="🏏" name="IPL" subtitle="2026 · Match Highlights"
+                color="#f59e0b" bg="rgba(245,158,11,0.06)" border="rgba(245,158,11,0.18)" to="/tournament/ipl"/>
             </div>
           </div>
 

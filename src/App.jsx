@@ -43,7 +43,7 @@ import AuthPage from './paged/AuthPage';
 import UpdatePassword from './paged/UpdatePassword';
 import TorrentSearch from './paged/Torrentsearch';
 import LiveCricketTV from './paged/LiveCricketTV';
-import Homeies from './paged/Homeies';
+import Homeies, { TournamentPage } from './paged/Homeies';
 import LiveChannelsUpload from './paged/LiveChannelsUpload';
 import LiveChannelsPage from './paged/LiveChannelsPage';
 import MatchCenter from './paged/MatchCenter';
@@ -233,6 +233,7 @@ const AppContent = () => {
         <Route path="/live-cricket"           element={<LiveCricket />} />
         <Route path="/search-torrent"         element={<TorrentSearch />} />
         <Route path="/sports"                 element={<Homeies />} />
+        <Route path="/tournament/:slug"       element={<TournamentPage />} />
         <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
         {/* Readable, stable match URL — what the sitemap lists and Google indexes. */}
         <Route path="/match/:slug"            element={<MatchCenter />} />
