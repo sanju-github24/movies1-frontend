@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo, useContext } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
+import { readContinueList, removeProgress, progressPercent as cwPercent, timeLeft as cwTimeLeft, hasNextEpisode as cwHasNext } from "../utils/continueWatching";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
 import { Loader2, Play, X, Clock3, TrendingUp, Volume2, VolumeX, UserCircle, CheckCircle2 } from "lucide-react";
@@ -586,6 +587,7 @@ const WatchListPage = () => {
       const langs = s?.user?.user_metadata?.languages || [];
       setUserLangs(langs);
       setFetchLangs(langs);
+      try { localStorage.setItem("profile_langs", JSON.stringify(langs)); } catch {}  // player auto-audio
       if (s?.user && !s.user.user_metadata?.hasSelectedLanguage) setShowLangPopup(true);
       setAuthChecked(true);
     });
@@ -601,6 +603,7 @@ const WatchListPage = () => {
     try {
       const { error } = await supabase.auth.updateUser({ data: { languages: userLangs, hasSelectedLanguage: true } });
       if (error) throw error;
+      try { localStorage.setItem("profile_langs", JSON.stringify(userLangs)); } catch {}  // player auto-audio
       setShowLangPopup(false);
       setFetchLangs(userLangs); // triggers a TMDB refetch scoped to the chosen languages
     } catch (e) { console.error(e); }
@@ -919,6 +922,7 @@ const WatchListPage = () => {
         state: {
           movie: {
             ...payload,
+            source: "tmdb",   // let WatchPage trust the search data (correct posters)
             content_type: movie.content_type || payload.content_type,
           },
         },
@@ -941,19 +945,9 @@ const WatchListPage = () => {
     }).slice(0, 12);
   }, [selectedMovie, allMovies]);
 
-  const resumeMap = useMemo(() => {
-    const raw = readAllResumeTimes();
-    const mapped = {};
-    Object.entries(raw).forEach(([id, value]) => {
-      const found = movies.find(m => m.slug === id || m.video_url === id);
-      if (found) mapped[found.slug] = { movie: found, time: value.time, updatedAt: value.updatedAt };
-    });
-    return mapped;
-  }, [movies, resumeRefresh]);
-
-  const continueList = useMemo(() =>
-    Object.values(resumeMap).filter(r => (r.time || 0) > 10).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
-  [resumeMap]);
+  // Standalone continue-watching — reads the store directly, so it works for every
+  // watched title (movies AND series, DB or TMDB), independent of the loaded list.
+  const continueList = useMemo(() => readContinueList(), [resumeRefresh]);
 
   /* ─── Genre rows ── */
   const groupedByBackendGenre = useMemo(() => {
@@ -1217,20 +1211,33 @@ const WatchListPage = () => {
                   <Clock3 className="w-5 h-5" /> CONTINUE WATCHING
                 </h2>
                 <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide px-2">
-                  {continueList.map(({ movie, time }) => {
-                    const progressPercent = Math.min(100, (time / (movie.runtime ? movie.runtime * 60 : 7200)) * 100);
+                  {continueList.map((r) => {
+                    const next = cwHasNext(r);   // finished episode with a next one queued
+                    const goPlay = () => {
+                      const resume = next ? { ...r, season: r.next.season, episode: r.next.episode, time: 0 } : r;
+                      navigate(`/watch/${r.slug}`, { state: { movie: { ...r, source: r.source || "tmdb" }, resume } });
+                    };
+                    const minsLeft = Math.ceil(cwTimeLeft(r) / 60);
                     return (
-                      <div key={movie.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={() => movie.source === "mxplayer" && movie.mxWebUrl ? navigate("/mx-watch", { state: { webUrl: movie.mxWebUrl, title: movie.title, image: movie.cover_poster || movie.poster } }) : navigate(`/watch/${movie.slug}`)}>
-                        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl group-hover:scale-105 transition-all">
-                          <img src={movie.cover_poster || movie.poster || "/default-cover.jpg"} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={movie.title} />
-                          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
-                            <div className="h-full bg-blue-600 shadow-[0_0_10px_#2563eb]" style={{ width: `${progressPercent}%` }} />
+                      <div key={r.slug} className="relative flex-none w-[260px] sm:w-[340px] cursor-pointer group/continue transition-all duration-300" onClick={goPlay}>
+                        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/10 shadow-2xl group-hover/continue:scale-105 transition-all">
+                          <img src={r.backdrop || r.poster || "/default-cover.jpg"} className="w-full h-full object-cover transition-transform duration-700 group-hover/continue:scale-110" alt={r.title} onError={(e) => { e.currentTarget.src = "/default-cover.jpg"; }} />
+                          {r.logo && <img src={r.logo} alt={r.title} className="absolute left-3 bottom-4 h-6 sm:h-8 max-w-[55%] object-contain drop-shadow-lg pointer-events-none" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 group-hover/continue:opacity-100 transition-opacity">
+                            {next
+                              ? <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider shadow-lg"><Play className="w-4 h-4" fill="white" /> Next Episode</span>
+                              : <Play className="w-10 h-10 text-white" fill="white" />}
                           </div>
+                          <button onClick={(e) => { e.stopPropagation(); removeProgress(r.slug); setResumeRefresh(x => x + 1); }} className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white/70 hover:text-white z-10"><X className="w-3.5 h-3.5" /></button>
+                          {!next && <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20"><div className="h-full bg-blue-600 shadow-[0_0_10px_#2563eb]" style={{ width: `${cwPercent(r)}%` }} /></div>}
                         </div>
                         <div className="mt-3 px-1">
-                          <h3 className="text-sm font-bold text-gray-200 truncate font-black">{movie.title || movie.slug}</h3>
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-900/80 px-2 py-1 rounded-md border border-white/5 mt-1 w-fit">
-                            <Clock3 className="w-3 h-3" /> {Math.floor(time / 60)}m watched
+                          <h3 className="text-sm font-bold text-gray-200 truncate font-black">{r.title || r.slug}</h3>
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 mt-1">
+                            {r.content_type === "tv" && r.episode && <span className="text-blue-400 font-black uppercase tracking-wider">S{r.season} · E{r.episode}</span>}
+                            {next
+                              ? <span className="text-green-400 font-black uppercase tracking-wider">✓ Up next: S{r.next.season} · E{r.next.episode}</span>
+                              : minsLeft > 0 && <span className="flex items-center gap-1"><Clock3 className="w-3 h-3" /> {minsLeft}m left</span>}
                           </div>
                         </div>
                       </div>

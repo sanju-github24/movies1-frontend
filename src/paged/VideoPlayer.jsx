@@ -18,17 +18,57 @@ const formatTime = (seconds) => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
+// Browsers only render WebVTT in a <track>. Convert an SRT (or a header-less VTT)
+// to WebVTT: add the WEBVTT header and turn "00:00:01,000" comma timestamps into
+// "00:00:01.000" periods. Leaves an already-valid VTT untouched.
+const toVtt = (text) => {
+  const body = (text || "").replace(/\r+/g, "");
+  if (/^﻿?WEBVTT/i.test(body.trim())) return body;              // already VTT
+  return "WEBVTT\n\n" + body.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+};
+
+// Does an audio track match a preferred language (a name like "Hindi" or a code
+// like "hin"/"hi")? Compares codes and names loosely so profile prefs "just work".
+const NAME_TO_CODE = { hindi:"hin", tamil:"tam", telugu:"tel", kannada:"kan", malayalam:"mal", english:"eng", bengali:"ben", marathi:"mar", punjabi:"pan", gujarati:"guj", urdu:"urd" };
+const audioMatchesLang = (track, pref) => {
+  if (!track || !pref) return false;
+  const p = String(pref).toLowerCase().trim();
+  const code = NAME_TO_CODE[p] || p;                    // "hindi" → "hin"
+  const lang = (track.lang || "").toLowerCase();
+  const name = (track.name || "").toLowerCase();
+  return lang === code || lang === p || lang.slice(0, 2) === code.slice(0, 2)
+      || name === p || (NAME_TO_CODE[name] && NAME_TO_CODE[name] === code);
+};
+const AUDIO_PREF_KEY = "preferred_audio_lang";
+
 const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
-  const langMap = {
-    'en': 'English', 'hi': 'Hindi', 'bn': 'Bengali', 'ta': 'Tamil',
-    'te': 'Telugu', 'kn': 'Kannada', 'ml': 'Malayalam', 'mr': 'Marathi'
-  };
-  const name = track.name || "";
+  // both 2- and 3-letter ISO codes (our HLS uses 3-letter: kan, hin, tam…)
+const langMap = {
+  en: 'English', eng: 'English',
+  hi: 'हिंदी', hin: 'हिंदी',
+  bn: 'বাংলা', ben: 'বাংলা',
+  ta: 'தமிழ்', tam: 'தமிழ்',
+  te: 'తెలుగు', tel: 'తెలుగు',
+  kn: 'ಕನ್ನಡ', kan: 'ಕನ್ನಡ',
+  ml: 'മലയാളം', mal: 'മലയാളം',
+  mr: 'मराठी', mar: 'मराठी',
+  pa: 'ਪੰਜਾਬੀ', pan: 'ਪੰਜਾਬੀ',
+  ur: 'اردو', urd: 'اردو',
+  gu: 'ગુજરાતી', guj: 'ગુજરાતી',
+  kok: 'कोंकणी',
+  or: 'ଓଡ଼ିଆ', ori: 'ଓଡ଼ିଆ',
+  as: 'অসমীয়া', asm: 'অসমীয়া',
+  ne: 'नेपाली', nep: 'नेपाली'
+};
   const langCode = (track.lang || "").toLowerCase();
-  if (name.trim() && !name.toLowerCase().includes("und") && isNaN(name)) return name;
-  if (langMap[langCode]) return langMap[langCode];
-  return langCode.toUpperCase() || `Track ${track.id + 1}`;
+  const name = (track.name || "").trim();
+  // ignore ffmpeg's generic labels like "audio_1" / "Track 2" / "und"
+  const generic = !name || /^(audio|track|stream|und|unknown)[\s_-]*\d*$/i.test(name);
+  if (!generic && isNaN(name)) return name;          // a real descriptive name wins
+  if (langMap[langCode]) return langMap[langCode];   // else map the language code
+  if (langCode && langCode !== "und") return langCode.toUpperCase();
+  return `Track ${(track.id ?? 0) + 1}`;
 };
 
 const VideoPlayer = ({ 
@@ -43,11 +83,19 @@ const VideoPlayer = ({
   quality = "",
   imdbRating = "0.0", // Prop passed from parent movieMeta
   year = "",          // Prop passed from parent movieMeta
-  onProgress          // optional (currentTime, duration) callback for resume/continue-watching
+  poster = "",        // TMDB poster (our-HLS playback)
+  backdrop = "",      // TMDB backdrop (our-HLS playback)
+  description = "",   // TMDB overview (our-HLS playback)
+  inline = false,     // true → fill parent container (embedded in watch overlay); false → full viewport
+  onProgress,         // optional (currentTime, duration) callback for resume/continue-watching
+  startTime = 0,      // resume position (seconds) — seek here once the media loads
+  preferredAudioLang = ""  // profile language (e.g. "Hindi") → auto-pick that audio track
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const hlsRef = useRef(null);
+  const didSeekRef = useRef(false);   // seek to startTime only once per source
+  const appliedAudioRef = useRef(false);   // auto-pick preferred audio once per source
   
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -79,6 +127,11 @@ const VideoPlayer = ({
   const currentSeason = episodes[currentIndex]?.season_number || episodes[currentIndex]?.season || 1;
   const activeSeason = selectedSeason != null ? selectedSeason : currentSeason;
   const nextEpData = hasNextEpisode ? episodes[currentIndex + 1] : null;
+
+  // Current episode for the S·E badge (series only; movies show nothing).
+  const isSeries = Array.isArray(episodes) && episodes.length > 0;
+  const currentEp = isSeries ? (episodes[currentIndex] || null) : null;
+  const currentEpNum = currentEp?.episodeNumberInSeason || currentEp?.episode || currentEp?.episode_number || (currentIndex + 1);
 
   // New Feature: Auto-Play Logic
   const handleVideoEnd = useCallback(() => {
@@ -112,6 +165,8 @@ const VideoPlayer = ({
     const video = videoRef.current;
     if (!video || !src) return;
     setIsBuffering(true);
+    didSeekRef.current = false;        // new source → allow one resume-seek
+    appliedAudioRef.current = false;   // new source → re-apply preferred audio
 
     if (src.includes(".m3u8") && Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
@@ -126,15 +181,31 @@ const VideoPlayer = ({
         setLevels(hls.levels || []);
       };
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => { syncTracks(); setIsBuffering(false); });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        syncTracks();
+        hls.subtitleTrack = -1;            // default: subtitles OFF
+        hls.subtitleDisplay = false;
+        setCurrentSubtitleId(-1);
+        setIsBuffering(false);
+      });
       hls.on(Hls.Events.LEVEL_LOADED, syncTracks);
+      // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => setSubtitleTracks(hls.subtitleTracks || []));
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => setAudioTracks(hls.audioTracks || []));
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => setCurrentAudioTrackId(data.id));
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => setCurrentSubtitleId(data.id));
 
       return () => hls.destroy();
     } else {
+      // Native HLS (Safari): subtitles surface as the video's own textTracks.
       video.src = src;
-      video.onloadedmetadata = () => setIsBuffering(false);
+      video.onloadedmetadata = () => {
+        setIsBuffering(false);
+        const tt = Array.from(video.textTracks || []).map((t, i) => ({ id: i, name: t.label || t.language, lang: t.language }));
+        setSubtitleTracks(tt);
+        for (let i = 0; i < video.textTracks.length; i++) video.textTracks[i].mode = "disabled"; // default OFF
+        setCurrentSubtitleId(-1);
+      };
     }
   }, [src]);
 
@@ -144,6 +215,36 @@ const VideoPlayer = ({
       videoRef.current.muted = isMuted;
     }
   }, [volume, isMuted]);
+
+  // When a subtitle is uploaded, wait for the <track> to mount, turn off any HLS
+  // subtitle and show the uploaded one (it's always the last text track).
+  useEffect(() => {
+    if (!externalSubUrl) return;
+    const t = setTimeout(() => {
+      if (hlsRef.current) { hlsRef.current.subtitleDisplay = false; hlsRef.current.subtitleTrack = -1; }
+      const tracks = videoRef.current?.textTracks;
+      if (tracks && tracks.length) {
+        for (let i = 0; i < tracks.length; i++) tracks[i].mode = "disabled";
+        tracks[tracks.length - 1].mode = "showing";
+      }
+    }, 120);
+    return () => clearTimeout(t);
+  }, [externalSubUrl]);
+
+  // Auto-pick the preferred audio track once tracks are known. A remembered manual
+  // choice (localStorage) wins; otherwise the profile language. Applied once per
+  // source, so the user can still switch freely afterwards.
+  useEffect(() => {
+    if (!audioTracks.length || appliedAudioRef.current || !hlsRef.current) return;
+    let saved = "";
+    try { saved = localStorage.getItem(AUDIO_PREF_KEY) || ""; } catch {}
+    const pref = saved || preferredAudioLang;
+    if (pref) {
+      const idx = audioTracks.findIndex((t) => audioMatchesLang(t, pref));
+      if (idx >= 0) { hlsRef.current.audioTrack = idx; setCurrentAudioTrackId(idx); }
+    }
+    appliedAudioRef.current = true;
+  }, [audioTracks, preferredAudioLang]);
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -169,20 +270,26 @@ const VideoPlayer = ({
     setShowSettings(null);
   };
 
-  const handleSubtitleUpload = (e) => {
+  const handleSubtitleUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setExternalSubUrl(url);
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const vtt = toVtt(raw);   // .srt → WebVTT (or pass a real .vtt through)
+      const url = URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
+      setExternalSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
       setCurrentSubtitleId(999);
       setShowSettings(null);
+    } catch {
+      /* ignore unreadable file */
     }
+    e.target.value = "";   // allow re-uploading the same filename
   };
 
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-full bg-black group overflow-hidden font-sans text-white select-none transition-all"
+      className={`${inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all`}
       onMouseMove={() => {
         setShowControls(true);
         clearTimeout(window.controlsTimeout);
@@ -197,7 +304,14 @@ const VideoPlayer = ({
           setCurrentTime(v.currentTime);
           if (onProgress) onProgress(v.currentTime, v.duration);
         }}
-        onLoadedMetadata={() => setDuration(videoRef.current.duration)}
+        onLoadedMetadata={() => {
+          setDuration(videoRef.current.duration);
+          // Resume: seek to the saved position once, if it's meaningfully into the video.
+          if (startTime > 1 && !didSeekRef.current && startTime < videoRef.current.duration - 5) {
+            try { videoRef.current.currentTime = startTime; } catch {}
+          }
+          didSeekRef.current = true;
+        }}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => { setIsBuffering(false); setIsPlaying(true); }}
         onEnded={handleVideoEnd}
@@ -206,14 +320,17 @@ const VideoPlayer = ({
       </video>
 
       {/* --- INTEGRATED DATABASE PAUSED OVERLAY --- */}
-      <PausedOverlay 
-        isVisible={!isPlaying && !isBuffering} 
-        title={title} 
-        genres={genres} 
+      <PausedOverlay
+        isVisible={!isPlaying && !isBuffering}
+        title={title}
+        genres={genres}
         quality={quality}
         logoUrl={logoUrl}
         imdbRating={imdbRating}
         year={year}
+        poster={poster}
+        backdrop={backdrop}
+        description={description}
       />
 
       {isBuffering && (
@@ -294,9 +411,17 @@ const VideoPlayer = ({
                       <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentSubtitleId === i && <Check size={16} className="text-blue-400"/>}
                     </button>
                   ))}
+                  {externalSubUrl && (
+                    <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                      <span className="text-sm font-medium">Uploaded subtitle</span>{currentSubtitleId === 999 && <Check size={16} className="text-blue-400"/>}
+                    </button>
+                  )}
+                  {subtitleTracks.length === 0 && !externalSubUrl && (
+                    <p className="px-4 py-2 text-xs text-white/40">No subtitles in this video — upload one below.</p>
+                  )}
                   <label className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 cursor-pointer text-white/70 hover:text-white transition-all">
-                    <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.vtt)</span>
-                    <input type="file" accept=".vtt" className="hidden" onChange={handleSubtitleUpload} />
+                    <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.srt / .vtt)</span>
+                    <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
                   </label>
                 </>
               )}
@@ -306,7 +431,7 @@ const VideoPlayer = ({
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
               {showSettings === 'audio' && (audioTracks.length ? audioTracks.map((t, i) => (
-                <button key={i} onClick={() => { hlsRef.current.audioTrack = i; setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                <button key={i} onClick={() => { hlsRef.current.audioTrack = i; setCurrentAudioTrackId(i); try { localStorage.setItem(AUDIO_PREF_KEY, t.lang || t.name || ""); } catch {} setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
@@ -316,13 +441,18 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: TOP --- */}
-      <div className={`absolute top-0 inset-x-0 p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
-        <div className="flex items-center gap-5">
-          <button onClick={onBackClick} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
+      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
+          <button onClick={onBackClick} className="p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
           <div className="flex flex-col text-left min-w-0">
             {logoUrl
               ? <img src={logoUrl} alt={title} className="h-8 md:h-11 max-w-[220px] md:max-w-md object-contain drop-shadow-2xl" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               : <h1 className="text-lg md:text-2xl font-bold truncate max-w-xs md:max-w-xl drop-shadow-2xl">{title}</h1>}
+            {isSeries && (
+              <span className="mt-1 text-[10px] md:text-xs font-black uppercase tracking-[0.15em] text-blue-400 truncate max-w-[220px] md:max-w-md drop-shadow">
+                S{currentSeason} · E{currentEpNum}{currentEp?.title ? ` · ${currentEp.title}` : ""}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -335,8 +465,8 @@ const VideoPlayer = ({
       </div>
 
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
-      <div className={`absolute bottom-0 inset-x-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
-        <div className="relative group/progress mb-8">
+      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+        <div className="relative group/progress mb-3 sm:mb-6 md:mb-8">
             <div className="flex justify-between text-[11px] font-semibold mb-3 px-1 text-white/70">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
@@ -351,12 +481,12 @@ const VideoPlayer = ({
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-10">
-            <button onClick={() => videoRef.current.currentTime -= 10} className="hover:text-blue-500 transition-colors"><RotateCcw size={28}/></button>
+          <div className="flex items-center gap-4 sm:gap-6 md:gap-10">
+            <button onClick={() => videoRef.current.currentTime -= 10} className="hidden sm:inline-flex hover:text-blue-500 transition-colors"><RotateCcw size={26}/></button>
             <button onClick={togglePlay} className="hover:scale-125 transition-transform active:scale-90 shadow-2xl">
-              {isPlaying ? <Pause size={36} className="text-white" /> : <Play size={36} fill="white" className="text-white ml-1" />}
+              {isPlaying ? <Pause size={32} className="text-white" /> : <Play size={32} fill="white" className="text-white ml-1" />}
             </button>
-            <button onClick={() => videoRef.current.currentTime += 10} className="hover:text-blue-500 transition-colors"><RotateCw size={28}/></button>
+            <button onClick={() => videoRef.current.currentTime += 10} className="hidden sm:inline-flex hover:text-blue-500 transition-colors"><RotateCw size={26}/></button>
 
             {hasNextEpisode && (
                 <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} className="p-3 bg-blue-600/20 border border-blue-500/40 rounded-xl hover:bg-blue-600 transition-all text-white flex items-center gap-2 group shadow-xl">
@@ -373,17 +503,17 @@ const VideoPlayer = ({
             </div>
           </div>
           
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-5">
             {episodes.length > 0 && (
                 <button onClick={() => setShowSettings('episodes')} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-blue-600 transition-all text-white flex items-center gap-3 shadow-lg group">
                     <ListVideo size={22} className="group-hover:scale-110 transition-transform" />
                     <span className="hidden md:inline text-xs font-semibold">Episodes</span>
                 </button>
             )}
-            <button onClick={() => setShowSettings('subs')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions size={22} /></button>
-            <button onClick={() => setShowSettings('audio')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music size={22} /></button>
-            <button onClick={() => setShowSettings('quality')} className={`p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers size={22} /></button>
-            <button onClick={handleFullscreen} className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white"><Maximize size={22} /></button>
+            <button onClick={() => setShowSettings('subs')} className={`p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions size={22} /></button>
+            <button onClick={() => setShowSettings('audio')} className={`p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music size={22} /></button>
+            <button onClick={() => setShowSettings('quality')} className={`p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers size={22} /></button>
+            <button onClick={handleFullscreen} className="p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white"><Maximize size={22} /></button>
           </div>
         </div>
       </div>

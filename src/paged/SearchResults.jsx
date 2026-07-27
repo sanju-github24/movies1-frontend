@@ -747,7 +747,36 @@ const SearchResults = () => {
       navigate("/mx-watch", { state: { webUrl: movie.mxWebUrl, mxId: movie.mxId, mxType: movie.mxType, title: movie.title, image: movie.poster || movie.cover_poster } });
       return;
     }
-    navigate(`/watch/${movie.slug}`, { state: { movie } });
+
+    if (movie.source === "tmdb") {
+      // Pure TMDB pick → pass the TMDB payload. WatchPage's attachLocalHls still
+      // surfaces AnchorHD if we've uploaded this title.
+      const payload = movie.tmdbPayload || {
+        tmdb_id: movie.tmdb_id || (typeof movie.id === "string" ? movie.id.replace(/^tmdb[-_]/, "") : movie.id),
+        imdb_id: movie.imdb_id || null,
+        title: movie.title,
+        slug: movie.slug,
+        poster: movie.poster,
+        cover_poster: movie.cover_poster,
+        description: movie.description,
+        year: movie.year,
+        imdb_rating: movie.imdb_rating || movie.imdbRating,
+        content_type: movie.content_type,
+        first_air_date: movie.first_air_date || null,
+        release_date: movie.release_date || null,
+        episodes: movie.episodes || [],
+        cast: movie.cast || [],
+        genres: movie.genres || [],
+        title_logo: movie.title_logo || null,
+        trailer_key: movie.trailer_key || movie.trailer_codes || null,
+      };
+      navigate(`/watch/${movie.slug}`, { state: { movie: { ...payload, source: "tmdb", mxWebUrl: movie.mxWebUrl || null } } });
+    } else {
+      // Our DB movie/series → pass ALL our fields (hls_url, direct_url, episodes,
+      // title_logo, genres, slug…) so AnchorHD + our metadata show. WatchPage then
+      // enriches the episode list from TMDB (posters/thumbnails) like a direct visit.
+      navigate(`/watch/${movie.slug}`, { state: { movie } });
+    }
     setSelectedMovie(null);
   };
 

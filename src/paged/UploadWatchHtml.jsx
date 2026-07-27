@@ -44,6 +44,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
           cover_poster: editData.cover_poster,
           title_logo: editData.title_logo,
           video_url: editData.video_url,
+          hls_url: editData.hls_url,
           direct_url: editData.direct_url,
           html_code: editData.html_code,
           html_code2: editData.html_code2,
@@ -126,6 +127,11 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
             <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-[10px] text-slate-300" value={editData.poster || ""} onChange={e => setEditData({...editData, poster: e.target.value})} placeholder="Poster URL" />
             <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-[10px] text-slate-300" value={editData.cover_poster || ""} onChange={e => setEditData({...editData, cover_poster: e.target.value})} placeholder="Backdrop URL" />
             <input className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-[10px] text-slate-300" value={editData.title_logo || ""} onChange={e => setEditData({...editData, title_logo: e.target.value})} placeholder="Title Logo URL" />
+        </div>
+
+        <div className="space-y-3 border-l-4 border-emerald-500 pl-4">
+            <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">⭐ Our HLS (R2) — shows first on watch page</p>
+            <input className="w-full bg-slate-800 border border-emerald-500/40 p-3 rounded-xl text-xs font-mono text-emerald-300" value={editData.hls_url || ""} onChange={e => setEditData({...editData, hls_url: e.target.value})} placeholder="HLS / MKV URL  (paste: movies/<slug>/master.m3u8  from the uploader)" />
         </div>
 
         <div className="space-y-3 border-l-4 border-blue-600 pl-4">
