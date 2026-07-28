@@ -5,6 +5,7 @@ import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
 import { Copy, CornerRightDown, Zap, Film, MonitorPlay, Clock, Sparkles, ChevronRight } from "lucide-react";
 import { AppContext } from "../context/AppContext";
 import MatchCenter from "../paged/MatchCenter";
+import MobileDetailSheet from "./MobileDetailSheet";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -295,7 +296,7 @@ const Header = () => {
   const [showMemberPopup, setShowMemberPopup] = useState(false);
   const [showBettingPopup, setShowBettingPopup] = useState(false);
 
-  const [mobileFocusId, setMobileFocusId] = useState(null);
+  const [sheetMovie, setSheetMovie] = useState(null);   // mobile: full-screen detail sheet
   const movieGridRef = useRef(null);
   const navigate = useNavigate();
 
@@ -318,26 +319,35 @@ const Header = () => {
     });
   }, []);
 
-  const handleClickOutside = useCallback((event) => {
-    if (mobileFocusId !== null && isMobileView()) {
-      if (movieGridRef.current && !movieGridRef.current.contains(event.target))
-        setMobileFocusId(null);
-    }
-  }, [mobileFocusId]);
+  // Open the mobile sheet, then enrich it from watch_html (matched by slug, then
+  // title) — that table holds the title logo, backdrop and trailer for our uploads,
+  // which the plain movies row is missing.
+  const openMobileSheet = async (movie) => {
+    setSheetMovie(movie);   // show immediately with what we already have
+    try {
+      let { data } = await supabase.from("watch_html").select("*").eq("slug", movie.slug).limit(1);
+      if ((!data || !data.length) && movie.title) {
+        ({ data } = await supabase.from("watch_html").select("*").ilike("title", movie.title).limit(1));
+      }
+      const w = data && data[0];
+      if (!w) return;
+      setSheetMovie(prev => (prev && prev.slug === movie.slug) ? {
+        ...prev,
+        title_logo:   prev.title_logo  || w.title_logo || "",
+        trailer_key:  prev.trailer_key || w.trailer_codes || null,   // watch_html stores the key in trailer_codes
+        cover_poster: w.cover_poster || prev.cover_poster || prev.poster,
+        poster:       prev.poster || w.poster,
+        tmdb_id:      prev.tmdb_id || w.tmdb_id,
+        content_type: prev.content_type || w.content_type,
+      } : prev);
+    } catch { /* enrichment is best-effort */ }
+  };
 
-  useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, [handleClickOutside]);
-
-  const handleCardClick = (movieId, event) => {
+  const handleCardClick = (movie, event) => {
     if (isMobileView()) {
       event.stopPropagation();
-      setMobileFocusId(mobileFocusId === movieId ? null : movieId);
+      event.preventDefault();
+      openMobileSheet(movie);   // open the full-screen detail sheet on mobile
     }
   };
 
@@ -457,15 +467,14 @@ const Header = () => {
           <div ref={movieGridRef}
             className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
             {latestMovies.map(movie => {
-              const isFocused = mobileFocusId === movie.id;
               return (
                 <div key={movie.id}
-                  className="group relative bg-gray-950 rounded-2xl overflow-hidden border border-gray-800 transition-all hover:border-blue-500/50"
-                  onClick={e => handleCardClick(movie.id, e)}>
+                  className="group relative bg-gray-950 rounded-2xl overflow-hidden border border-gray-800 transition-all hover:border-blue-500/50 cursor-pointer"
+                  onClick={e => handleCardClick(movie, e)}>
                   <div className="aspect-[2/3] relative overflow-hidden">
                     <img src={movie.poster||movie.poster_url||"/default-poster.jpg"} alt={movie.title}
                       loading="lazy"
-                      className={`w-full h-full object-cover transition-transform duration-700 ${isFocused?"scale-110":"group-hover:scale-110"}`}/>
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"/>
                     <div className="absolute top-2 left-2 flex flex-col gap-1">
                       {movie.note && (
                         <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xl uppercase">
@@ -497,7 +506,7 @@ const Header = () => {
                       {movie.title}
                     </h2>
                   </div>
-                  <div className={`absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 gap-3 transition-all duration-300 ${isFocused?"opacity-100":"opacity-0 group-hover:opacity-100"}`}>
+                  <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm hidden sm:flex flex-col items-center justify-center p-4 gap-3 transition-all duration-300 opacity-0 group-hover:opacity-100">
                     <Link to={`/movie/${movie.slug}`}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-3 rounded-xl flex items-center justify-center gap-2 transition"
                       onClick={e=>e.stopPropagation()}>
@@ -517,6 +526,9 @@ const Header = () => {
           </div>
         </div>
       )}
+
+      {/* ── MOBILE DETAIL SHEET ─────────────────────────────────────────── */}
+      <MobileDetailSheet movie={sheetMovie} onClose={() => setSheetMovie(null)} />
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
       <footer className="w-full py-12 text-center border-t border-gray-900 mt-12 bg-gray-950/50">
