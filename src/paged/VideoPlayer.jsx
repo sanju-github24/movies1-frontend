@@ -97,6 +97,8 @@ const VideoPlayer = ({
   const didSeekRef = useRef(false);   // seek to startTime only once per source
   const appliedAudioRef = useRef(false);   // auto-pick preferred audio once per source
   const appliedSubRef = useRef(false);     // auto-enable default subtitle once per source
+  const langBarShownRef = useRef(false);   // show the audio-language bar once per source
+  const langBarTimer = useRef(null);
   const previewRef = useRef(null);         // hidden <video> for scrub-thumbnail preview
   const previewHlsRef = useRef(null);
   const progressBarRef = useRef(null);
@@ -126,6 +128,8 @@ const VideoPlayer = ({
   const [hoverTime, setHoverTime] = useState(null);   // scrub preview time (null = hidden)
   const [hoverPct, setHoverPct] = useState(0);
   const [previewHasFrame, setPreviewHasFrame] = useState(false);  // hide black until a frame decodes
+  const [showLangBar, setShowLangBar] = useState(false);   // Hotstar-style audio-language chooser on load
+  const [langIntro, setLangIntro] = useState(false);       // intro phase: only the bar shows, controls stay hidden
   const [selectedSeason, setSelectedSeason] = useState(null); // season tab in the episodes panel
 
   // Normalization
@@ -170,6 +174,14 @@ const VideoPlayer = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  // Always start playing. If the browser blocks unmuted autoplay, retry muted.
+  const tryAutoplay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    if (p && p.catch) p.catch(() => { v.muted = true; setIsMuted(true); v.play().catch(() => {}); });
+  };
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -177,6 +189,7 @@ const VideoPlayer = ({
     didSeekRef.current = false;        // new source → allow one resume-seek
     appliedAudioRef.current = false;   // new source → re-apply preferred audio
     appliedSubRef.current = false;     // new source → re-apply default subtitle
+    langBarShownRef.current = false;   // new source → offer the language bar again
     // tear down the old scrub-preview so it re-inits against the new source
     if (previewHlsRef.current) { try { previewHlsRef.current.destroy(); } catch {} previewHlsRef.current = null; }
     if (previewRef.current) { try { previewRef.current.removeAttribute("src"); delete previewRef.current.dataset.ready; } catch {} }
@@ -214,6 +227,7 @@ const VideoPlayer = ({
         setIsBuffering(false);
         // Auto-enable the default embedded subtitle (SUBTITLE_TRACKS_UPDATED refines it).
         maybeEnableDefaultSub(hls);
+        tryAutoplay();
       });
       hls.on(Hls.Events.LEVEL_LOADED, syncTracks);
       // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
@@ -232,6 +246,7 @@ const VideoPlayer = ({
         setSubtitleTracks(tt);
         for (let i = 0; i < video.textTracks.length; i++) video.textTracks[i].mode = "disabled"; // default OFF
         setCurrentSubtitleId(-1);
+        tryAutoplay();
       };
     }
   }, [src]);
@@ -272,6 +287,35 @@ const VideoPlayer = ({
     }
     appliedAudioRef.current = true;
   }, [audioTracks, preferredAudioLang]);
+
+  // Switch audio track + remember the choice (used by the menu and the language bar).
+  const changeAudio = (i) => {
+    if (hlsRef.current) hlsRef.current.audioTrack = i;
+    setCurrentAudioTrackId(i);
+    try { localStorage.setItem(AUDIO_PREF_KEY, audioTracks[i]?.lang || audioTracks[i]?.name || ""); } catch {}
+  };
+  // End the intro: fade the language bar out, then let the player controls slide in.
+  const endLangIntro = () => {
+    if (langBarTimer.current) clearTimeout(langBarTimer.current);
+    setShowLangBar(false);
+    setLangIntro(false);
+    setShowControls(true);
+  };
+  const scheduleEndLangIntro = (ms) => {
+    if (langBarTimer.current) clearTimeout(langBarTimer.current);
+    langBarTimer.current = setTimeout(endLangIntro, ms);
+  };
+  // Hotstar-style intro: on load show ONLY the language bar (controls hidden); once it
+  // dismisses, the player controls appear smoothly. Runs once per source.
+  useEffect(() => {
+    if (audioTracks.length > 1 && !langBarShownRef.current) {
+      langBarShownRef.current = true;
+      setLangIntro(true);
+      setShowLangBar(true);
+      setShowControls(false);
+      scheduleEndLangIntro(5000);
+    }
+  }, [audioTracks]);
 
   // Clean up the hidden scrub-preview hls + timer on unmount.
   useEffect(() => () => {
@@ -516,7 +560,7 @@ const VideoPlayer = ({
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
               {showSettings === 'audio' && (audioTracks.length ? audioTracks.map((t, i) => (
-                <button key={i} onClick={() => { hlsRef.current.audioTrack = i; setCurrentAudioTrackId(i); try { localStorage.setItem(AUDIO_PREF_KEY, t.lang || t.name || ""); } catch {} setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
@@ -531,7 +575,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: TOP --- */}
-      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
           <button onClick={onBackClick} className="p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
           <div className="flex flex-col text-left min-w-0">
@@ -554,8 +598,25 @@ const VideoPlayer = ({
          </div>
       </div>
 
+      {/* Audio-language chooser — slides up on load (Hotstar-style), default highlighted */}
+      {showLangBar && audioTracks.length > 1 && (
+        <div className="absolute inset-x-0 bottom-28 sm:bottom-32 z-[60] flex justify-center px-4">
+          <div className="flex items-center gap-1 sm:gap-2 max-w-full overflow-x-auto no-scrollbar bg-black/70 backdrop-blur-xl border border-white/10 rounded-full px-2 py-2 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <span className="hidden sm:inline text-[10px] font-black uppercase tracking-[0.15em] text-white/40 px-2 shrink-0">Audio</span>
+            {audioTracks.map((t, i) => (
+              <button key={i} onClick={() => { changeAudio(i); scheduleEndLangIntro(1200); }}
+                className={`px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 ${currentAudioTrackId === i ? "bg-white text-black" : "text-white/80 hover:bg-white/10"}`}>
+                {getLanguageName(t)}
+              </button>
+            ))}
+            <button onClick={endLangIntro}
+              className="ml-1 p-1.5 rounded-full text-white/50 hover:text-white hover:bg-white/10 shrink-0"><CloseIcon size={16}/></button>
+          </div>
+        </div>
+      )}
+
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
-      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <div className="relative mb-2 sm:mb-4">
             {/* Scrub thumbnail preview (like Netflix/Hotstar) */}
             <div className="absolute bottom-7 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-100" style={{ left: `${hoverPct}%`, opacity: hoverTime != null ? 1 : 0 }}>
