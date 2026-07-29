@@ -697,11 +697,18 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
           }
 
           if (watchData) {
+            const localEps = Array.isArray(watchData.episodes) ? watchData.episodes : [];
+            // If the upload has episodes it's a SERIES — force TMDB to resolve as
+            // /tv/{id}. Movie and TV ids are separate namespaces, so querying a
+            // series' id as a movie returns a completely unrelated film (wrong
+            // poster / year / runtime / episode names). Episodes present overrides
+            // any stale content_type stored on the row.
+            const ctype = localEps.length ? "tv" : (watchData.content_type || null);
             // Enrich by tmdb_id OR imdb_id so direct visits also get TMDB metadata.
             tData = (watchData.tmdb_id || watchData.imdb_id)
-              ? await fetchFullTmdb(watchData.tmdb_id, watchData.imdb_id, watchData.content_type)
+              ? await fetchFullTmdb(watchData.tmdb_id, watchData.imdb_id, ctype)
               : null;
-            eps   = Array.isArray(watchData.episodes) ? watchData.episodes : [];
+            eps   = localEps;
             if (eps.length === 0 && Array.isArray(tData?.episodes)) eps = tData.episodes;
 
             meta = {
@@ -711,7 +718,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               title:        tData?.title || tData?.name || watchData.title || watchData.slug,
               tmdb_id:      watchData.tmdb_id || tData?.tmdb_id || null,
               imdb_id:      watchData.imdb_id || null,
-              content_type: watchData.content_type || (eps.length > 0 ? "tv" : "movie"),
+              content_type: (eps.length > 0 || ctype === "tv") ? "tv" : (watchData.content_type || tData?.content_type || "movie"),
               poster:       safeURI(tData?.poster_url || watchData.poster || "/default-poster.jpg"),
               background:   safeURI(tData?.cover_poster_url || watchData.cover_poster || watchData.poster),
               imdbRating:   watchData.imdb_rating || tData?.imdb_rating?.toFixed?.(1) || "0.0",
@@ -728,6 +735,28 @@ if (!alive) return;
 
         if (meta) {
           const isTV = meta.content_type === "tv" || eps.length > 0;
+
+          // Safety net for every path: if it's a series but the TMDB metadata was
+          // resolved as a MOVIE (wrong namespace → unrelated film's poster/year),
+          // re-fetch as /tv and replace the poster/backdrop/year/rating/genres.
+          if (isTV && (meta.tmdb_id || meta.imdb_id) && meta.content_type !== "tv") {
+            const tv = await fetchFullTmdb(meta.tmdb_id, meta.imdb_id, "tv");
+            if (tv) {
+              tData = tv;
+              meta = {
+                ...meta,
+                content_type: "tv",
+                title:      tv.title || tv.name || meta.title,
+                poster:     safeURI(tv.poster_url || meta.poster),
+                background: safeURI(tv.cover_poster_url || meta.background),
+                year:       tv.year || meta.year,
+                imdbRating: tv.imdb_rating?.toFixed?.(1) || meta.imdbRating,
+                genres:     (tv.genres || []).map(g => typeof g === "object" ? g.name : g) || meta.genres,
+              };
+            } else {
+              meta = { ...meta, content_type: "tv" };
+            }
+          }
 
           if (isTV && (meta.tmdb_id || meta.imdb_id)) {
             const tmdbEps = await fetchTmdbEpisodes(meta.tmdb_id, meta.imdb_id);

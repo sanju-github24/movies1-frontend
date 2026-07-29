@@ -146,6 +146,11 @@ const VideoPlayer = ({
   const currentEp = isSeries ? (episodes[currentIndex] || null) : null;
   const currentEpNum = currentEp?.episodeNumberInSeason || currentEp?.episode || currentEp?.episode_number || (currentIndex + 1);
 
+  // Per-episode TMDB still — same field logic as WatchPage. Returns "" when the
+  // episode has no still, so we never fall back to the wrong series/movie poster.
+  const epStill = (ep) => ep?.thumbnail
+    || (ep?.still_path ? (ep.still_path.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`) : "");
+
   // New Feature: Auto-Play Logic
   const handleVideoEnd = useCallback(() => {
     if (hasNextEpisode) {
@@ -505,7 +510,7 @@ const VideoPlayer = ({
                   className={`w-full group flex gap-3 p-2 rounded-xl text-left transition-all border ${currentIndex === i ? 'bg-blue-600/20 border-blue-500' : 'border-transparent hover:bg-white/5'}`}
                 >
                   <div className="relative w-28 shrink-0 aspect-video rounded-lg overflow-hidden bg-gray-900 border border-white/10">
-                    <img src={ep.cover_poster || ep.poster || '/api/placeholder/400/225'} className="w-full h-full object-cover" alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    {epStill(ep) && <img src={epStill(ep)} className="w-full h-full object-cover" alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />}
                     <span className="absolute left-1 top-1 text-[9px] font-black bg-black/70 px-1.5 py-0.5 rounded">E{ep.episodeNumberInSeason || ep.episode || (i + 1)}</span>
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Play size={20} fill="white"/></div>
                     {currentIndex === i && <div className="absolute inset-0 bg-blue-600/40 flex items-center justify-center"><Activity className="animate-pulse" size={18}/></div>}
