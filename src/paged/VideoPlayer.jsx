@@ -202,7 +202,23 @@ const VideoPlayer = ({
     setPreviewHasFrame(false);
 
     if (src.includes(".m3u8") && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+      // Some external CDNs put an auth token in the master URL's query (e.g. ?in=…)
+      // and require it on EVERY request, but hls.js doesn't carry a playlist's query
+      // onto its children — so audio renditions/segments would load without it and
+      // fail. Append the master's query to any child request that has none. Our own
+      // R2 children already carry ?t=… (worker-rewritten), so they're skipped.
+      const q = src.includes("?") ? src.slice(src.indexOf("?") + 1) : "";
+      const cfg = { enableWorker: true, lowLatencyMode: true };
+      if (q) {
+        class TokenLoader extends Hls.DefaultConfig.loader {
+          load(context, config, callbacks) {
+            if (context?.url && !context.url.includes("?")) context.url += "?" + q;
+            super.load(context, config, callbacks);
+          }
+        }
+        cfg.loader = TokenLoader;
+      }
+      const hls = new Hls(cfg);
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(video);
@@ -356,7 +372,18 @@ const VideoPlayer = ({
     // frames when we seek it (otherwise a never-played <video> can stay black).
     const prime = () => { pv.play().then(() => pv.pause()).catch(() => {}); };
     if (src && src.includes(".m3u8") && Hls.isSupported()) {
-      const h = new Hls({ maxBufferLength: 4, startLevel: 0, capLevelToPlayerSize: false });
+      const q = src.includes("?") ? src.slice(src.indexOf("?") + 1) : "";   // carry token to children
+      const pcfg = { maxBufferLength: 4, startLevel: 0, capLevelToPlayerSize: false };
+      if (q) {
+        class PreviewTokenLoader extends Hls.DefaultConfig.loader {
+          load(context, config, callbacks) {
+            if (context?.url && !context.url.includes("?")) context.url += "?" + q;
+            super.load(context, config, callbacks);
+          }
+        }
+        pcfg.loader = PreviewTokenLoader;
+      }
+      const h = new Hls(pcfg);
       previewHlsRef.current = h;
       h.loadSource(src);
       h.attachMedia(pv);
