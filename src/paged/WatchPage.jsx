@@ -383,15 +383,24 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   /* ── Our own R2 HLS → plays INLINE in the same overlay as every other server
      (via the site's /player.html, which handles HLS + audio tracks), so it's
      one consistent, mobile-fit player — no separate page. ── */
-  const playOurHls = useCallback(async () => {
-    if (!movieMeta?.hls_url) return;
+  // Play a movie-level stream in our rich VideoPlayer. Accepts either our HLS
+  // (m3u8) field or a Direct URL — both go through the same player (m3u8 via
+  // hls.js, direct .mp4/.mkv natively). A full http(s)/blob link plays as-is;
+  // an R2 path (movies/<slug>/master.m3u8) is signed via the backend.
+  const playOurHls = useCallback(async (preferLink = null) => {
+    const link = preferLink || movieMeta?.hls_url || movieMeta?.video_url;
+    if (!link) return;
     setMxResolving(true);
     try {
-      const r = await fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(movieMeta.hls_url)}`);
-      const j = await r.json();
-      if (j?.success && j.url) {
+      let url = link;
+      if (!/^(https?:|blob:)/i.test(link)) {
+        const r = await fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(link)}`);
+        const j = await r.json();
+        url = j?.success && j.url ? j.url : null;
+      }
+      if (url) {
         setResumeStart(getResumeTime(movieMeta.slug || routeSlug));   // resume movie
-        setFinalSource(j.url);          // raw signed m3u8 → native VideoPlayer
+        setFinalSource(url);            // signed m3u8 OR direct URL → our VideoPlayer
         setSourceType("hls");
         setVideoTitle(movieMeta.title || routeSlug);
         setShowOverlay(true);
@@ -504,10 +513,20 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     // Only if there's no stream do we fall back to the embed mirror for this item,
     // so selecting AnchorHD never silently opens Multi Audio when a stream exists.
     if (serverId === "ourhls" || serverId === "hls") {
-      if (ep && (ep.direct_url || ep.hls_url)) { playEpisodeStream(ep); return; }
-      if (!ep && movieMeta.hls_url) { playOurHls(); return; }
-      if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";
-      else { playOurHls(); return; }
+      if (ep) {
+        // Series: play the episode's own stream link in our VideoPlayer.
+        if (ep.direct_url || ep.hls_url) { playEpisodeStream(ep); return; }
+        if (ep.html || ep.html_code) serverId = "embed";       // else fall to the embed mirror
+      } else {
+        // Movies: play OUR stream in the VideoPlayer. AnchorHD prefers the HLS
+        // (m3u8) field; Direct prefers the direct URL — both handled by the same
+        // player (m3u8 via hls.js, direct .mp4/.mkv natively).
+        const movieLink = serverId === "hls"
+          ? (movieMeta.video_url || movieMeta.hls_url)
+          : (movieMeta.hls_url || movieMeta.video_url);
+        if (movieLink) { playOurHls(movieLink); return; }
+        if (movieMeta.html_code) serverId = "embed";
+      }
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
 
@@ -539,8 +558,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       case "tmdb":    if (tmdb) src = TV ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`                     : `https://vidlink.pro/movie/${tmdb}`;                     break;
       case "2embed":  if (id)   src = TV ? `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`            : `https://www.2embed.cc/embed/${id}`;                     break;
       case "hls":
-        src  = ep ? ep.direct_url : movieMeta.video_url;
-        type = "video"; break;
+        // Direct server → our VideoPlayer, so ANY HLS (.m3u8) or direct URL plays.
+        src  = ep ? (ep.direct_url || ep.hls_url) : (movieMeta.video_url || movieMeta.hls_url);
+        type = "hls"; break;
       case "embed":
         src  = ep ? (ep.html || ep.html_code) : movieMeta.html_code;
         type = src ? "html" : null; break;
