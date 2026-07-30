@@ -383,6 +383,16 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   /* ── Our own R2 HLS → plays INLINE in the same overlay as every other server
      (via the site's /player.html, which handles HLS + audio tracks), so it's
      one consistent, mobile-fit player — no separate page. ── */
+  // Route THIRD-PARTY HLS through our backend CORS proxy (hls.js needs CORS on
+  // the manifest + every segment). Our own R2/worker streams already send CORS
+  // (and a token), and direct .mp4 plays natively without CORS — so skip those.
+  const maybeProxy = useCallback((u) => {
+    if (!u || !/^https?:/i.test(u)) return u;
+    if (!/\.m3u8($|\?)/i.test(u)) return u;                         // only HLS needs the proxy
+    try { if (/1anchormovies|r2\.dev|cloudflarestorage|workers\.dev/i.test(new URL(u).host)) return u; } catch {}
+    return `${backendUrl}/api/hls-proxy?url=${encodeURIComponent(u)}`;
+  }, [backendUrl]);
+
   // Play a movie-level stream in our rich VideoPlayer. Accepts either our HLS
   // (m3u8) field or a Direct URL — both go through the same player (m3u8 via
   // hls.js, direct .mp4/.mkv natively). A full http(s)/blob link plays as-is;
@@ -400,14 +410,14 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       }
       if (url) {
         setResumeStart(getResumeTime(movieMeta.slug || routeSlug));   // resume movie
-        setFinalSource(url);            // signed m3u8 OR direct URL → our VideoPlayer
+        setFinalSource(maybeProxy(url));   // signed m3u8 / direct URL / proxied 3rd-party HLS
         setSourceType("hls");
         setVideoTitle(movieMeta.title || routeSlug);
         setShowOverlay(true);
       }
     } catch { /* ignore — user can pick another server */ }
     setMxResolving(false);
-  }, [movieMeta, backendUrl, routeSlug]);
+  }, [movieMeta, backendUrl, routeSlug, maybeProxy]);
 
   /* ── Resolve an episode's stream link to a playable URL. A full http(s) link
      plays as-is; an R2 path (movies/<slug>/master.m3u8) is signed via the backend. ── */
@@ -435,12 +445,12 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const sameEp = saved && String(saved.season) === String(ep.season || 1) && String(saved.episode) === String(epNo);
     setResumeStart(sameEp ? (saved.time || 0) : 0);
     setCurrentOverlayEp(ep);
-    setFinalSource(url);
+    setFinalSource(maybeProxy(url));    // proxy 3rd-party HLS; our own streams pass through
     setSourceType("hls");               // → the rich VideoPlayer (with episode switcher)
     setVideoTitle(`${movieMeta?.title || routeSlug} — S${ep.season || 1}E${epNo || 1}`);
     setShowOverlay(true);
     return true;
-  }, [resolveStreamLink, movieMeta, routeSlug]);
+  }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy]);
 
   /* ── Continue Watching: throttled progress save while our HLS plays ── */
   const handleProgress = useCallback((time, duration) => {
@@ -575,12 +585,12 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     }
 
     if (src) {
-      setFinalSource(src);
+      setFinalSource(type === "hls" ? maybeProxy(src) : src);   // proxy 3rd-party HLS for CORS
       setSourceType(type);
       setVideoTitle(label);
       setShowOverlay(true);
     }
-  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream]);
+  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream, maybeProxy]);
 
   const handleServerSwitch = (server) => {
     setActiveServer(server);
