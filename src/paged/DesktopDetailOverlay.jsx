@@ -71,7 +71,7 @@ const RelatedRow = ({ movies, onSelect }) => {
               {isHovered && showTrailer && m.trailer_key && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-xl">
                   <div className="w-full h-full scale-[1.6] pointer-events-none">
-                    <iframe src={`https://www.youtube.com/embed/${m.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${m.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    <iframe src={`https://www.youtube.com/embed/${m.trailer_key}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                       className="w-full h-full" frameBorder="0" allow="autoplay" />
                   </div>
                   <div className="absolute top-3 left-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm">
@@ -181,7 +181,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
             {movie.trailer_key && showTrailer && (
               <div className="absolute inset-0 animate-in fade-in duration-1000">
                 <iframe
-                  src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${movie.trailer_key}&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
+                  src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}
                   className="w-full h-full scale-[1.35] pointer-events-none"
                   frameBorder="0"
                   allow="autoplay"

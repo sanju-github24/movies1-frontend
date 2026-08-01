@@ -161,7 +161,7 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
             <div className="absolute inset-0 bg-black overflow-hidden">
               <div className="relative w-full h-full scale-[1.25] pointer-events-none">
                 <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${trailerKey}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                   className="w-full h-full"
                   frameBorder="0"
                   allow="autoplay"
@@ -276,7 +276,7 @@ const SearchMobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) 
             <>
               <div className="relative w-full h-full scale-[1.3] pointer-events-none">
                 <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${trailerKey}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                   title="Trailer"
                   className="w-full h-full"
                   frameBorder="0"

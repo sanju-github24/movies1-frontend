@@ -533,7 +533,7 @@ export default function TrackDetailPage() {
       {ytPreview ? (
         <div style={{ position:'fixed', top:0, left:0, width:'100vw', height:'100vh', zIndex:0, overflow:'hidden', pointerEvents:'none' }}>
           <iframe
-            src={`https://www.youtube.com/embed/${ytPreview.videoId}?enablejsapi=1&autoplay=1&mute=1&start=${ytPreview.startSeconds}&controls=0&showinfo=0&rel=0&loop=1&playlist=${ytPreview.videoId}&playsinline=1`}
+            src={`https://www.youtube.com/embed/${ytPreview.videoId}?enablejsapi=1&autoplay=1&mute=1&start=${ytPreview.startSeconds}&controls=0&showinfo=0&rel=0&playsinline=1`}
             style={{ position:'absolute', top:'50%', left:'50%', width:'100vw', height:'56.25vw', minHeight:'100vh', minWidth:'177.78vh', transform:'translate(-50%,-50%) scale(1.15)', border:'none', opacity: ytReady ? (isMobile ? 0.42 : 0.44) : 0, transition:'opacity 0.8s ease', pointerEvents:'none' }}
             allow="autoplay; encrypted-media"
             tabIndex={-1}

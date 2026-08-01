@@ -358,7 +358,7 @@ const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 
                   <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden">
                     <div className="w-full h-full scale-[1.4] pointer-events-none">
                       <iframe
-                        src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                        src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                         className="w-full h-full"
                         frameBorder="0"
                         allow="autoplay"
@@ -493,7 +493,7 @@ const GenreRow = ({ title, movies, onSelect }) => {
               {hoveredId === movie.id && showTrailer && movie.trailer_key && window.innerWidth >= 640 && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-xl">
                   <div className="w-full h-full scale-[1.6] pointer-events-none">
-                    <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${movie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    <iframe src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                       className="w-full h-full" frameBorder="0" />
                   </div>
                   <div className="absolute top-3 left-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm">
@@ -1137,7 +1137,7 @@ const WatchListPage = () => {
                     {idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile && (
                       <div className="absolute inset-0 bg-black overflow-hidden">
                         <div className="relative w-full h-full scale-[1.35] pointer-events-none">
-                          <iframe src={`https://www.youtube.com/embed/${liveMovieData.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${liveMovieData.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
+                          <iframe src={`https://www.youtube.com/embed/${liveMovieData.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
                             title="Hero Trailer" className="w-full h-full" frameBorder="0" allow="autoplay" />
                         </div>
                         <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
@@ -1296,7 +1296,7 @@ const WatchListPage = () => {
                 <>
                   <div className="relative w-full h-full scale-[1.3] pointer-events-none">
                     <iframe
-                      src={`https://www.youtube.com/embed/${selectedMovie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${selectedMovie.trailer_key}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
+                      src={`https://www.youtube.com/embed/${selectedMovie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
                       title="Trailer" className="w-full h-full" frameBorder="0"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
                   </div>

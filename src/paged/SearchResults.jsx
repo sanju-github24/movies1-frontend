@@ -147,7 +147,7 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
                 <iframe
                   src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
                     isMuted ? 1 : 0
-                  }&controls=0&loop=1&playlist=${trailerKey}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                  }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                   className="w-full h-full"
                   frameBorder="0"
                   allow="autoplay"
@@ -269,7 +269,7 @@ const MobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
                 <iframe
                   src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
                     isMuted ? 1 : 0
-                  }&controls=0&loop=1&playlist=${trailerKey}&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                  }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
                   title="Trailer"
                   className="w-full h-full"
                   frameBorder="0"
