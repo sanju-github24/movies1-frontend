@@ -21,6 +21,62 @@ function HlsTrailer({ src, muted }) {
   }, [src]);
   return <video ref={ref} autoPlay loop playsInline muted={muted} className="w-full h-full object-cover" />;
 }
+
+// YouTube trailer via the IFrame API — lets us end it ~20s early (before YouTube's
+// end-screen shows recommendations) and hand back to the poster, and a transparent
+// cover absorbs all mouse events so no player controls / pause overlay ever appear.
+let _ytApiPromise;
+function loadYT() {
+  if (typeof window !== "undefined" && window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (_ytApiPromise) return _ytApiPromise;
+  _ytApiPromise = new Promise((resolve) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(window.YT); };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  });
+  return _ytApiPromise;
+}
+function YouTubeTrailer({ videoId, muted, onEnd, endSkip = 20 }) {
+  const hostRef = React.useRef(null);
+  const playerRef = React.useRef(null);
+  React.useEffect(() => {
+    let cancelled = false, poll;
+    loadYT().then((YT) => {
+      if (cancelled || !hostRef.current) return;
+      playerRef.current = new YT.Player(hostRef.current, {
+        videoId,
+        playerVars: { autoplay: 1, mute: muted ? 1 : 0, controls: 0, showinfo: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, disablekb: 1, fs: 0, playsinline: 1 },
+        events: {
+          onReady: (e) => { try { muted ? e.target.mute() : e.target.unMute(); e.target.playVideo(); } catch {} },
+          onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) onEnd && onEnd(); },
+        },
+      });
+      poll = setInterval(() => {
+        const p = playerRef.current;
+        try {
+          if (p && p.getDuration) {
+            const d = p.getDuration(), t = p.getCurrentTime();
+            if (d > 0 && t >= d - endSkip) onEnd && onEnd();   // stop before the end-screen
+          }
+        } catch {}
+      }, 500);
+    });
+    return () => { cancelled = true; clearInterval(poll); try { playerRef.current && playerRef.current.destroy(); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId]);
+  React.useEffect(() => {
+    const p = playerRef.current;
+    try { if (p && p.mute) (muted ? p.mute() : p.unMute()); } catch {}
+  }, [muted]);
+  return (
+    <div className="w-full h-full relative">
+      <div ref={hostRef} className="w-full h-full" />
+      <div className="absolute inset-0" />{/* transparent cover blocks YouTube's hover controls */}
+    </div>
+  );
+}
 import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
 import DesktopDetailOverlay from "./DesktopDetailOverlay";
@@ -1136,9 +1192,8 @@ const WatchListPage = () => {
                     )}
                     {idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile && (
                       <div className="absolute inset-0 bg-black overflow-hidden">
-                        <div className="relative w-full h-full scale-[1.35] pointer-events-none">
-                          <iframe src={`https://www.youtube.com/embed/${liveMovieData.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-                            title="Hero Trailer" className="w-full h-full" frameBorder="0" allow="autoplay" />
+                        <div className="relative w-full h-full scale-[1.35]">
+                          <YouTubeTrailer videoId={liveMovieData.trailer_key} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />
                         </div>
                         <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
                           className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90">
