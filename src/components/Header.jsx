@@ -435,12 +435,17 @@ const Header = () => {
 
           {/* Admin panel */}
           {isAdmin && (
-            <div className="w-full p-4 bg-red-950/20 border border-red-500/30 rounded-2xl text-center">
+            <div className="w-full p-4 bg-red-950/20 border border-red-500/30 rounded-2xl text-center space-y-3">
               <Link to="/admin" target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 text-red-400 hover:text-red-300 font-black uppercase italic tracking-tighter transition-all">
                 <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"/>
                 ACCESS SECURE ADMIN PANEL
               </Link>
+              <a href="https://upload.1anchormovies.buzz" target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 font-black uppercase italic tracking-tighter transition-all">
+                <MonitorPlay className="w-4 h-4"/>
+                R2 MOVIE UPLOADER
+              </a>
             </div>
           )}
 
