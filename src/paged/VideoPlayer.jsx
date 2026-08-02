@@ -105,6 +105,13 @@ const VideoPlayer = ({
   const previewSeekTimer = useRef(null);
   const startTimeRef = useRef(startTime);
   startTimeRef.current = startTime;   // read by the loader effect without re-running it
+  const showControlsRef = useRef(true);      // read inside timers without re-binding
+  const tapRef = useRef({ t: 0, x: 0, id: 0 });
+  const holdTimer = useRef(null);
+  const heldRef = useRef(false);             // long-press speed boost is active
+  const prevRateRef = useRef(1);
+  const hideTimer = useRef(null);
+  const lastTouchRef = useRef(0);            // suppress the click that follows a tap
   
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -133,6 +140,8 @@ const VideoPlayer = ({
   const [showLangBar, setShowLangBar] = useState(false);   // Hotstar-style audio-language chooser on load
   const [langIntro, setLangIntro] = useState(false);       // intro phase: only the bar shows, controls stay hidden
   const [selectedSeason, setSelectedSeason] = useState(null); // season tab in the episodes panel
+  const [seekFlash, setSeekFlash] = useState(null);   // {side:'back'|'fwd', secs} double-tap ripple
+  const [speedBoost, setSpeedBoost] = useState(false);// long-press 2x indicator
 
   // Normalization
   const currentIndex = Number(currentEpisodeIndex);
@@ -160,21 +169,122 @@ const VideoPlayer = ({
     }
   }, [hasNextEpisode, nextEpData, currentIndex, onEpisodeClick]);
 
+  /* ── Controls visibility ───────────────────────────────────────────────
+     One helper for every input (mouse, touch, keyboard): show the HUD and
+     re-arm the auto-hide. Kept in a ref too so timers can read it. */
+  const bumpControls = useCallback((show = true) => {
+    setShowControls(show);
+    showControlsRef.current = show;
+    clearTimeout(hideTimer.current);
+    if (show) {
+      hideTimer.current = setTimeout(() => {
+        if (videoRef.current && !videoRef.current.paused) {
+          setShowControls(false);
+          showControlsRef.current = false;
+        }
+      }, 3200);
+    }
+  }, []);
+
+  /** Relative seek that stays inside the media and flashes the ±10s ripple. */
+  const nudgeSeek = useCallback((secs, side) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const max = (v.duration || Infinity) - 0.5;
+    v.currentTime = Math.max(0, Math.min(max, v.currentTime + secs));
+    if (side) {
+      setSeekFlash({ side, secs: Math.abs(secs) });
+      setTimeout(() => setSeekFlash(null), 550);
+    }
+  }, []);
+
   const handleKeyDown = useCallback((e) => {
     if (showSettings) return;
     const v = videoRef.current;
     if (!v) return;
-    switch (e.key.toLowerCase()) {
-      case " ": e.preventDefault(); togglePlay(); break;
+    const k = e.key.toLowerCase();
+    if (/^[0-9]$/.test(k) && v.duration) {          // 0-9 → jump to 0%…90%
+      e.preventDefault();
+      v.currentTime = (Number(k) / 10) * v.duration;
+      bumpControls();
+      return;
+    }
+    switch (k) {
+      case " ": case "k": e.preventDefault(); togglePlay(); break;
       case "f": e.preventDefault(); handleFullscreen(); break;
       case "m": setIsMuted(prev => !prev); break;
-      case "arrowright": v.currentTime += 10; break;
-      case "arrowleft": v.currentTime -= 10; break;
-      case "n": if(hasNextEpisode) onEpisodeClick(nextEpData, currentIndex + 1); break;
+      case "arrowright": case "l": nudgeSeek(10, "fwd"); break;
+      case "arrowleft":  case "j": nudgeSeek(-10, "back"); break;
+      case "arrowup":   e.preventDefault(); setVolume(v2 => Math.min(1, +(v2 + 0.1).toFixed(2))); setIsMuted(false); break;
+      case "arrowdown": e.preventDefault(); setVolume(v2 => Math.max(0, +(v2 - 0.1).toFixed(2))); break;
+      case "c": changeSubtitles(currentSubtitleId === -1 ? (subtitleTracks.length ? 0 : -1) : -1); break;
+      case ">": case ".": applySpeed(Math.min(2, playbackRate + 0.25)); break;
+      case "<": case ",": applySpeed(Math.max(0.5, playbackRate - 0.25)); break;
+      case "n": if (hasNextEpisode) onEpisodeClick(nextEpData, currentIndex + 1); break;
+      case "escape": if (onBackClick) onBackClick(); break;
       default: break;
     }
-    setShowControls(true);
-  }, [showSettings, isPlaying, hasNextEpisode, nextEpData, currentIndex, onEpisodeClick]);
+    bumpControls();
+  }, [showSettings, isPlaying, hasNextEpisode, nextEpData, currentIndex, onEpisodeClick,
+      bumpControls, nudgeSeek, currentSubtitleId, subtitleTracks, playbackRate, onBackClick]);
+
+  /* ── Touch gestures (mobile) ───────────────────────────────────────────
+     Tap #1 only reveals the controls — it never pauses, which is what makes
+     a phone player feel right. Tap #2 (while they're visible) toggles play.
+     Double-tap the left/right third seeks ±10s, and holding down plays at 2x
+     until you let go. */
+  const onVideoTouchStart = useCallback((e) => {
+    heldRef.current = false;
+    const v = videoRef.current;
+    clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      if (!v || v.paused) return;
+      heldRef.current = true;
+      prevRateRef.current = v.playbackRate;
+      v.playbackRate = 2;
+      setSpeedBoost(true);
+    }, 550);
+    tapRef.current.x = e.touches[0].clientX;
+  }, []);
+
+  const endHold = useCallback(() => {
+    clearTimeout(holdTimer.current);
+    if (!heldRef.current) return false;
+    heldRef.current = false;
+    const v = videoRef.current;
+    if (v) v.playbackRate = prevRateRef.current || playbackRate;
+    setSpeedBoost(false);
+    return true;                     // swallow the tap that ended the hold
+  }, [playbackRate]);
+
+  const onVideoTouchEnd = useCallback((e) => {
+    if (endHold()) return;
+    if (showSettings) { setShowSettings(null); return; }
+
+    const x = e.changedTouches?.[0]?.clientX ?? 0;
+    const rect = containerRef.current?.getBoundingClientRect();
+    const zone = rect && rect.width ? (x - rect.left) / rect.width : 0.5;
+    const now = Date.now();
+    const prev = tapRef.current;
+
+    if (now - prev.t < 320 && Math.abs(x - prev.x) < 80) {   // ── double tap ──
+      tapRef.current = { t: 0, x, id: 0 };
+      if (zone < 0.35) nudgeSeek(-10, "back");
+      else if (zone > 0.65) nudgeSeek(10, "fwd");
+      else togglePlay();
+      bumpControls();
+      return;
+    }
+
+    const id = now;
+    tapRef.current = { t: now, x, id };
+    setTimeout(() => {
+      if (tapRef.current.id !== id) return;      // a double tap consumed it
+      if (!showControlsRef.current) bumpControls(true);      // tap 1 → just show
+      else if (videoRef.current?.paused) { togglePlay(); bumpControls(true); }
+      else { togglePlay(); bumpControls(true); }            // tap 2 → play/pause
+    }, 300);
+  }, [endHold, showSettings, nudgeSeek, bumpControls]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -227,10 +337,11 @@ const VideoPlayer = ({
         ? Math.max(500e3, link.downlink * 1e6 * 0.7)     // 70% of the reported downlink
         : (smallScreen ? 900e3 : 2e6);
 
+      const resumeAt = startTimeRef.current > 1 ? startTimeRef.current : 0;
       const cfg = {
         enableWorker: true,
         lowLatencyMode: false,             // VOD — LL-HLS part loading only adds work
-        startPosition: startTimeRef.current > 1 ? startTimeRef.current : -1,
+        startPosition: resumeAt || -1,
         startFragPrefetch: true,           // fetch the first fragment during manifest parse
         testBandwidth: true,
 
@@ -294,6 +405,12 @@ const VideoPlayer = ({
         // Phones: never let ABR climb past 720p. 1080p/4K segments are several
         // times larger for no visible gain on a 6" screen and are what made the
         // first seconds crawl. Manual quality picks still override this.
+        // Resume: make sure the very first fragment request is the one at the
+        // saved position. Without this a re-attach can start at 0 and only seek
+        // after metadata — which is exactly the "coming back is slow" delay.
+        if (resumeAt > 1 && (videoRef.current?.currentTime || 0) < resumeAt - 2) {
+          try { hls.startLoad(resumeAt); } catch {}
+        }
         if (smallScreen) {
           const cap = (hls.levels || []).reduce(
             (best, l, i) => (l.height && l.height <= 720 &&
@@ -345,11 +462,29 @@ const VideoPlayer = ({
         if (!v || v.paused || v.seeking || v.ended) { stuck = 0; return; }
         if (v.currentTime > lastT + 0.05) { lastT = v.currentTime; stuck = 0; return; }
         stuck += 1;
-        if (stuck === 5) { try { hls.startLoad(v.currentTime); } catch {} }         // ~10s
-        if (stuck >= 8) { try { v.currentTime = v.currentTime + 0.2; } catch {} stuck = 0; }
+        if (stuck === 2) { try { hls.startLoad(v.currentTime); } catch {} }         // ~4s
+        if (stuck >= 5) { try { v.currentTime = v.currentTime + 0.2; } catch {} stuck = 0; }
       }, 2000);
 
-      return () => { clearInterval(watchdog); hls.destroy(); };
+      /* Mobile browsers tear down the media pipeline when the tab/app goes to the
+         background. On return, restart the loader at the current position right
+         away instead of waiting for the watchdog. */
+      const onWake = () => {
+        if (document.visibilityState !== "visible") return;
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.readyState < 3) { try { hls.startLoad(v.currentTime); } catch {} }
+        if (!v.paused) v.play().catch(() => {});
+      };
+      document.addEventListener("visibilitychange", onWake);
+      window.addEventListener("pageshow", onWake);
+
+      return () => {
+        clearInterval(watchdog);
+        document.removeEventListener("visibilitychange", onWake);
+        window.removeEventListener("pageshow", onWake);
+        hls.destroy();
+      };
     } else {
       // Native HLS (iPhone Safari): let the OS player prefetch, and start at the
       // resume point via the media fragment so it doesn't load from 0 and seek.
@@ -418,6 +553,7 @@ const VideoPlayer = ({
     setShowLangBar(false);
     setLangIntro(false);
     setShowControls(true);
+    showControlsRef.current = true;
   };
   const scheduleEndLangIntro = (ms) => {
     if (langBarTimer.current) clearTimeout(langBarTimer.current);
@@ -431,6 +567,7 @@ const VideoPlayer = ({
       setLangIntro(true);
       setShowLangBar(true);
       setShowControls(false);
+      showControlsRef.current = false;
       scheduleEndLangIntro(5000);
     }
   }, [audioTracks]);
@@ -551,15 +688,23 @@ const VideoPlayer = ({
     <div 
       ref={containerRef}
       className={`${inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all`}
+      style={{ touchAction: "manipulation" }}   /* no double-tap zoom stealing our gestures */
       onMouseMove={() => {
-        setShowControls(true);
-        clearTimeout(window.controlsTimeout);
-        window.controlsTimeout = setTimeout(() => {
-          if (isPlaying && !showSettings && !showVolumeSlider) setShowControls(false);
-        }, 3000);
+        if (showSettings || showVolumeSlider) { bumpControls(true); clearTimeout(hideTimer.current); return; }
+        bumpControls(true);
       }}
     >
-      <video ref={videoRef} className="w-full h-full object-contain cursor-pointer bg-black" onClick={togglePlay} playsInline autoPlay
+      <video ref={videoRef} className="w-full h-full object-contain cursor-pointer bg-black" playsInline autoPlay
+        onTouchStart={(e) => { lastTouchRef.current = Date.now(); onVideoTouchStart(e); }}
+        onTouchEnd={(e) => { lastTouchRef.current = Date.now(); onVideoTouchEnd(e); }}
+        onTouchCancel={endHold}
+        onClick={() => {
+          // Touch devices emit a click after touchend — the gesture handler
+          // already dealt with it.
+          if (Date.now() - lastTouchRef.current < 700) return;
+          togglePlay();
+          bumpControls(true);
+        }}
         onTimeUpdate={() => {
           const v = videoRef.current; if (!v) return;
           setCurrentTime(v.currentTime);
@@ -598,7 +743,27 @@ const VideoPlayer = ({
 
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/40 backdrop-blur-sm">
-          <Loader2 className="w-14 h-14 text-blue-500 animate-spin" />
+          <Loader2 className="w-12 h-12 sm:w-14 sm:h-14 text-blue-500 animate-spin" />
+        </div>
+      )}
+
+      {/* Double-tap ±10s ripple */}
+      {seekFlash && (
+        <div className={`absolute inset-y-0 ${seekFlash.side === "back" ? "left-0" : "right-0"} w-2/5 z-40 flex items-center justify-center pointer-events-none
+          bg-white/10 ${seekFlash.side === "back" ? "rounded-r-[50%]" : "rounded-l-[50%]"} animate-in fade-in duration-150`}>
+          <div className="flex flex-col items-center gap-1 text-white drop-shadow-lg">
+            {seekFlash.side === "back" ? <RotateCcw className="w-8 h-8" /> : <RotateCw className="w-8 h-8" />}
+            <span className="text-xs font-black tracking-wide">{seekFlash.secs}s</span>
+          </div>
+        </div>
+      )}
+
+      {/* Hold-to-speed indicator */}
+      {speedBoost && (
+        <div className="absolute top-16 sm:top-24 inset-x-0 z-40 flex justify-center pointer-events-none">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white text-xs font-black">
+            <Zap className="w-3.5 h-3.5 text-blue-400" fill="currentColor" /> 2x SPEED
+          </div>
         </div>
       )}
 
@@ -788,12 +953,14 @@ const VideoPlayer = ({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 sm:gap-6 md:gap-10 min-w-0">
-            <button onClick={() => { videoRef.current.currentTime -= 10; }} className="hidden sm:inline-flex hover:text-blue-500 transition-colors"><RotateCcw size={24}/></button>
+          <div className="flex items-center gap-4 sm:gap-6 md:gap-10 min-w-0">
+            <button onClick={() => nudgeSeek(-10, "back")} aria-label="Back 10 seconds"
+              className="inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCcw className="w-6 h-6 sm:w-6 sm:h-6"/></button>
             <button onClick={togglePlay} className="hover:scale-110 transition-transform active:scale-90 shrink-0">
               {isPlaying ? <Pause className="w-7 h-7 sm:w-8 sm:h-8 text-white" /> : <Play className="w-7 h-7 sm:w-8 sm:h-8 text-white ml-0.5" fill="white" />}
             </button>
-            <button onClick={() => { videoRef.current.currentTime += 10; }} className="hidden sm:inline-flex hover:text-blue-500 transition-colors"><RotateCw size={24}/></button>
+            <button onClick={() => nudgeSeek(10, "fwd")} aria-label="Forward 10 seconds"
+              className="inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCw className="w-6 h-6 sm:w-6 sm:h-6"/></button>
 
             {hasNextEpisode && (
                 <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} className="p-1.5 sm:p-2.5 bg-blue-600/20 border border-blue-500/40 rounded-lg hover:bg-blue-600 transition-all text-white flex items-center gap-2 shrink-0">
