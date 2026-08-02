@@ -452,6 +452,19 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     return true;
   }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy]);
 
+  /* ── Re-sign an expired stream URL and carry on from the same second.
+     Our R2 links are signed for 24h; if one is rejected mid-playback the
+     player asks for a fresh one instead of dying. ── */
+  const refreshSource = useCallback(async (atSeconds) => {
+    const link = currentOverlayEp?.direct_url || currentOverlayEp?.hls_url
+      || movieMeta?.hls_url || movieMeta?.video_url;
+    if (!link) return;
+    const url = await resolveStreamLink(link);
+    if (!url) return;
+    setResumeStart(atSeconds || 0);
+    setFinalSource(maybeProxy(url));
+  }, [currentOverlayEp, movieMeta, resolveStreamLink, maybeProxy]);
+
   /* ── Continue Watching: throttled progress save while our HLS plays ── */
   const handleProgress = useCallback((time, duration) => {
     if (!movieMeta || !(time > 0)) return;
@@ -1008,6 +1021,7 @@ if (!alive) return;
                    startTime={resumeStart}
                    onProgress={handleProgress}
                    preferredAudioLang={preferredAudioLang}
+                   onRefreshSource={refreshSource}
                    onBackClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); loadContinue(); }}
                  />
                ) :

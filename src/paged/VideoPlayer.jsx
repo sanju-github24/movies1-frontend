@@ -40,6 +40,9 @@ const audioMatchesLang = (track, pref) => {
       || name === p || (NAME_TO_CODE[name] && NAME_TO_CODE[name] === code);
 };
 const AUDIO_PREF_KEY = "preferred_audio_lang";
+// Last sustained throughput (bits/s) — seeds the ABR estimate on the next load so
+// the very first fragment is already the right quality.
+const BW_KEY = "hls_bw_estimate_v1";
 
 const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
@@ -89,7 +92,8 @@ const VideoPlayer = ({
   inline = false,     // true → fill parent container (embedded in watch overlay); false → full viewport
   onProgress,         // optional (currentTime, duration) callback for resume/continue-watching
   startTime = 0,      // resume position (seconds) — seek here once the media loads
-  preferredAudioLang = ""  // profile language (e.g. "Hindi") → auto-pick that audio track
+  preferredAudioLang = "",  // profile language (e.g. "Hindi") → auto-pick that audio track
+  onRefreshSource     // optional (atSeconds) → parent re-signs an expired stream URL
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -112,6 +116,9 @@ const VideoPlayer = ({
   const prevRateRef = useRef(1);
   const hideTimer = useRef(null);
   const lastTouchRef = useRef(0);            // suppress the click that follows a tap
+  const nativeCleanupRef = useRef(null);     // listener teardown for the native-HLS path
+  const refreshRef = useRef(onRefreshSource);
+  refreshRef.current = onRefreshSource;      // used by the loader effect without re-running it
   
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -142,6 +149,7 @@ const VideoPlayer = ({
   const [selectedSeason, setSelectedSeason] = useState(null); // season tab in the episodes panel
   const [seekFlash, setSeekFlash] = useState(null);   // {side:'back'|'fwd', secs} double-tap ripple
   const [speedBoost, setSpeedBoost] = useState(false);// long-press 2x indicator
+  const [reconnecting, setReconnecting] = useState(false);  // recovering from a drop
 
   // Normalization
   const currentIndex = Number(currentEpisodeIndex);
@@ -333,9 +341,13 @@ const VideoPlayer = ({
       const smallScreen = Math.min(window.innerWidth, window.innerHeight) <= 820
         || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
       const link = navigator.connection || {};
-      const estimate = link.downlink
-        ? Math.max(500e3, link.downlink * 1e6 * 0.7)     // 70% of the reported downlink
-        : (smallScreen ? 900e3 : 2e6);
+      // Remember what this device actually sustained last time: a cold guess is
+      // what makes the first seconds either grainy (too low) or slow (too high).
+      const remembered = Number(localStorage.getItem(BW_KEY)) || 0;
+      const estimate = remembered > 300e3
+        ? remembered
+        : (link.downlink ? Math.max(500e3, link.downlink * 1e6 * 0.7)   // 70% of downlink
+                         : (smallScreen ? 900e3 : 3e6));
 
       const resumeAt = startTimeRef.current > 1 ? startTimeRef.current : 0;
       const cfg = {
@@ -432,27 +444,64 @@ const VideoPlayer = ({
       // Keep the quality menu honest about what's actually playing (-1 = Auto).
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level));
 
-      /* Recovery — a dropped segment on mobile data used to leave the spinner up
-         forever because nothing restarted the loader. */
-      let netRetries = 0, mediaRetries = 0;
+      /* Recovery ───────────────────────────────────────────────────────────
+         The player must never end up dead: we retry for as long as the page is
+         open, backing off so a long outage doesn't hammer the network, and
+         report "Reconnecting…" instead of an endless silent spinner. */
+      let mediaRetries = 0, backoff = 500, pending = null;
+      const reload = (at) => {
+        if (pending) return;                       // one recovery in flight
+        if (backoff > 900) setReconnecting(true);  // stay quiet for a one-off blip
+        pending = setTimeout(() => {
+          pending = null;
+          const from = at ?? videoRef.current?.currentTime ?? -1;
+          try { hls.startLoad(from > 1 ? from : -1); } catch {}
+          const v = videoRef.current;
+          if (v && !v.paused) v.play().catch(() => {});
+        }, backoff);
+        backoff = Math.min(8000, Math.round(backoff * 1.8));
+      };
+
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (!data?.fatal) {
-          // Non-fatal buffer stall → let hls.js re-seek into the buffered range.
           if (data?.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) setIsBuffering(true);
           return;
         }
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries < 6) {
-          netRetries++;
-          setTimeout(() => { try { hls.startLoad(); } catch {} }, Math.min(2000, 300 * netRetries));
-        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < 3) {
+        const status = data.response?.code;
+        // A signed R2 URL that has expired can only be fixed by minting a new one.
+        if (status === 401 || status === 403 || status === 410) {
+          // Ask the page for a freshly signed URL, and still retry this one in
+          // case the rejection was transient.
+          refreshRef.current?.(videoRef.current?.currentTime || 0);
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           mediaRetries++;
-          try { mediaRetries === 1 ? hls.recoverMediaError() : hls.swapAudioCodec() || hls.recoverMediaError(); } catch {}
-        } else {
-          try { hls.destroy(); } catch {}
+          try {
+            if (mediaRetries <= 2) hls.recoverMediaError();
+            else { hls.swapAudioCodec(); hls.recoverMediaError(); }
+          } catch { reload(); }
+          if (mediaRetries > 4) { mediaRetries = 0; reload(); }
+          return;
+        }
+        reload();          // network + anything else: keep trying
+      });
+
+      // Healthy again → clear the banner, reset the backoff, and remember the
+      // throughput for the next session's start level.
+      let bwSaved = 0;
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        mediaRetries = 0; backoff = 500;
+        setReconnecting(false);
+        const now = Date.now();
+        if (hls.bandwidthEstimate > 0 && now - bwSaved > 15000) {
+          bwSaved = now;
+          try { localStorage.setItem(BW_KEY, String(Math.round(hls.bandwidthEstimate))); } catch {}
         }
       });
-      // A successful fragment means we're healthy again — reset the retry budget.
-      hls.on(Hls.Events.FRAG_BUFFERED, () => { netRetries = 0; mediaRetries = 0; });
+
+      // Back on the network → don't wait out the backoff.
+      const onOnline = () => { backoff = 500; if (pending) { clearTimeout(pending); pending = null; } reload(); };
+      window.addEventListener("online", onOnline);
 
       /* Watchdog: if playback hasn't advanced for 10s while we think we're
          playing, kick the loader (and nudge past a bad segment boundary). */
@@ -481,8 +530,11 @@ const VideoPlayer = ({
 
       return () => {
         clearInterval(watchdog);
+        clearTimeout(pending);
         document.removeEventListener("visibilitychange", onWake);
         window.removeEventListener("pageshow", onWake);
+        window.removeEventListener("online", onOnline);
+        setReconnecting(false);
         hls.destroy();
       };
     } else {
@@ -492,6 +544,36 @@ const VideoPlayer = ({
       video.src = startTimeRef.current > 1
         ? `${src}${src.includes("#") ? "" : `#t=${Math.floor(startTimeRef.current)}`}`
         : src;
+      /* The OS player has no loader we can restart, so recover by re-attaching
+         the source at the current position — on a media error, when the network
+         returns, and when the app comes back to the foreground. */
+      let nativeAt = 0;
+      const reattach = () => {
+        const at = video.currentTime || nativeAt || 0;
+        setReconnecting(true);
+        video.src = at > 1 ? `${src}${src.includes("#") ? "" : `#t=${Math.floor(at)}`}` : src;
+        video.load();
+        video.play().catch(() => {});
+      };
+      const nativeError = () => reattach();
+      const nativeWake = () => {
+        if (document.visibilityState !== "visible") return;
+        if (video.error || video.readyState < 2) reattach();
+        else if (!video.paused) video.play().catch(() => {});
+      };
+      video.addEventListener("error", nativeError);
+      video.addEventListener("timeupdate", () => { nativeAt = video.currentTime; });
+      video.addEventListener("playing", () => setReconnecting(false));
+      window.addEventListener("online", reattach);
+      document.addEventListener("visibilitychange", nativeWake);
+      window.addEventListener("pageshow", nativeWake);
+      nativeCleanupRef.current = () => {
+        video.removeEventListener("error", nativeError);
+        window.removeEventListener("online", reattach);
+        document.removeEventListener("visibilitychange", nativeWake);
+        window.removeEventListener("pageshow", nativeWake);
+      };
+
       // subtitles surface as the video's own textTracks.
       video.onloadedmetadata = () => {
         setIsBuffering(false);
@@ -501,6 +583,8 @@ const VideoPlayer = ({
         setCurrentSubtitleId(-1);
         tryAutoplay();
       };
+
+      return () => { nativeCleanupRef.current?.(); nativeCleanupRef.current = null; setReconnecting(false); };
     }
   }, [src]);
 
@@ -746,6 +830,14 @@ const VideoPlayer = ({
       {isBuffering && (
         <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/40 backdrop-blur-sm">
           <Loader2 className="w-12 h-12 sm:w-14 sm:h-14 text-blue-500 animate-spin" />
+        </div>
+      )}
+
+      {reconnecting && (
+        <div className="absolute top-16 sm:top-24 inset-x-0 z-[70] flex justify-center pointer-events-none px-4">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-white text-[11px] sm:text-xs font-bold">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" /> Reconnecting…
+          </div>
         </div>
       )}
 
