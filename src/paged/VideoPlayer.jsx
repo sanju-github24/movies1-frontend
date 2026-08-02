@@ -687,14 +687,16 @@ const VideoPlayer = ({
   return (
     <div 
       ref={containerRef}
-      className={`${inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all`}
+      className={`${inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all ${showControls || langIntro ? "" : "cursor-none"}`}
       style={{ touchAction: "manipulation" }}   /* no double-tap zoom stealing our gestures */
       onMouseMove={() => {
         if (showSettings || showVolumeSlider) { bumpControls(true); clearTimeout(hideTimer.current); return; }
         bumpControls(true);
       }}
     >
-      <video ref={videoRef} className="w-full h-full object-contain cursor-pointer bg-black" playsInline autoPlay
+      {/* cursor-none while the HUD is hidden — otherwise the pointer sits on top
+          of a fullscreen movie forever */}
+      <video ref={videoRef} className={`w-full h-full object-contain bg-black ${showControls ? "cursor-pointer" : "cursor-none"}`} playsInline autoPlay
         onTouchStart={(e) => { lastTouchRef.current = Date.now(); onVideoTouchStart(e); }}
         onTouchEnd={(e) => { lastTouchRef.current = Date.now(); onVideoTouchEnd(e); }}
         onTouchCancel={endHold}
