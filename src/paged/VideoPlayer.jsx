@@ -103,6 +103,8 @@ const VideoPlayer = ({
   const previewHlsRef = useRef(null);
   const progressBarRef = useRef(null);
   const previewSeekTimer = useRef(null);
+  const startTimeRef = useRef(startTime);
+  startTimeRef.current = startTime;   // read by the loader effect without re-running it
   
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -208,7 +210,52 @@ const VideoPlayer = ({
       // fail. Append the master's query to any child request that has none. Our own
       // R2 children already carry ?t=… (worker-rewritten), so they're skipped.
       const q = src.includes("?") ? src.slice(src.indexOf("?") + 1) : "";
-      const cfg = { enableWorker: true, lowLatencyMode: true };
+
+      /* ── Tuning ──────────────────────────────────────────────────────────
+         Desktop was fast and phones weren't, because with the defaults hls.js
+         buffers ~30s/60MB, keeps the whole back-buffer, and never caps the
+         rendition to the screen — a phone would pull 1080p segments over a
+         mobile link before it could show frame one. On small screens we cap
+         the level to the player size, keep buffers phone-sized, start from a
+         conservative bandwidth estimate and let ABR climb, and (crucially)
+         hand hls.js the resume position up front so it fetches the segment we
+         actually need instead of loading from 0 and then seeking. */
+      const smallScreen = Math.min(window.innerWidth, window.innerHeight) <= 820
+        || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const link = navigator.connection || {};
+      const estimate = link.downlink
+        ? Math.max(500e3, link.downlink * 1e6 * 0.7)     // 70% of the reported downlink
+        : (smallScreen ? 900e3 : 2e6);
+
+      const cfg = {
+        enableWorker: true,
+        lowLatencyMode: false,             // VOD — LL-HLS part loading only adds work
+        startPosition: startTimeRef.current > 1 ? startTimeRef.current : -1,
+        startFragPrefetch: true,           // fetch the first fragment during manifest parse
+        testBandwidth: true,
+
+        // Rendition selection
+        startLevel: -1,
+        abrEwmaDefaultEstimate: estimate,
+        abrBandWidthFactor: 0.9,
+        abrBandWidthUpFactor: 0.6,         // climb carefully, don't overshoot and stall
+        capLevelOnFPSDrop: true,           // auto-quality is capped to 720p on phones
+                                           // in MANIFEST_PARSED (see autoLevelCapping)
+
+        // Buffers — phone memory is the limit, not bandwidth
+        maxBufferLength: smallScreen ? 20 : 40,
+        maxMaxBufferLength: smallScreen ? 90 : 600,
+        maxBufferSize: (smallScreen ? 24 : 60) * 1000 * 1000,
+        backBufferLength: smallScreen ? 30 : 90,
+
+        // Flaky mobile networks: retry hard instead of parking on the spinner
+        manifestLoadingMaxRetry: 6,
+        levelLoadingMaxRetry: 6,
+        fragLoadingMaxRetry: 8,
+        fragLoadingRetryDelay: 500,
+        fragLoadingMaxRetryTimeout: 8000,
+        nudgeMaxRetry: 10,
+      };
       if (q) {
         class TokenLoader extends Hls.DefaultConfig.loader {
           load(context, config, callbacks) {
@@ -244,6 +291,15 @@ const VideoPlayer = ({
       };
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Phones: never let ABR climb past 720p. 1080p/4K segments are several
+        // times larger for no visible gain on a 6" screen and are what made the
+        // first seconds crawl. Manual quality picks still override this.
+        if (smallScreen) {
+          const cap = (hls.levels || []).reduce(
+            (best, l, i) => (l.height && l.height <= 720 &&
+              (best < 0 || l.height > hls.levels[best].height) ? i : best), -1);
+          if (cap >= 0) hls.autoLevelCapping = cap;
+        }
         syncTracks();
         setIsBuffering(false);
         // Auto-enable the default embedded subtitle (SUBTITLE_TRACKS_UPDATED refines it).
@@ -256,11 +312,52 @@ const VideoPlayer = ({
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => setAudioTracks(hls.audioTracks || []));
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => setCurrentAudioTrackId(data.id));
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => setCurrentSubtitleId(data.id));
+      // Keep the quality menu honest about what's actually playing (-1 = Auto).
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level));
 
-      return () => hls.destroy();
+      /* Recovery — a dropped segment on mobile data used to leave the spinner up
+         forever because nothing restarted the loader. */
+      let netRetries = 0, mediaRetries = 0;
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (!data?.fatal) {
+          // Non-fatal buffer stall → let hls.js re-seek into the buffered range.
+          if (data?.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) setIsBuffering(true);
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries < 6) {
+          netRetries++;
+          setTimeout(() => { try { hls.startLoad(); } catch {} }, Math.min(2000, 300 * netRetries));
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < 3) {
+          mediaRetries++;
+          try { mediaRetries === 1 ? hls.recoverMediaError() : hls.swapAudioCodec() || hls.recoverMediaError(); } catch {}
+        } else {
+          try { hls.destroy(); } catch {}
+        }
+      });
+      // A successful fragment means we're healthy again — reset the retry budget.
+      hls.on(Hls.Events.FRAG_BUFFERED, () => { netRetries = 0; mediaRetries = 0; });
+
+      /* Watchdog: if playback hasn't advanced for 10s while we think we're
+         playing, kick the loader (and nudge past a bad segment boundary). */
+      let lastT = 0, stuck = 0;
+      const watchdog = setInterval(() => {
+        const v = videoRef.current;
+        if (!v || v.paused || v.seeking || v.ended) { stuck = 0; return; }
+        if (v.currentTime > lastT + 0.05) { lastT = v.currentTime; stuck = 0; return; }
+        stuck += 1;
+        if (stuck === 5) { try { hls.startLoad(v.currentTime); } catch {} }         // ~10s
+        if (stuck >= 8) { try { v.currentTime = v.currentTime + 0.2; } catch {} stuck = 0; }
+      }, 2000);
+
+      return () => { clearInterval(watchdog); hls.destroy(); };
     } else {
-      // Native HLS (Safari): subtitles surface as the video's own textTracks.
-      video.src = src;
+      // Native HLS (iPhone Safari): let the OS player prefetch, and start at the
+      // resume point via the media fragment so it doesn't load from 0 and seek.
+      video.preload = "auto";
+      video.src = startTimeRef.current > 1
+        ? `${src}${src.includes("#") ? "" : `#t=${Math.floor(startTimeRef.current)}`}`
+        : src;
+      // subtitles surface as the video's own textTracks.
       video.onloadedmetadata = () => {
         setIsBuffering(false);
         const tt = Array.from(video.textTracks || []).map((t, i) => ({ id: i, name: t.label || t.language, lang: t.language }));
@@ -367,6 +464,10 @@ const VideoPlayer = ({
   const ensurePreview = useCallback(() => {
     const pv = previewRef.current;
     if (!pv || pv.dataset.ready) return;
+    // Phones: skip it. A second HLS instance means a second decoder + a parallel
+    // segment download competing with playback — the main cause of slow, stuttery
+    // scrubbing on mobile (and Hotstar/Netflix don't show scrub previews there).
+    if (Math.min(window.innerWidth, window.innerHeight) <= 820) return;
     pv.muted = true;
     // "Prime" the decoder — a muted play→pause makes the element actually render
     // frames when we seek it (otherwise a never-played <video> can stay black).
@@ -468,7 +569,8 @@ const VideoPlayer = ({
           setDuration(videoRef.current.duration);
           videoRef.current.playbackRate = playbackRate;   // keep chosen speed across episodes
           // Resume: seek to the saved position once, if it's meaningfully into the video.
-          if (startTime > 1 && !didSeekRef.current && startTime < videoRef.current.duration - 5) {
+          if (startTime > 1 && !didSeekRef.current && startTime < videoRef.current.duration - 5
+              && Math.abs(videoRef.current.currentTime - startTime) > 2) {
             try { videoRef.current.currentTime = startTime; } catch {}
           }
           didSeekRef.current = true;
@@ -585,6 +687,12 @@ const VideoPlayer = ({
                     <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
                   </label>
                 </>
+              )}
+              {showSettings === 'quality' && levels.length > 0 && (
+                <button onClick={() => { hlsRef.current.currentLevel = -1; setShowSettings(null); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentLevel === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium">Auto</span>{currentLevel === -1 && <Check size={16} className="text-blue-400"/>}
+                </button>
               )}
               {showSettings === 'quality' && (levels.length ? levels.map((l, i) => (
                 <button key={i} onClick={() => { hlsRef.current.currentLevel = i; setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentLevel === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
