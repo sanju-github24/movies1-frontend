@@ -2351,6 +2351,121 @@ function Wt20MatchCenter({ matchId, onMatchState }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   FANCODE MATCH CENTER — scorecard only (public data via /api/fancode/scorecard)
+   Clicking a FanCode live match opens its live scorecard here. No video stream.
+═══════════════════════════════════════════════════════════════════════════ */
+function FanCodeMatchCenter({ matchId, title = "", seriesText = "", onMatchState }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [tab, setTab]         = useState("scorecard");
+  const [refreshing, setRefreshing] = useState(false);
+  const [countdown, setCountdown]   = useState(30);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const idRef = useRef(matchId);
+  useEffect(() => { idRef.current = matchId; }, [matchId]);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setRefreshing(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/fancode/scorecard?matchId=${idRef.current}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j); setLastUpdate(new Date()); setCountdown(30); setError(null);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, []);
+
+  useEffect(() => { load(); const t = setInterval(() => load(true), 30000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { const t = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000); return () => clearInterval(t); }, [lastUpdate]);
+
+  const innings    = data?.innings || [];
+  const desc       = data?.description || "";
+  const isFinished = data?.available && /won by|match tied|drawn|no result|beat /i.test(desc);
+  const isLive     = data?.available && !isFinished && innings.some(i => i.runs != null);
+
+  useEffect(() => {
+    if (!data) return;
+    onMatchState?.({ isLive: !!isLive, isFinished: !!isFinished, result: desc, mom: "", momRuns: "", momWickets: "", momImg: "" });
+  }, [isLive, isFinished, desc, data]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-32 gap-4">
+      <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "rgba(207,20,43,0.2)", borderTopColor: ECB_RED }} />
+      <p className="text-xs text-white/30 font-semibold uppercase tracking-widest">Loading scorecard</p>
+    </div>
+  );
+  if (error || !data?.available || !innings.length) return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-4">
+      <AlertCircle size={28} className="text-white/20" />
+      <p className="text-sm text-white/35">Scorecard not available yet</p>
+      <button onClick={() => load()} className="px-5 py-2.5 rounded-xl border text-sm font-semibold text-white/50" style={{ borderColor: "rgba(255,255,255,0.12)" }}>Try again</button>
+    </div>
+  );
+
+  const inn0 = innings[0], inn1 = innings[1];
+  const teamA = inn0?.team || (title.split(/\s+vs\s+/i)[0] || "").trim();
+  const teamB = inn1?.team || (title.split(/\s+vs\s+/i)[1] || "").trim();
+  const innScore = (inn) => (inn && inn.runs != null) ? [{ score: `${inn.runs}/${inn.wickets}`, overs: `${inn.overs} ov` }] : [];
+
+  const batRows = (inn) => (inn?.batsmen || []).filter(b => b.balls !== "" && b.balls != null).map(b => ({
+    name: b.name, isNotOut: !b.out,
+    dismissal: b.out ? (b.dismissal || "—") : "not out",
+    runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes, sr: b.sr,
+  }));
+  const bowlRows = (inn) => (inn?.bowlers || []).map(b => ({
+    name: b.name, overs: b.overs, maidens: b.maidens, runs: b.runs, wickets: b.wickets, eco: b.econ,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <EcbHero
+        homeCode={teamA} homeName={teamA} homeLogo={null} homeFlag={getIccTeam(teamA).flag}
+        awayCode={teamB} awayName={teamB} awayLogo={null} awayFlag={getIccTeam(teamB).flag}
+        homeInnings={innScore(inn0)} awayInnings={innScore(inn1)}
+        isLive={isLive} isFinished={isFinished}
+        statusText={desc}
+        tossText=""
+        seriesText={seriesText || "FanCode"}
+        venueText=""
+        matchTypeText="Cricket"
+        countdown={countdown} refreshing={refreshing} onRefresh={() => load()}
+      >
+        {data.currentRunRate && isLive && <EcbStatRow label="Current RR" value={data.currentRunRate} color="#4ade80" />}
+        {data.requiredRunRate && isLive && <EcbStatRow label="Required RR" value={data.requiredRunRate} color="#fcd34d" />}
+        {isFinished && desc && <EcbResultBanner resultText={desc} />}
+      </EcbHero>
+
+      <EcbScorecardCard>
+        <EcbTabBar
+          tabs={[{ k: "scorecard", l: "Scorecard" }, { k: "bowling", l: "Bowling" }]}
+          active={tab} onChange={setTab} accent={ECB_RED}
+        />
+        {tab === "scorecard" && innings.map((inn, idx) => {
+          const rows = batRows(inn); if (!rows.length) return null;
+          return (
+            <div key={idx}>
+              <EcbSectionHeader label={`Innings ${inn.number || idx + 1} · ${inn.team || "—"} Batting — ${inn.runs}/${inn.wickets} (${inn.overs})`} />
+              <EcbBattingTable rows={rows} />
+            </div>
+          );
+        })}
+        {tab === "bowling" && innings.map((inn, idx) => {
+          const rows = bowlRows(inn); if (!rows.length) return null;
+          return (
+            <div key={idx}>
+              <EcbSectionHeader label={`Innings ${inn.number || idx + 1} · ${inn.team || "—"} Bowling`} />
+              <EcbBowlingTable rows={rows} />
+            </div>
+          );
+        })}
+      </EcbScorecardCard>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    FIFA MATCH CENTER — ECB style
 ═══════════════════════════════════════════════════════════════════════════ */
 function FifaMatchCenter({ matchId, onMatchState }) {
@@ -2744,6 +2859,9 @@ export default function MatchCenter() {
         )}
         {payload.sport === "cricket" && payload.type === "wt20" && payload.matchId && (
           <Wt20MatchCenter matchId={payload.matchId} onMatchState={setMatchState} />
+        )}
+        {payload.sport === "cricket" && payload.type === "fancode" && payload.matchId && (
+          <FanCodeMatchCenter matchId={payload.matchId} title={payload.title || ""} seriesText={payload.seriesText || ""} onMatchState={setMatchState} />
         )}
         {payload.sport === "football" && payload.type === "fifa" && payload.matchId && (
           <FifaMatchCenter matchId={payload.matchId} onMatchState={setMatchState} />

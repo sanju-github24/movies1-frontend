@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { encodeMatchHash } from "../utils/matchHash";
 import {
   ArrowLeft, Tv2, Signal, Volume2, Maximize2, AlertCircle,
   RefreshCw, Activity, Calendar, Globe, Trophy, Star
@@ -14,6 +15,10 @@ const FIFA_STAGE       = "289273";
 const FIFA_API_BASE    = "https://api.fifa.com/api/v3";
 const WT20_SERIES_ID   = "12672";
 const API_BASE         = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const FANCODE_FEED     = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
+// FanCode cricket match → scorecard-only match center (no video stream linked).
+const fcMatchCenterLink = (fc) =>
+  `/match-center/${encodeMatchHash({ sport: "cricket", type: "fancode", matchId: fc.match_id, title: fc.title || "", seriesText: fc.tournament || "" })}`;
 
 // ─── BCCI HELPERS ──────────────────────────────────────────────────────────────
 const BCCI_WOMENS_COMP_IDS = new Set([238]);
@@ -936,6 +941,21 @@ function SmartCricketPanel() {
   const [selectedWt20Id, setSelectedWt20Id] = useState(null);
   const [subPanel, setSubPanel]           = useState("scores");
   const [indiaRecent, setIndiaRecent] = useState([]);
+  const [fancodeMatches, setFancodeMatches] = useState([]);   // cricket matches from FanCode feed (scorecard only)
+
+  const loadFancode = useCallback(async () => {
+    try {
+      const r = await fetch(`${FANCODE_FEED}?_=${Date.now()}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      const list = (j.matches || []).filter(m =>
+        m.match_id && (!m.category || m.category.toLowerCase() === "cricket") &&
+        (m.status || "").toUpperCase() !== "COMPLETED"
+      );
+      setFancodeMatches(list);
+    } catch {}
+  }, []);
+  useEffect(() => { loadFancode(); const t = setInterval(loadFancode, 60000); return () => clearInterval(t); }, [loadFancode]);
 
   const loadIndia = useCallback(async (silent = false) => {
     if (!silent) setLoadingIndia(true);
@@ -1208,10 +1228,41 @@ useEffect(() => {
       </div>
     )}
 
+    {/* FanCode matches → open the scorecard match center (no video stream) */}
+    {fancodeMatches.length > 0 && (
+      <div className="space-y-1.5 mb-2 pt-2 border-t border-white/5">
+        <p className="text-[8px] font-black uppercase tracking-widest text-gray-600 px-1 mb-1">FanCode · Scorecards</p>
+        {fancodeMatches.slice(0, 8).map(fc => {
+          const live = (fc.status || "").toUpperCase() === "LIVE";
+          const names = (fc.team || []).map(t => t.name).filter(Boolean);
+          const label = names.length >= 2 ? `${names[0]} vs ${names[1]}` : fc.title;
+          return (
+            <Link key={fc.match_id} to={fcMatchCenterLink(fc)}
+              className="w-full text-left rounded-2xl border overflow-hidden transition-all active:scale-[0.98] block"
+              style={{
+                background: live ? "rgba(239,68,68,0.03)" : "rgba(255,255,255,0.02)",
+                borderColor: live ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)",
+              }}>
+              <div className="px-3 py-2.5 flex items-center gap-2">
+                {live
+                  ? <span className="flex items-center gap-1 bg-red-500/15 text-red-400 text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0"><span className="w-1 h-1 rounded-full bg-red-400 animate-pulse inline-block" />Live</span>
+                  : <span className="text-[7px] font-black uppercase text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded-full shrink-0">Soon</span>}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-black text-white truncate">{label}</p>
+                  <p className="text-[8px] text-gray-600 truncate">{fc.tournament || "FanCode"}</p>
+                </div>
+                <span className="text-[8px] font-black text-gray-500 shrink-0">Scorecard ›</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    )}
+
     {/* Scorecard */}
     {selectedIndia
       ? <div className="pt-2 border-t border-white/5"><BcciScorecard match={selectedIndia} /></div>
-      : !loadingIndia && <div className="text-center py-10"><p className="text-[11px] text-gray-700">No India matches right now</p></div>
+      : !loadingIndia && fancodeMatches.length === 0 && <div className="text-center py-10"><p className="text-[11px] text-gray-700">No India matches right now</p></div>
     }
   </>
 )}

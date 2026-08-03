@@ -6,6 +6,10 @@ import { encodeMatchHash } from "../utils/matchHash";
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
 const mcLink = (payload) => `/match-center/${encodeMatchHash(payload)}`;
+// FanCode match → scorecard-only match center (no video stream).
+function fcLink(fc) {
+  return mcLink({ sport: "cricket", type: "fancode", matchId: fc.matchId, title: fc.titleRaw, seriesText: fc.tournament });
+}
 function bcciLink(m, home, away) {
   return mcLink({
     sport: "cricket", type: "bcci",
@@ -86,9 +90,15 @@ async function fetchFancodeMatches() {
     if (!res.ok) { setCache(k, []); return []; }
     const json = await res.json();
     const matches = (json.matches || []).map(m => ({
+      matchId: m.match_id,
+      category: m.category || "",
+      titleRaw: m.title || "",
       title: (m.title || "").toLowerCase(),
       status: (m.status || "").toUpperCase(),        // LIVE | NOT_STARTED | COMPLETED
+      tournament: m.tournament || "",
       teams: (m.team || []).map(t => (t.name || "").toLowerCase()),
+      teamNames: (m.team || []).map(t => t.name || "").filter(Boolean),
+      startTime: m.startTime || "",
       // Match thumbnail for the hero background. BG_IMAGE / APP / image are the
       // reliable cms-media match cards; TATAPLAY/CLOUDFARE 404 for many matches.
       thumb: (m.image_cdn && (m.image_cdn.BG_IMAGE || m.image_cdn.APP)) || m.image
@@ -480,7 +490,7 @@ function CricketSlide({slide}){
               color:"#fff",
             }}>
             <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
+            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
           </Link>
         )}
       </div>
@@ -660,7 +670,7 @@ function FootballSlide({slide}){
               color:"#fff",
             }}>
             <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
+            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
           </Link>
         )}
       </div>
@@ -820,6 +830,43 @@ export default function HeroSection(){
           };
           if (fcNowLive) liveC.push(upSlide); else upC.push(upSlide);
         }
+      }
+    }catch{}
+
+    // ── FanCode standalone matches (scorecard only, no video) ──
+    // Any FanCode cricket match not already shown via BCCI → its own hero card
+    // that opens the FanCode scorecard match center. Video stream is not linked.
+    try{
+      const shown = new Set();
+      for (const s of [...liveC, ...upC, ...finC]) {
+        shown.add([s.home?.name, s.away?.name].map(x => (x || "").toLowerCase()).sort().join("|"));
+      }
+      let fcLiveN = 0, fcUpN = 0;
+      for (const fc of fcList) {
+        if (!fc.matchId) continue;
+        if (fc.category && fc.category.toLowerCase() !== "cricket") continue;
+        if (fc.status !== "LIVE" && fc.status !== "NOT_STARTED") continue;
+        const names = fc.teamNames.length >= 2 ? fc.teamNames : fc.titleRaw.split(/\s+vs\s+/i).map(x => x.trim());
+        if (names.length < 2) continue;
+        const key = names.slice(0, 2).map(x => x.toLowerCase()).sort().join("|");
+        if (shown.has(key)) continue;              // already shown via BCCI
+        if (fc.status === "LIVE" ? fcLiveN >= 3 : fcUpN >= 3) continue;
+        shown.add(key);
+        if (fc.status === "LIVE") fcLiveN++; else fcUpN++;
+        const home = buildSide({ code: teamCode(null, names[0]), name: names[0] });
+        const away = buildSide({ code: teamCode(null, names[1]), name: names[1] });
+        const slide = {
+          id: `fc-${fc.matchId}`, sport: "cricket",
+          status: fc.status === "LIVE" ? "live" : "upcoming",
+          link: fcLink(fc), scorecardOnly: true,   // hero button → "View Scorecard"
+          home, away,
+          tournament: fc.tournament || "FanCode",
+          matchFmt: "CRICKET", venue: "",
+          fancodeThumb: fc.thumb || null,
+          fancodeLive: fc.status === "LIVE",
+          timeLabel: fc.startTime || "",
+        };
+        if (fc.status === "LIVE") liveC.push(slide); else upC.push(slide);
       }
     }catch{}
 
