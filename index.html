@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Playback starts with a DNS lookup + TLS handshake to the stream host;
+         doing it during page load saves that round trip off time-to-first-frame. -->
+    <link rel="preconnect" href="https://stream.1anchormovies.buzz" crossorigin />
+    <link rel="dns-prefetch" href="https://stream.1anchormovies.buzz" />
     <!-- Basic Meta Tags -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -413,7 +413,26 @@ const VideoPlayer = ({
         appliedSubRef.current = true;
       };
 
+      /* Pick the audio track BEFORE any fragment loads. Doing this from a React
+         effect (as we used to) meant hls.js had already fetched the default
+         language's first segment and then threw it away — a doubled download in
+         the worst possible window. */
+      const applyPreferredAudio = (h) => {
+        if (appliedAudioRef.current) return;
+        const tracks = h.audioTracks || [];
+        if (!tracks.length) return;
+        let saved = "";
+        try { saved = localStorage.getItem(AUDIO_PREF_KEY) || ""; } catch {}
+        const pref = saved || preferredAudioLang;
+        if (pref) {
+          const idx = tracks.findIndex((t) => audioMatchesLang(t, pref));
+          if (idx >= 0 && h.audioTrack !== idx) { h.audioTrack = idx; setCurrentAudioTrackId(idx); }
+        }
+        appliedAudioRef.current = true;
+      };
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        applyPreferredAudio(hls);
         // Phones: never let ABR climb past 720p. 1080p/4K segments are several
         // times larger for no visible gain on a 6" screen and are what made the
         // first seconds crawl. Manual quality picks still override this.
@@ -431,14 +450,16 @@ const VideoPlayer = ({
         }
         syncTracks();
         setIsBuffering(false);
-        // Auto-enable the default embedded subtitle (SUBTITLE_TRACKS_UPDATED refines it).
-        maybeEnableDefaultSub(hls);
         tryAutoplay();
+        // NOTE: subtitles are deliberately NOT enabled here. Turning them on now
+        // makes hls.js fetch the subtitle playlist + VTT segments in the same
+        // window as the first video and audio fragments, on the same connection.
+        // They're switched on after playback has actually started (below).
       });
       hls.on(Hls.Events.LEVEL_LOADED, syncTracks);
       // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
-      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => { setSubtitleTracks(hls.subtitleTracks || []); maybeEnableDefaultSub(hls); });
-      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => setAudioTracks(hls.audioTracks || []));
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => setSubtitleTracks(hls.subtitleTracks || []));
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => { setAudioTracks(hls.audioTracks || []); applyPreferredAudio(hls); });
       hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => setCurrentAudioTrackId(data.id));
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => setCurrentSubtitleId(data.id));
       // Keep the quality menu honest about what's actually playing (-1 = Auto).
@@ -492,6 +513,8 @@ const VideoPlayer = ({
       hls.on(Hls.Events.FRAG_BUFFERED, () => {
         mediaRetries = 0; backoff = 500;
         setReconnecting(false);
+        // Playback is running — now it's safe to pull the subtitle track.
+        maybeEnableDefaultSub(hls);
         const now = Date.now();
         if (hls.bandwidthEstimate > 0 && now - bwSaved > 15000) {
           bwSaved = now;
@@ -610,20 +633,8 @@ const VideoPlayer = ({
     return () => clearTimeout(t);
   }, [externalSubUrl]);
 
-  // Auto-pick the preferred audio track once tracks are known. A remembered manual
-  // choice (localStorage) wins; otherwise the profile language. Applied once per
-  // source, so the user can still switch freely afterwards.
-  useEffect(() => {
-    if (!audioTracks.length || appliedAudioRef.current || !hlsRef.current) return;
-    let saved = "";
-    try { saved = localStorage.getItem(AUDIO_PREF_KEY) || ""; } catch {}
-    const pref = saved || preferredAudioLang;
-    if (pref) {
-      const idx = audioTracks.findIndex((t) => audioMatchesLang(t, pref));
-      if (idx >= 0) { hlsRef.current.audioTrack = idx; setCurrentAudioTrackId(idx); }
-    }
-    appliedAudioRef.current = true;
-  }, [audioTracks, preferredAudioLang]);
+  // (The preferred audio track is applied inside the loader effect, before the
+  // first fragment loads — see applyPreferredAudio.)
 
   // Switch audio track + remember the choice (used by the menu and the language bar).
   const changeAudio = (i) => {
@@ -1047,41 +1058,54 @@ const VideoPlayer = ({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-4 sm:gap-6 md:gap-10 min-w-0">
+          <div className="flex items-center gap-3 sm:gap-6 md:gap-10 min-w-0">
+            {/* ±10s: desktop only. On a phone the double-tap gesture does this,
+                and a series needs the width for Episodes / Next Episode. */}
             <button onClick={() => nudgeSeek(-10, "back")} aria-label="Back 10 seconds"
-              className="inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCcw className="w-6 h-6 sm:w-6 sm:h-6"/></button>
-            <button onClick={togglePlay} className="hover:scale-110 transition-transform active:scale-90 shrink-0">
-              {isPlaying ? <Pause className="w-7 h-7 sm:w-8 sm:h-8 text-white" /> : <Play className="w-7 h-7 sm:w-8 sm:h-8 text-white ml-0.5" fill="white" />}
+              className="hidden sm:inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCcw className="w-6 h-6"/></button>
+            <button onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"}
+              className="hover:scale-110 transition-transform active:scale-90 shrink-0">
+              {isPlaying ? <Pause className="w-8 h-8 text-white" /> : <Play className="w-8 h-8 text-white ml-0.5" fill="white" />}
             </button>
             <button onClick={() => nudgeSeek(10, "fwd")} aria-label="Forward 10 seconds"
-              className="inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCw className="w-6 h-6 sm:w-6 sm:h-6"/></button>
+              className="hidden sm:inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCw className="w-6 h-6"/></button>
 
             {hasNextEpisode && (
-                <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} className="p-1.5 sm:p-2.5 bg-blue-600/20 border border-blue-500/40 rounded-lg hover:bg-blue-600 transition-all text-white flex items-center gap-2 shrink-0">
-                    <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" />
+                <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} aria-label="Next episode"
+                  className="p-2 sm:p-2.5 bg-blue-600/20 border border-blue-500/40 rounded-lg hover:bg-blue-600 transition-all text-white flex items-center gap-2 shrink-0 active:scale-90">
+                    <SkipForward className="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="currentColor" />
                     <span className="hidden md:inline text-xs font-semibold">Next Episode</span>
                 </button>
             )}
 
             <div className="relative flex items-center group/volume shrink-0" onMouseEnter={() => setShowVolumeSlider(true)} onMouseLeave={() => setShowVolumeSlider(false)}>
-                <button onClick={() => setIsMuted(!isMuted)} className="hover:text-blue-500 transition-colors">{isMuted ? <VolumeX className="w-6 h-6 sm:w-7 sm:h-7"/> : <Volume2 className="w-6 h-6 sm:w-7 sm:h-7"/>}</button>
+                <button onClick={() => setIsMuted(!isMuted)} aria-label={isMuted ? "Unmute" : "Mute"}
+                  className="hover:text-blue-500 transition-colors active:scale-90">{isMuted ? <VolumeX className="w-[22px] h-[22px] sm:w-7 sm:h-7"/> : <Volume2 className="w-[22px] h-[22px] sm:w-7 sm:h-7"/>}</button>
                 <div className={`hidden sm:flex items-center transition-all duration-300 overflow-hidden ${showVolumeSlider ? 'w-24 opacity-100 ml-2' : 'w-0 opacity-0'}`}>
                     <input type="range" min="0" max="1" step="0.1" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-full h-1 bg-white/20 accent-blue-500 cursor-pointer" />
                 </div>
             </div>
           </div>
 
+          {/* One size for every secondary control so nothing overlaps once a
+              series adds Episodes + Next Episode to the row. */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {episodes.length > 0 && (
-                <button onClick={() => setShowSettings('episodes')} className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-blue-600 transition-all text-white flex items-center gap-2">
-                    <ListVideo className="w-5 h-5" /><span className="hidden md:inline text-xs font-semibold">Episodes</span>
+                <button onClick={() => setShowSettings('episodes')} aria-label="Episodes"
+                  className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-blue-600 transition-all flex items-center gap-2 active:scale-90 ${showSettings === 'episodes' ? 'text-blue-400' : 'text-white'}`}>
+                    <ListVideo className="w-[18px] h-[18px] sm:w-5 sm:h-5" /><span className="hidden md:inline text-xs font-semibold">Episodes</span>
                 </button>
             )}
-            <button onClick={() => setShowSettings('speed')} className={`px-2 py-1.5 sm:px-2.5 sm:py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-xs font-black min-w-[34px] ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
-            <button onClick={() => setShowSettings('subs')} className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions className="w-5 h-5" /></button>
-            <button onClick={() => setShowSettings('audio')} className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music className="w-5 h-5" /></button>
-            <button onClick={() => setShowSettings('quality')} className={`hidden sm:inline-flex p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers className="w-5 h-5" /></button>
-            <button onClick={handleFullscreen} className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white"><Maximize className="w-5 h-5" /></button>
+            <button onClick={() => setShowSettings('speed')} aria-label="Playback speed"
+              className={`px-2 py-2 sm:px-2.5 sm:py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-[11px] sm:text-xs font-black leading-none min-w-[32px] sm:min-w-[34px] active:scale-90 ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
+            <button onClick={() => setShowSettings('subs')} aria-label="Subtitles"
+              className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
+            <button onClick={() => setShowSettings('audio')} aria-label="Audio language"
+              className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
+            <button onClick={() => setShowSettings('quality')} aria-label="Quality"
+              className={`hidden sm:inline-flex p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers className="w-5 h-5" /></button>
+            <button onClick={handleFullscreen} aria-label="Fullscreen"
+              className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white active:scale-90"><Maximize className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
           </div>
         </div>
       </div>
