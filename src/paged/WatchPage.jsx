@@ -180,16 +180,25 @@ const lookupMx = async (title, isTV) => {
   } catch (e) { return null; }
 };
 
+/* Server order is deliberate — the list is what the user sees AND what plays by
+   default (index 0 becomes the active server):
+     1. AnchorHD    — our own stream, when we host this title
+     2. Multi Audio — our uploaded mirror, the next best thing we control
+     3. Omega       — first of the third-party servers
+     4. everything else
+   So a title we host never opens on a third-party embed, and a title we don't
+   host opens on Omega. */
 const buildServers = (meta, eps = []) => {
   const srv = [];
   // Our own R2 HLS — highest priority when present (multi-audio, our CDN).
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
-  // MX Player next — when the title exists on MX, prefer its free real HD stream.
-  if (meta.mx_web_url || meta.mx_id) srv.push({ id:"mx", name:"MX Player", label:"Free HD", icon:<Zap size={14}/> });
-  // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
-  srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
+  // Our uploaded embed mirror — ahead of every third-party server.
   if (meta.html_code || eps.some(e => e.html))
     srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> });
+  // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
+  srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
+  // MX Player after ours — a real free HD stream, but still someone else's.
+  if (meta.mx_web_url || meta.mx_id) srv.push({ id:"mx", name:"MX Player", label:"Free HD", icon:<Zap size={14}/> });
   if (meta.tmdb_id) {
     srv.push({ id:"vidify",  name:"Vidify",  label:"Premium",     icon:<Zap size={14}/>     });
     srv.push({ id:"videasy", name:"VidEasy", label:"Simple",       icon:<Globe size={14}/>   });
@@ -894,8 +903,9 @@ if (!alive) return;
   }, [routeSlug, backendUrl, fetchFullTmdb, fetchTmdbEpisodes, location.state]);
 
   /* ── MX "no miss" — once a title loads (any path), check MX and, if found,
-       add MX Player as the FIRST/preferred server. Runs regardless of how the
-       page was reached (search click, refresh, direct URL). ── */
+       add MX Player to the list. It slots in at its normal priority (after
+       AnchorHD / Multi Audio / Omega), and only becomes the active server when
+       nothing better is already selected. ── */
   useEffect(() => {
     if (!movieMeta || movieMeta.mx_web_url || movieMeta.mx_id) return;
     let alive = true;
