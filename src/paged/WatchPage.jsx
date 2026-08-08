@@ -287,6 +287,7 @@ const WatchHtmlPage = () => {
   const [continueList,      setContinueList     ] = useState([]);  // continue-watching row
   const lastSaveRef = useRef(0);
   const resumedRef = useRef(false);
+  const autoPlayedRef = useRef(false);   // state.autoPlay → open the player once
 
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [autoNextEpisode,   setAutoNextEpisode  ] = useState(true);
@@ -614,6 +615,74 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     }
   }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream, maybeProxy]);
 
+  /* Closing the player: when we were opened straight from the mobile detail
+     sheet, go back to it instead of revealing the watch page underneath. */
+  const closeOverlay = useCallback(() => {
+    setShowOverlay(false);
+    setCurrentOverlayEp(null);
+    setShowSettingsPanel(false);
+    loadContinue();
+    if (location.state?.autoPlay) navigate(-1);
+  }, [location.state, navigate, loadContinue]);
+
+  /* ── autoPlay: the mobile detail sheet sends users straight into the player,
+       so the watch page itself is never shown. state.autoPlayEpisode picks the
+       episode; without it a series starts on its first episode. ── */
+  useEffect(() => {
+    if (!location.state?.autoPlay || autoPlayedRef.current) return;
+    if (loading || !movieMeta || !availableServers.length) return;
+    const want = location.state?.autoPlayEpisode;
+    const isTV = episodes.length > 0 || !!want;
+
+    let ep = null;
+    if (isTV) {
+      ep = want
+        ? episodes.find(e =>
+            String(e.season || 1) === String(want.season) &&
+            String(e.episodeNumberInSeason || e.episode) === String(want.episode))
+        : null;
+      // The sheet lists every season/episode TMDB knows about, so the pick may be
+      // one we haven't uploaded — play it on a server using its numbers.
+      if (!ep && want) {
+        ep = { season: Number(want.season) || 1, episodeNumberInSeason: Number(want.episode) || 1,
+               episode: Number(want.episode) || 1, title: `Episode ${want.episode}` };
+      }
+      ep = ep || episodes[0];
+    }
+
+    autoPlayedRef.current = true;
+
+    /* AnchorHD (our own R2 stream) plays immediately — that's the whole point of
+       coming straight from the detail overlay. Anything else needs a choice, so
+       we stay on this page and open its server list for exactly this item. */
+    const anchorHd = ep
+      ? (ep.direct_url || ep.hls_url)
+      : (movieMeta.hls_url || movieMeta.video_url);
+
+    if (anchorHd) {
+      const srv = availableServers.find(s => s.id === "ourhls") ||
+                  availableServers.find(s => s.id === "hls");
+      if (srv) setActiveServer(srv);
+      handlePlayAction(ep, srv?.id);
+      return;
+    }
+
+    setCurrentOverlayEp(ep);          // servers picked below apply to this episode
+    setActiveTab("servers");
+    if (ep) {
+      // Open this episode's own server menu, like tapping it on this page does.
+      const key = `S${ep.season || 1}`;
+      setActiveSeason(key);
+      const idx = (groupedEpisodes[key]?.episodes || []).findIndex(e =>
+        String(e.episodeNumberInSeason || e.episode) === String(ep.episodeNumberInSeason || ep.episode));
+      setOpenDropdown(idx >= 0 ? idx : null);
+    }
+    setTimeout(() => {
+      document.getElementById(ep ? "episodes-section" : "servers-section")
+        ?.scrollIntoView({ behavior: "smooth", block: ep ? "start" : "center" });
+    }, 120);
+  }, [location.state, loading, movieMeta, episodes, availableServers, handlePlayAction, groupedEpisodes]);
+
   const handleServerSwitch = (server) => {
     setActiveServer(server);
     handlePlayAction(currentOverlayEp, server.id);
@@ -917,8 +986,9 @@ if (!alive) return;
       setMovieMeta(meta2);
       const srv2 = buildServers(meta2, episodes);
       setAvailableServers(srv2);
-      // Make MX the default/active server so "Stream Now" opens MX directly.
-      setActiveServer(srv2[0]);
+      // Keep whatever is already active (AnchorHD / Multi Audio) — only adopt the
+      // new top server when nothing was selected yet.
+      setActiveServer(prev => (prev && srv2.some(s => s.id === prev.id)) ? prev : srv2[0]);
     })();
     return () => { alive = false; };
   }, [movieMeta?.title, movieMeta?.content_type, movieMeta?.mx_web_url, movieMeta?.mx_id, episodes.length]);
@@ -977,7 +1047,7 @@ if (!alive) return;
 
           {/* Top bar */}
           <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-black/60 backdrop-blur-xl border-b border-white/[0.04] shrink-0 z-20">
-            <button onClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); setShowSettingsPanel(false); }}
+            <button onClick={closeOverlay}
               aria-label="Close player and go back"
               className="flex items-center gap-2 px-3 py-2.5 min-h-[44px] min-w-[44px] justify-center rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 text-gray-400 hover:text-white transition-all border border-white/5 touch-manipulation">
               <ArrowLeft size={17} />
@@ -1032,7 +1102,7 @@ if (!alive) return;
                    onProgress={handleProgress}
                    preferredAudioLang={preferredAudioLang}
                    onRefreshSource={refreshSource}
-                   onBackClick={() => { setShowOverlay(false); setCurrentOverlayEp(null); loadContinue(); }}
+                   onBackClick={closeOverlay}
                  />
                ) :
                sourceType === "html"  ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSource }} /> :
@@ -1321,7 +1391,7 @@ if (!alive) return;
 
             {/* Quick server select */}
             {availableServers.length > 0 && (
-              <div className="pt-2">
+              <div className="pt-2 scroll-mt-24" id="servers-section">
                 <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2 text-center lg:text-left">Available Servers</p>
                 <div
                   className="flex gap-2 justify-start lg:justify-start overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1"
@@ -1329,7 +1399,7 @@ if (!alive) return;
                 >
                   {availableServers.slice(0,5).map(sv => (
                     <button key={sv.id}
-                      onClick={() => { setActiveServer(sv); handlePlayAction(null, sv.id); }}
+                      onClick={() => { setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
                       className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
                         ${activeServer?.id === sv.id ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30") : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"}`}>
                       <span className={`w-1 h-1 rounded-full ${activeServer?.id === sv.id ? "bg-current" : "bg-gray-700"}`}/>
@@ -1386,7 +1456,7 @@ if (!alive) return;
 
         {/* Episodes */}
         {episodes.length > 0 && (
-          <div className="space-y-6">
+          <div className="space-y-6 scroll-mt-24" id="episodes-section">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10"><List size={18} className="text-blue-400"/></div>
               <div>

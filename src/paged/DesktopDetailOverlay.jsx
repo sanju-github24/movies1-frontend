@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { X, Play, Volume2, VolumeX, Star, Info, Plus, ChevronDown, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { X, Play, Volume2, VolumeX, Star, Plus, ChevronDown, CheckCircle2, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate } from "../utils/titleEpisodes";
+import { inMyList, toggleMyList } from "../utils/myList";
+import { useRecommendations } from "../utils/recommendations";
 
 const formatLanguage = (langs) => {
   const langArray = Array.isArray(langs) ? langs : [langs];
@@ -11,7 +14,7 @@ const formatLanguage = (langs) => {
 /* ── Home-row style animated related titles row ──
    Mirrors the GenreRow cards on the watchlist home: poster → cover crossfade,
    hover expand, trailer preview after 2s, gradient info + Watch Now. */
-const RelatedRow = ({ movies, onSelect }) => {
+const RelatedRow = ({ movies, onSelect, onPlay }) => {
   const rowRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -99,7 +102,8 @@ const RelatedRow = ({ movies, onSelect }) => {
                   )}
                   {m.year && <span>{m.year}</span>}
                 </div>
-                <button className="w-full py-1.5 bg-white text-black text-[9px] font-extrabold rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
+                <button onClick={(e) => { e.stopPropagation(); onPlay?.(m); }}
+                  className="w-full py-1.5 bg-white text-black text-[9px] font-extrabold rounded-lg flex items-center justify-center gap-1.5 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
                   <Play className="w-3 h-3 fill-current" />
                   {m.content_type === "tv" ? "STREAM SERIES" : "WATCH NOW"}
                 </button>
@@ -116,15 +120,22 @@ const RelatedRow = ({ movies, onSelect }) => {
   );
 };
 
-const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMuted, setIsMuted }) => {
+const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relatedMovies, isMuted, setIsMuted }) => {
   const [showTrailer, setShowTrailer] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
+  const [activeSeason, setActiveSeason] = useState(null);
+  const [saved, setSaved] = useState(false);
   const navigate = useNavigate();
+  const { episodes, seasons, tmdbExtra, trailerMp4 } = useTitleEpisodes(movie);
+  // Our library first (same genres), then TMDB's own recommendations.
+  const recommendations = useRecommendations(movie, relatedMovies || [], tmdbExtra, 18);
 
   useEffect(() => {
     setIsEntering(true);
     setShowTrailer(false);
-    
+    setActiveSeason(null);          // a new title opens on its newest season
+    setSaved(inMyList(movie?.slug));
+
     if (movie?.trailer_key) {
       const timer = setTimeout(() => {
         setShowTrailer(true);
@@ -133,7 +144,25 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
     }
   }, [movie]);
 
+  // Newest season first, like the mobile sheet.
+  const currentSeason = activeSeason ?? (seasons.length ? seasons[seasons.length - 1] : null);
+  const seasonEpisodes = useMemo(
+    () => episodes.filter((e) => seasonNo(e) === currentSeason).sort((a, b) => epNo(a) - epNo(b)),
+    [episodes, currentSeason]
+  );
+  const latestEpisode = seasonEpisodes[0] || episodes[0] || null;
+
   if (!movie) return null;
+
+  // Fill the gaps in our row from the TMDB detail the hook resolved.
+  const x = tmdbExtra || {};
+  const isTV = movie.content_type === "tv" || episodes.length > 0 || x.content_type === "tv";
+  const genres = (movie.genres?.length ? movie.genres : (movie.tmdb_genres || x.genres || []));
+  const cover = movie.cover_poster || x.cover_poster_url || movie.poster;
+  const logo = movie.title_logo || x.title_logo || "";
+  const description = movie.description || x.description || "No description available.";
+  const ratingImdb = movie.imdbRating || movie.imdb_rating || x.imdb_rating;
+  const certification = movie.certification || x.certification;
 
   const formatLanguageDisplay = (langs) => {
     const langArray = Array.isArray(langs) ? langs : [langs];
@@ -141,12 +170,15 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
     return `${langArray.length} Languages`; 
   };
 
-  const handlePlayClick = () => {
-    // Route through onNavigate so TMDB items carry their payload in location.state
-    if (onNavigate) onNavigate(movie);
-    else navigate(`/watch/${movie.slug}`);
+  /* Play straight into the player — the watch PAGE is never shown. WatchPage
+     resolves the servers and opens its player overlay from `autoPlay`. */
+  const play = (ep = null) => {
+    const episode = ep ? { season: seasonNo(ep), episode: epNo(ep) } : null;
+    if (onNavigate) onNavigate(movie, { autoPlay: true, episode });
+    else navigate(`/watch/${movie.slug}`, { state: { autoPlay: true, autoPlayEpisode: episode } });
     onClose();
   };
+  const handlePlayClick = () => play(isTV ? latestEpisode : null);
 
   return (
     <div className="fixed inset-0 z-[500] hidden lg:flex items-center justify-center p-8 xl:p-16">
@@ -173,10 +205,18 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
 
           <div className="absolute inset-0">
             <img 
-              src={movie.cover_poster || movie.poster} 
-              className={`w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${showTrailer ? 'opacity-0' : 'opacity-60'}`} 
+              src={cover} 
+              className={`w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${showTrailer && (trailerMp4 || movie.trailer_key) ? 'opacity-0' : 'opacity-60'}`} 
               alt="" 
             />
+
+            {!movie.trailer_key && trailerMp4 && showTrailer && (
+              <div className="absolute inset-0 animate-in fade-in duration-1000">
+                {/* Bare MP4 — no iframe, so no player chrome of any kind. */}
+                <video key={trailerMp4} src={trailerMp4} autoPlay muted={isMuted} loop playsInline preload="auto"
+                  className="w-full h-full object-cover pointer-events-none" />
+              </div>
+            )}
 
             {movie.trailer_key && showTrailer && (
               <div className="absolute inset-0 animate-in fade-in duration-1000">
@@ -190,7 +230,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
             )}
             
             {/* 🚀 FIXED VOLUME BUTTON: Always white icons, clear visibility */}
-            {movie.trailer_key && showTrailer && (
+            {(trailerMp4 || movie.trailer_key) && showTrailer && (
                <button 
                 onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
                 className="absolute bottom-10 right-10 z-[510] p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-full border border-white/20 backdrop-blur-xl transition-all shadow-2xl active:scale-95"
@@ -208,26 +248,33 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
             <div className={`max-w-2xl space-y-6 transition-all duration-1000 delay-300 ${isEntering ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0'}`}>
               
               <div className="h-20 md:h-24 w-full flex items-end">
-                {movie.title_logo ? (
+                {logo ? (
                   <img 
-                    src={movie.title_logo} 
+                    src={logo} 
                     className="h-full max-w-[320px] object-contain object-left drop-shadow-2xl" 
                     alt="Title Logo" 
                   />
                 ) : (
                   <h1 className="text-4xl xl:text-5xl font-black italic uppercase tracking-tighter text-white drop-shadow-2xl">
-                    {movie.title || movie.slug}
+                    {cleanTitle(movie.title) || movie.slug}
                   </h1>
                 )}
               </div>
 
               <div className="flex items-center gap-4 text-xs font-black text-gray-300">
-                <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded border border-white/10">
-                  <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                  <span className="text-white">{movie.imdbRating || "7.5"}</span>
-                </div>
-                <span>{movie.year || "2024"}</span>
-              
+                {ratingImdb && (
+                  <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded border border-white/10">
+                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                    <span className="text-white">{ratingImdb}</span>
+                  </div>
+                )}
+                {(movie.year || x.year) && <span>{movie.year || x.year}</span>}
+                {certification && (
+                  <span className="px-1.5 py-0.5 bg-white/10 border border-white/15 rounded text-gray-200">{certification}</span>
+                )}
+                {seasons.length > 0 && (
+                  <span>{seasons.length} Season{seasons.length > 1 ? "s" : ""}</span>
+                )}
                 <span className="text-blue-500 tracking-widest">{formatLanguageDisplay(movie.language)}</span>
               </div>
 
@@ -236,11 +283,15 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
                   onClick={handlePlayClick}
                   className="px-8 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black flex items-center gap-2 transition-all transform hover:scale-105 uppercase text-xs tracking-widest shadow-xl"
                 >
-                  <Play size={18} className="fill-current" /> PLAY NOW
+                  <Play size={18} className="fill-current" />
+                  {isTV && latestEpisode
+                    ? <>WATCH S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</>
+                    : "PLAY NOW"}
                 </button>
                 
-                <button className="p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 backdrop-blur-xl transition-all">
-                    <Plus size={20} />
+                <button onClick={() => setSaved(toggleMyList(movie))} aria-label="Watchlist"
+                  className="p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 backdrop-blur-xl transition-all">
+                    {saved ? <Check size={20} className="text-blue-400" /> : <Plus size={20} />}
                 </button>
               </div>
             </div>
@@ -256,7 +307,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
                  <span>98% Match</span>
                </div>
                <p className="text-lg text-gray-200 leading-relaxed font-medium italic border-l-2 border-blue-600 pl-6">
-                 {movie.description || "No description available."}
+                 {description}
                </p>
             </div>
 
@@ -264,8 +315,8 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
                <div className="text-xs">
                  <span className="text-gray-500 font-black uppercase tracking-widest block mb-2">Genres</span>
                  <div className="flex flex-wrap gap-2 text-gray-300 font-bold">
-                   {movie.genres?.map((g, i) => (
-                     <span key={i}>{g}{i !== movie.genres.length - 1 && ","}</span>
+                   {genres.map((g, i) => (
+                     <span key={g}>{g}{i !== genres.length - 1 && ","}</span>
                    ))}
                  </div>
                </div>
@@ -273,12 +324,69 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, relatedMovies, isMut
             </div>
           </div>
 
-          {relatedMovies.length > 0 && (
+          {episodes.length > 0 && (
+            <div className="mt-16">
+              <div className="flex items-center justify-between gap-6 mb-5">
+                <h4 className="text-xl font-black text-white uppercase tracking-tighter italic border-l-4 border-blue-600 pl-3">
+                  Episodes
+                </h4>
+                {seasons.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                    {seasons.map((sn) => (
+                      <button key={sn} onClick={() => setActiveSeason(sn)}
+                        className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all ${
+                          sn === currentSeason ? "bg-white text-black" : "bg-white/5 text-gray-300 hover:bg-white/10"}`}>
+                        Season {sn}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="max-h-[26rem] overflow-y-auto scrollbar-hide divide-y divide-white/5 pr-1">
+                {seasonEpisodes.map((ep) => (
+                  <button key={`${seasonNo(ep)}-${epNo(ep)}`} onClick={() => play(ep)}
+                    className="w-full flex items-center gap-5 py-3 text-left group/ep hover:bg-white/[0.04] rounded-xl px-3 transition-colors">
+                    <div className="relative w-40 shrink-0 aspect-video rounded-lg overflow-hidden bg-gray-900">
+                      <img src={epStill(ep) || cover} alt="" loading="lazy"
+                        className={`w-full h-full object-cover transition-transform duration-500 group-hover/ep:scale-105 ${epStill(ep) ? "" : "opacity-60"}`}
+                        onError={(e) => { e.currentTarget.src = cover; }} />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/ep:opacity-100 transition-opacity flex items-center justify-center">
+                        <Play className="w-7 h-7 text-white fill-white drop-shadow" />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-bold truncate">
+                        {ep.title || ep.name || `Episode ${epNo(ep)}`}
+                      </p>
+                      <p className="text-gray-500 text-xs font-bold mt-1 flex items-center gap-2">
+                        {ep.hasStream && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 text-[9px] font-black uppercase tracking-wider">AnchorHD</span>
+                        )}
+                        {`S${seasonNo(ep)} E${epNo(ep)}`}
+                        {airDate(ep.air_date) && ` · ${airDate(ep.air_date)}`}
+                        {ep.runtime ? ` · ${ep.runtime}m` : ""}
+                      </p>
+                      {ep.description && (
+                        <p className="text-gray-400 text-sm mt-1.5 line-clamp-2">{ep.description}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recommendations.length > 0 && (
             <div className="mt-20">
               <h4 className="text-xl font-black text-white uppercase tracking-tighter italic mb-4 border-l-4 border-blue-600 pl-3">
                 Recommended <span className="text-blue-600">Titles</span>
               </h4>
-              <RelatedRow movies={relatedMovies} onSelect={onNavigate} />
+              <RelatedRow
+                movies={recommendations}
+                onSelect={(m) => (onSelectMovie ? onSelectMovie(m) : onNavigate?.(m))}
+                onPlay={(m) => { onNavigate?.(m, { autoPlay: true }); onClose(); }}
+              />
             </div>
           )}
           

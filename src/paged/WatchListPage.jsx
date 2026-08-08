@@ -80,6 +80,7 @@ function YouTubeTrailer({ videoId, muted, onEnd, endSkip = 20 }) {
 import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
 import DesktopDetailOverlay from "./DesktopDetailOverlay";
+import MobileDetailSheet from "../components/MobileDetailSheet";
 
 /* ===== Helper: Save Recently Watched ===== */
 const saveRecentlyWatched = (movie) => {
@@ -534,9 +535,9 @@ const GenreRow = ({ title, movies, onSelect }) => {
           <button onClick={() => scroll("left")} className="absolute left-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-r-xl opacity-0 group-hover/row:opacity-100">◀</button>
         )}
         <div ref={rowRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-14 pt-4 px-2">
-          {movies.map((movie) => (
+          {movies.map((movie, i) => (
             <div
-              key={movie.id}
+              key={movie.id ?? movie.slug ?? i}
               className="group relative flex-none w-36 sm:w-52 h-52 sm:h-72 border border-white/5 rounded-xl cursor-pointer transition-all duration-500 ease-out hover:z-[70] sm:hover:scale-110 sm:hover:w-80 sm:hover:shadow-[0_20px_50px_rgba(0,0,0,1)] bg-gray-900"
               onMouseEnter={() => handleMouseEnter(movie.id)}
               onMouseLeave={handleMouseLeave}
@@ -597,6 +598,21 @@ const GenreRow = ({ title, movies, onSelect }) => {
 const WatchListPage = () => {
   const { backendUrl } = useContext(AppContext);
   const navigate = useNavigate();
+
+  /* The whole catalogue was refetched (and the spinner shown) on every visit to
+     this page, even when coming back from a detail overlay seconds later. The
+     last result is kept in sessionStorage so a return visit paints instantly;
+     it still refreshes in the background so nothing goes stale. */
+  const CACHE_KEY = "watchlist_page_cache_v1";
+  const CACHE_TTL = 10 * 60 * 1000;   // 10 minutes
+  const readCache = () => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const c = JSON.parse(raw);
+      return c && Date.now() - c.at < CACHE_TTL ? c : null;
+    } catch { return null; }
+  };
 
   const [movies, setMovies] = useState([]);
   const [allMovies, setAllMovies] = useState([]);
@@ -779,7 +795,7 @@ const WatchListPage = () => {
   /* ─── Main data fetch ── */
   useEffect(() => {
     const fetchMovies = async () => {
-      setLoading(true);
+      if (!readCache()) setLoading(true);   // never blank out an already-painted page
       try {
         const [watchRes, moviesRes] = await Promise.all([
           supabase.from("watch_html").select("*").order("created_at", { ascending: false }).limit(400),
@@ -864,6 +880,14 @@ const WatchListPage = () => {
           .slice(0, 10 - manualTrending.length);
         setTrendingMovies([...manualTrending, ...autoFill]);
 
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+            at: Date.now(), langs: fetchLangs.join("|"),
+            movies: merged, allMovies: combined, langTrending: langTrendingMap,
+            trending: [...manualTrending, ...autoFill],
+          }));
+        } catch { /* quota or private mode — caching is best-effort */ }
+
         // Fire-and-forget: fill in logos/trailers for the bulk-fetched pages
         enrichTmdbBatch(tmdb.filter(m => !m.title_logo && !m.trailer_key && m.tmdb_id));
 
@@ -877,6 +901,17 @@ const WatchListPage = () => {
     // Wait for the auth check so we know the user's saved languages before
     // hitting TMDB; refetch whenever the committed language choice changes.
     if (!authChecked) return;
+
+    // Paint from the last result first — same languages, under 10 minutes old —
+    // so returning to this page is instant instead of a spinner.
+    const cached = readCache();
+    if (cached && cached.langs === fetchLangs.join("|")) {
+      setMovies(cached.movies || []);
+      setAllMovies(cached.allMovies || []);
+      setLangTrending(cached.langTrending || {});
+      setTrendingMovies(cached.trending || []);
+      setLoading(false);
+    }
     fetchMovies();
   }, [backendUrl, authChecked, fetchLangs.join("|")]);
 
@@ -932,9 +967,15 @@ const WatchListPage = () => {
     }
   };
 
-  /* ─── Navigate to watch page ── */
-  const handleNavigateToWatch = (movie) => {
+  /* ─── Navigate to watch page ──
+     opts.autoPlay (mobile sheet): skip the watch page entirely — WatchPage picks
+     the server and opens the player overlay straight away.
+     opts.episode: { season, episode } to start on. */
+  const handleNavigateToWatch = (movie, opts = {}) => {
     saveRecentlyWatched(movie);
+    const playState = opts.autoPlay
+      ? { autoPlay: true, autoPlayEpisode: opts.episode || null }
+      : {};
 
     // MX Player hero slides open the in-SPA MX watch page (VideoPlayer.jsx).
     if (movie.source === "mxplayer" && (movie.mx_web_url || movie.mx_id)) {
@@ -981,25 +1022,19 @@ const WatchListPage = () => {
             source: "tmdb",   // let WatchPage trust the search data (correct posters)
             content_type: movie.content_type || payload.content_type,
           },
+          ...playState,
         },
       });
     } else {
-      navigate(`/watch/${movie.slug}`, { state: { movie } });
+      navigate(`/watch/${movie.slug}`, { state: { movie, ...playState } });
     }
 
     setSelectedMovie(null);
   };
 
-  const relatedMovies = useMemo(() => {
-    if (!selectedMovie) return [];
-    const targetGenres = selectedMovie.tmdb_genres || selectedMovie.genres || selectedMovie.categories || [];
-    const targetLangs = Array.isArray(selectedMovie.language) ? selectedMovie.language : [selectedMovie.language];
-    return allMovies.filter(m => m.slug !== selectedMovie.slug).filter(m => {
-      const mGenres = m.tmdb_genres || m.genres || m.categories || [];
-      const mLangs = Array.isArray(m.language) ? m.language : [m.language];
-      return mGenres.some(g => targetGenres.includes(g)) && mLangs.some(l => targetLangs.includes(l));
-    }).slice(0, 12);
-  }, [selectedMovie, allMovies]);
+  // The overlays rank this pool themselves (shared genres from our rows AND from
+  // TMDB, plus language/type affinity) and blend in TMDB's own recommendations.
+  const relatedMovies = useMemo(() => (selectedMovie ? allMovies : []), [selectedMovie, allMovies]);
 
   // Standalone continue-watching — reads the store directly, so it works for every
   // watched title (movies AND series, DB or TMDB), independent of the loaded list.
@@ -1017,20 +1052,43 @@ const WatchListPage = () => {
         (Array.isArray(movie.language) ? movie.language : [movie.language]).some(lang => userLangs.includes(lang))
       );
 
+    /* One title can reach the same row twice — a repeated genre name on the row,
+       or the same TMDB id arriving under two slugs from the DB/TMDB merge. That
+       rendered duplicate cards AND tripped React's unique-key warning, so each
+       bucket keeps one entry per id. */
+    const seenPerGenre = {};
     const result = filteredList.reduce((acc, movie) => {
-      const genres =
+      const genres = [...new Set(
         movie.tmdb_genres?.length > 0 ? movie.tmdb_genres :
         movie.genres?.length > 0 ? movie.genres :
         movie.categories?.length > 0 ? movie.categories :
-        ["Others"];
+        ["Others"]
+      )];
+      const key = String(movie.id ?? movie.slug);
       genres.forEach(genre => {
-        if (!acc[genre]) acc[genre] = [];
+        if (!acc[genre]) { acc[genre] = []; seenPerGenre[genre] = new Set(); }
+        if (seenPerGenre[genre].has(key)) return;
+        seenPerGenre[genre].add(key);
         acc[genre].push(movie);
       });
       return acc;
     }, {});
 
-    Object.keys(result).forEach(key => { result[key] = result[key].sort(() => 0.5 - Math.random()); });
+    /* Rows were shuffled with Math.random() on every recompute, so each time
+       enrichment updated allMovies the whole page reordered itself under the
+       viewer. Order is now derived from the genre + title, so it looks varied,
+       stays put across re-renders, and is the same on a reload. */
+    const hash = (str) => {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0;
+    };
+    Object.keys(result).forEach(genre => {
+      result[genre] = result[genre]
+        .map(m => ({ m, k: hash(`${genre}:${m.id ?? m.slug ?? ""}`) }))
+        .sort((a, b) => a.k - b.k)
+        .map(x => x.m);
+    });
     return result;
   }, [allMovies, search, userLangs]);
 
@@ -1338,87 +1396,14 @@ const WatchListPage = () => {
       )}
 
       {/* ── Mobile Movie Detail Sheet ── */}
-      {selectedMovie && isMobile && (
-        <div className="fixed inset-0 z-[200] bg-gray-950/98 backdrop-blur-xl flex flex-col animate-in fade-in slide-in-from-bottom duration-500"
-          onClick={e => e.target === e.currentTarget && setSelectedMovie(null)}>
-          <button onClick={() => setSelectedMovie(null)}
-            className="absolute top-6 right-6 z-[210] p-3 bg-black/50 rounded-full text-white backdrop-blur-md active:scale-90 transition-transform">
-            <X size={24} />
-          </button>
-          <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide">
-            <div className="relative aspect-video w-full shadow-2xl bg-black overflow-hidden flex items-center justify-center">
-              {selectedMovie.trailer_key ? (
-                <>
-                  <div className="relative w-full h-full scale-[1.3] pointer-events-none">
-                    <iframe
-                      src={`https://www.youtube.com/embed/${selectedMovie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${window.location.origin}`}
-                      title="Trailer" className="w-full h-full" frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
-                  </div>
-                  <div className="absolute top-4 left-4 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm shadow-lg pointer-events-none">
-                    <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.2em]">Trailer</span>
-                  </div>
-                  <button onClick={e => { e.stopPropagation(); setIsMuted(!isMuted); }}
-                    className="absolute bottom-10 right-6 z-[220] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md transition-all border border-white/10 shadow-2xl active:scale-90">
-                    {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                  </button>
-                </>
-              ) : (
-                <img src={selectedMovie.cover_poster || selectedMovie.poster} className="w-full h-full object-cover opacity-80" alt="" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent pointer-events-none" />
-            </div>
-
-            <div className="px-6 flex flex-col items-center text-center space-y-6 -mt-12 relative z-10">
-              {selectedMovie.title_logo ? (
-                <img src={selectedMovie.title_logo} className="h-16 w-auto object-contain drop-shadow-2xl mb-2" alt="" />
-              ) : (
-                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl leading-none">{selectedMovie.title || selectedMovie.slug}</h3>
-              )}
-              <div className="flex items-center gap-4 text-xs font-black text-gray-400">
-                {selectedMovie.imdbRating && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="bg-[#f5c518] text-black px-1.5 py-0.5 rounded-[3px] font-black text-[9px] shadow-md">IMDb</div>
-                    <span className="text-white">{selectedMovie.imdbRating}</span>
-                  </div>
-                )}
-                {selectedMovie.year && <span>{selectedMovie.year}</span>}
-                <span className="font-black text-blue-400 uppercase tracking-widest">{formatLanguageCount(selectedMovie.language)}</span>
-                {selectedMovie.content_type === "tv" && (
-                  <span className="px-2 py-0.5 bg-purple-600/80 text-white text-[9px] font-black uppercase tracking-widest rounded">SERIES</span>
-                )}
-              </div>
-              <button
-                onClick={() => handleNavigateToWatch(selectedMovie)}
-                className="w-full bg-white text-black py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg uppercase tracking-widest">
-                <Play className="w-5 h-5 fill-current" />
-                {selectedMovie.content_type === "tv" ? "STREAM SERIES" : "WATCH NOW"}
-              </button>
-              <div className="flex flex-wrap justify-center gap-2">
-                {(selectedMovie.tmdb_genres || selectedMovie.genres || []).map(g => (
-                  <span key={g} className="px-3 py-1 bg-gray-900 border border-white/5 rounded-full text-[9px] font-black uppercase text-gray-400 tracking-wider">{g}</span>
-                ))}
-              </div>
-              <p className="text-gray-400 text-sm leading-relaxed max-w-sm italic opacity-80 font-medium">{selectedMovie.description}</p>
-              {relatedMovies.length > 0 && (
-                <div className="w-full pt-10 text-left border-t border-white/10 mt-8">
-                  <h4 className="text-lg font-black text-white uppercase tracking-widest border-l-4 border-blue-600 pl-3 mb-4">More Like This</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    {relatedMovies.map(m => (
-                      <div key={m.id || m.slug} className="flex flex-col gap-2 group active:scale-95 transition-transform cursor-pointer"
-                        onClick={() => { setSelectedMovie(m); document.querySelector(".overflow-y-auto")?.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-white/5 bg-gray-900 shadow-lg">
-                          <img src={m.poster || "/default-poster.jpg"} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110" alt="" />
-                        </div>
-                        <span className="text-[9px] font-black text-gray-400 truncate uppercase tracking-tighter">{m.title || m.slug}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {isMobile && (
+        <MobileDetailSheet
+          movie={selectedMovie}
+          onClose={() => setSelectedMovie(null)}
+          relatedMovies={relatedMovies}
+          onNavigate={handleNavigateToWatch}
+          onSelectMovie={handleMovieSelect}
+        />
       )}
 
       {/* ── Desktop Detail Overlay ── */}
@@ -1427,6 +1412,7 @@ const WatchListPage = () => {
           movie={selectedMovie}
           onClose={() => setSelectedMovie(null)}
           onNavigate={handleNavigateToWatch}
+          onSelectMovie={handleMovieSelect}
           relatedMovies={relatedMovies}
           isMuted={isMuted}
           setIsMuted={setIsMuted}

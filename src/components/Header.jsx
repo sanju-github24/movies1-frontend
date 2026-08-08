@@ -313,6 +313,10 @@ const Header = () => {
 
   const isMobileView = () => window.innerWidth < 640;
 
+  // Pool for "More Like This" — the sheet scores it on shared genres (ours and
+  // TMDB's) and tops it up with TMDB's own recommendations.
+  const sheetRelated = useMemo(() => (sheetMovie ? movies : []), [sheetMovie, movies]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setCurrentUserEmail(session.user.email);
@@ -331,6 +335,7 @@ const Header = () => {
       }
       const w = data && data[0];
       if (!w) return;
+      const localEps = Array.isArray(w.episodes) ? w.episodes : [];
       setSheetMovie(prev => (prev && prev.slug === movie.slug) ? {
         ...prev,
         title_logo:   prev.title_logo  || w.title_logo || "",
@@ -338,7 +343,13 @@ const Header = () => {
         cover_poster: w.cover_poster || prev.cover_poster || prev.poster,
         poster:       prev.poster || w.poster,
         tmdb_id:      prev.tmdb_id || w.tmdb_id,
-        content_type: prev.content_type || w.content_type,
+        imdb_id:      prev.imdb_id || w.imdb_id || null,
+        // Episodes present means it's a series, whatever the row says.
+        content_type: localEps.length ? "tv" : (prev.content_type || w.content_type),
+        episodes:     localEps,
+        // The sheet plays through our own player whenever we have an upload row.
+        has_watch_html: true,
+        watch_slug:   w.slug || prev.slug,
       } : prev);
     } catch { /* enrichment is best-effort */ }
   };
@@ -518,9 +529,14 @@ const Header = () => {
                       <Film className="w-4 h-4"/> DETAILS
                     </Link>
                     {movie.watchUrl && (
+                      // Mobile: Watch opens the detail sheet (which then goes straight
+                      // to the player). Desktop keeps the direct link.
                       <a href={movie.watchUrl}
                         className="w-full bg-white text-black text-xs font-black py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition"
-                        onClick={e=>e.stopPropagation()}>
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (isMobileView()) { e.preventDefault(); openMobileSheet(movie); }
+                        }}>
                         <MonitorPlay className="w-4 h-4"/> WATCH NOW
                       </a>
                     )}
@@ -533,7 +549,12 @@ const Header = () => {
       )}
 
       {/* ── MOBILE DETAIL SHEET ─────────────────────────────────────────── */}
-      <MobileDetailSheet movie={sheetMovie} onClose={() => setSheetMovie(null)} />
+      <MobileDetailSheet
+        movie={sheetMovie}
+        onClose={() => setSheetMovie(null)}
+        relatedMovies={sheetRelated}
+        onSelectMovie={openMobileSheet}
+      />
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
       <footer className="w-full py-12 text-center border-t border-gray-900 mt-12 bg-gray-950/50">
