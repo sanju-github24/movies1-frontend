@@ -880,13 +880,6 @@ const WatchListPage = () => {
           .slice(0, 10 - manualTrending.length);
         setTrendingMovies([...manualTrending, ...autoFill]);
 
-        try {
-          sessionStorage.setItem(CACHE_KEY, JSON.stringify({
-            at: Date.now(), langs: fetchLangs.join("|"),
-            movies: merged, allMovies: combined, langTrending: langTrendingMap,
-            trending: [...manualTrending, ...autoFill],
-          }));
-        } catch { /* quota or private mode — caching is best-effort */ }
 
         // Fire-and-forget: fill in logos/trailers for the bulk-fetched pages
         enrichTmdbBatch(tmdb.filter(m => !m.title_logo && !m.trailer_key && m.tmdb_id));
@@ -910,10 +903,24 @@ const WatchListPage = () => {
       setAllMovies(cached.allMovies || []);
       setLangTrending(cached.langTrending || {});
       setTrendingMovies(cached.trending || []);
+      setHeroMovies(cached.hero || []);      // without this the hero renders empty
       setLoading(false);
     }
     fetchMovies();
   }, [backendUrl, authChecked, fetchLangs.join("|")]);
+
+  /* Snapshot once the page has actually settled rather than mid-fetch — the
+     hero picks up MX slides asynchronously, and writing earlier stored an empty
+     hero, which is why a cached reload showed no hero section. */
+  useEffect(() => {
+    if (loading || allMovies.length === 0) return;
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        at: Date.now(), langs: fetchLangs.join("|"),
+        movies, allMovies, langTrending, trending: trendingMovies, hero: heroMovies,
+      }));
+    } catch { /* quota or private mode — caching is best-effort */ }
+  }, [loading, movies, allMovies, langTrending, trendingMovies, heroMovies, fetchLangs]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncTodaysUploads = async (list) => {
     const todayStr = new Date().toISOString().split("T")[0];
