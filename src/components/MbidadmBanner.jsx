@@ -12,14 +12,14 @@ const MbidadmBanner = () => {
 
     // Create the banner container element
     const adPlaceholder = document.createElement('div');
-    adPlaceholder.setAttribute('data-banner-id', '2024253');
+    adPlaceholder.setAttribute('data-banner-id', '2026421');
     containerRef.current.appendChild(adPlaceholder);
 
     // Create the script element to initialize/run the ad
     const script = document.createElement('script');
     script.async = true;
     script.src = `https://js.mbidadm.com/static/scripts.js?cb=${Date.now()}`;
-    script.setAttribute('data-admpid', '446919');
+    script.setAttribute('data-admpid', '452435');
 
     // Append script to container to run it in the context of the placeholder
     containerRef.current.appendChild(script);
