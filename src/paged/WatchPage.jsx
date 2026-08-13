@@ -77,6 +77,7 @@ const Toggle = ({ checked, onChange }) => (
 const COLOR = {
   imdb_reader: { glow:"rgba(234,179,8,0.3)",  bg:"from-yellow-500/10 to-yellow-600/5", border:"border-yellow-500/30", text:"text-yellow-400", dot:"bg-yellow-400" },
   embed:       { glow:"rgba(99,102,241,0.3)",  bg:"from-indigo-500/10 to-indigo-600/5", border:"border-indigo-500/30", text:"text-indigo-400", dot:"bg-indigo-400" },
+  mirchi:      { glow:"rgba(244,63,94,0.3)",   bg:"from-rose-500/10 to-rose-600/5",     border:"border-rose-500/30",   text:"text-rose-400",   dot:"bg-rose-400"   },
   vidify:      { glow:"rgba(168,85,247,0.3)",  bg:"from-purple-500/10 to-purple-600/5", border:"border-purple-500/30", text:"text-purple-400", dot:"bg-purple-400" },
   videasy:     { glow:"rgba(59,130,246,0.3)",  bg:"from-blue-500/10 to-blue-600/5",   border:"border-blue-500/30",   text:"text-blue-400",   dot:"bg-blue-400"   },
   vidup:       { glow:"rgba(6,182,212,0.3)",   bg:"from-cyan-500/10 to-cyan-600/5",    border:"border-cyan-500/30",   text:"text-cyan-400",   dot:"bg-cyan-400"   },
@@ -120,6 +121,7 @@ const SRV_COLOR = {
   mx:          "text-green-400  bg-green-500/10  border-green-500/30  hover:border-green-500/60",
   imdb_reader: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20 hover:border-yellow-500/50",
   embed:       "text-indigo-400 bg-indigo-500/10 border-indigo-500/20 hover:border-indigo-500/50",
+  mirchi:      "text-rose-400   bg-rose-500/10   border-rose-500/20   hover:border-rose-500/50",
   vidify:      "text-purple-400 bg-purple-500/10 border-purple-500/20 hover:border-purple-500/50",
   videasy:     "text-blue-400   bg-blue-500/10   border-blue-500/20   hover:border-blue-500/50",
   vidup:       "text-cyan-400   bg-cyan-500/10   border-cyan-500/20   hover:border-cyan-500/50",
@@ -194,7 +196,11 @@ const buildServers = (meta, eps = []) => {
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
   // Our uploaded embed mirror — ahead of every third-party server.
   if (meta.html_code || eps.some(e => e.html))
-    srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> });
+    srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> })
+  
+  if (meta.tmdb_id)
+    srv.push({ id:"mirchi", name:"Mirchi", label:"Hindi Audio", icon:<Languages size={14}/> });
+  srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
   // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
   srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
   // MX Player after ours — a real free HD stream, but still someone else's.
@@ -585,6 +591,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
     switch (serverId) {
       case "imdb_reader": { const omegaId = imdb || tmdb; if (omegaId) src = `https://gemma416okl.com/play/${omegaId}`; break; }
+      case "mirchi": if (tmdb) src = TV
+          ? `https://nxsha.space/embed/tv/${tmdb}/${s}/${e}`
+          : `https://nxsha.space/embed/movie/${tmdb}`;
+        break;
       case "vidify":  if (tmdb) src = TV ? `https://player.vidify.top/embed/tv/${tmdb}/${s}/${e}?${p_vidify}`   : `https://player.vidify.top/embed/movie/${tmdb}?${p_vidify}`;   break;
       case "videasy": if (tmdb) src = TV ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}?${p_videasy}` : `https://player.videasy.net/movie/${tmdb}?${p_videasy}`; break;
       case "vidup":   if (id)   src = TV ? `https://vidup.to/tv/${id}/${s}/${e}?autoPlay=true`            : `https://vidup.to/movie/${id}?autoPlay=true`;            break;
@@ -1528,6 +1538,7 @@ if (!alive) return;
                         ...(movieMeta.mx_web_url || movieMeta.mx_id ? [{ id:"mx", label:"MX Player", color:"green" }] : []),
                         { id:"imdb_reader", label:"Omega",      color:"yellow" },
                         { id:"embed",       label:"Multi Audio", color:"indigo" },
+                        { id:"mirchi",      label:"Mirchi",      color:"rose"   },
                         { id:"vidify",      label:"Vidify",     color:"purple" },
                         { id:"videasy",     label:"VidEasy",    color:"blue"   },
                         { id:"vidup",       label:"VidUp",      color:"cyan"   },
@@ -1542,6 +1553,7 @@ if (!alive) return;
                           green: "bg-green-500/10 text-green-400 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/15",
                           yellow:"bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:border-yellow-500/40 hover:bg-yellow-500/15",
                           indigo:"bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/40 hover:bg-indigo-500/15",
+                          rose:  "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/15",
                           purple:"bg-purple-500/10 text-purple-400 border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/15",
                           blue:  "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15",
                           cyan:  "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/15",
