@@ -76,8 +76,18 @@ export function useMp4Trailer(movie, extra = null) {
       setTrailerPending(false);
     }, 4000);
 
+    /* Phones and data-saver get the 480p rendition. These are progressive MP4s
+       with no adaptive switching, so a 720p file on a phone connection can run
+       the buffer dry and leave the trailer paused; at that screen size 480p
+       costs nothing visually. */
+    const light = typeof window !== "undefined" &&
+      (window.innerWidth < 640 || navigator.connection?.saveData === true);
+
     const ask = (path, params) =>
-      axios.get(`${backendUrl}/api/${path}`, { params: { ...params, title }, timeout: 8000 })
+      axios.get(`${backendUrl}/api/${path}`, {
+        params: { ...params, title, ...(light ? { def: "480" } : {}) },
+        timeout: 8000,
+      })
         .then(r => (r.data?.success && r.data.url ? r.data.url : null))
         .catch(() => null);   // network hiccup → try the next source
 

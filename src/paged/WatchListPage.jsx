@@ -1140,6 +1140,9 @@ const WatchListPage = () => {
                 ? { imdbId: m.imdb_id }
                 : { tmdbId: m.tmdb_id, contentType: m.content_type === "tv" ? "tv" : "movie" }),
               title: m.title || "",
+              // Narrow windows and data-saver get the lighter rendition, which
+              // is far less likely to stall mid-trailer.
+              ...(navigator.connection?.saveData === true ? { def: "480" } : {}),
             },
             timeout: 8000,
           });

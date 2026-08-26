@@ -106,6 +106,13 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
         content_type: movie.content_type || (isTV ? "tv" : "movie"),
         genres,
         title_logo: logo || null,
+        /* Our own streams, when the sheet was enriched from an upload row.
+           Without these the watch page opens with only the third-party
+           servers — no AnchorHD, no Multi Audio — even though we host it. */
+        html_code:  movie.html_code || movie.html || null,
+        hls_url:    movie.hls_url   || null,
+        video_url:  movie.video_url || null,
+        episodes:   Array.isArray(movie.episodes) ? movie.episodes : [],
       };
     }
     // watch_html can live under a different slug than the movies row (matched by

@@ -347,6 +347,11 @@ const Header = () => {
         // Episodes present means it's a series, whatever the row says.
         content_type: localEps.length ? "tv" : (prev.content_type || w.content_type),
         episodes:     localEps,
+        // Our own streams — carried through so the watch page offers AnchorHD
+        // and Multi Audio for a title we host, not just the third-party servers.
+        html_code:    prev.html_code || w.html_code || null,
+        hls_url:      prev.hls_url   || w.hls_url   || null,
+        video_url:    prev.video_url || w.video_url || null,
         // The sheet plays through our own player whenever we have an upload row.
         has_watch_html: true,
         watch_slug:   w.slug || prev.slug,

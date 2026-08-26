@@ -223,29 +223,45 @@ const buildServers = (meta, eps = []) => {
 };
 
 /* ===================================================================
-   attachLocalHls — when arriving from a TMDB search result, find whether
-   we've ALSO uploaded this title to R2 (a watch_html row with an hls_url)
-   and return it, so the AnchorHD server shows for TMDB results too.
-   Match order: exact tmdb_id → fuzzy title (+ year) over our uploaded set.
+   attachLocalHls — when we arrive with router state (a TMDB pick, a search
+   result, the header's detail sheet), find whether we've ALSO uploaded this
+   title, and return the row so OUR servers — AnchorHD and Multi Audio — show
+   up alongside the third-party ones.
+   Match order: exact slug → exact tmdb_id → fuzzy title (+ year).
 =================================================================== */
 const localNorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const LOCAL_COLS = "slug,hls_url,video_url,html_code,episodes";
+/* Any of these makes a row worth attaching: our own HLS, a direct file, the
+   uploaded embed (which is what "Multi Audio" plays) or per-episode stream
+   links. An embed-only row used to be discarded here, which is why Multi Audio
+   went missing for titles we had definitely uploaded. */
+const localUsable = (r) => !!(r && (r.hls_url || r.video_url || r.html_code ||
+  (Array.isArray(r.episodes) && r.episodes.length)));
+
 const attachLocalHls = async (m) => {
   try {
-    // 1) exact tmdb_id — reliable when the watch_html row is tagged with it.
-    //    Return the row if it has a movie hls_url OR episodes (series stream links),
-    //    so both movies and series surface AnchorHD.
+    /* 1) exact slug — what our own rows arrive under, and the only match that
+          works for an upload carrying no tmdb_id. */
+    if (m.slug) {
+      const { data } = await supabase.from("watch_html")
+        .select(LOCAL_COLS).eq("slug", m.slug).limit(1);
+      if (localUsable(data && data[0])) return data[0];
+    }
+    // 2) exact tmdb_id — reliable when the watch_html row is tagged with one.
     if (m.tmdb_id) {
       const { data } = await supabase.from("watch_html")
-        .select("hls_url,video_url,html_code,episodes")
-        .eq("tmdb_id", String(m.tmdb_id))
-        .limit(1);
-      if (data && data[0] && (data[0].hls_url || (Array.isArray(data[0].episodes) && data[0].episodes.length))) return data[0];
+        .select(LOCAL_COLS).eq("tmdb_id", String(m.tmdb_id)).limit(1);
+      if (localUsable(data && data[0])) return data[0];
     }
-    // 2) fuzzy title match across our uploaded movies (rows with an hls_url).
-    //    Series are matched by tmdb_id above (they usually lack a movie-level hls_url).
+    /* 3) fuzzy title across every row that carries a stream of any kind.
+          Note there is no `year` column on watch_html — selecting one made this
+          query 400 and quietly return nothing, so this branch never actually
+          ran. The year agreement boost below reads whatever the row carries and
+          is simply skipped when it carries none. */
     const { data: rows } = await supabase.from("watch_html")
-      .select("hls_url,video_url,html_code,episodes,title,year")
-      .not("hls_url", "is", null).limit(500);
+      .select(`${LOCAL_COLS},title`)
+      .or("hls_url.not.is.null,html_code.not.is.null,video_url.not.is.null")
+      .limit(500);
     if (!rows || !rows.length) return null;
     const STOP = new Set(["the","and","of","a","an","in","on","to","is","hindi","tamil","telugu","kannada","malayalam","english","season","part","movie","full","hd","www"]);
     const toks = (t) => localNorm(t).split(" ").filter((w) => w.length > 2 && !STOP.has(w));
