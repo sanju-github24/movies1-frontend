@@ -8,8 +8,18 @@ import { useVideoMute } from "../utils/useVideoMute";
    overlays play whenever a trailer resolves; TMDB's YouTube embed is only the
    fallback for the titles neither source has. */
 
-export default function Mp4Trailer({ src, muted, loop = false, onEnd, className = "w-full h-full object-cover" }) {
+export default function Mp4Trailer({ src, muted, loop = false, onEnd, onStart, className = "w-full h-full object-cover" }) {
   const ref = React.useRef(null);
+  /* Stays invisible until it is genuinely playing. Some devices refuse to
+     autoplay at all — iOS in Low Power Mode is the common one — and a video
+     element that can't start doesn't sit there quietly: Safari draws its own
+     play button over it. Hidden until it plays, that never shows, and callers
+     keep the artwork up instead (onStart tells them when to drop it). */
+  const [live, setLive] = React.useState(false);
+  const onStartRef = React.useRef(onStart);
+  onStartRef.current = onStart;
+
+  React.useEffect(() => { setLive(false); }, [src]);
 
   React.useEffect(() => {
     const v = ref.current;
@@ -45,7 +55,11 @@ export default function Mp4Trailer({ src, muted, loop = false, onEnd, className 
     };
     const onVisible = () => { if (!document.hidden) { tries = 0; resume(); } };
     // Playing cleanly again means the next stall gets a fresh set of retries.
-    const onPlaying = () => { tries = 0; };
+    const onPlaying = () => {
+      tries = 0;
+      setLive(true);
+      if (onStartRef.current) onStartRef.current();
+    };
 
     v.addEventListener("pause", resume);
     v.addEventListener("playing", onPlaying);
@@ -62,6 +76,7 @@ export default function Mp4Trailer({ src, muted, loop = false, onEnd, className 
   return (
     <video ref={ref} src={src} autoPlay muted loop={loop} playsInline preload="auto"
       disablePictureInPicture controlsList="nodownload noplaybackrate"
-      onEnded={onEnd} className={`${className} pointer-events-none`} />
+      onEnded={onEnd}
+      className={`${className} pointer-events-none transition-opacity duration-700 ${live ? "opacity-100" : "opacity-0"}`} />
   );
 }

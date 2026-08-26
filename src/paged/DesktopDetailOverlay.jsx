@@ -123,6 +123,7 @@ const RelatedRow = ({ movies, onSelect, onPlay }) => {
 
 const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relatedMovies, isMuted, setIsMuted }) => {
   const [introDone, setIntroDone] = useState(false);   // the 1s the artwork holds for
+  const [mp4Live, setMp4Live] = useState(false);      // the MP4 is actually playing
   const [isEntering, setIsEntering] = useState(false);
   const [activeSeason, setActiveSeason] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -146,6 +147,9 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
     const timer = setTimeout(() => setIntroDone(true), 1000);
     return () => clearTimeout(timer);
   }, [movie]);
+
+  // A different trailer has to earn the fade-in again.
+  useEffect(() => { setMp4Live(false); }, [trailerMp4]);
 
   /* Play the moment the intro is done and we know what we're playing: the MP4
      if it resolved, YouTube once the lookup has come back with nothing. */
@@ -213,7 +217,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
           <div className="absolute inset-0">
             <img 
               src={cover} 
-              className={`w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${showTrailer && (trailerMp4 || movie.trailer_key) ? 'opacity-0' : 'opacity-60'}`} 
+              className={`w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${showTrailer && (trailerMp4 ? mp4Live : movie.trailer_key) ? 'opacity-0' : 'opacity-60'}`} 
               alt="" 
             />
 
@@ -221,7 +225,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
               <div className="absolute inset-0 animate-in fade-in duration-1000">
                 {/* Bare MP4 — no iframe, so no player chrome of any kind. That's
                     why it wins over TMDB's YouTube embed below. */}
-                <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                <Mp4Trailer src={trailerMp4} muted={isMuted} loop onStart={() => setMp4Live(true)} />
               </div>
             )}
 
@@ -237,7 +241,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
             )}
             
             {/* 🚀 FIXED VOLUME BUTTON: Always white icons, clear visibility */}
-            {(trailerMp4 || movie.trailer_key) && showTrailer && (
+            {(trailerMp4 ? mp4Live : movie.trailer_key) && showTrailer && (
                <button 
                 onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
                 className="absolute bottom-10 right-10 z-[510] p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-full border border-white/20 backdrop-blur-xl transition-all shadow-2xl active:scale-95"

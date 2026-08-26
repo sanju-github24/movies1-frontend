@@ -641,6 +641,7 @@ const WatchListPage = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
   const [heroMp4, setHeroMp4] = useState({});          // hero slug → IMDb MP4 trailer
+  const [heroMp4Live, setHeroMp4Live] = useState(false);   // the slide's MP4 is playing
   const [infoVisible, setInfoVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -1158,7 +1159,7 @@ const WatchListPage = () => {
 
   useEffect(() => {
     if (heroMovies.length === 0) return;
-    setHeroTrailerActive(false); setInfoVisible(true);
+    setHeroTrailerActive(false); setInfoVisible(true); setHeroMp4Live(false);
     let slideTimer, trailerTimer, fadeTimer;
     if (isMobile) {
       slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
@@ -1299,22 +1300,24 @@ const WatchListPage = () => {
                 return (
                   <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
                     <img src={liveMovieData.cover_poster}
-                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${showMx || showMp4 || showYt ? "sm:opacity-0" : "opacity-100"}`} alt="" />
+                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${showMx || showYt || (showMp4 && heroMp4Live) ? "sm:opacity-0" : "opacity-100"}`} alt="" />
                     {(showMx || showMp4 || showYt) && (
-                      <div className="absolute inset-0 bg-black overflow-hidden">
+                      <div className={`absolute inset-0 overflow-hidden ${showMp4 && !heroMp4Live ? "" : "bg-black"}`}>
                         <div className="relative w-full h-full scale-[1.35] pointer-events-none">
                           {showMx  && <HlsTrailer src={liveMovieData.mx_trailer} muted={isMuted} />}
-                          {showMp4 && <Mp4Trailer src={mp4} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />}
+                          {showMp4 && <Mp4Trailer src={mp4} muted={isMuted} onStart={() => setHeroMp4Live(true)} onEnd={() => setHeroTrailerActive(false)} />}
                           {showYt  && <YouTubeTrailer videoId={liveMovieData.trailer_key} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />}
                         </div>
                         {/* The only control on the hero trailer. It flips the
                             mute flag on the live element, so sound comes in
                             where the trailer already is — it never restarts. */}
+                        {(showMx || showYt || heroMp4Live) && (
                         <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
                           aria-label={isMuted ? "Unmute trailer" : "Mute trailer"}
                           className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90">
                           {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
                         </button>
+                        )}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/20 to-transparent flex flex-col justify-end p-6 sm:p-20 z-20 pointer-events-none">

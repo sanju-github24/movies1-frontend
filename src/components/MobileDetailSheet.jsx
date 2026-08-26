@@ -22,6 +22,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
   const recommendations = useRecommendations(movie, relatedMovies, tmdbExtra, 12);
 
   const [isMuted, setIsMuted] = useState(true);   // autoplay requires muted start
+  const [mp4Live, setMp4Live] = useState(false);  // the MP4 is actually playing
   const [activeSeason, setActiveSeason] = useState(null);
   const [saved, setSaved] = useState(false);
   const [rating, setStars] = useState(0);
@@ -45,6 +46,9 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
     setShared(false);
     setActiveSeason(null);      // a new title opens on its newest season
   }, [slug]);
+
+  // A different trailer has to earn the fade-in again.
+  useEffect(() => { setMp4Live(false); }, [trailerMp4]);
 
   // Hotstar opens on the newest season.
   const currentSeason = activeSeason ?? (seasons.length ? seasons[seasons.length - 1] : null);
@@ -154,15 +158,25 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
             <>
               {/* The IMDb MP4 — plays with no player chrome at all, so it's
                   preferred over TMDB's YouTube embed below, which is held back
-                  until the MP4 lookup has come back empty. */}
-              <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
-              <div className="absolute top-4 left-4 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm shadow-lg pointer-events-none">
-                <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.2em]">Trailer</span>
-              </div>
-              <button onClick={e => { e.stopPropagation(); setIsMuted(!isMuted); }}
-                className="absolute bottom-10 right-6 z-[220] p-3 bg-black/60 text-white rounded-full backdrop-blur-md transition-all border border-white/10 shadow-2xl active:scale-90">
-                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-              </button>
+                  until the MP4 lookup has come back empty.
+
+                  The backdrop sits under it and stays until it really starts:
+                  a device that refuses to autoplay (iOS in Low Power Mode) then
+                  shows artwork rather than a dead black frame. */}
+              <img src={cover} className="absolute inset-0 w-full h-full object-cover opacity-80" alt=""
+                onError={e => { e.target.src = "/default-poster.jpg"; }} />
+              <Mp4Trailer src={trailerMp4} muted={isMuted} loop onStart={() => setMp4Live(true)} />
+              {mp4Live && (
+                <>
+                  <div className="absolute top-4 left-4 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm shadow-lg pointer-events-none">
+                    <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.2em]">Trailer</span>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); setIsMuted(!isMuted); }}
+                    className="absolute bottom-10 right-6 z-[220] p-3 bg-black/60 text-white rounded-full backdrop-blur-md transition-all border border-white/10 shadow-2xl active:scale-90">
+                    {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                  </button>
+                </>
+              )}
             </>
           ) : trailerKey && !trailerPending ? (
             <>

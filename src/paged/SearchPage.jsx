@@ -119,9 +119,12 @@ const TitleDisplay = ({ movie, className = "", textClassName = "" }) => {
 /* ====== Desktop Modal Detail Panel ====== */
 const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
   const [introDone, setIntroDone] = useState(false);
+  const [mp4Live, setMp4Live] = useState(false);   // the MP4 is actually playing
   // A TMDB search result resolves its IMDb trailer from the tmdb_id it carries,
   // exactly like one of our own rows does.
   const { trailerMp4, trailerPending } = useMp4Trailer(movie);
+
+  useEffect(() => { setMp4Live(false); }, [trailerMp4]);
 
   useEffect(() => {
     setIntroDone(false);
@@ -162,14 +165,14 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
         <div className="relative w-full aspect-video bg-black overflow-hidden">
           <img
             src={movie.cover_poster || movie.poster || "/default-cover.jpg"}
-            className={`w-full h-full object-cover transition-opacity duration-1000 ${showTrailer ? "opacity-0" : "opacity-100"}`}
+            className={`w-full h-full object-cover transition-opacity duration-1000 ${showTrailer && (trailerMp4 ? mp4Live : true) ? "opacity-0" : "opacity-100"}`}
             alt=""
           />
           {showTrailer && (
-            <div className="absolute inset-0 bg-black overflow-hidden">
+            <div className={`absolute inset-0 overflow-hidden ${trailerMp4 && !mp4Live ? "" : "bg-black"}`}>
               <div className="relative w-full h-full scale-[1.25] pointer-events-none">
                 {trailerMp4 ? (
-                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop onStart={() => setMp4Live(true)} />
                 ) : (
                   <iframe
                     src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
@@ -292,7 +295,10 @@ const SearchMobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) 
             <>
               <div className="relative w-full h-full scale-[1.3] pointer-events-none">
                 {trailerMp4 ? (
-                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                  <>
+                    <img src={movie.cover_poster || movie.poster} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                    <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                  </>
                 ) : (
                   <iframe
                     src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
