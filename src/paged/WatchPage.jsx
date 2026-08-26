@@ -10,11 +10,11 @@ import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
 import {
   Loader2, Star, Play, ShieldCheck,
-  ArrowLeft, List, MonitorPlay, Server,
-  Video, Zap, Database, Clock, Globe, Calendar, AlertCircle, Tags,
+  ArrowLeft, List, MonitorPlay,
+  Video, Zap, Database, Clock, Globe, AlertCircle,
   ChevronDown, Monitor, Cpu, Download, X, Languages,
   Settings, Eye, Film, Tv2,
-  Shield, Signal
+  Shield, Signal, Users
 } from "lucide-react";
 
 /* ===== Safe URI ===== */
@@ -83,6 +83,7 @@ const COLOR = {
   vidup:       { glow:"rgba(6,182,212,0.3)",   bg:"from-cyan-500/10 to-cyan-600/5",    border:"border-cyan-500/30",   text:"text-cyan-400",   dot:"bg-cyan-400"   },
   tmdb:        { glow:"rgba(59,130,246,0.3)",  bg:"from-blue-500/10 to-blue-600/5",   border:"border-blue-500/30",   text:"text-blue-400",   dot:"bg-blue-400"   },
   "2embed":    { glow:"rgba(249,115,22,0.3)",  bg:"from-orange-500/10 to-orange-600/5",border:"border-orange-500/30",text:"text-orange-400", dot:"bg-orange-400" },
+  modiplay:    { glow:"rgba(236,72,153,0.3)",  bg:"from-pink-500/10 to-pink-600/5",    border:"border-pink-500/30",   text:"text-pink-400",   dot:"bg-pink-400"   },
   hls:         { glow:"rgba(34,197,94,0.3)",   bg:"from-green-500/10 to-green-600/5",  border:"border-green-500/30",  text:"text-green-400",  dot:"bg-green-400"  },
 };
 
@@ -127,6 +128,7 @@ const SRV_COLOR = {
   vidup:       "text-cyan-400   bg-cyan-500/10   border-cyan-500/20   hover:border-cyan-500/50",
   tmdb:        "text-blue-400   bg-blue-500/10   border-blue-500/20   hover:border-blue-500/50",
   "2embed":    "text-orange-400 bg-orange-500/10 border-orange-500/20 hover:border-orange-500/50",
+  modiplay:    "text-pink-400   bg-pink-500/10   border-pink-500/20   hover:border-pink-500/50",
   hls:         "text-green-400  bg-green-500/10  border-green-500/20  hover:border-green-500/50",
 };
 
@@ -200,9 +202,10 @@ const buildServers = (meta, eps = []) => {
   
   if (meta.tmdb_id)
     srv.push({ id:"mirchi", name:"Mirchi", label:"Hindi Audio", icon:<Languages size={14}/> });
-  srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
   // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
   srv.push({ id:"imdb_reader", name:"Omega", label:"Direct Stream", icon:<Cpu size={14}/> });
+  if (meta.tmdb_id)
+    srv.push({ id:"modiplay", name:"Nova", label:"HD Embed", icon:<MonitorPlay size={14}/> });
   // MX Player after ours — a real free HD stream, but still someone else's.
   if (meta.mx_web_url || meta.mx_id) srv.push({ id:"mx", name:"MX Player", label:"Free HD", icon:<Zap size={14}/> });
   if (meta.tmdb_id) {
@@ -600,6 +603,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       case "vidup":   if (id)   src = TV ? `https://vidup.to/tv/${id}/${s}/${e}?autoPlay=true`            : `https://vidup.to/movie/${id}?autoPlay=true`;            break;
       case "tmdb":    if (tmdb) src = TV ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`                     : `https://vidlink.pro/movie/${tmdb}`;                     break;
       case "2embed":  if (id)   src = TV ? `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`            : `https://www.2embed.cc/embed/${id}`;                     break;
+      case "modiplay":if (tmdb) src = TV ? `https://rozgarlelo.modiplay.xyz/embed/tmdb/tv?id=${tmdb}&s=${s}&e=${e}` : `https://rozgarlelo.modiplay.xyz/embed/tmdb/movie?id=${tmdb}`; break;
       case "hls":
         // Direct server → our VideoPlayer, so ANY HLS (.m3u8) or direct URL plays.
         src  = ep ? (ep.direct_url || ep.hls_url) : (movieMeta.video_url || movieMeta.hls_url);
@@ -1300,7 +1304,7 @@ if (!alive) return;
           </div>
         )}
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
 
           {/* Poster */}
           <div className="shrink-0 mx-auto lg:mx-0">
@@ -1318,7 +1322,7 @@ if (!alive) return;
           </div>
 
           {/* Meta */}
-          <div className="flex-1 space-y-5 lg:pt-6 text-center lg:text-left">
+          <div className="flex-1 min-w-0 w-full space-y-5 lg:pt-6 text-center lg:text-left">
 
             {/* Eyebrow */}
             <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
@@ -1402,12 +1406,14 @@ if (!alive) return;
             {/* Quick server select */}
             {availableServers.length > 0 && (
               <div className="pt-2 scroll-mt-24" id="servers-section">
+                {/* Every server lives here now that the deployment grid is gone:
+                    one swipeable row on a phone, wrapping from sm up. */}
                 <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2 text-center lg:text-left">Available Servers</p>
                 <div
-                  className="flex gap-2 justify-start lg:justify-start overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1"
+                  className="flex gap-2 justify-start lg:justify-start max-w-full overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 scrollbar-hide"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  {availableServers.slice(0,5).map(sv => (
+                  {availableServers.map(sv => (
                     <button key={sv.id}
                       onClick={() => { setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
                       className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
@@ -1544,6 +1550,7 @@ if (!alive) return;
                         { id:"vidup",       label:"VidUp",      color:"cyan"   },
                         { id:"tmdb",        label:"Alpha",      color:"blue"   },
                         { id:"2embed",      label:"Prime",      color:"orange" },
+                        { id:"modiplay",    label:"Nova",       color:"pink"   },
                       ].filter(srv => {
                         // Hide embed server button if this episode has no html embed
                         if (srv.id === "embed") return !!(ep.html || ep.html_code);
@@ -1558,6 +1565,7 @@ if (!alive) return;
                           blue:  "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15",
                           cyan:  "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/15",
                           orange:"bg-orange-500/10 text-orange-400 border-orange-500/20 hover:border-orange-500/40 hover:bg-orange-500/15",
+                          pink:  "bg-pink-500/10 text-pink-400 border-pink-500/20 hover:border-pink-500/40 hover:bg-pink-500/15",
                         };
                         return (
                           <button key={srv.id} onClick={() => handlePlayAction(ep, srv.id)}
@@ -1574,58 +1582,47 @@ if (!alive) return;
           </div>
         )}
 
-        {/* Metadata strip */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-8 border-t border-white/[0.04]">
-          {[
-            { icon:<Globe size={14} className="text-blue-500/60 shrink-0"/>, label:"Origin",   value: tmdbMeta?.origin_country?.[0] || "Global" },
-            { icon:<Tags size={14} className="text-blue-500/60 shrink-0"/>,  label:"Genres",   value: movieMeta.genres.slice(0,3).map(g=>typeof g==="object"?g.name:g).join(" · ") || "—", accent:true },
-            { icon:<Calendar size={14} className="text-blue-500/60 shrink-0"/>, label:"Released",
-              value: movieMeta.release_date ? new Date(movieMeta.release_date).toLocaleDateString() : (movieMeta.year || "Recently") },
-          ].map(({ icon, label, value, accent }) => (
-            <div key={label} className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-              {icon}
-              <div>
-                <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mb-0.5">{label}</p>
-                <p className={`text-xs font-bold ${accent ? "text-blue-400" : "text-white"}`}>{value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Deployment grid */}
-        {availableServers.length > 0 && (
+        {/* ── Top Cast ──
+             The genre/origin strip and the second copy of the server grid used
+             to sit here. Both were duplicates — genres and the release year are
+             already in the hero, and every server is one tap away in the strip
+             under the poster — so the space goes to the cast instead. */}
+        {(tmdbMeta?.cast || []).length > 0 && (
           <div className="space-y-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10"><Server size={18} className="text-blue-400"/></div>
+              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10"><Users size={18} className="text-blue-400"/></div>
               <div>
-                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Deployment Grid</h2>
-                <p className="text-[10px] text-gray-600 font-bold">{availableServers.length} servers online</p>
+                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Top Cast</h2>
+                <p className="text-[10px] text-gray-600 font-bold">{tmdbMeta.cast.length} billed</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {availableServers.map(sv => {
-                const isActive = activeServer?.id === sv.id;
-                return (
-                  <button key={sv.id} onClick={() => handlePlayAction(null, sv.id)}
-                    className={`relative group p-5 min-h-[44px] rounded-2xl flex flex-col items-center gap-3 transition-all border overflow-hidden active:scale-[0.97] touch-manipulation
-                      ${isActive ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/20") : "bg-white/[0.02] border-white/[0.04] text-gray-500 hover:bg-white/[0.05] hover:border-white/10 hover:text-gray-300"}`}>
-                    {isActive && <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"/>}
-                    <div className={`relative p-2.5 rounded-xl ${isActive ? "bg-current/10" : "bg-white/5 group-hover:bg-white/10"} transition-all`}>
-                      {sv.icon || <MonitorPlay size={18}/>}
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-black uppercase tracking-widest">{sv.name}</p>
-                      <p className={`text-[9px] mt-0.5 ${isActive ? "opacity-70" : "text-gray-700"}`}>{sv.label}</p>
-                    </div>
-                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"/>}
-                  </button>
-                );
-              })}
+
+            {/* One row that scrolls on a phone and wraps into a grid from sm up,
+                so the faces stay the same size instead of shrinking to fit. */}
+            <div
+              className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:gap-4 sm:overflow-visible scrollbar-hide"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {tmdbMeta.cast.slice(0, 12).map((actor, i) => (
+                <div key={i} className="group w-[104px] shrink-0 sm:w-auto">
+                  <div className="aspect-[2/3] rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06] group-hover:border-blue-500/30 transition-colors">
+                    <img
+                      src={actor.profile_url || (actor.profile_path ? `https://image.tmdb.org/t/p/w300${actor.profile_path}` : "/default-avatar.jpg")}
+                      alt={actor.name}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={e => { e.target.onerror = null; e.target.src = "/default-avatar.jpg"; }}
+                    />
+                  </div>
+                  <p className="mt-2.5 text-[11px] font-bold text-white leading-tight line-clamp-2">{actor.name}</p>
+                  {actor.character && (
+                    <p className="mt-0.5 text-[10px] text-gray-500 leading-tight line-clamp-1">{actor.character}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
-
-        
 
         {/* Downloads */}
         {movieMeta.download_links?.length > 0 && (

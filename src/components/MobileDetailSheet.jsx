@@ -4,6 +4,7 @@ import { X, Play, Info, Volume2, VolumeX, Plus, Check, Share2, Star } from "luci
 import { inMyList, toggleMyList, getRating, setRating } from "../utils/myList";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, langLabel } from "../utils/titleEpisodes";
 import { useRecommendations } from "../utils/recommendations";
+import Mp4Trailer from "./Mp4Trailer";
 
 // Full-screen mobile detail sheet — the single mobile overlay used by the homepage
 // grid AND the /watch browse page. Shows the trailer/backdrop hero, the title
@@ -16,7 +17,7 @@ import { useRecommendations } from "../utils/recommendations";
 
 export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], onNavigate, onSelectMovie }) {
   const navigate = useNavigate();
-  const { episodes, seasons, tmdbExtra, trailerMp4, loading: epsLoading } = useTitleEpisodes(movie);
+  const { episodes, seasons, tmdbExtra, trailerMp4, trailerPending, loading: epsLoading } = useTitleEpisodes(movie);
   // Our library first (same genres), then TMDB's own recommendations.
   const recommendations = useRecommendations(movie, relatedMovies, tmdbExtra, 12);
 
@@ -142,16 +143,12 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
       <div className="flex-1 overflow-y-auto overscroll-contain pb-28 scrollbar-hide">
         {/* ── Hero: trailer if we have one, else the backdrop ── */}
         <div className="relative aspect-video w-full shadow-2xl bg-black overflow-hidden flex items-center justify-center">
-          {!trailerKey && trailerMp4 ? (
+          {trailerMp4 ? (
             <>
-              {/* No YouTube trailer for this title — fall back to a plain MP4,
-                  which plays with no player chrome at all. */}
-              <video
-                key={trailerMp4}
-                src={trailerMp4}
-                autoPlay muted={isMuted} loop playsInline preload="auto"
-                className="w-full h-full object-cover pointer-events-none"
-              />
+              {/* The IMDb MP4 — plays with no player chrome at all, so it's
+                  preferred over TMDB's YouTube embed below, which is held back
+                  until the MP4 lookup has come back empty. */}
+              <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
               <div className="absolute top-4 left-4 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-sm shadow-lg pointer-events-none">
                 <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.2em]">Trailer</span>
               </div>
@@ -160,7 +157,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
                 {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
               </button>
             </>
-          ) : trailerKey ? (
+          ) : trailerKey && !trailerPending ? (
             <>
               <div className="relative w-full h-full scale-[1.3] pointer-events-none">
                 <iframe

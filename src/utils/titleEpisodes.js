@@ -1,21 +1,17 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
+import { cleanTitle } from "./cleanTitle";
+import { useMp4Trailer } from "./useMp4Trailer";
+
+// Re-exported: this module has long been where callers import it from.
+export { cleanTitle };
 
 /* Shared title/episode resolution for the detail overlays (mobile sheet and
    desktop card). Resolves a TMDB id for the title — by id, else by a TV-first
    title search — then pulls every season's episodes with their stills and
    attaches our own uploaded streams to the ones we host. */
 
-// Turn a raw release name into a clean display title, e.g.
-// "MUSAFIR CAFE (2026) S01 EP (01-08) TRUE WEB-DL - [1080P...] - ESUB" → "Musafir Cafe".
-export const cleanTitle = (t = "") => {
-  if (!t) return "";
-  let s = t.split(/\s*[([]?\s*(?:19|20)\d{2}/)[0];
-  s = s.split(/\s+(?:S\d{1,2}|Season|EP\d|Complete|WEB[\s-]?DL|HDRip|BluRay|1080p|720p|480p|2160p)/i)[0];
-  s = s.replace(/[\s\-_.|]+$/g, "").trim();
-  return s || t;
-};
 
 // Uploaded episode rows keep season as a string ("1"), TMDB as a number — always
 // compare numbers so season tabs and the position match never miss.
@@ -100,23 +96,23 @@ function attachLocal(tmdbEps, local) {
 
 /**
  * Resolve a title's TMDB detail + full episode list.
- * @returns {{ episodes, seasons, tmdbExtra, loading }}
+ * @returns {{ episodes, seasons, tmdbExtra, trailerMp4, trailerPending, loading }}
  */
 export function useTitleEpisodes(movie) {
   const { backendUrl } = useContext(AppContext);
   const [episodes, setEpisodes] = useState([]);
   const [tmdbExtra, setTmdbExtra] = useState(null);
-  const [trailerMp4, setTrailerMp4] = useState(null);   // clean, chrome-free trailer
   const [loading, setLoading] = useState(false);
 
   const slug = movie?.slug;
-  const nfTriedRef = useRef("");     // one Netflix lookup per title
+
+  // IMDb → Netflix MP4, with TMDB's YouTube key as the callers' fallback.
+  const { trailerMp4, trailerPending } = useMp4Trailer(movie, tmdbExtra);
 
   useEffect(() => {
     const local = numberLocal(Array.isArray(movie?.episodes) ? movie.episodes : []);
     setEpisodes(local);
     setTmdbExtra(null);
-    nfTriedRef.current = "";        // new title → allow one trailer lookup again
     if (!movie || !backendUrl) return;
 
     const looksTV = movie.content_type === "tv" || local.length > 0;
@@ -187,52 +183,10 @@ export function useTitleEpisodes(movie) {
     // re-render of the same movie object.
   }, [slug, movie?.tmdb_id, movie?.imdb_id, movie?.content_type, backendUrl]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* A bare MP4 trailer plays in a <video> with no player chrome at all — no
-     YouTube branding, end screens or hover controls. Netflix publishes one on
-     each public title page; we resolve it on demand because the URL carries a
-     ~12h token. The id comes from netflix_id on the row when present, otherwise
-     the backend derives it (TMDB imdb_id → Wikidata P1874). YouTube comes first
-     whenever TMDB has a trailer_key — this only fills the gap for titles with no
-     YouTube trailer, so nothing ever waits on the lookup. */
-  useEffect(() => {
-    // `movie` is null whenever the overlay is closed, and tmdbExtra can still
-    // hold the previous title for a render — so check the movie itself, not just
-    // the ids derived from it.
-    if (!movie || !backendUrl) return;
-    // A YouTube trailer wins: it's permanent, needs no lookup and no token — so
-    // don't even ask about Netflix. The MP4 only fills the gap when YouTube has
-    // nothing for this title.
-    if (movie.trailer_key || tmdbExtra?.trailer_key) return;
-    const nfId = movie.netflix_id || movie.netflixId || null;
-    const tmdbId = movie.tmdb_id || tmdbExtra?.tmdb_id || null;
-    if (!nfId && !tmdbId) return;
-
-    // One attempt per title. The effect re-runs when the TMDB detail lands (and
-    // twice more under StrictMode), and this stops that becoming 3 requests.
-    const key = String(nfId || tmdbId);
-    if (nfTriedRef.current === key) return;
-    nfTriedRef.current = key;
-    setTrailerMp4(null);
-    let alive = true;
-
-    axios.get(`${backendUrl}/api/netflix/trailer`, {
-      params: {
-        ...(nfId ? { netflixId: nfId } : { tmdbId, contentType: movie.content_type === "tv" ? "tv" : "movie" }),
-        title: cleanTitle(movie.title || "") || "",
-      },
-      timeout: 8000,
-    })
-      .then(r => { if (alive && r.data?.success && r.data.url) setTrailerMp4(r.data.url); })
-      .catch(() => { /* network hiccup → the YouTube trailer plays instead */ })
-      ;
-    return () => { alive = false; };
-  }, [movie?.netflix_id, movie?.netflixId, movie?.tmdb_id, movie?.trailer_key,
-      tmdbExtra?.tmdb_id, tmdbExtra?.trailer_key, slug, backendUrl]);   // eslint-disable-line react-hooks/exhaustive-deps
-
   const seasons = useMemo(
     () => Array.from(new Set(episodes.map(seasonNo))).sort((a, b) => a - b),
     [episodes]
   );
 
-  return { episodes, seasons, tmdbExtra, trailerMp4, loading };
+  return { episodes, seasons, tmdbExtra, trailerMp4, trailerPending, loading };
 }

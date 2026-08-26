@@ -5,6 +5,8 @@ import { Helmet } from "react-helmet-async";
 import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
+import Mp4Trailer from "../components/Mp4Trailer";
+import { useMp4Trailer } from "../utils/useMp4Trailer";
 
 // MX Player content worker (Cloudflare) — ?search= returns titles/posters from any IP.
 // On click, the item's webUrl is resolved to a real stream by the backend's Playwright
@@ -94,15 +96,15 @@ const TitleDisplay = ({ movie, className = "", textClassName = "" }) => {
 
 /* ====== Desktop Modal Detail Panel ====== */
 const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
-  const [showTrailer, setShowTrailer] = useState(false);
+  const [introDone, setIntroDone] = useState(false);
+  // Whatever the result came from — our library or TMDB — the IMDb trailer is
+  // resolved from the ids it carries.
+  const { trailerMp4, trailerPending } = useMp4Trailer(movie);
 
   useEffect(() => {
-    if (!movie) {
-      setShowTrailer(false);
-      return;
-    }
-    setShowTrailer(false);
-    const t = setTimeout(() => setShowTrailer(true), 1800);
+    setIntroDone(false);
+    if (!movie) return;
+    const t = setTimeout(() => setIntroDone(true), 1800);
     return () => clearTimeout(t);
   }, [movie?.slug]);
 
@@ -123,6 +125,9 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
 
   if (!movie) return null;
   const trailerKey = movie.trailer_codes || movie.trailer_key;
+  // The MP4 plays with no player chrome at all, so YouTube is only the fallback
+  // — held back until the lookup comes back empty rather than starting first.
+  const showTrailer = introDone && (!!trailerMp4 || (!trailerPending && !!trailerKey));
 
   return (
     <div
@@ -137,21 +142,25 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
           <img
             src={movie.cover_poster || movie.poster || "/default-cover.jpg"}
             className={`w-full h-full object-cover transition-opacity duration-1000 ${
-              showTrailer && trailerKey ? "opacity-0" : "opacity-100"
+              showTrailer ? "opacity-0" : "opacity-100"
             }`}
             alt=""
           />
-          {showTrailer && trailerKey && (
+          {showTrailer && (
             <div className="absolute inset-0 bg-black overflow-hidden">
               <div className="relative w-full h-full scale-[1.25] pointer-events-none">
-                <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
-                    isMuted ? 1 : 0
-                  }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allow="autoplay"
-                />
+                {trailerMp4 ? (
+                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                ) : (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
+                      isMuted ? 1 : 0
+                    }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="autoplay"
+                  />
+                )}
               </div>
               <div className="absolute top-4 left-4 z-30 px-2.5 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md">
                 <span className="text-[8px] font-black text-white/90 uppercase tracking-[0.3em]">Trailer</span>
@@ -245,8 +254,10 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
 
 /* ====== Mobile Sheet ====== */
 const MobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
+  const { trailerMp4, trailerPending } = useMp4Trailer(movie);
   if (!movie) return null;
   const trailerKey = movie.trailer_codes || movie.trailer_key;
+  const showTrailer = !!trailerMp4 || (!trailerPending && !!trailerKey);
 
   return (
     <div
@@ -263,18 +274,22 @@ const MobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
 
       <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide overscroll-contain">
         <div className="relative aspect-video w-full bg-black overflow-hidden flex items-center justify-center">
-          {trailerKey ? (
+          {showTrailer ? (
             <>
               <div className="relative w-full h-full scale-[1.3] pointer-events-none">
-                <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
-                    isMuted ? 1 : 0
-                  }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
-                  title="Trailer"
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                />
+                {trailerMp4 ? (
+                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                ) : (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
+                      isMuted ? 1 : 0
+                    }&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    title="Trailer"
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
+                )}
               </div>
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-full shadow-lg pointer-events-none">
                 <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.25em]">Trailer</span>

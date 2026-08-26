@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate } from "../utils/titleEpisodes";
 import { inMyList, toggleMyList } from "../utils/myList";
 import { useRecommendations } from "../utils/recommendations";
+import Mp4Trailer from "../components/Mp4Trailer";
 
 const formatLanguage = (langs) => {
   const langArray = Array.isArray(langs) ? langs : [langs];
@@ -121,28 +122,34 @@ const RelatedRow = ({ movies, onSelect, onPlay }) => {
 };
 
 const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relatedMovies, isMuted, setIsMuted }) => {
-  const [showTrailer, setShowTrailer] = useState(false);
+  const [introDone, setIntroDone] = useState(false);   // the 1s the artwork holds for
   const [isEntering, setIsEntering] = useState(false);
   const [activeSeason, setActiveSeason] = useState(null);
   const [saved, setSaved] = useState(false);
   const navigate = useNavigate();
-  const { episodes, seasons, tmdbExtra, trailerMp4 } = useTitleEpisodes(movie);
+  const { episodes, seasons, tmdbExtra, trailerMp4, trailerPending } = useTitleEpisodes(movie);
   // Our library first (same genres), then TMDB's own recommendations.
   const recommendations = useRecommendations(movie, relatedMovies || [], tmdbExtra, 18);
 
   useEffect(() => {
     setIsEntering(true);
-    setShowTrailer(false);
     setActiveSeason(null);          // a new title opens on its newest season
     setSaved(inMyList(movie?.slug));
-
-    if (movie?.trailer_key) {
-      const timer = setTimeout(() => {
-        setShowTrailer(true);
-      }, 1000); 
-      return () => clearTimeout(timer);
-    }
   }, [movie]);
+
+  /* The artwork holds for a second before any trailer fades in. Timed off the
+     title alone — an earlier version restarted this clock every time the MP4
+     resolved, which is what made the trailer take twice as long to appear as
+     it should have. */
+  useEffect(() => {
+    setIntroDone(false);
+    const timer = setTimeout(() => setIntroDone(true), 1000);
+    return () => clearTimeout(timer);
+  }, [movie]);
+
+  /* Play the moment the intro is done and we know what we're playing: the MP4
+     if it resolved, YouTube once the lookup has come back with nothing. */
+  const showTrailer = introDone && (!!trailerMp4 || (!trailerPending && !!movie?.trailer_key));
 
   // Newest season first, like the mobile sheet.
   const currentSeason = activeSeason ?? (seasons.length ? seasons[seasons.length - 1] : null);
@@ -210,15 +217,15 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
               alt="" 
             />
 
-            {!movie.trailer_key && trailerMp4 && showTrailer && (
+            {trailerMp4 && showTrailer && (
               <div className="absolute inset-0 animate-in fade-in duration-1000">
-                {/* Bare MP4 — no iframe, so no player chrome of any kind. */}
-                <video key={trailerMp4} src={trailerMp4} autoPlay muted={isMuted} loop playsInline preload="auto"
-                  className="w-full h-full object-cover pointer-events-none" />
+                {/* Bare MP4 — no iframe, so no player chrome of any kind. That's
+                    why it wins over TMDB's YouTube embed below. */}
+                <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
               </div>
             )}
 
-            {movie.trailer_key && showTrailer && (
+            {!trailerMp4 && movie.trailer_key && showTrailer && (
               <div className="absolute inset-0 animate-in fade-in duration-1000">
                 <iframe
                   src={`https://www.youtube.com/embed/${movie.trailer_key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`}

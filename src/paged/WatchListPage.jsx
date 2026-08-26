@@ -7,8 +7,12 @@ import { Helmet } from "react-helmet";
 import { Loader2, Play, X, Clock3, TrendingUp, Volume2, VolumeX, UserCircle, CheckCircle2 } from "lucide-react";
 import axios from "axios";
 import Hls from "hls.js";
+import Mp4Trailer from "../components/Mp4Trailer";
+import { useVideoMute } from "../utils/useVideoMute";
 
 // Muted looping HLS trailer for the hero (MX trailers are .m3u8, not YouTube).
+// Mute is driven through useVideoMute for the same reason as the MP4 below:
+// autoplay only starts silent, and the toggle must not restart playback.
 function HlsTrailer({ src, muted }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -19,7 +23,8 @@ function HlsTrailer({ src, muted }) {
     else if (Hls.isSupported()) { hls = new Hls({ enableWorker: true }); hls.loadSource(src); hls.attachMedia(v); }
     return () => { if (hls) hls.destroy(); };
   }, [src]);
-  return <video ref={ref} autoPlay loop playsInline muted={muted} className="w-full h-full object-cover" />;
+  useVideoMute(ref, muted, src);
+  return <video ref={ref} autoPlay loop playsInline muted className="w-full h-full object-cover" />;
 }
 
 // YouTube trailer via the IFrame API — lets us end it ~20s early (before YouTube's
@@ -635,6 +640,7 @@ const WatchListPage = () => {
   const [resumeRefresh, setResumeRefresh] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
+  const [heroMp4, setHeroMp4] = useState({});          // hero slug → IMDb MP4 trailer
   const [infoVisible, setInfoVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -1109,15 +1115,52 @@ const WatchListPage = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  /* ─── Hero trailers: resolve the chrome-free MP4 for every slide ──────────
+     IMDb publishes a clean MP4 for nearly every title (the backend resolves it),
+     and it plays with no player furniture at all — which is why the hero prefers
+     it over the YouTube embed and only falls back to that when IMDb has nothing.
+     Resolved for all the slides up front rather than on arrival: a slide has to
+     know whether it has a trailer before its 2s timer decides how long to stay. */
+  const heroMp4TriedRef = useRef(new Set());
+  useEffect(() => {
+    if (!backendUrl || heroMovies.length === 0 || isMobile) return;
+    let alive = true;
+    (async () => {
+      for (const m of heroMovies) {
+        if (!alive) return;
+        if (m.mx_trailer) continue;                       // already has a clean HLS trailer
+        const key = m.slug || m.id;
+        if (!key || (!m.imdb_id && !m.tmdb_id)) continue;
+        if (heroMp4TriedRef.current.has(key)) continue;   // one lookup per title
+        heroMp4TriedRef.current.add(key);
+        try {
+          const { data } = await axios.get(`${backendUrl}/api/imdb/trailer`, {
+            params: {
+              ...(m.imdb_id
+                ? { imdbId: m.imdb_id }
+                : { tmdbId: m.tmdb_id, contentType: m.content_type === "tv" ? "tv" : "movie" }),
+              title: m.title || "",
+            },
+            timeout: 8000,
+          });
+          if (alive && data?.success && data.url) setHeroMp4(prev => ({ ...prev, [key]: data.url }));
+        } catch { /* best-effort — the YouTube trailer still plays */ }
+      }
+    })();
+    return () => { alive = false; };
+  }, [heroMovies, backendUrl, isMobile]);
+
+  const currentHero = heroMovies[currentSlide];
+  const currentHeroMp4 = heroMp4[currentHero?.slug || currentHero?.id] || null;
+
   useEffect(() => {
     if (heroMovies.length === 0) return;
     setHeroTrailerActive(false); setInfoVisible(true);
     let slideTimer, trailerTimer, fadeTimer;
-    const currentHero = heroMovies[currentSlide];
     if (isMobile) {
       slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
     } else {
-      if (!currentHero?.trailer_key && !currentHero?.mx_trailer) {
+      if (!currentHero?.trailer_key && !currentHero?.mx_trailer && !currentHeroMp4) {
         slideTimer = setTimeout(() => setCurrentSlide(prev => (prev + 1) % heroMovies.length), 5000);
       } else {
         trailerTimer = setTimeout(() => { if (window.scrollY < 400) setHeroTrailerActive(true); }, 2000);
@@ -1126,7 +1169,7 @@ const WatchListPage = () => {
       }
     }
     return () => { clearTimeout(slideTimer); clearTimeout(trailerTimer); clearTimeout(fadeTimer); };
-  }, [currentSlide, heroMovies, isMobile]);
+  }, [currentSlide, heroMovies, isMobile, currentHero, currentHeroMp4]);
 
   const getProfileInitial = () => {
     if (!session?.user) return "";
@@ -1240,27 +1283,32 @@ const WatchListPage = () => {
                 const liveMovieData = (movie.source === "local"
                   ? (allMovies.find(m => m.slug === movie.slug) || movie)
                   : movie);
+                /* One trailer per slide, best source first: MX's own HLS, then
+                   the IMDb MP4, and the YouTube embed only when neither exists.
+                   The first two are bare <video>s — no icons, no branding — and
+                   the single mute button below is the only control on any of
+                   them. */
+                const mp4 = heroMp4[movie.slug || movie.id] || null;
+                const trailerOn = idx === currentSlide && heroTrailerActive && !isMobile;
+                const showMx  = trailerOn && !!liveMovieData.mx_trailer;
+                const showMp4 = trailerOn && !showMx && !!mp4;
+                const showYt  = trailerOn && !showMx && !showMp4 && !!liveMovieData.trailer_key;
                 return (
                   <div key={`${movie.slug}-${idx}`} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
                     <img src={liveMovieData.cover_poster}
-                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${idx === currentSlide && heroTrailerActive && (liveMovieData.trailer_key || liveMovieData.mx_trailer) && !isMobile ? "sm:opacity-0" : "opacity-100"}`} alt="" />
-                    {idx === currentSlide && heroTrailerActive && liveMovieData.mx_trailer && !isMobile && (
+                      className={`w-full h-full object-cover brightness-[0.5] transition-opacity duration-1000 ${showMx || showMp4 || showYt ? "sm:opacity-0" : "opacity-100"}`} alt="" />
+                    {(showMx || showMp4 || showYt) && (
                       <div className="absolute inset-0 bg-black overflow-hidden">
                         <div className="relative w-full h-full scale-[1.35] pointer-events-none">
-                          <HlsTrailer src={liveMovieData.mx_trailer} muted={isMuted} />
+                          {showMx  && <HlsTrailer src={liveMovieData.mx_trailer} muted={isMuted} />}
+                          {showMp4 && <Mp4Trailer src={mp4} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />}
+                          {showYt  && <YouTubeTrailer videoId={liveMovieData.trailer_key} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />}
                         </div>
+                        {/* The only control on the hero trailer. It flips the
+                            mute flag on the live element, so sound comes in
+                            where the trailer already is — it never restarts. */}
                         <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
-                          className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90">
-                          {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-                        </button>
-                      </div>
-                    )}
-                    {idx === currentSlide && heroTrailerActive && liveMovieData.trailer_key && !isMobile && (
-                      <div className="absolute inset-0 bg-black overflow-hidden">
-                        <div className="relative w-full h-full scale-[1.35]">
-                          <YouTubeTrailer videoId={liveMovieData.trailer_key} muted={isMuted} onEnd={() => setHeroTrailerActive(false)} />
-                        </div>
-                        <button onClick={e => { e.preventDefault(); setIsMuted(!isMuted); }}
+                          aria-label={isMuted ? "Unmute trailer" : "Mute trailer"}
                           className="absolute bottom-32 right-10 z-[40] p-3 bg-black/60 hover:bg-white text-white hover:text-black rounded-full backdrop-blur-md border border-white/10 transition-all shadow-2xl active:scale-90">
                           {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
                         </button>

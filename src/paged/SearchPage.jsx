@@ -6,6 +6,8 @@ import { Helmet } from "react-helmet";
 import { Loader2, Play, X, TrendingUp, Globe, ListVideo, Volume2, VolumeX, ChevronLeft } from "lucide-react";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
+import Mp4Trailer from "../components/Mp4Trailer";
+import { useMp4Trailer } from "../utils/useMp4Trailer";
 
 // MX Player content worker (Cloudflare). Search metadata works from any IP; the
 // real stream is resolved in-app on the MX watch page (/mx-watch).
@@ -116,12 +118,15 @@ const TitleDisplay = ({ movie, className = "", textClassName = "" }) => {
 
 /* ====== Desktop Modal Detail Panel ====== */
 const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
-  const [showTrailer, setShowTrailer] = useState(false);
+  const [introDone, setIntroDone] = useState(false);
+  // A TMDB search result resolves its IMDb trailer from the tmdb_id it carries,
+  // exactly like one of our own rows does.
+  const { trailerMp4, trailerPending } = useMp4Trailer(movie);
 
   useEffect(() => {
-    if (!movie) { setShowTrailer(false); return; }
-    setShowTrailer(false);
-    const t = setTimeout(() => setShowTrailer(true), 1800);
+    setIntroDone(false);
+    if (!movie) return;
+    const t = setTimeout(() => setIntroDone(true), 1800);
     return () => clearTimeout(t);
   }, [movie?.slug]);
 
@@ -138,6 +143,9 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
 
   if (!movie) return null;
   const trailerKey = movie.trailer_codes || movie.trailer_key;
+  // The MP4 plays with no player chrome at all, so YouTube is only the fallback
+  // — held back until the lookup comes back empty rather than starting first.
+  const showTrailer = introDone && (!!trailerMp4 || (!trailerPending && !!trailerKey));
 
   return (
     <div
@@ -154,18 +162,22 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
         <div className="relative w-full aspect-video bg-black overflow-hidden">
           <img
             src={movie.cover_poster || movie.poster || "/default-cover.jpg"}
-            className={`w-full h-full object-cover transition-opacity duration-1000 ${showTrailer && trailerKey ? "opacity-0" : "opacity-100"}`}
+            className={`w-full h-full object-cover transition-opacity duration-1000 ${showTrailer ? "opacity-0" : "opacity-100"}`}
             alt=""
           />
-          {showTrailer && trailerKey && (
+          {showTrailer && (
             <div className="absolute inset-0 bg-black overflow-hidden">
               <div className="relative w-full h-full scale-[1.25] pointer-events-none">
-                <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allow="autoplay"
-                />
+                {trailerMp4 ? (
+                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                ) : (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="autoplay"
+                  />
+                )}
               </div>
               <div className="absolute top-4 left-4 z-30 px-2.5 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md">
                 <span className="text-[8px] font-black text-white/90 uppercase tracking-[0.3em]">Trailer</span>
@@ -254,8 +266,12 @@ const DetailPanel = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
 
 /* ====== Mobile Sheet ====== */
 const SearchMobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) => {
+  // Same order as everywhere else: the chrome-free IMDb MP4 first, TMDB's
+  // YouTube embed only once that lookup has come back with nothing.
+  const { trailerMp4, trailerPending } = useMp4Trailer(movie);
   if (!movie) return null;
   const trailerKey = movie.trailer_codes || movie.trailer_key;
+  const showTrailer = !!trailerMp4 || (!trailerPending && !!trailerKey);
 
   return (
     <div
@@ -272,16 +288,20 @@ const SearchMobileSheet = ({ movie, onClose, onNavigate, isMuted, setIsMuted }) 
 
       <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide overscroll-contain">
         <div className="relative aspect-video w-full bg-black overflow-hidden flex items-center justify-center">
-          {trailerKey ? (
+          {showTrailer ? (
             <>
               <div className="relative w-full h-full scale-[1.3] pointer-events-none">
-                <iframe
-                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
-                  title="Trailer"
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                />
+                {trailerMp4 ? (
+                  <Mp4Trailer src={trailerMp4} muted={isMuted} loop />
+                ) : (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1`}
+                    title="Trailer"
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
+                )}
               </div>
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-full shadow-lg pointer-events-none">
                 <span className="text-[8px] font-bold text-white/90 uppercase tracking-[0.25em]">Trailer</span>
