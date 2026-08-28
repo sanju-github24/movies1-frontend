@@ -163,7 +163,8 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
                   The backdrop sits under it and stays until it really starts:
                   a device that refuses to autoplay (iOS in Low Power Mode) then
                   shows artwork rather than a dead black frame. */}
-              <img src={cover} className="absolute inset-0 w-full h-full object-cover opacity-80" alt=""
+              <img src={cover} alt=""
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${mp4Live ? "opacity-0" : "opacity-80"}`}
                 onError={e => { e.target.src = "/default-poster.jpg"; }} />
               <Mp4Trailer src={trailerMp4} muted={isMuted} loop onStart={() => setMp4Live(true)} />
               {mp4Live && (

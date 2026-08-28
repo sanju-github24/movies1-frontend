@@ -18,8 +18,9 @@ export default function Mp4Trailer({ src, muted, loop = false, onEnd, onStart, c
   const [live, setLive] = React.useState(false);
   const onStartRef = React.useRef(onStart);
   onStartRef.current = onStart;
+  const startedRef = React.useRef(false);   // onStart is a one-shot per trailer
 
-  React.useEffect(() => { setLive(false); }, [src]);
+  React.useEffect(() => { setLive(false); startedRef.current = false; }, [src]);
 
   React.useEffect(() => {
     const v = ref.current;
@@ -57,26 +58,46 @@ export default function Mp4Trailer({ src, muted, loop = false, onEnd, onStart, c
     // Playing cleanly again means the next stall gets a fresh set of retries.
     const onPlaying = () => {
       tries = 0;
+      markLive();
+    };
+    /* Belt and braces on "it really started": `playing` can be missed if the
+       element got going before this effect ran (a cached file does that), so a
+       frame actually advancing counts too. */
+    const markLive = () => {
+      if (startedRef.current) return;      // timeupdate fires several times a second
+      startedRef.current = true;
       setLive(true);
       if (onStartRef.current) onStartRef.current();
     };
+    const onProgress = () => { if (!v.paused && v.currentTime > 0) markLive(); };
+    if (!v.paused && v.currentTime > 0) markLive();
 
     v.addEventListener("pause", resume);
     v.addEventListener("playing", onPlaying);
+    v.addEventListener("timeupdate", onProgress);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       v.removeEventListener("pause", resume);
       v.removeEventListener("playing", onPlaying);
+      v.removeEventListener("timeupdate", onProgress);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [src]);
 
   useVideoMute(ref, muted, src);
 
+  /* The stage is positioned and paints last, so it covers the artwork behind it
+     — a plain in-flow <video> does not: an absolutely positioned poster paints
+     ABOVE an in-flow element, which is how the poster ended up sitting on top
+     of a playing trailer. Transparent until it's live, opaque once it is, so a
+     device that can't autoplay still shows the artwork. Every caller wraps this
+     in a positioned box, which is what inset-0 resolves against. */
   return (
-    <video ref={ref} src={src} autoPlay muted loop={loop} playsInline preload="auto"
-      disablePictureInPicture controlsList="nodownload noplaybackrate"
-      onEnded={onEnd}
-      className={`${className} pointer-events-none transition-opacity duration-700 ${live ? "opacity-100" : "opacity-0"}`} />
+    <div className={`absolute inset-0 z-10 transition-opacity duration-700 ${live ? "opacity-100 bg-black" : "opacity-0"}`}>
+      <video ref={ref} src={src} autoPlay muted loop={loop} playsInline preload="auto"
+        disablePictureInPicture controlsList="nodownload noplaybackrate"
+        onEnded={onEnd}
+        className={`${className} pointer-events-none`} />
+    </div>
   );
 }
