@@ -353,6 +353,36 @@ const WatchHtmlPage = () => {
     }
   }, [showOverlay]);
 
+  /* ── Fresh download links, signed on every visit ──────────────────────────
+     A stored entry can carry a `path` instead of a URL: the file sits on R2 and
+     Cloudflare serves it against a token that only lasts a day. Signing here,
+     on load, means the page always hands out a live link and the bytes never
+     touch our own bandwidth. Entries that already carry a plain `url` are left
+     exactly as they are. */
+  const [signedLinks, setSignedLinks] = useState({});   // path → signed url
+
+  useEffect(() => {
+    const paths = (movieMeta?.download_links || [])
+      .flatMap(b => b?.links || [])
+      .map(l => l?.path)
+      .filter(Boolean);
+    if (!paths.length || !backendUrl) return;
+
+    let alive = true;
+    (async () => {
+      const pairs = await Promise.all([...new Set(paths)].map(async (path) => {
+        try {
+          const { data } = await axios.get(`${backendUrl}/api/download-link`, {
+            params: { path, hours: 24 }, timeout: 10000,
+          });
+          return data?.success ? [path, data.url] : null;
+        } catch { return null; }      // the button falls back to whatever it had
+      }));
+      if (alive) setSignedLinks(Object.fromEntries(pairs.filter(Boolean)));
+    })();
+    return () => { alive = false; };
+  }, [movieMeta?.download_links, backendUrl]);
+
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
     if (!backendUrl) return null;
@@ -1662,7 +1692,11 @@ if (!alive) return;
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {block.links?.map((link, i) => (
-                      <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                      <a key={i} href={(link.path && signedLinks[link.path]) || link.url} target="_blank" rel="noopener noreferrer"
+                        // A path with no signature yet is not a working link — wait for it
+                        // rather than sending someone to a 403.
+                        aria-disabled={!!link.path && !signedLinks[link.path]}
+                        onClick={e => { if (link.path && !signedLinks[link.path]) e.preventDefault(); }}
                         className="group p-4 min-h-[44px] rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-green-500/30 hover:bg-green-500/5 transition-all flex items-center gap-3 active:scale-[0.98] touch-manipulation">
                         <div className="p-2 rounded-lg bg-green-500/10 text-green-400 group-hover:bg-green-500/20 transition-colors"><Download size={14}/></div>
                         <p className="text-xs font-bold text-gray-300 group-hover:text-white transition-colors uppercase tracking-wide">{link.label}</p>
