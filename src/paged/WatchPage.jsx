@@ -1692,7 +1692,11 @@ if (!alive) return;
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {block.links?.map((link, i) => (
-                      <a key={i} href={(link.path && signedLinks[link.path]) || link.url} target="_blank" rel="noopener noreferrer"
+                      /* rel is "noopener" WITHOUT "noreferrer": the Cloudflare worker
+                         checks the Referer and answers "Forbidden origin" without one,
+                         so noreferrer would 403 every download. noopener still stops the
+                         opened tab reaching back through window.opener. */
+                      <a key={i} href={(link.path && signedLinks[link.path]) || link.url} target="_blank" rel="noopener"
                         // A path with no signature yet is not a working link — wait for it
                         // rather than sending someone to a 403.
                         aria-disabled={!!link.path && !signedLinks[link.path]}
