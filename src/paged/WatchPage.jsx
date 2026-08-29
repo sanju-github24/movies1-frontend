@@ -8,6 +8,7 @@ import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
+import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
 import {
   Loader2, Star, Play, ShieldCheck,
   ArrowLeft, List, MonitorPlay,
@@ -1681,15 +1682,38 @@ if (!alive) return;
               </div>
             </div>
             <div className="space-y-6">
-              {movieMeta.download_links.map((block, idx) => (
+              {movieMeta.download_links.map((block, idx) => {
+                // Read what the file actually is from its name — resolution,
+                // source, codec, languages, audio, subs, size — for a clear view.
+                const meta = parseFileMeta(fileNameOf(block.links?.[0] || {}, block) + " " + (block.quality || ""));
+                const langCount = meta.languages.list.length;
+                const badge = "text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md border";
+                return (
                 <div key={idx} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400"/>
-                      <span className="text-xs font-black text-green-400 uppercase tracking-widest">{block.quality}</span>
-                    </div>
-                    {block.size && <span className="text-[10px] font-bold text-gray-600">{block.size}</span>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0"/>
+                    {(meta.quality || block.quality) &&
+                      <span className={`${badge} bg-green-500/10 text-green-400 border-green-500/20`}>{meta.quality || block.quality}</span>}
+                    {meta.source &&
+                      <span className={`${badge} bg-blue-500/10 text-blue-400 border-blue-500/20`}>{meta.source}</span>}
+                    {meta.codec &&
+                      <span className={`${badge} bg-white/5 text-gray-400 border-white/10`}>{meta.codec}</span>}
+                    {langCount > 0 &&
+                      <span className={`${badge} bg-purple-500/10 text-purple-300 border-purple-500/20`}
+                            title={meta.languages.list.join(", ")}>
+                        {langCount === 1 ? meta.languages.list[0] : `${langCount} Languages`}
+                      </span>}
+                    {langCount === 0 && meta.languages.label &&
+                      <span className={`${badge} bg-purple-500/10 text-purple-300 border-purple-500/20`}>{meta.languages.label}</span>}
+                    {meta.audio &&
+                      <span className={`${badge} bg-white/5 text-gray-400 border-white/10`}>{meta.audio}</span>}
+                    {meta.subs &&
+                      <span className={`${badge} bg-white/5 text-gray-400 border-white/10`}>ESub</span>}
+                    <span className="ml-auto text-[10px] font-bold text-gray-600">{meta.size || block.size}</span>
                   </div>
+                  {langCount > 1 && (
+                    <p className="text-[10px] text-gray-500 -mt-1 pl-3.5">{meta.languages.list.join(" · ")}</p>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {block.links?.map((link, i) => (
                       /* rel is "noopener" WITHOUT "noreferrer": the Cloudflare worker
@@ -1708,7 +1732,8 @@ if (!alive) return;
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
