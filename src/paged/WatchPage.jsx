@@ -1692,9 +1692,11 @@ if (!alive) return;
                 <div key={idx} className="space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0"/>
-                    {(meta.quality || block.quality) &&
-                      <span className={`${badge} bg-green-500/10 text-green-400 border-green-500/20`}>{meta.quality || block.quality}</span>}
-                    {meta.source &&
+                    {/* Lead with the block's own label — for a series it carries
+                        "S01 · Episodes" / "S01 · Full Season", which the parsed
+                        badges don't. Fall back to the parsed quality otherwise. */}
+                    <span className={`${badge} bg-green-500/10 text-green-400 border-green-500/20`}>{block.quality || meta.quality}</span>
+                    {meta.source && !/(web-?dl|hdrip|bluray|predvd|hdtc)/i.test(block.quality || "") &&
                       <span className={`${badge} bg-blue-500/10 text-blue-400 border-blue-500/20`}>{meta.source}</span>}
                     {meta.codec &&
                       <span className={`${badge} bg-white/5 text-gray-400 border-white/10`}>{meta.codec}</span>}
