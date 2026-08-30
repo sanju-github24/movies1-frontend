@@ -640,7 +640,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const p_videasy = "nextEpisode=true&autoplayNextEpisode=true&episodeSelector=true&overlay=true&color=3B82F6";
 
     switch (serverId) {
-      case "imdb_reader": { const omegaId = imdb || tmdb; if (omegaId) src = `https://gemma416okl.com/play/${omegaId}`; break; }
+      case "imdb_reader": { const omegaId = imdb || tmdb; if (omegaId) src = `https://slast430did.com/play/${omegaId}`; break; }
       case "mirchi": if (tmdb) src = TV
           ? `https://nxsha.space/embed/tv/${tmdb}/${s}/${e}`
           : `https://nxsha.space/embed/movie/${tmdb}`;
