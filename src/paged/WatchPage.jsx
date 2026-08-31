@@ -967,6 +967,25 @@ if (!alive) return;
                 });
               });
 
+              // ── Exact episode-number lookup, for rows that carry one (the R2
+              //    uploader stamps `episode`). This beats position mapping when
+              //    episodes are uploaded out of order or with gaps — E01 then E03
+              //    must land on S×E1 and S×E3, not S×E1 and S×E2. Legacy rows
+              //    with no number fall through to the position/title lookups. ──
+              const dbEpNo = (dbEp) => {
+                const n = Number(dbEp?.episode ?? dbEp?.episode_number ?? dbEp?.episodeNumberInSeason);
+                return Number.isFinite(n) && n > 0 ? n : null;
+              };
+              const dbByExactEp = {};
+              const dbEpNumsBySeason = {};   // season → Set of explicit episode numbers
+              eps.forEach(dbEp => {
+                const n = dbEpNo(dbEp);
+                if (n == null) return;
+                const s = String(dbEp.season || 1);
+                dbByExactEp[`${s}__${n}`] = dbEp;
+                (dbEpNumsBySeason[s] || (dbEpNumsBySeason[s] = new Set())).add(n);
+              });
+
               // ── Normalized title lookup as secondary match ──
               const normalize = (str) =>
                 (str || "").toLowerCase().trim()
@@ -984,6 +1003,10 @@ if (!alive) return;
                 ? tmdbEps.filter(tmdbEp => {
                     const s = tmdbEp.season;
                     if (!dbSeasons.includes(s)) return false; // season not uploaded
+                    // Season carries explicit numbers → show exactly those episodes.
+                    const nums = dbEpNumsBySeason[String(s)];
+                    if (nums && nums.size) return nums.has(tmdbEp.episodeNumberInSeason);
+                    // Legacy season (no numbers) → show up to the count DB has.
                     const dbCountForSeason = dbGrouped[String(s)]?.length || 0;
                     return tmdbEp.episodeNumberInSeason <= dbCountForSeason;
                   })
@@ -991,17 +1014,18 @@ if (!alive) return;
 
               // ── Merge: attach DB html/direct_url onto matching TMDB episode ──
               eps = filteredTmdbEps.map(tmdbEp => {
+                const exactKey = `${tmdbEp.season}__${tmdbEp.episodeNumberInSeason}`;
                 const posKey   = `${tmdbEp.season}__${tmdbEp.episodeNumberInSeason}`;
                 const titleKey = `${tmdbEp.season}__${normalize(tmdbEp.title)}`;
-                const dbMatch  = dbBySeasonEp[posKey] || dbByTitle[titleKey] || null;
+                const dbMatch  = dbByExactEp[exactKey] || dbBySeasonEp[posKey] || dbByTitle[titleKey] || null;
 
                 return {
                   ...tmdbEp,
                   html:       dbMatch?.html       || null,
                   html_code:  dbMatch?.html       || null,
-                  direct_url: dbMatch?.direct_url || null,
+                  direct_url: dbMatch?.direct_url || dbMatch?.hls_url || null,
                   hasEmbed:   !!(dbMatch?.html),
-                  hasDirect:  !!(dbMatch?.direct_url),
+                  hasDirect:  !!(dbMatch?.direct_url || dbMatch?.hls_url),
                 };
               });
 
