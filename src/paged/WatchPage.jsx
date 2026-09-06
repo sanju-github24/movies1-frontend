@@ -231,13 +231,16 @@ const buildServers = (meta, eps = []) => {
    Match order: exact slug → exact tmdb_id → fuzzy title (+ year).
 =================================================================== */
 const localNorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const LOCAL_COLS = "slug,hls_url,video_url,html_code,episodes";
+const LOCAL_COLS = "slug,hls_url,video_url,html_code,episodes,download_links";
 /* Any of these makes a row worth attaching: our own HLS, a direct file, the
-   uploaded embed (which is what "Multi Audio" plays) or per-episode stream
-   links. An embed-only row used to be discarded here, which is why Multi Audio
-   went missing for titles we had definitely uploaded. */
+   uploaded embed (which is what "Multi Audio" plays), per-episode stream links —
+   or downloads. An embed-only row used to be discarded here, which is why Multi
+   Audio went missing for titles we had definitely uploaded; a DOWNLOAD-only row
+   was discarded for the same reason, which is why a title opened from global
+   search showed none of the downloads it plainly has. */
 const localUsable = (r) => !!(r && (r.hls_url || r.video_url || r.html_code ||
-  (Array.isArray(r.episodes) && r.episodes.length)));
+  (Array.isArray(r.episodes) && r.episodes.length) ||
+  (Array.isArray(r.download_links) && r.download_links.length)));
 
 const attachLocalHls = async (m) => {
   try {
@@ -261,7 +264,7 @@ const attachLocalHls = async (m) => {
           is simply skipped when it carries none. */
     const { data: rows } = await supabase.from("watch_html")
       .select(`${LOCAL_COLS},title`)
-      .or("hls_url.not.is.null,html_code.not.is.null,video_url.not.is.null")
+      .or("hls_url.not.is.null,html_code.not.is.null,video_url.not.is.null,download_links.not.is.null")
       .limit(500);
     if (!rows || !rows.length) return null;
     const STOP = new Set(["the","and","of","a","an","in","on","to","is","hindi","tamil","telugu","kannada","malayalam","english","season","part","movie","full","hd","www"]);
@@ -857,6 +860,13 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               hls_url:   meta.hls_url   || localHls.hls_url   || null,
               video_url: meta.video_url || localHls.video_url || null,
               html_code: meta.html_code || localHls.html_code || null,
+              /* A title picked from global search carries no downloads of its
+                 own — TMDB has none. The row we just matched does, and it is the
+                 same film, so the Downloads section appears from a global result
+                 exactly as it does from a local one. */
+              download_links: (meta.download_links && meta.download_links.length)
+                ? meta.download_links
+                : (Array.isArray(localHls.download_links) ? localHls.download_links : []),
             };
             // Series: use OUR episodes (with per-episode stream links) as the merge
             // source below, so AnchorHD shows and each episode plays from our stream.
