@@ -994,20 +994,17 @@ const WatchListPage = () => {
   };
 
   /* ─── When a movie card is clicked ── */
-  /* A nightly telecast only exists between 9:30 and 10:30 PM IST. Outside that
-     the card says when it starts instead of opening a detail sheet whose only
-     button would lead to a dead feed. */
-  const liveBlocked = (movie) => {
-    const show = getLiveShow(movie);
-    if (!show) return false;
-    const st = liveStatus(show, liveClock);
-    if (st.live) return false;
-    toast.info(`${show.name} is live at ${show.startLabel} IST — starts in ${st.countdown}.`);
-    return true;
-  };
+  /* A nightly telecast used to be unopenable outside 9:30–10:30 PM IST: the
+     card answered with the start time and refused to open, because back then
+     the live feed was the only thing the title had and the detail sheet would
+     have led nowhere.
 
+     That is no longer true — the episodes that have already aired sit on Drive
+     and play from their download links — so refusing to open the page just made
+     the whole title unreachable for the twenty-three hours it is not on air.
+     The card still carries its LIVE AT badge; the watch page decides what to
+     play, and it now knows the difference between on air and not. */
   const handleMovieSelect = (movie) => {
-    if (liveBlocked(movie)) return;
     setSelectedMovie(movie);
     // Not-yet-enriched TMDB movie: fetch its logo + trailer right away so the
     // detail overlay shows the title treatment instead of plain text.
@@ -1021,7 +1018,6 @@ const WatchListPage = () => {
      the server and opens the player overlay straight away.
      opts.episode: { season, episode } to start on. */
   const handleNavigateToWatch = (movie, opts = {}) => {
-    if (liveBlocked(movie)) return;
     saveRecentlyWatched(movie);
     const playState = opts.autoPlay
       ? { autoPlay: true, autoPlayEpisode: opts.episode || null }
