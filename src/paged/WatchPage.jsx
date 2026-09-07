@@ -9,6 +9,8 @@ import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
 import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
+import { getLiveShow, isLiveShow, liveStatus, useLiveClock } from "../utils/liveShow";
+import { toast } from "react-toastify";
 import {
   Loader2, Star, Play, ShieldCheck,
   ArrowLeft, List, MonitorPlay,
@@ -194,6 +196,12 @@ const lookupMx = async (title, isTV) => {
    So a title we host never opens on a third-party embed, and a title we don't
    host opens on Omega. */
 const buildServers = (meta, eps = []) => {
+  /* A nightly live telecast goes out on our own feed and nowhere else — no
+     third-party server carries it, so listing them would only hand the viewer
+     a row of dead ends. AnchorHD is the whole menu. */
+  if (isLiveShow(meta)) {
+    return [{ id: "ourhls", name: "AnchorHD", label: "Live · Our CDN", icon: <Video size={14} /> }];
+  }
   const srv = [];
   // Our own R2 HLS — highest priority when present (multi-audio, our CDN).
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
@@ -324,6 +332,10 @@ const WatchHtmlPage = () => {
   const [activeTab,         setActiveTab        ] = useState("servers");
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
+
+  // Ticks every 20s so the live pill and its CTA flip themselves at 9:30 and
+  // again at 10:30 without the viewer reloading the page.
+  const liveClock = useLiveClock();
 
   // Index of the currently-playing episode within the flat episodes list (for the
   // in-player episode switcher + auto-next).
@@ -599,6 +611,24 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
     if (!movieMeta) return;
 
+    /* Live telecast: one source, one window. Outside it there is nothing on the
+       wire, so we say when it starts rather than opening the player onto a dead
+       feed. The stream is a player page carrying its own signed params, so it
+       goes in as an embed — not through hls.js, and never through the proxy. */
+    const live = getLiveShow(movieMeta);
+    if (live) {
+      const st = liveStatus(live);
+      if (!st.live) {
+        toast.info(`${live.name} is live at ${live.startLabel} IST — starts in ${st.countdown}.`);
+        return;
+      }
+      setFinalSource(live.streamUrl);
+      setSourceType(null);
+      setVideoTitle(`${movieMeta.title || live.name} — ${st.episodeLabel} · LIVE`);
+      setShowOverlay(true);
+      return;
+    }
+
     let serverId   = forceServer || activeServer?.id || availableServers[0]?.id;
     const ep       = manualEp || currentOverlayEp;
     // AnchorHD / Direct → play OUR stream when available (episode-wise for series).
@@ -715,6 +745,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     }
 
     autoPlayedRef.current = true;
+
+    if (isLiveShow(movieMeta)) { handlePlayAction(null, "ourhls"); return; }
 
     /* AnchorHD (our own R2 stream) plays immediately — that's the whole point of
        coming straight from the detail overlay. Anything else needs a choice, so
@@ -1118,6 +1150,8 @@ if (!alive) return;
   );
 
   const isTVShow = movieMeta.content_type === "tv" || episodes.length > 0;
+  const liveShow = getLiveShow(movieMeta);
+  const live     = liveShow ? liveStatus(liveShow, liveClock) : null;
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
@@ -1455,6 +1489,13 @@ if (!alive) return;
                   {typeof g === "object" ? g.name : g}
                 </span>
               ))}
+              {live && (
+                <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border
+                  ${live.live ? "text-white bg-red-600 border-red-500" : "text-red-300 bg-red-500/10 border-red-500/30"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full bg-current ${live.live ? "animate-pulse" : ""}`} />
+                  {live.badge}
+                </span>
+              )}
             </div>
 
             {/* Description */}
@@ -1471,10 +1512,15 @@ if (!alive) return;
                 // to the embed mirror when the active server can't play this item.
                 handlePlayAction(firstEp);
               }}
-                className="group relative overflow-hidden px-8 py-4 sm:py-3.5 min-h-[48px] bg-blue-600 text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-blue-600/25 hover:shadow-blue-600/50 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation">
+                className={`group relative overflow-hidden px-8 py-4 sm:py-3.5 min-h-[48px] text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation
+                  ${live && !live.live
+                    ? "bg-white/10 border border-white/10 cursor-not-allowed shadow-none"
+                    : live
+                      ? "bg-red-600 shadow-red-600/25 hover:shadow-red-600/50"
+                      : "bg-blue-600 shadow-blue-600/25 hover:shadow-blue-600/50"}`}>
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <div className="relative p-1.5 bg-white/20 rounded-lg"><Play size={14} fill="currentColor"/></div>
-                <span className="relative">{isTVShow ? "Stream Now" : "Play Now"}</span>
+                <span className="relative">{live ? live.cta : (isTVShow ? "Stream Now" : "Play Now")}</span>
               </button>
               {movieMeta.download_links?.length > 0 && (
                 <button onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior:"smooth" })}

@@ -9,6 +9,8 @@ import axios from "axios";
 import Hls from "hls.js";
 import Mp4Trailer from "../components/Mp4Trailer";
 import { useVideoMute } from "../utils/useVideoMute";
+import { getLiveShow, liveStatus, useLiveClock } from "../utils/liveShow";
+import { toast } from "react-toastify";
 
 // Muted looping HLS trailer for the hero (MX trailers are .m3u8, not YouTube).
 // Mute is driven through useVideoMute for the same reason as the MP4 below:
@@ -359,6 +361,7 @@ const HOTSTAR_NUMBER_OVERLAYS = [
 
 const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 10 }) => {
   const rowRef = useRef(null);
+  const liveClock = useLiveClock();
   const [hoveredId, setHoveredId] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
   const timerRef = useRef(null);
@@ -431,6 +434,22 @@ const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 
                     </div>
                   </div>
                 )}
+
+                {/* Nightly telecast — lit only inside its daily window. */}
+                {(() => {
+                  const show = getLiveShow(movie);
+                  if (!show) return null;
+                  const st = liveStatus(show, liveClock);
+                  return (
+                    <div className={`absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1 px-1.5 py-0.5 rounded backdrop-blur-md border text-[8px] font-black uppercase tracking-tighter
+                      ${st.live
+                        ? "bg-red-600 text-white border-red-500 shadow-[0_0_18px_rgba(220,38,38,0.7)]"
+                        : "bg-black/80 text-red-300 border-red-500/40"}`}>
+                      <span className={`w-1 h-1 rounded-full bg-current ${st.live ? "animate-pulse" : ""}`} />
+                      {st.badge}
+                    </div>
+                  );
+                })()}
 
                 {/* Badges top-right */}
                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none z-30">
@@ -642,6 +661,9 @@ const WatchListPage = () => {
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
   const [heroMp4, setHeroMp4] = useState({});          // hero slug → IMDb MP4 trailer
   const [heroMp4Live, setHeroMp4Live] = useState(false);   // the slide's MP4 is playing
+  // Ticks every 20s so the nightly-telecast badges flip themselves at 9:30 and
+  // again at 10:30 without anyone reloading the page.
+  const liveClock = useLiveClock();
   const [infoVisible, setInfoVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -972,7 +994,20 @@ const WatchListPage = () => {
   };
 
   /* ─── When a movie card is clicked ── */
+  /* A nightly telecast only exists between 9:30 and 10:30 PM IST. Outside that
+     the card says when it starts instead of opening a detail sheet whose only
+     button would lead to a dead feed. */
+  const liveBlocked = (movie) => {
+    const show = getLiveShow(movie);
+    if (!show) return false;
+    const st = liveStatus(show, liveClock);
+    if (st.live) return false;
+    toast.info(`${show.name} is live at ${show.startLabel} IST — starts in ${st.countdown}.`);
+    return true;
+  };
+
   const handleMovieSelect = (movie) => {
+    if (liveBlocked(movie)) return;
     setSelectedMovie(movie);
     // Not-yet-enriched TMDB movie: fetch its logo + trailer right away so the
     // detail overlay shows the title treatment instead of plain text.
@@ -986,6 +1021,7 @@ const WatchListPage = () => {
      the server and opens the player overlay straight away.
      opts.episode: { season, episode } to start on. */
   const handleNavigateToWatch = (movie, opts = {}) => {
+    if (liveBlocked(movie)) return;
     saveRecentlyWatched(movie);
     const playState = opts.autoPlay
       ? { autoPlay: true, autoPlayEpisode: opts.episode || null }
@@ -1293,6 +1329,10 @@ const WatchListPage = () => {
                    the single mute button below is the only control on any of
                    them. */
                 const mp4 = heroMp4[movie.slug || movie.id] || null;
+                // Nightly telecast slide (Bigg Boss Kannada 13): the hero shows
+                // the daily 9:30 PM window, live-lit only inside it.
+                const heroShow = getLiveShow(liveMovieData);
+                const heroLive = heroShow ? liveStatus(heroShow, liveClock) : null;
                 const trailerOn = idx === currentSlide && heroTrailerActive && !isMobile;
                 const showMx  = trailerOn && !!liveMovieData.mx_trailer;
                 const showMp4 = trailerOn && !showMx && !!mp4;
@@ -1344,8 +1384,17 @@ const WatchListPage = () => {
                             )}
                             <span className="text-blue-400 uppercase tracking-widest drop-shadow-md font-black">{formatLanguageCount(liveMovieData.language)}</span>
                             {/* Hero TV badge */}
-                            {liveMovieData.content_type === "tv" && (
+                            {liveMovieData.content_type === "tv" && !heroLive && (
                               <span className="px-2 py-0.5 bg-purple-600/80 text-white text-[9px] font-black uppercase tracking-widest rounded">SERIES</span>
+                            )}
+                            {heroLive && (
+                              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[9px] sm:text-[11px] font-black uppercase tracking-widest border
+                                ${heroLive.live
+                                  ? "bg-red-600 text-white border-red-500 shadow-[0_0_25px_rgba(220,38,38,0.6)]"
+                                  : "bg-red-500/10 text-red-300 border-red-500/30"}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full bg-current ${heroLive.live ? "animate-pulse" : ""}`} />
+                                {heroLive.badge}
+                              </span>
                             )}
                             {liveMovieData.genres?.length > 0 && (
                               <span className="text-gray-400 font-bold uppercase tracking-widest border-l border-white/20 pl-4 hidden sm:block">
@@ -1354,13 +1403,26 @@ const WatchListPage = () => {
                             )}
                           </div>
                           <p className="text-gray-300 text-xs sm:text-lg line-clamp-2 max-w-2xl font-medium italic drop-shadow-lg leading-relaxed">{liveMovieData.description}</p>
+                          {heroLive && (
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-red-300/90 drop-shadow-md">
+                              {heroLive.window}
+                              {!heroLive.live && ` · starts in ${heroLive.countdown}`}
+                            </p>
+                          )}
                         </div>
                         <button
                           onClick={() => handleNavigateToWatch(liveMovieData)}
-                          className="group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95 shadow-lg uppercase tracking-widest">
+                          className={`group w-full sm:w-fit px-8 py-3 sm:px-12 sm:py-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg uppercase tracking-widest
+                            ${heroLive && !heroLive.live
+                              ? "bg-white/10 text-white/70 border border-white/15 cursor-not-allowed"
+                              : heroLive
+                                ? "bg-red-600 text-white hover:bg-red-500 hover:scale-105"
+                                : "bg-white text-black hover:bg-blue-600 hover:text-white hover:scale-105"}`}>
                           <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-current" />
                           <span className="text-[11px] sm:text-base tracking-widest font-black">
-                            {liveMovieData.content_type === "tv" ? "STREAM SERIES" : "PLAY NOW"}
+                            {heroLive
+                              ? heroLive.cta
+                              : liveMovieData.content_type === "tv" ? "STREAM SERIES" : "PLAY NOW"}
                           </span>
                         </button>
                       </div>
@@ -1427,6 +1489,17 @@ const WatchListPage = () => {
               const langRows = Object.entries(langTrending).filter(
                 ([langName]) => userLangs.length === 0 || userLangs.includes(langName)
               );
+              /* Pin each nightly telecast to the head of its own language row —
+                 that's where viewers go looking for it. The row is created even
+                 when TMDB returned nothing for that language today, so the show
+                 never simply vanishes from the page. */
+              movies.filter(m => getLiveShow(m)).forEach((m) => {
+                const lang = getLiveShow(m).language;
+                if (userLangs.length > 0 && !userLangs.includes(lang)) return;
+                const row = langRows.find(([name]) => name === lang);
+                if (row) row[1] = [m, ...row[1].filter(x => x.slug !== m.slug)];
+                else langRows.unshift([lang, [m]]);
+              });
               let langIdx = 0;
               const blocks = [];
               const pushLangRow = () => {
