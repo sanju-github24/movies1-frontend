@@ -501,12 +501,23 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   }, [movieMeta, backendUrl, routeSlug, maybeProxy]);
 
   /* ── Resolve an episode's stream link to a playable URL. A full http(s) link
-     plays as-is; an R2 path (movies/<slug>/master.m3u8) is signed via the backend. ── */
+     plays as-is; a stored path is signed by the backend.
+
+     Two kinds of path, and they need different endpoints. An HLS folder
+     (movies/<slug>) is signed by /api/movie-stream, which appends master.m3u8
+     when the path does not already end in it. A single FILE — the same
+     drive/<id>/<name>.mp4 the download button uses — must go to
+     /api/download-link instead: movie-stream would turn it into
+     "…/name.mp4/master.m3u8" and nothing would play. Serving an episode from
+     its download link means one upload covers both watching and downloading,
+     with no separate HLS build. ── */
   const resolveStreamLink = useCallback(async (link) => {
     if (!link) return null;
     if (/^(https?:|blob:)/i.test(link)) return link;
+    const isFile = /\.(mp4|m4v|webm|mov|mkv)$/i.test(link);
+    const endpoint = isFile ? "download-link" : "movie-stream";
     try {
-      const r = await fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(link)}`);
+      const r = await fetch(`${backendUrl}/api/${endpoint}?path=${encodeURIComponent(link)}`);
       const j = await r.json();
       return j?.success && j.url ? j.url : null;
     } catch { return null; }
