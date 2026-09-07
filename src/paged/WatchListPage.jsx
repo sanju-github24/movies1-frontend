@@ -10,7 +10,6 @@ import Hls from "hls.js";
 import Mp4Trailer from "../components/Mp4Trailer";
 import { useVideoMute } from "../utils/useVideoMute";
 import { getLiveShow, liveStatus, useLiveClock } from "../utils/liveShow";
-import { toast } from "react-toastify";
 
 // Muted looping HLS trailer for the hero (MX trailers are .m3u8, not YouTube).
 // Mute is driven through useVideoMute for the same reason as the MP4 below:
