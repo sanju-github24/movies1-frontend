@@ -1,131 +1,122 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, Link } from "react-router-dom"; 
-import { supabase } from "../utils/supabaseClient";
-import { Search, Loader2, Frown, Film, MonitorPlay } from "lucide-react"; // Imported for better UX
+/* A language page — /category/Kannada and friends.
+
+   Rebuilt for three reasons: it rendered "**Kannada**" literally on screen
+   (markdown asterisks in JSX do nothing), it pulled all 978 rows on every
+   visit and filtered them in the browser, and every card opened the download
+   page. It now reads the shared catalogue, so a card knows whether we stream
+   the title and links accordingly. */
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import { Search, Loader2, Frown, Film, AlertCircle } from "lucide-react";
+import { loadCatalog } from "../utils/catalog";
+import CatalogCard from "./CatalogCard";
+
+const PAGE_SIZE = 60;
 
 const CategoryPage = () => {
-  const { name } = useParams(); // /category/:name
-  const pageName = decodeURIComponent(name || ""); // e.g., "Tamil"
+  const { name } = useParams();
+  const pageName = decodeURIComponent(name || "");
 
-  const [allMovies, setAllMovies] = useState([]); // Store all fetched movies
+  const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [subCategories, setSubCategories] = useState(["All"]);
+  const [error, setError] = useState(null);
   const [activeSub, setActiveSub] = useState("All");
   const [search, setSearch] = useState("");
-  const [error, setError] = useState(null);
+  const [shown, setShown] = useState(PAGE_SIZE);
 
-  // Helper function: Normalizes and flattens a field into an array of lowercase strings
-  const normalizeField = useCallback((field) => {
-    if (!field) return [];
-    if (typeof field === "string") return [field.toLowerCase()];
-    if (Array.isArray(field)) return field.map((x) => x?.toLowerCase() || "");
-    return [];
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setEntries(await loadCatalog());
+    } catch (err) {
+      console.error("[CategoryPage]", err);
+      setError("Couldn't load this collection. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  /* --- Data Fetching Logic (Optimized) --- */
-  const fetchMovies = useCallback(async () => {
-    if (!pageName) return;
-    setLoading(true);
-    setError(null); // Reset error state
+  useEffect(() => { load(); }, [load]);
 
-    // 1. Fetch ALL movies (or at least a large initial set)
-    const { data, error: fetchError } = await supabase
-      .from("movies")
-      .select("*")
-      .order("created_at", { ascending: false });
+  // A new language means a fresh set of filters.
+  useEffect(() => { setActiveSub("All"); setSearch(""); setShown(PAGE_SIZE); }, [pageName]);
 
-    if (fetchError) {
-      console.error("Supabase error:", fetchError.message);
-      setError("Failed to fetch movies. Please try again.");
-      setAllMovies([]);
-      setLoading(false);
-      return;
-    }
+  const inLanguage = useMemo(() => {
+    const want = pageName.toLowerCase();
+    return entries.filter((e) => e.language.some((l) => l.toLowerCase() === want));
+  }, [entries, pageName]);
 
-    // 2. Filter movies by the main language/category name
-    const categoryFiltered = (data || []).filter((movie) =>
-      normalizeField(movie.language).includes(pageName.toLowerCase())
-    );
-
-    setAllMovies(categoryFiltered);
-
-    // 3. Collect unique subcategories
+  const subCategories = useMemo(() => {
     const subs = new Set();
-    categoryFiltered.forEach((movie) =>
-      normalizeField(movie.subCategory).forEach((s) => s && subs.add(s))
-    );
+    inLanguage.forEach((e) => e.subCategory.forEach((s) => s && subs.add(s)));
+    return ["All", ...Array.from(subs).sort()];
+  }, [inLanguage]);
 
-    setSubCategories(["All", ...Array.from(subs)]);
-    setActiveSub("All");
-    setLoading(false);
-  }, [pageName, normalizeField]);
-
-  useEffect(() => {
-    fetchMovies();
-  }, [fetchMovies]);
-
-  /* --- Filtering Logic (Memoized) --- */
-  const filteredMovies = useMemo(() => {
-    // Return a subset of allMovies based on subcategory and search filters
-    return allMovies.filter((movie) => {
-      const subsList = normalizeField(movie.subCategory);
-      
-      const matchesSub = 
-        activeSub === "All" || 
-        subsList.includes(activeSub.toLowerCase());
-        
-      const matchesSearch =
-        movie.title?.toLowerCase().includes(search.toLowerCase()) ||
-        (movie.description || "").toLowerCase().includes(search.toLowerCase()) ||
-        (movie.cast || []).join(', ').toLowerCase().includes(search.toLowerCase()); // Added cast search
-
-      return matchesSub && matchesSearch;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return inLanguage.filter((e) => {
+      const matchesSub = activeSub === "All" ||
+        e.subCategory.some((s) => s.toLowerCase() === activeSub.toLowerCase());
+      if (!matchesSub) return false;
+      if (!q) return true;
+      return e.title.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
     });
-  }, [allMovies, activeSub, search, normalizeField]);
+  }, [inLanguage, activeSub, search]);
 
-  const searchPlaceholder = `Search in ${pageName} movies...`;
+  // Any filter change starts the list from the top again.
+  useEffect(() => { setShown(PAGE_SIZE); }, [activeSub, search]);
 
-  /* --- JSX Structure --- */
+  const visible = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
+  const streamCount = useMemo(() => filtered.filter((e) => e.streamable).length, [filtered]);
+
   return (
     <div className="min-h-screen bg-gray-950 px-4 sm:px-8 py-10 text-white">
-      {/* Page Header */}
-      <header className="text-center mb-10">
-        <h1 className="text-4xl font-extrabold text-blue-400 border-b border-gray-800 pb-3">
-          <Film className="inline w-8 h-8 mr-2 -mt-1" />
-          {pageName} Movies
-        </h1>
-        <p className="text-md text-gray-400 mt-3">
-          Explore the world of **{pageName}** cinema, including genres and releases.
+      <Helmet>
+        <title>{pageName} Movies & Series | 1AnchorMovies</title>
+        <meta name="description" content={`Watch and download ${pageName} movies and series on 1AnchorMovies.`} />
+      </Helmet>
+
+      {/* ── Header ── */}
+      <header className="max-w-7xl mx-auto mb-8 border-b border-gray-900 pb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Film className="w-6 h-6 text-blue-500" />
+          <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter italic">
+            {pageName} Collection
+          </h1>
+        </div>
+        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">
+          {loading
+            ? "Loading…"
+            : `${filtered.length.toLocaleString()} titles · ${streamCount} streamable`}
         </p>
       </header>
 
-      {/* Search Bar */}
+      {/* ── Search ── */}
       <div className="max-w-xl mx-auto mb-8 relative">
         <input
           type="text"
-          placeholder={searchPlaceholder}
+          placeholder={`Search in ${pageName}…`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 bg-gray-800 text-white border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-lg"
+          className="w-full pl-12 pr-4 py-3 bg-gray-900 text-white border border-white/5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-lg placeholder:text-gray-600"
         />
-        <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+        <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
       </div>
 
-      {/* Subcategories (Pill Tabs) */}
+      {/* ── Sub-category pills ── */}
       {subCategories.length > 1 && (
-        <div className="max-w-4xl mx-auto overflow-x-auto pb-4 mb-8 custom-scrollbar">
-          <div className="flex gap-3 w-max">
+        <div className="max-w-5xl mx-auto overflow-x-auto pb-4 mb-8 scrollbar-hide">
+          <div className="flex gap-2 w-max px-1">
             {subCategories.map((sub) => (
               <button
                 key={sub}
-                onClick={() => {
-                    setActiveSub(sub);
-                    setSearch(""); // Clear search when changing subcategory
-                }}
-                className={`min-w-[100px] px-4 py-2 rounded-full font-medium text-sm whitespace-nowrap transition border ${
+                onClick={() => setActiveSub(sub)}
+                className={`px-4 py-2 rounded-full font-black text-[11px] uppercase tracking-widest whitespace-nowrap transition border ${
                   activeSub === sub
-                    ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/50"
-                    : "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700"
+                    ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/25"
+                    : "bg-gray-900 hover:bg-gray-800 text-gray-400 border-white/5"
                 }`}
               >
                 {sub}
@@ -135,78 +126,49 @@ const CategoryPage = () => {
         </div>
       )}
 
-      {/* --- Movie List Area --- */}
+      {/* ── Body ── */}
       {loading ? (
-        <div className="flex justify-center items-center h-48">
-          <Loader2 className="w-8 h-8 text-blue-400 animate-spin mr-3" />
-          <p className="text-xl text-gray-400">Loading {pageName} collection...</p>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+          <p className="text-gray-500 font-mono tracking-widest uppercase text-[10px]">
+            Loading {pageName} collection…
+          </p>
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center h-48 text-red-400">
-            <Frown className="w-10 h-10 mb-2" />
-            <p className="text-xl font-medium">{error}</p>
+        <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+          <AlertCircle className="w-10 h-10 text-red-500/70" />
+          <p className="text-gray-400 font-bold">{error}</p>
+          <button onClick={load}
+            className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-black uppercase tracking-widest">
+            Retry
+          </button>
         </div>
-      ) : filteredMovies.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-            <Frown className="w-10 h-10 mb-2" />
-            <p className="text-xl font-medium">
-              No movies found matching your criteria.
-            </p>
-            <p className="text-sm mt-1">
-                Try broadening your search or switching the subcategory.
-            </p>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center text-gray-500">
+          <Frown className="w-10 h-10 mb-3 text-gray-700" />
+          <p className="font-black uppercase tracking-widest text-sm">No titles found</p>
+          <p className="text-xs mt-1 text-gray-600">
+            {search ? "Try a different search term." : `Nothing in ${pageName} under this filter yet.`}
+          </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 mt-10 max-w-7xl mx-auto">
-          {filteredMovies.map((movie) => (
-            <div
-              key={movie.slug}
-              className="group bg-gray-800 rounded-xl shadow-lg hover:shadow-blue-500/30 transition duration-300 overflow-hidden relative"
-            >
-              {/* Poster */}
-              <div className="relative w-full aspect-[2/3] overflow-hidden">
-                <img
-                  src={movie.poster || "/default-poster.jpg"}
-                  alt={movie.title}
-                  className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/0 transition duration-300" />
-              </div>
-              
-              {/* Info */}
-              <div className="p-3 text-center">
-                <h2 className="text-md font-semibold text-blue-300 truncate mb-1">
-                  {movie.title}
-                </h2>
-                <p className="text-xs text-gray-400 capitalize">
-                    {normalizeField(movie.subCategory)[0] || pageName}
-                </p>
-              </div>
+        <>
+          <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+            {visible.map((entry) => (
+              <CatalogCard key={entry.key} entry={entry} showAge />
+            ))}
+          </div>
 
-              {/* Action Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="flex flex-col gap-3">
-                    <Link
-                        to={`/movie/${movie.slug}`}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-full font-medium transition flex items-center gap-2"
-                    >
-                        <Film className="w-4 h-4" /> Details
-                    </Link>
-                    {movie.watchUrl && (
-                        <a
-                            href={movie.watchUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-full font-medium transition flex items-center gap-2"
-                        >
-                            <MonitorPlay className="w-4 h-4" /> Watch Now
-                        </a>
-                    )}
-                </div>
-              </div>
+          {shown < filtered.length && (
+            <div className="flex justify-center pt-10 pb-4">
+              <button
+                onClick={() => setShown((n) => n + PAGE_SIZE)}
+                className="px-10 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95">
+                Load more · {filtered.length - shown} left
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

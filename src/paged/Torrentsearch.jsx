@@ -1,442 +1,421 @@
-import { useState, useContext } from "react";
-import { AppContext } from "../context/AppContext";
+/* The torrent page.
 
-const LANGUAGES = [
-  "Tamil", "Telugu", "Kannada", "Malayalam", "Hindi",
-  "Bengali", "Marathi", "Punjabi", "English"
+   Two changes of substance over the old version. First, it searches OUR
+   catalogue before it searches the web: every title we've uploaded already
+   carries its magnet and direct links, so a query that matches the library
+   is answered from the library instead of round-tripping to 1TamilMV for
+   links we already hold. Only when nothing matches does it fall through to
+   the scrapers, which behave exactly as they always did.
+
+   Second, the download links that used to live on /movie/:slug are surfaced
+   here, so a download-only title in the catalogue has somewhere to land.
+   Catalogue cards link in with ?q=<title>, which runs the search on arrival.
+*/
+import React, { useState, useContext, useEffect, useMemo, useCallback, useRef } from "react";
+import { useSearchParams, Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import {
+  Search, Loader2, Magnet, Download, ExternalLink, Copy, Check,
+  Play, Globe, Library, AlertCircle, HardDrive, Users,
+} from "lucide-react";
+import { AppContext } from "../context/AppContext";
+import { loadCatalog } from "../utils/catalog";
+
+const LANGUAGES = ["Tamil", "Telugu", "Kannada", "Malayalam", "Hindi", "Bengali", "Marathi", "Punjabi", "English"];
+const SOURCES = [
+  { id: "1TamilMV", param: "1tamilmv" },
+  { id: "PirateBay", param: "piratebay" },
 ];
 
-const SOURCES = ["1TamilMV", "PirateBay"];
+const isReal = (v) => !!v && v !== "Not Available" && v !== "No Magnet Found";
 
-/* ── Seeder color helper ── */
-const seedColor = (n) => {
-  if (!n || n === "N/A" || n === "0") return "#333";
-  const c = parseInt(n, 10);
-  return c > 200 ? "#00e676" : c > 50 ? "#ffea00" : "#ff5555";
-};
-
-/* ── Copy button ── */
+/* ── Copy-to-clipboard pill ── */
 function CopyBtn({ text, label = "Copy" }) {
   const [copied, setCopied] = useState(false);
-  const isValid = text && text !== "Not Available" && text !== "No Magnet Found";
-  if (!isValid) return null;
+  if (!isReal(text)) return null;
   return (
     <button
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1800);
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1800);
+        } catch { /* clipboard blocked — the link is still on screen */ }
       }}
-      style={{
-        padding: "9px 16px",
-        borderRadius: "6px",
-        background: copied ? "#00e67618" : "#111",
-        border: `1px solid ${copied ? "#00e676" : "#222"}`,
-        color: copied ? "#00e676" : "#888",
-        fontSize: "13px",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        fontWeight: 500,
-        cursor: "pointer",
-        transition: "all 0.15s",
-        whiteSpace: "nowrap",
-      }}
+      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+        copied
+          ? "bg-green-500/10 border-green-500/40 text-green-400"
+          : "bg-white/[0.03] border-white/10 text-gray-400 hover:text-white hover:border-white/25"
+      }`}
     >
-      {copied ? "✓ Copied" : label}
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {copied ? "Copied" : label}
     </button>
   );
 }
 
-/* ── Action Button (Magnet / Download / Direct) ── */
-function ActionBtn({ href, label, icon, accent = "#00e676" }) {
-  const isValid = href && href !== "Not Available" && href !== "No Magnet Found";
-  const base = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "7px",
-    padding: "9px 18px",
-    borderRadius: "6px",
-    fontSize: "13px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    fontWeight: 600,
-    textDecoration: "none",
-    transition: "all 0.15s",
-    cursor: isValid ? "pointer" : "default",
-    whiteSpace: "nowrap",
+/* ── Link button, greyed out when the source didn't supply one ── */
+function LinkBtn({ href, label, icon, tone = "blue" }) {
+  const tones = {
+    green: "bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20",
+    blue:  "bg-blue-500/10 border-blue-500/40 text-blue-400 hover:bg-blue-500/20",
+    amber: "bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20",
   };
-
-  if (!isValid) {
+  if (!isReal(href)) {
     return (
-      <span style={{ ...base, background: "#0a0a0a", border: "1px solid #111", color: "#1e1e1e" }}>
+      <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border border-white/[0.04] bg-white/[0.01] text-gray-700 cursor-default">
         {icon} {label}
       </span>
     );
   }
-
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ ...base, background: `${accent}18`, border: `1px solid ${accent}55`, color: accent }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = `${accent}30`;
-        e.currentTarget.style.borderColor = accent;
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = `${accent}18`;
-        e.currentTarget.style.borderColor = `${accent}55`;
-      }}
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider border transition-all active:scale-95 ${tones[tone]}`}>
       {icon} {label}
     </a>
   );
 }
 
-/* ── Result Card — 1Flex style ── */
-function ResultCard({ item, index }) {
-  const hasMagnet  = item.magnet      && item.magnet      !== "No Magnet Found" && item.magnet !== "Not Available";
-  const hasDirect  = item.direct_link && item.direct_link !== "Not Available";
-  const hasTorrent = item.torrent_file && item.torrent_file !== "Not Available";
-  const isTMV      = item.source === "1TamilMV";
-
-  const sc = seedColor(item.seeders);
-
+/* ── One of our own catalogue titles, with the links we already hold ── */
+function LibraryCard({ entry }) {
   return (
-    <div
-      style={{
-        background: index % 2 === 0 ? "#0c0c0c" : "#090909",
-        borderBottom: "1px solid #111",
-        padding: "20px 24px",
-        transition: "background 0.15s",
-        animation: `fadeUp 0.3s ease ${Math.min(index * 0.06, 0.5)}s both`,
-      }}
-      onMouseEnter={e => (e.currentTarget.style.background = "#101010")}
-      onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? "#0c0c0c" : "#090909")}
-    >
-      {/* ── Title row ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "14px" }}>
-        <h3 style={{
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          fontSize: "15px",
-          fontWeight: 600,
-          color: "#e8e8e8",
-          lineHeight: 1.5,
-          margin: 0,
-          flex: 1,
-        }}>
-          {item.quality || item.title || "Unknown"}
-        </h3>
-
-        {/* Source badge */}
-        <span style={{
-          flexShrink: 0,
-          fontSize: "11px",
-          padding: "3px 10px",
-          borderRadius: "3px",
-          background: isTMV ? "#ff3c3c18" : "#3c8fff18",
-          color: isTMV ? "#ff5555" : "#55aaff",
-          border: `1px solid ${isTMV ? "#ff555533" : "#55aaff33"}`,
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          fontWeight: 600,
-          marginTop: "2px",
-        }}>
-          {item.source}
-        </span>
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] overflow-hidden">
+      <div className="flex gap-4 p-4">
+        <img
+          src={entry.poster}
+          alt=""
+          loading="lazy"
+          className="w-[68px] sm:w-[86px] aspect-[2/3] object-cover rounded-lg border border-white/10 shrink-0 bg-gray-900"
+          onError={(e) => { e.currentTarget.src = "/default-poster.jpg"; }}
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm sm:text-base font-black text-white leading-snug line-clamp-2">{entry.title}</h3>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {entry.language.slice(0, 4).map((l) => (
+              <span key={l} className="text-[9px] font-black uppercase tracking-wider text-blue-300 bg-blue-500/10 border border-blue-500/25 px-2 py-0.5 rounded">{l}</span>
+            ))}
+            {entry.imdbRating && entry.imdbRating !== "NaN" && (
+              <span className="text-[9px] font-black text-gray-400">★ {entry.imdbRating}</span>
+            )}
+          </div>
+          {entry.streamable && (
+            <Link to={`/watch/${entry.watchSlug}`}
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-2 rounded-lg bg-white text-black hover:bg-blue-600 hover:text-white text-[11px] font-black uppercase tracking-wider transition-all active:scale-95">
+              <Play className="w-3 h-3 fill-current" /> Watch Now
+            </Link>
+          )}
+        </div>
       </div>
 
-      {/* ── Metadata row: seeders / leechers / info ── */}
-      <div style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: "20px",
-        marginBottom: "18px",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-      }}>
-        {/* Seeders */}
-        {item.seeders && item.seeders !== "N/A" && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke={sc} strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="9" cy="7" r="4" stroke={sc} strokeWidth="2"/>
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke={sc} strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            <span style={{ fontSize: "13px", color: sc, fontWeight: 500 }}>Seeders: {item.seeders}</span>
+      {/* Stored download options */}
+      <div className="border-t border-white/5 divide-y divide-white/5">
+        {entry.downloads.map((d) => (
+          <div key={d.id} className="px-4 py-3">
+            <div className="flex items-start justify-between gap-3 mb-2.5">
+              <p className="text-[12px] font-bold text-gray-300 leading-snug flex-1">{d.label}</p>
+              {d.size && (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-black text-gray-500 uppercase">
+                  <HardDrive className="w-3 h-3" /> {d.size}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <LinkBtn href={d.magnet} label="Magnet" tone="green" icon={<Magnet className="w-3 h-3" />} />
+              <LinkBtn href={d.direct} label="Direct" tone="blue" icon={<Download className="w-3 h-3" />} />
+              {d.gpLink && <LinkBtn href={d.gpLink} label="Mirror" tone="amber" icon={<ExternalLink className="w-3 h-3" />} />}
+              <CopyBtn text={d.magnet || d.direct} label="Copy Link" />
+            </div>
+          </div>
+        ))}
+        {entry.downloads.length === 0 && entry.downloadPageUrl && (
+          <div className="px-4 py-3">
+            <LinkBtn href={entry.downloadPageUrl} label="Download Page" tone="amber" icon={<ExternalLink className="w-3 h-3" />} />
           </div>
         )}
-
-        {/* Leechers */}
-        {item.leechers && item.leechers !== "N/A" && item.leechers !== "0" && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="#ff5555" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="9" cy="7" r="4" stroke="#ff5555" strokeWidth="2"/>
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#ff5555" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            <span style={{ fontSize: "13px", color: "#ff5555", fontWeight: 500 }}>Leechers: {item.leechers}</span>
-          </div>
-        )}
-
-        {/* Extra info */}
-        {item.info && (
-          <span style={{
-            fontSize: "12px",
-            color: "#555",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "300px",
-          }}>
-            {item.info}
-          </span>
-        )}
       </div>
-
-      {/* ── Action buttons row ── */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-        {/* Magnet Link */}
-        <ActionBtn
-          href={item.magnet}
-          label="Magnet Link"
-          icon={
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M6 15A6 6 0 1 0 18 15"/>
-              <path d="M6 15V5h4v10M14 15V5h4v10M10 5h4"/>
-            </svg>
-          }
-          accent="#00e676"
-        />
-
-        {/* Torrent Download */}
-        <ActionBtn
-          href={item.torrent_file}
-          label="Download"
-          icon={
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-          }
-          accent="#3c8fff"
-        />
-
-        {/* Direct Link */}
-        {hasDirect && (
-          <ActionBtn
-            href={item.direct_link}
-            label="Direct Link"
-            icon={
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-            }
-            accent="#ff9500"
-          />
-        )}
-
-        {/* Copy magnet */}
-        {hasMagnet && <CopyBtn text={item.magnet} label="Copy Magnet" />}
-      </div>
-
-
     </div>
   );
 }
 
-/* ════════════════════════════════════════
-   Main Page
-════════════════════════════════════════ */
-export default function TorrentSearch() {
+/* ── A scraped result from 1TamilMV / PirateBay ── */
+function WebResultCard({ item }) {
+  const seeders = Number(item.seeders);
+  const seedTone = !Number.isFinite(seeders) || seeders === 0
+    ? "text-gray-600" : seeders > 200 ? "text-green-400" : seeders > 50 ? "text-yellow-400" : "text-red-400";
+
+  return (
+    <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 hover:border-white/15 transition-colors">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <h3 className="text-[13px] font-bold text-gray-200 leading-snug flex-1">
+          {item.quality || item.title || "Unknown"}
+        </h3>
+        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border ${
+          item.source === "1TamilMV"
+            ? "bg-red-500/10 text-red-400 border-red-500/25"
+            : "bg-sky-500/10 text-sky-400 border-sky-500/25"
+        }`}>
+          {item.source}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 mb-3.5 text-[11px] font-bold">
+        {item.seeders && item.seeders !== "N/A" && (
+          <span className={`inline-flex items-center gap-1.5 ${seedTone}`}>
+            <Users className="w-3 h-3" /> {item.seeders} seeders
+          </span>
+        )}
+        {item.leechers && item.leechers !== "N/A" && item.leechers !== "0" && (
+          <span className="inline-flex items-center gap-1.5 text-gray-500">
+            <Users className="w-3 h-3" /> {item.leechers} leechers
+          </span>
+        )}
+        {item.info && <span className="text-gray-600 truncate max-w-[280px]">{item.info}</span>}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <LinkBtn href={item.magnet} label="Magnet" tone="green" icon={<Magnet className="w-3 h-3" />} />
+        <LinkBtn href={item.torrent_file} label="Torrent" tone="blue" icon={<Download className="w-3 h-3" />} />
+        {isReal(item.direct_link) && (
+          <LinkBtn href={item.direct_link} label="Direct" tone="amber" icon={<ExternalLink className="w-3 h-3" />} />
+        )}
+        <CopyBtn text={item.magnet} label="Copy Magnet" />
+      </div>
+    </div>
+  );
+}
+
+const TorrentSearch = () => {
   const { backendUrl } = useContext(AppContext);
+  const [params, setParams] = useSearchParams();
 
-  const [movieName, setMovieName] = useState("");
-  const [language,  setLanguage]  = useState("Kannada");
-  const [source,    setSource]    = useState("1TamilMV");
-  const [results,   setResults]   = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [searched,  setSearched]  = useState(false);
-  const [error,     setError]     = useState("");
+  const [query, setQuery] = useState(params.get("q") || "");
+  const [language, setLanguage] = useState("Kannada");
+  const [source, setSource] = useState("1TamilMV");
 
-  const sourceParam = source === "1TamilMV" ? "1tamilmv" : "piratebay";
+  const [catalog, setCatalog] = useState([]);
+  /* Separate from `catalog.length` so a failed load still releases the
+     ?q= auto-search instead of leaving the page waiting forever. */
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [webResults, setWebResults] = useState([]);
+  const [webLoading, setWebLoading] = useState(false);
+  const [webSearched, setWebSearched] = useState(false);
+  const [submitted, setSubmitted] = useState(params.get("q") || "");
+  const [error, setError] = useState("");
 
-  const handleSearch = async () => {
-    if (!movieName.trim()) return;
-    setLoading(true);
+  // The catalogue loads in the background; the web search never waits on it.
+  useEffect(() => {
+    loadCatalog()
+      .then(setCatalog)
+      .catch((err) => console.warn("[TorrentSearch] catalogue unavailable", err))
+      .finally(() => setCatalogReady(true));
+  }, []);
+
+  /* Our own titles matching the query. Both the release name and its cleaned
+     form are searched, so "kantara" finds "Kantara (2022) TRUE WEB-DL - […]". */
+  const libraryMatches = useMemo(() => {
+    const q = submitted.trim().toLowerCase();
+    if (!q) return [];
+    return catalog
+      .filter((e) => e.downloadable &&
+        (e.title.toLowerCase().includes(q) || e.cleanTitle.toLowerCase().includes(q)))
+      .slice(0, 12);
+  }, [catalog, submitted]);
+
+  const runWebSearch = useCallback(async (term) => {
+    const movie = (term ?? submitted).trim();
+    if (!movie) return;
+    setWebLoading(true);
+    setWebSearched(true);
     setError("");
-    setResults([]);
-    setSearched(true);
+    setWebResults([]);
     try {
-      const url = `${backendUrl}/search?movie=${encodeURIComponent(movieName)}&lang=${encodeURIComponent(language)}&source=${sourceParam}`;
-      const res  = await fetch(url);
+      const param = SOURCES.find((s) => s.id === source)?.param || "1tamilmv";
+      const url = `${backendUrl}/search?movie=${encodeURIComponent(movie)}&lang=${encodeURIComponent(language)}&source=${param}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       if (data?.[0]?.error) throw new Error(data[0].error);
-      setResults(Array.isArray(data) ? data : []);
+      setWebResults(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e.message || "Search failed. Check your server connection.");
     } finally {
-      setLoading(false);
+      setWebLoading(false);
     }
-  };
+  }, [backendUrl, language, source, submitted]);
+
+  /* A search resolves against the library first. Only a miss goes to the
+     scrapers — matching the library means we already hold the links. */
+  const handleSearch = useCallback((term) => {
+    const q = (term ?? query).trim();
+    if (!q) return;
+    setSubmitted(q);
+    setParams(q ? { q } : {}, { replace: true });
+    setWebResults([]);
+    setWebSearched(false);
+    setError("");
+
+    const lower = q.toLowerCase();
+    const hit = catalog.some((e) => e.downloadable &&
+      (e.title.toLowerCase().includes(lower) || e.cleanTitle.toLowerCase().includes(lower)));
+    if (!hit) runWebSearch(q);
+  }, [query, catalog, runWebSearch, setParams]);
+
+  /* Arriving from a catalogue card (?q=…) runs the search once the catalogue
+     is in hand, so a library title isn't sent to the scrapers by mistake. */
+  const autoRan = useRef(false);
+  useEffect(() => {
+    const q = params.get("q");
+    if (!q || autoRan.current || !catalogReady) return;
+    autoRan.current = true;
+    setQuery(q);
+    handleSearch(q);
+  }, [params, catalogReady, handleSearch]);
+
+  const hasLibrary = libraryMatches.length > 0;
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #050505; color: #e0e0e0; }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes spin   { to   { transform: rotate(360deg); } }
-        .t-input:focus { outline: none; border-color: #ff3c3c !important; }
-        .t-input::placeholder { color: #252525; }
-        select:focus { outline: none; }
-        select option { background: #0a0a0a; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #050505; }
-        ::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
-      `}</style>
+    <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-8 py-10">
+      <Helmet><title>Torrent Search | 1AnchorMovies</title></Helmet>
 
-      <div style={{ minHeight: "100vh", background: "#050505", fontFamily: "'Space Mono', monospace", position: "relative", overflow: "hidden" }}>
+      <div className="max-w-4xl mx-auto">
+        {/* ── Header ── */}
+        <header className="mb-8 border-b border-gray-900 pb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Magnet className="w-6 h-6 text-red-500" />
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter italic">Torrent Search</h1>
+          </div>
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">
+            Our library first · then 1TamilMV &amp; PirateBay
+          </p>
+        </header>
 
-        {/* Grid bg */}
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
-          backgroundImage: `linear-gradient(rgba(255,60,60,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,60,60,0.03) 1px,transparent 1px)`,
-          backgroundSize: "40px 40px",
-        }} />
-
-        <div style={{ position: "relative", zIndex: 1, maxWidth: "900px", margin: "0 auto", padding: "60px 24px 80px" }}>
-
-          {/* ── Header ── */}
-          <div style={{ marginBottom: "48px", animation: "fadeUp 0.5s ease both" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ff3c3c", animation: "spin 3s linear infinite" }} />
-              <span style={{ fontSize: "10px", letterSpacing: "0.25em", color: "#555", textTransform: "uppercase" }}>Torrent Engine v2.0</span>
+        {/* ── Search panel ── */}
+        <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 mb-8">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
+              <input
+                type="text"
+                placeholder="Movie or series name…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="w-full pl-11 pr-4 py-3 bg-gray-950 border border-white/5 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition placeholder:text-gray-700"
+              />
             </div>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "clamp(32px,6vw,56px)", lineHeight: 1, letterSpacing: "-0.02em", color: "#fff", marginBottom: "8px" }}>
-              SEARCH<br /><span style={{ color: "#ff3c3c" }}>TORRENTS</span>
-            </h1>
-            <p style={{ fontSize: "11px", color: "#444", letterSpacing: "0.1em" }}>1TAMILMV · PIRATEBAY · MAGNET · DIRECT · TORRENT FILE</p>
+            <button
+              onClick={() => handleSearch()}
+              disabled={webLoading || !query.trim()}
+              className="px-8 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95 flex items-center justify-center gap-2">
+              {webLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Scanning</> : "Search"}
+            </button>
           </div>
 
-          {/* ── Search panel ── */}
-          <div style={{ background: "#090909", border: "1px solid #1a1a1a", borderRadius: "6px", overflow: "hidden", marginBottom: "32px", animation: "fadeUp 0.5s ease 0.1s both" }}>
+          {/* Web-source controls — only relevant to the fallback search */}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest mr-1">Web source:</span>
+            {SOURCES.map((s) => (
+              <button key={s.id} onClick={() => setSource(s.id)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition ${
+                  source === s.id
+                    ? "bg-red-500/10 text-red-400 border-red-500/40"
+                    : "bg-white/[0.02] text-gray-600 border-white/5 hover:text-gray-400"
+                }`}>
+                {s.id}
+              </button>
+            ))}
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="ml-auto bg-gray-950 border border-white/5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-gray-400 outline-none focus:border-blue-500">
+              {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+        </div>
 
-            {/* Source tabs */}
-            <div style={{ display: "flex", borderBottom: "1px solid #111" }}>
-              {SOURCES.map(s => (
-                <button key={s} onClick={() => setSource(s)} style={{
-                  flex: 1, padding: "12px", background: source === s ? "#0f0f0f" : "transparent",
-                  border: "none", borderBottom: source === s ? "2px solid #ff3c3c" : "2px solid transparent",
-                  color: source === s ? "#fff" : "#444",
-                  fontFamily: "'Space Mono', monospace", fontSize: "11px",
-                  letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer", transition: "all 0.2s",
-                }}>{s}</button>
-              ))}
+        {/* ── Library results ── */}
+        {hasLibrary && (
+          <section className="mb-10">
+            <div className="flex items-center gap-3 mb-4">
+              <Library className="w-4 h-4 text-blue-400" />
+              <h2 className="text-sm font-black text-blue-400 uppercase tracking-widest">From our library</h2>
+              <span className="text-[10px] font-bold text-gray-700">{libraryMatches.length} match{libraryMatches.length > 1 ? "es" : ""}</span>
+              <div className="flex-1 h-px bg-gray-900" />
             </div>
 
-            <div style={{ padding: "20px" }}>
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <div className="flex flex-col gap-4">
+              {libraryMatches.map((entry) => <LibraryCard key={entry.key} entry={entry} />)}
+            </div>
 
-                {/* Movie name */}
-                <div style={{ flex: "2 1 200px", position: "relative" }}>
-                  <div style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#2a2a2a", fontSize: "13px", pointerEvents: "none" }}>🎬</div>
-                  <input
-                    className="t-input"
-                    type="text"
-                    placeholder="Movie name..."
-                    value={movieName}
-                    onChange={e => setMovieName(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleSearch()}
-                    style={{ width: "100%", padding: "12px 14px 12px 38px", background: "#050505", border: "1px solid #1a1a1a", borderRadius: "4px", color: "#e0e0e0", fontFamily: "'Space Mono', monospace", fontSize: "13px", transition: "border-color 0.2s" }}
-                  />
-                </div>
-
-                {/* Language */}
-                <div style={{ flex: "1 1 140px", position: "relative" }}>
-                  <select
-                    value={language}
-                    onChange={e => setLanguage(e.target.value)}
-                    style={{ width: "100%", padding: "12px 14px", background: "#050505", border: "1px solid #1a1a1a", borderRadius: "4px", color: source === "1TamilMV" ? "#e0e0e0" : "#555", fontFamily: "'Space Mono', monospace", fontSize: "13px", cursor: "pointer", appearance: "none", WebkitAppearance: "none" }}
-                  >
-                    {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                  <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "#444", pointerEvents: "none", fontSize: "10px" }}>▼</div>
-                </div>
-
-                {/* Search button */}
-                <button
-                  onClick={handleSearch}
-                  disabled={loading || !movieName.trim()}
-                  style={{ flex: "0 0 auto", padding: "12px 28px", background: loading ? "#1a0a0a" : "#ff3c3c", border: "none", borderRadius: "4px", color: loading ? "#ff3c3c" : "#fff", fontFamily: "'Space Mono', monospace", fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", cursor: loading ? "not-allowed" : "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: "8px" }}
-                  onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#cc2222"; }}
-                  onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#ff3c3c"; }}
-                >
-                  {loading
-                    ? <><div style={{ width: "12px", height: "12px", border: "2px solid #ff3c3c33", borderTopColor: "#ff3c3c", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />SCANNING</>
-                    : "SEARCH"
-                  }
+            {/* The web is still one click away when our copy isn't what they want. */}
+            {!webSearched && (
+              <div className="flex justify-center mt-6">
+                <button onClick={() => runWebSearch()}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-black uppercase tracking-widest transition-all active:scale-95">
+                  <Globe className="w-3.5 h-3.5" /> Search {source} as well
                 </button>
               </div>
+            )}
+          </section>
+        )}
 
-              <p style={{ marginTop: "12px", fontSize: "10px", color: "#1e1e1e", letterSpacing: "0.08em" }}>
-                {source === "1TamilMV"
-                  ? "↳ 1TamilMV · magnet + direct link + .torrent file"
-                  : `↳ PirateBay · searching "${movieName || "..."} ${language}" sorted by seeders`}
-              </p>
-            </div>
+        {/* ── Error ── */}
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs font-bold mb-6">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
           </div>
+        )}
 
-          {/* ── Error ── */}
-          {error && (
-            <div style={{ padding: "16px 20px", background: "#ff3c3c11", border: "1px solid #ff3c3c33", borderRadius: "4px", color: "#ff5555", fontSize: "12px", marginBottom: "24px", fontFamily: "'Space Mono', monospace", animation: "fadeUp 0.3s ease both" }}>
-              ⚠ {error}
+        {/* ── Web results ── */}
+        {webLoading && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+            <p className="text-gray-600 font-mono uppercase tracking-widest text-[10px]">Scanning {source}…</p>
+          </div>
+        )}
+
+        {webSearched && !webLoading && !error && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <Globe className="w-4 h-4 text-gray-500" />
+              <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest">{source} results</h2>
+              <span className="text-[10px] font-bold text-gray-700">{webResults.length} found</span>
+              <div className="flex-1 h-px bg-gray-900" />
             </div>
-          )}
 
-          {/* ── Results ── */}
-          {searched && !loading && (
-            <div style={{ animation: "fadeUp 0.4s ease both" }}>
-
-              {/* Result count header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", padding: "0 4px" }}>
-                <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "18px", color: "#e0e0e0", letterSpacing: "-0.01em" }}>
-                  Search Results{" "}
-                  <span style={{ color: "#333", fontSize: "14px", fontWeight: 700 }}>({results.length} found)</span>
-                </span>
-                <span style={{ fontSize: "9px", color: "#222", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "'Space Mono', monospace" }}>
-                  Provider: {source.toUpperCase()}
-                </span>
+            {webResults.length === 0 ? (
+              <div className="py-14 text-center rounded-2xl border border-white/5 bg-white/[0.02]">
+                <p className="text-gray-500 font-black uppercase tracking-widest text-xs">No results found</p>
+                <p className="text-gray-700 text-[11px] mt-1.5">Try a different title, source or language.</p>
               </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {webResults.map((item, i) => <WebResultCard key={`${item.magnet || item.title || i}-${i}`} item={item} />)}
+              </div>
+            )}
+          </section>
+        )}
 
-              {results.length === 0 ? (
-                <div style={{ padding: "56px", textAlign: "center", background: "#090909", border: "1px solid #111", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "32px", marginBottom: "12px", color: "#1a1a1a" }}>◎</div>
-                  <p style={{ fontSize: "12px", letterSpacing: "0.1em", color: "#2a2a2a", fontFamily: "'Space Mono', monospace" }}>NO RESULTS FOUND</p>
-                  <p style={{ fontSize: "10px", marginTop: "6px", color: "#1a1a1a", fontFamily: "'Space Mono', monospace" }}>Try a different title or language</p>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {results.map((item, i) => (
-                    <ResultCard key={i} item={item} index={i} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Footer ── */}
-          <div style={{ marginTop: "60px", paddingTop: "24px", borderTop: "1px solid #0f0f0f", display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: "9px", color: "#181818", letterSpacing: "0.2em", fontFamily: "'Space Mono', monospace" }}>ANCHOR · TORRENT ENGINE</span>
-            <span style={{ fontSize: "9px", color: "#181818", letterSpacing: "0.1em", fontFamily: "'Space Mono', monospace" }}>/search?movie=&lang=&source=</span>
+        {/* ── Idle state ── */}
+        {!submitted && (
+          <div className="py-16 text-center">
+            <Magnet className="w-12 h-12 text-gray-800 mx-auto mb-4" />
+            <p className="text-gray-600 font-black uppercase tracking-widest text-xs">Search for a title</p>
+            <p className="text-gray-700 text-[11px] mt-1.5 max-w-sm mx-auto">
+              Titles we host answer straight from our own library. Anything else goes out to {source}.
+            </p>
           </div>
+        )}
 
-        </div>
+        {/* Nothing anywhere — library missed and the web search came back empty */}
+        {submitted && !hasLibrary && !webSearched && !webLoading && !error && (
+          <div className="py-16 text-center">
+            <Loader2 className="w-6 h-6 text-gray-700 animate-spin mx-auto" />
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
-}
+};
+
+export default TorrentSearch;
