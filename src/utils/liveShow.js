@@ -122,6 +122,13 @@ export const liveStatus = (show, now = new Date()) => {
 export const liveStatusFor = (movieOrSlug, now = new Date()) =>
   liveStatus(getLiveShow(movieOrSlug), now);
 
+/* "Is this on the wire RIGHT NOW", as against isLiveShow's "does this title ever
+   go out live". The distinction matters on the watch page: outside the window
+   the title is an ordinary one with episodes and downloads, and treating it as
+   live all day long hid those behind a player with nothing to play. */
+export const isLiveNow = (movieOrSlug, now = new Date()) =>
+  liveStatusFor(movieOrSlug, now).live === true;
+
 /* A shared clock for anything that has to flip itself at 9:30 and again at
    10:30 without the viewer reloading. 20s is fine — the badge only needs to
    be right to within a card's worth of attention. */

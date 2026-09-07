@@ -9,7 +9,7 @@ import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
 import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
-import { getLiveShow, isLiveShow, liveStatus, useLiveClock } from "../utils/liveShow";
+import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveShow";
 import { toast } from "react-toastify";
 import {
   Loader2, Star, Play, ShieldCheck,
@@ -196,10 +196,16 @@ const lookupMx = async (title, isTV) => {
    So a title we host never opens on a third-party embed, and a title we don't
    host opens on Omega. */
 const buildServers = (meta, eps = []) => {
-  /* A nightly live telecast goes out on our own feed and nowhere else — no
-     third-party server carries it, so listing them would only hand the viewer
-     a row of dead ends. AnchorHD is the whole menu. */
-  if (isLiveShow(meta)) {
+  /* WHILE IT IS ON AIR, a nightly telecast goes out on our own feed and nowhere
+     else — no third-party server carries it, so listing them would hand the
+     viewer a row of dead ends. AnchorHD is then the whole menu.
+
+     Outside the window it is an ordinary title again: the episodes already
+     aired are on Drive and play from their download links, so the normal server
+     list applies. Gating this on "is a live show" rather than "is live now"
+     left the page showing a live-only player all day, with the episodes and
+     downloads unreachable. */
+  if (isLiveNow(meta)) {
     return [{ id: "ourhls", name: "AnchorHD", label: "Live · Our CDN", icon: <Video size={14} /> }];
   }
   const srv = [];
@@ -336,6 +342,20 @@ const WatchHtmlPage = () => {
   // Ticks every 20s so the live pill and its CTA flip themselves at 9:30 and
   // again at 10:30 without the viewer reloading the page.
   const liveClock = useLiveClock();
+
+  /* The server list is built once, when the title loads. A page left open
+     across 9:30 would therefore keep the menu it started with — the live-only
+     one before the telecast, or the ordinary one after it had begun. Rebuild it
+     the moment the show goes on or off air, and only for a title that has a
+     telecast at all, so nothing else pays for this. */
+  const onAir = isLiveNow(movieMeta, liveClock);
+  useEffect(() => {
+    if (!movieMeta || !getLiveShow(movieMeta)) return;
+    const srv = buildServers(movieMeta, episodes);
+    setAvailableServers(srv);
+    setActiveServer((prev) => (prev && srv.some((x) => x.id === prev.id)) ? prev : srv[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onAir]);
 
   // Index of the currently-playing episode within the flat episodes list (for the
   // in-player episode switcher + auto-next).
@@ -757,7 +777,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
     autoPlayedRef.current = true;
 
-    if (isLiveShow(movieMeta)) { handlePlayAction(null, "ourhls"); return; }
+    // Only hand play straight to the live feed while it is actually on air;
+    // otherwise fall through to the normal episode/AnchorHD path below.
+    if (isLiveNow(movieMeta)) { handlePlayAction(null, "ourhls"); return; }
 
     /* AnchorHD (our own R2 stream) plays immediately — that's the whole point of
        coming straight from the detail overlay. Anything else needs a choice, so
