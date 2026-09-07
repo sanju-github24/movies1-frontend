@@ -642,22 +642,25 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
     if (!movieMeta) return;
 
-    /* Live telecast: one source, one window. Outside it there is nothing on the
-       wire, so we say when it starts rather than opening the player onto a dead
-       feed. The stream is a player page carrying its own signed params, so it
-       goes in as an embed — not through hls.js, and never through the proxy. */
+    /* Live telecast, WHILE IT IS ON AIR: one source, one window. The stream is a
+       player page carrying its own signed params, so it goes in as an embed —
+       not through hls.js, and never through the proxy.
+
+       Off air we fall through to the ordinary path. This used to announce the
+       start time and return, which meant that for the rest of the day every
+       play — the hero button, an episode, a chosen server — was swallowed here,
+       and the episodes already aired could not be opened at all. The countdown
+       still shows in the badge; it just no longer stands in for playback. */
     const live = getLiveShow(movieMeta);
     if (live) {
       const st = liveStatus(live);
-      if (!st.live) {
-        toast.info(`${live.name} is live at ${live.startLabel} IST — starts in ${st.countdown}.`);
+      if (st.live) {
+        setFinalSource(live.streamUrl);
+        setSourceType(null);
+        setVideoTitle(`${movieMeta.title || live.name} — ${st.episodeLabel} · LIVE`);
+        setShowOverlay(true);
         return;
       }
-      setFinalSource(live.streamUrl);
-      setSourceType(null);
-      setVideoTitle(`${movieMeta.title || live.name} — ${st.episodeLabel} · LIVE`);
-      setShowOverlay(true);
-      return;
     }
 
     let serverId   = forceServer || activeServer?.id || availableServers[0]?.id;
@@ -1546,14 +1549,14 @@ if (!alive) return;
                 handlePlayAction(firstEp);
               }}
                 className={`group relative overflow-hidden px-8 py-4 sm:py-3.5 min-h-[48px] text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation
-                  ${live && !live.live
-                    ? "bg-white/10 border border-white/10 cursor-not-allowed shadow-none"
-                    : live
-                      ? "bg-red-600 shadow-red-600/25 hover:shadow-red-600/50"
-                      : "bg-blue-600 shadow-blue-600/25 hover:shadow-blue-600/50"}`}>
+                  ${live && live.live
+                    ? "bg-red-600 shadow-red-600/25 hover:shadow-red-600/50"
+                    : "bg-blue-600 shadow-blue-600/25 hover:shadow-blue-600/50"}`}>
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <div className="relative p-1.5 bg-white/20 rounded-lg"><Play size={14} fill="currentColor"/></div>
-                <span className="relative">{live ? live.cta : (isTVShow ? "Stream Now" : "Play Now")}</span>
+                {/* Off air the button plays the aired episodes, so it must say so —
+                    the start time is still on the badge above. */}
+                <span className="relative">{live && live.live ? live.cta : (isTVShow ? "Stream Now" : "Play Now")}</span>
               </button>
               {movieMeta.download_links?.length > 0 && (
                 <button onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior:"smooth" })}
