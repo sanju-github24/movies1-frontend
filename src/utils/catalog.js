@@ -69,6 +69,25 @@ const normDownloads = (raw) => asArray(raw).map((d, i) => {
   };
 }).filter((d) => d.magnet || d.direct || d.gpLink);
 
+/* watch_html.download_links — our OWN drive, one block per quality, each
+   holding one link for a movie or one per episode for a series:
+     [{ size, quality, links: [{ url, path, label }] }]
+   The stored `url` can be a time-signed link that has since lapsed, so the
+   `path` is kept alongside it: the torrent page re-signs by path and falls
+   back to the stored url, the same way the watch page does. */
+const normDrive = (raw) => asArray(raw).map((b, i) => ({
+  id: `drv-${i}`,
+  quality: (b?.quality || "").trim() || `Set ${i + 1}`,
+  size: (b?.size || "").trim() || null,
+  links: asArray(b?.links)
+    .filter((l) => l && (l.url || l.path))
+    .map((l, j) => ({
+      url: (l.url || "").trim() || null,
+      path: (l.path || "").trim() || null,
+      label: (l.label || "").trim() || `Link ${j + 1}`,
+    })),
+})).filter((b) => b.links.length > 0);
+
 const MOVIE_COLS = "id,slug,title,poster,language,categories,subCategory,description,created_at,downloads,watchUrl,download_page_url";
 const WATCH_COLS = "slug,title,poster,cover_poster,title_logo,genres,imdb_rating,content_type,created_at,episodes,download_links,hls_url,video_url,html_code";
 
@@ -92,6 +111,7 @@ const buildCatalog = async () => {
     const streamable = !!(w && (w.hls_url || w.video_url || w.html_code ||
       (Array.isArray(w.episodes) && w.episodes.length)));
     const downloads = normDownloads(m.downloads);
+    const driveLinks = normDrive(w?.download_links);
     return {
       key: m.id || m.slug,
       title: m.title || w?.title || m.slug,
@@ -102,8 +122,9 @@ const buildCatalog = async () => {
       movieSlug: m.slug,
       streamable,
       downloads,
+      driveLinks,
       downloadPageUrl: m.download_page_url || null,
-      downloadable: downloads.length > 0 || !!m.download_page_url,
+      downloadable: downloads.length > 0 || driveLinks.length > 0 || !!m.download_page_url,
       poster: w?.poster || m.poster || "/default-poster.jpg",
       cover: w?.cover_poster || w?.poster || m.poster || "/default-cover.jpg",
       titleLogo: w?.title_logo || null,

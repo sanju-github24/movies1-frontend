@@ -16,8 +16,9 @@ import { useSearchParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
   Search, Loader2, Magnet, Download, ExternalLink, Copy, Check,
-  Play, Globe, Library, AlertCircle, HardDrive, Users,
+  Play, Globe, Library, AlertCircle, HardDrive, Users, HardDriveDownload,
 } from "lucide-react";
+import axios from "axios";
 import { AppContext } from "../context/AppContext";
 import { loadCatalog } from "../utils/catalog";
 
@@ -77,7 +78,9 @@ function LinkBtn({ href, label, icon, tone = "blue" }) {
 }
 
 /* ── One of our own catalogue titles, with the links we already hold ── */
-function LibraryCard({ entry }) {
+function LibraryCard({ entry, signedLinks = {} }) {
+  // A lapsed signed link is replaced by a freshly minted one where we got it.
+  const liveUrl = (l) => (l.path && signedLinks[l.path]) || l.url || null;
   return (
     <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] overflow-hidden">
       <div className="flex gap-4 p-4">
@@ -107,7 +110,45 @@ function LibraryCard({ entry }) {
         </div>
       </div>
 
-      {/* Stored download options */}
+      {/* Our own drive — the copies we host ourselves, ahead of any torrent. */}
+      {entry.driveLinks.length > 0 && (
+        <div className="border-t border-white/5 bg-green-500/[0.03]">
+          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+            <HardDriveDownload className="w-3.5 h-3.5 text-green-400" />
+            <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Our drive</span>
+            <span className="text-[9px] font-bold text-gray-700">direct · no torrent client</span>
+          </div>
+          <div className="divide-y divide-white/5">
+            {entry.driveLinks.map((block) => (
+              <div key={block.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3 mb-2.5">
+                  <p className="text-[12px] font-bold text-gray-300 leading-snug flex-1">{block.quality}</p>
+                  {block.size && (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-black text-gray-500 uppercase">
+                      <HardDrive className="w-3 h-3" /> {block.size}
+                    </span>
+                  )}
+                </div>
+                {/* One link for a movie, one per episode for a series. */}
+                <div className="flex flex-wrap gap-2">
+                  {block.links.map((l, i) => (
+                    <LinkBtn
+                      key={`${block.id}-${i}`}
+                      href={liveUrl(l)}
+                      label={l.label}
+                      tone="green"
+                      icon={<Download className="w-3 h-3" />}
+                    />
+                  ))}
+                  {block.links.length === 1 && <CopyBtn text={liveUrl(block.links[0])} label="Copy Link" />}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Torrent / mirror options stored against the catalogue entry */}
       <div className="border-t border-white/5 divide-y divide-white/5">
         {entry.downloads.map((d) => (
           <div key={d.id} className="px-4 py-3">
@@ -127,7 +168,7 @@ function LibraryCard({ entry }) {
             </div>
           </div>
         ))}
-        {entry.downloads.length === 0 && entry.downloadPageUrl && (
+        {entry.downloads.length === 0 && entry.driveLinks.length === 0 && entry.downloadPageUrl && (
           <div className="px-4 py-3">
             <LinkBtn href={entry.downloadPageUrl} label="Download Page" tone="amber" icon={<ExternalLink className="w-3 h-3" />} />
           </div>
@@ -200,6 +241,7 @@ const TorrentSearch = () => {
   const [webLoading, setWebLoading] = useState(false);
   const [webSearched, setWebSearched] = useState(false);
   const [submitted, setSubmitted] = useState(params.get("q") || "");
+  const [signedLinks, setSignedLinks] = useState({});   // drive path → fresh signed url
   const [error, setError] = useState("");
 
   // The catalogue loads in the background; the web search never waits on it.
@@ -220,6 +262,32 @@ const TorrentSearch = () => {
         (e.title.toLowerCase().includes(q) || e.cleanTitle.toLowerCase().includes(q)))
       .slice(0, 12);
   }, [catalog, submitted]);
+
+  /* Stored drive links can be time-signed and long since lapsed, so mint a
+     fresh one per path — exactly what the watch page does for its download
+     section. A failure is harmless: the button keeps the stored URL. The cap
+     keeps a series with dozens of episodes from firing dozens of requests. */
+  useEffect(() => {
+    const paths = [...new Set(
+      libraryMatches.flatMap((e) => e.driveLinks.flatMap((b) => b.links.map((l) => l.path)))
+        .filter(Boolean)
+    )].slice(0, 60);
+    if (!paths.length || !backendUrl) return;
+
+    let alive = true;
+    (async () => {
+      const pairs = await Promise.all(paths.map(async (path) => {
+        try {
+          const { data } = await axios.get(`${backendUrl}/api/download-link`, {
+            params: { path, hours: 24 }, timeout: 10000,
+          });
+          return data?.success && data.url ? [path, data.url] : null;
+        } catch { return null; }
+      }));
+      if (alive) setSignedLinks((prev) => ({ ...prev, ...Object.fromEntries(pairs.filter(Boolean)) }));
+    })();
+    return () => { alive = false; };
+  }, [libraryMatches, backendUrl]);
 
   const runWebSearch = useCallback(async (term) => {
     const movie = (term ?? submitted).trim();
@@ -344,7 +412,9 @@ const TorrentSearch = () => {
             </div>
 
             <div className="flex flex-col gap-4">
-              {libraryMatches.map((entry) => <LibraryCard key={entry.key} entry={entry} />)}
+              {libraryMatches.map((entry) => (
+                <LibraryCard key={entry.key} entry={entry} signedLinks={signedLinks} />
+              ))}
             </div>
 
             {/* The web is still one click away when our copy isn't what they want. */}
