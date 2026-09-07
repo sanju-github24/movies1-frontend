@@ -6,6 +6,7 @@ import { Copy, CornerRightDown, Zap, Film, MonitorPlay, Clock, Sparkles, Chevron
 import { AppContext } from "../context/AppContext";
 import MatchCenter from "../paged/MatchCenter";
 import MobileDetailSheet from "./MobileDetailSheet";
+import { LIVE_SHOWS, liveStatus, useLiveClock } from "../utils/liveShow";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -159,6 +160,105 @@ function Dot({ color="#ef4444", size=5 }) {
       <span className="relative inline-flex rounded-full h-full w-full"
         style={{background:color}}/>
     </span>
+  );
+}
+
+// ─── ON-AIR BANNER ────────────────────────────────────────────────────────────
+/* A nightly telecast that's mid-broadcast. Deliberately unlike the live-sports
+   strip above it: sports is a muted card built around a running score, so it
+   stays quiet and factual. A telecast has no score — the only thing worth
+   saying is that it's on right now and for how much longer — so this one is
+   loud on purpose: the show's own backdrop, an equalizer instead of a ping
+   dot, and a red edge that makes it the first thing the eye lands on. It
+   exists only while the show is actually on air. */
+function OnAirBars() {
+  return (
+    <span className="flex items-end gap-[3px] h-4 shrink-0" aria-hidden="true">
+      {[0, 180, 360, 120].map((delay, i) => (
+        <span key={i}
+          className="onair-bar w-[3px] h-full rounded-full bg-red-500"
+          style={{ animationDelay: `${delay}ms` }} />
+      ))}
+    </span>
+  );
+}
+
+function LiveShowBanner() {
+  const navigate = useNavigate();
+  const clock = useLiveClock();
+  const [row, setRow] = useState(null);
+
+  // Whichever telecast is on air this minute, if any.
+  const onAir = useMemo(() => {
+    for (const show of Object.values(LIVE_SHOWS)) {
+      const st = liveStatus(show, clock);
+      if (st.live) return { show, st };
+    }
+    return null;
+  }, [clock]);
+
+  const slug = onAir?.show.slug || null;
+
+  /* Artwork comes from the show's own row, so the banner never drifts from
+     what the rest of the site shows for it. */
+  useEffect(() => {
+    if (!slug) { setRow(null); return; }
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("watch_html")
+        .select("slug,title,poster,cover_poster,title_logo").eq("slug", slug).limit(1);
+      if (alive) setRow(data?.[0] || null);
+    })();
+    return () => { alive = false; };
+  }, [slug]);
+
+  if (!onAir) return null;
+  const { show, st } = onAir;
+  const art = row?.cover_poster || row?.poster || null;
+
+  return (
+    <button
+      onClick={() => navigate(`/watch/${show.slug}`)}
+      className="w-full max-w-7xl mt-4 text-left group relative overflow-hidden rounded-2xl border border-red-500/30 hover:border-red-500/60 transition-all duration-300 active:scale-[0.995] shadow-[0_0_40px_rgba(239,68,68,0.12)] hover:shadow-[0_0_60px_rgba(239,68,68,0.22)]"
+    >
+      {art && (
+        <img src={art} alt="" aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-40 scale-105 group-hover:opacity-55 group-hover:scale-110 transition-all duration-700" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/85 to-gray-950/30" />
+      <span className="absolute left-0 inset-y-0 w-[3px] bg-red-500 shadow-[0_0_20px_#ef4444]" />
+
+      <div className="relative flex items-center gap-3 sm:gap-4 pl-4 pr-3 sm:pl-5 sm:pr-4 py-3.5">
+        <OnAirBars />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.25em] text-white bg-red-600 px-2 py-[3px] rounded-full leading-none">
+              On Air
+            </span>
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-red-300">
+              {st.episodeLabel}
+            </span>
+            <span className="text-[9px] text-gray-500 font-bold">
+              · {st.minutesLeft}m left
+            </span>
+          </div>
+
+          {row?.title_logo ? (
+            <img src={row.title_logo} alt={row?.title || show.name}
+              className="h-6 sm:h-8 w-auto max-w-[70%] object-contain object-left mt-1.5 drop-shadow-lg" />
+          ) : (
+            <p className="text-[13px] sm:text-[15px] font-black text-white truncate mt-1 uppercase italic tracking-tight">
+              {row?.title || show.name}
+            </p>
+          )}
+        </div>
+
+        <span className="shrink-0 flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-white bg-red-600 group-hover:bg-red-500 px-3 py-2 rounded-xl transition-colors">
+          Watch Live <ChevronRight className="w-3 h-3" />
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -396,6 +496,9 @@ const Header = () => {
 
   return (
     <div className="flex flex-col items-center mt-1 px-4 sm:px-5 w-full bg-gray-950 min-h-screen">
+
+      {/* ── ON-AIR TELECAST ─────────────────────────────────────────────── */}
+      <LiveShowBanner />
 
       {/* ── LIVE MATCH STRIP ────────────────────────────────────────────── */}
       <LiveMatchStrip />
