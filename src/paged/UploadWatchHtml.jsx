@@ -11,6 +11,19 @@ import {
   Layers, Database, Tv, Layout, Monitor, Film, RotateCcw, Save, X, Eye, EyeOff, TrendingUp, Languages
 } from "lucide-react";
 
+/* Tell search engines a title page is new or changed, so an upload is offered
+   to them rather than waiting to be stumbled upon. Fire and forget — a page
+   that saved correctly must never be reported as failed because a search
+   engine was unreachable. */
+const announceToSearch = (backendUrl, slug) => {
+  if (!backendUrl || !slug) return;
+  fetch(`${backendUrl}/api/index-now`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ slug }),
+  }).catch(() => { /* indexing is a courtesy, never a failure */ });
+};
+
 /* ================= EDITABLE ITEM COMPONENT (STUDIO EDITOR) ================= */
 const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -83,6 +96,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
 
       if (!error) {
         toast.success("Studio Sync Successful!");
+        announceToSearch(backendUrl, editData.slug || item.slug);
         setIsEditing(false);
         fetchWatchPages();
       } else throw error;
@@ -361,6 +375,7 @@ const UploadWatchHtml = () => {
       
       if (!error) {
         toast.success("Deployed!");
+        announceToSearch(backendUrl, formData.slug);
         setFormData(initialForm);
         setEpisodes([{ title: "", html: "", direct_url: "", season: 1, tmdb_id: "" }]);
         fetchWatchPages();
