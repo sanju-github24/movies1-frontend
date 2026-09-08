@@ -7,6 +7,7 @@ import { supabase } from "./utils/supabaseClient";
 // --- Components & Pages Imports ---
 import Navbar from './components/Navbar';
 import CategoryBar from './components/CategoryBar';
+import SiteFooter from './components/SiteFooter';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -298,6 +299,11 @@ const AppContent = () => {
           <AdPopup />
         </>
       )}
+
+      {/* Crawlable links into the catalogue, on every page that has chrome.
+          Without this the language collections had nothing pointing at them:
+          the navbar's dropdown renders no markup until it is opened. */}
+      {!hideNavbar && <SiteFooter />}
 
       {/* Persistent music mini player — shows on all pages when minimized */}
       <PersistentMiniPlayer />

@@ -1573,6 +1573,19 @@ if (!alive) return;
                   {typeof g === "object" ? g.name : g}
                 </span>
               ))}
+              {/* The audio languages, as links to their collections. Useful to
+                  someone who wants more of the same, and it is the only path a
+                  crawler has from a title back into the catalogue — this page
+                  hides the site chrome, footer included. */}
+              {dlLangs.slice(0, 4).map((lang) => (
+                <Link
+                  key={lang}
+                  to={`/category/${encodeURIComponent(lang)}`}
+                  className="text-blue-300 hover:text-white text-[9px] font-black uppercase bg-blue-500/10 border border-blue-500/30 px-2.5 py-1.5 rounded-lg transition"
+                >
+                  {lang}
+                </Link>
+              ))}
               {live && (
                 <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border
                   ${live.live ? "text-white bg-red-600 border-red-500" : "text-red-300 bg-red-500/10 border-red-500/30"}`}>

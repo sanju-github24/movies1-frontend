@@ -41,6 +41,17 @@ const CategoryPage = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  /* Tell the prerenderer when this page is worth snapshotting.
+
+     Its readiness test is "there is a canonical and the root has text", and
+     both are true the instant this component paints — while it still says
+     "Loading Kannada collection…". Crawlers were being handed an empty
+     collection page. The flag goes up only once the catalogue has arrived. */
+  useEffect(() => {
+    document.documentElement.dataset.prerender = loading ? "loading" : "ready";
+    return () => { delete document.documentElement.dataset.prerender; };
+  }, [loading]);
+
   // A new language means a fresh set of filters.
   useEffect(() => { setActiveSub("All"); setSearch(""); setShown(PAGE_SIZE); }, [pageName]);
 
