@@ -9,9 +9,42 @@
  * Nothing here is hidden or stuffed — these are six pages that exist, named
  * for what they contain.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Send } from "lucide-react";
 import NotifyButton from "./NotifyButton";
+
+const API = import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
+
+/* The channel invitation, on every page.
+   A channel nobody can find announces to nobody — and a visitor who joins is
+   worth far more than one who reads a page and leaves, because they see every
+   upload from then on without having to find us again. The link comes from the
+   server so it always matches the channel actually configured, and nothing is
+   rendered at all when there is no channel to join. */
+const TelegramLink = () => {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API}/api/telegram/channel`)
+      .then((r) => r.json())
+      .then((d) => { if (alive && d?.enabled && d.url) setUrl(d.url); })
+      .catch(() => { /* no channel, no invitation */ });
+    return () => { alive = false; };
+  }, []);
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase
+                 tracking-widest bg-sky-600 hover:bg-sky-500 border border-sky-500 text-white transition"
+    >
+      <Send size={14} /> Join our Telegram
+    </a>
+  );
+};
 
 const LANGUAGES = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
@@ -50,8 +83,11 @@ const SiteFooter = () => (
         <p className="text-white font-black uppercase tracking-widest mb-3">AnchorMovies</p>
         <p className="mb-4">Movies and web series in Tamil, Telugu, Kannada, Hindi, Malayalam and
            English — streaming in HD with download links.</p>
-        {/* The one channel that does not depend on anyone's ranking algorithm. */}
-        <NotifyButton />
+        {/* The two channels that do not depend on anyone's ranking algorithm. */}
+        <div className="flex flex-wrap gap-2">
+          <NotifyButton />
+          <TelegramLink />
+        </div>
       </div>
     </div>
   </footer>
