@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -12,49 +12,48 @@ import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
 import ResetPassword from './paged/ResetPassword';
-import MovieDetail from './paged/MovieDetail';
-import SearchResults from './paged/SearchResults';
-import SearchPage from './paged/SearchPage';
+const MovieDetail = lazy(() => import('./paged/MovieDetail'));
+const SearchResults = lazy(() => import('./paged/SearchResults'));
+const SearchPage = lazy(() => import('./paged/SearchPage'));
 import CategoryPage from './components/CategoryPage';
 import LatestUploads from './components/LatestUploads';
 import { AppContext } from './context/AppContext';
-import AdminUpload from './context/AdminUpload';
-import BlogEditor from './components/BlogEditor';
-import BlogList from './components/BlogList';
-import BlogViewer from './components/BlogViewer';
-import AdminDashboard from './paged/AdminDashboard';
-import AdminStories from "./paged/AdminStories";
+const AdminUpload = lazy(() => import('./context/AdminUpload'));
+const BlogEditor = lazy(() => import('./components/BlogEditor'));
+const BlogList = lazy(() => import('./components/BlogList'));
+const BlogViewer = lazy(() => import('./components/BlogViewer'));
+const AdminDashboard = lazy(() => import('./paged/AdminDashboard'));
+const AdminStories = lazy(() => import('./paged/AdminStories'));
 import AdScriptLoader from './components/AdScriptLoader';
 import AdPopup from './components/AdPopup';
 import PopAdsScript from './components/PopAdsScript';
 import MbidadmBanner from './components/MbidadmBanner';
-import Profile from "./paged/Profile";
-import UploadWatchHtml from './paged/UploadWatchHtml';
-import WatchPage from './paged/WatchPage';
-import AdminMembers from "./paged/AdminMembers";
-import WatchListPage from "./paged/WatchListPage";
-import MXWatch from "./paged/MXWatch";
-import HlsWatch from "./paged/HlsWatch";
-import AdminUp4streamFiles from './components/AdminUp4streamFiles';
-import VideoPlayerPage from './paged/VideoPlayerPage';
-import LiveCricket from './paged/LiveCricket';
-import AdminLiveMatchUpload from './paged/AdminLiveMatchUpload';
-import LiveStreamPlayer from './paged/LiveStreamPlayer';
-import SeriesView from './paged/SeriesView';
-import AuthPage from './paged/AuthPage';
-import UpdatePassword from './paged/UpdatePassword';
-import TorrentSearch from './paged/Torrentsearch';
-import LiveCricketTV from './paged/LiveCricketTV';
+const Profile = lazy(() => import('./paged/Profile'));
+const UploadWatchHtml = lazy(() => import('./paged/UploadWatchHtml'));
+const WatchPage = lazy(() => import('./paged/WatchPage'));
+const AdminMembers = lazy(() => import('./paged/AdminMembers'));
+const WatchListPage = lazy(() => import('./paged/WatchListPage'));
+const MXWatch = lazy(() => import('./paged/MXWatch'));
+const HlsWatch = lazy(() => import('./paged/HlsWatch'));
+const AdminUp4streamFiles = lazy(() => import('./components/AdminUp4streamFiles'));
+const VideoPlayerPage = lazy(() => import('./paged/VideoPlayerPage'));
+const LiveCricket = lazy(() => import('./paged/LiveCricket'));
+const AdminLiveMatchUpload = lazy(() => import('./paged/AdminLiveMatchUpload'));
+const LiveStreamPlayer = lazy(() => import('./paged/LiveStreamPlayer'));
+const SeriesView = lazy(() => import('./paged/SeriesView'));
+const AuthPage = lazy(() => import('./paged/AuthPage'));
+const UpdatePassword = lazy(() => import('./paged/UpdatePassword'));
+const TorrentSearch = lazy(() => import('./paged/Torrentsearch'));
+const LiveCricketTV = lazy(() => import('./paged/LiveCricketTV'));
 import Homeies, { TournamentPage } from './paged/Homeies';
-import LiveChannelsUpload from './paged/LiveChannelsUpload';
-import LiveChannelsPage from './paged/LiveChannelsPage';
-import MatchCenter from './paged/MatchCenter';
-import NewsViewer from './components/NewsReader';
-
+const LiveChannelsUpload = lazy(() => import('./paged/LiveChannelsUpload'));
+const LiveChannelsPage = lazy(() => import('./paged/LiveChannelsPage'));
+const MatchCenter = lazy(() => import('./paged/MatchCenter'));
+const NewsViewer = lazy(() => import('./components/NewsReader'));
 // --- Music Feature Imports ---
-import HomeLandingPage from './paged/HomeLandingPage';
-import SearchResultsPage from './paged/SearchResultsPage';
-import TrackDetailPage from './paged/TrackDetailPage';
+const HomeLandingPage = lazy(() => import('./paged/HomeLandingPage'));
+const SearchResultsPage = lazy(() => import('./paged/SearchResultsPage'));
+const TrackDetailPage = lazy(() => import('./paged/TrackDetailPage'));
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import PersistentMiniPlayer from './components/PersistentMiniPlayer';
 
@@ -217,6 +216,16 @@ const AppContent = () => {
 
 
 
+      {/* Every route below is code-split. The app shipped as one 2.4MB script,
+          so a visitor landing on the home page downloaded the admin studio, the
+          blog editor, the match centre and three video players before seeing
+          anything. On a phone on mobile data that is the difference between a
+          visit and a bounce. */}
+      <Suspense fallback={
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
       <Routes>
         <Route path="/"                       element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code"            element={<MovieDetail />} />
@@ -289,6 +298,7 @@ const AppContent = () => {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
 
       {/* Bottom Ad slots and scripts for all pages except admin */}
       {!isAdminPath && (

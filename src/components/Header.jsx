@@ -4,7 +4,6 @@ import { supabase } from "../utils/supabaseClient";
 import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
 import { Copy, CornerRightDown, Zap, Film, MonitorPlay, Clock, Sparkles, ChevronRight } from "lucide-react";
 import { AppContext } from "../context/AppContext";
-import MatchCenter from "../paged/MatchCenter";
 import MobileDetailSheet from "./MobileDetailSheet";
 import { LIVE_SHOWS, liveStatus, useLiveClock } from "../utils/liveShow";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
