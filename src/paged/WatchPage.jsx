@@ -398,18 +398,10 @@ const WatchHtmlPage = () => {
   const [signedLinks, setSignedLinks] = useState({});   // path → signed url
 
   useEffect(() => {
-    /* Episode stream paths are signed here too. An episode served from its
-       download link used to be signed on the click, which put a round trip to
-       the backend — measured around 0.9s — between pressing play and the first
-       byte being asked for. Signing at load costs nothing extra (these run in
-       parallel with the page) and makes the press instant. */
-    const epPaths = (episodes || [])
-      .map(e => e?.direct_url || e?.hls_url)
-      .filter(l => typeof l === "string" && !/^(https?:|blob:)/i.test(l) && /\.(mp4|m4v|webm|mov|mkv)$/i.test(l));
-    const paths = [...(movieMeta?.download_links || [])
+    const paths = (movieMeta?.download_links || [])
       .flatMap(b => b?.links || [])
       .map(l => l?.path)
-      .filter(Boolean), ...epPaths];
+      .filter(Boolean);
     if (!paths.length || !backendUrl) return;
 
     let alive = true;
@@ -425,7 +417,7 @@ const WatchHtmlPage = () => {
       if (alive) setSignedLinks(Object.fromEntries(pairs.filter(Boolean)));
     })();
     return () => { alive = false; };
-  }, [movieMeta?.download_links, episodes, backendUrl]);
+  }, [movieMeta?.download_links, backendUrl]);
 
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
@@ -542,8 +534,6 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const resolveStreamLink = useCallback(async (link) => {
     if (!link) return null;
     if (/^(https?:|blob:)/i.test(link)) return link;
-    // Already signed while the page loaded — skip the round trip entirely.
-    if (signedLinks[link]) return signedLinks[link];
     const isFile = /\.(mp4|m4v|webm|mov|mkv)$/i.test(link);
     const endpoint = isFile ? "download-link" : "movie-stream";
     try {
@@ -551,7 +541,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       const j = await r.json();
       return j?.success && j.url ? j.url : null;
     } catch { return null; }
-  }, [backendUrl, signedLinks]);
+  }, [backendUrl]);
 
   /* ── Play one episode's stream link in our rich VideoPlayer (episode-wise). ── */
   const playEpisodeStream = useCallback(async (ep) => {
