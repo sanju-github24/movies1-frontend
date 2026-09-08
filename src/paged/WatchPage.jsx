@@ -11,6 +11,8 @@ import MbidadmBanner from "../components/MbidadmBanner";
 import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
 import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveShow";
 import { toast } from "react-toastify";
+import { Helmet } from "react-helmet";
+import { absUrl, jsonLd, titleForSearch } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck,
   ArrowLeft, List, MonitorPlay,
@@ -1178,9 +1180,47 @@ if (!alive) return;
   const liveShow = getLiveShow(movieMeta);
   const live     = liveShow ? liveStatus(liveShow, liveClock) : null;
 
+  /* ── What a search engine sees ──────────────────────────────────────
+     Stored titles are release names — "Bigg Boss Kannada (2026) S13 - TRUE
+     WEB-DL - 1080p - Kannada" — and nobody types that into Google. The show's
+     own name is what gets searched, so the meta carries that while the page
+     keeps showing the full release name. */
+  const { name: seoName, year: seoYear, season: seoSeason } = titleForSearch(movieMeta.title || "");
+  const seoTitle = `${seoName}${seoSeason ? ` Season ${Number(seoSeason)}` : ""}`;
+  const seoFull  = `${seoTitle}${seoYear ? ` (${seoYear})` : ""}`;
+  const seoDesc = (movieMeta.overview || tmdbMeta?.overview || "").trim()
+    || `Watch ${seoFull} online in HD on AnchorHD`
+       + `${isTVShow ? ", every episode" : ""}. Streaming and download links.`;
+  const canonical = absUrl(`/watch/${movieMeta.slug || routeSlug}`);
+
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-[#070709] text-white pb-24 font-sans overflow-x-hidden">
+      <Helmet>
+        <title>{`${seoFull} — Watch Online in HD | AnchorMovies`}</title>
+        <meta name="description" content={seoDesc.slice(0, 300)} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:type" content={isTVShow ? "video.tv_show" : "video.movie"} />
+        <meta property="og:title" content={`${seoFull} — Watch Online`} />
+        <meta property="og:description" content={seoDesc.slice(0, 300)} />
+        <meta property="og:url" content={canonical} />
+        {movieMeta.poster && <meta property="og:image" content={movieMeta.poster} />}
+        <meta name="twitter:card" content="summary_large_image" />
+        {/* Tells Google this is a title page rather than an article, and gives
+            it the name to match a query against — the release name would not. */}
+        <script type="application/ld+json">{jsonLd({
+          "@context": "https://schema.org",
+          "@type": isTVShow ? "TVSeries" : "Movie",
+          "@id": canonical,
+          name: seoTitle,
+          ...(seoSeason ? { seasonNumber: Number(seoSeason) } : {}),
+          url: canonical,
+          ...(seoYear ? { datePublished: seoYear } : {}),
+          ...(movieMeta.poster ? { image: movieMeta.poster } : {}),
+          ...(seoDesc ? { description: seoDesc.slice(0, 300) } : {}),
+        })}</script>
+      </Helmet>
+
       {mxResolving && (
         <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
           <Loader2 className="animate-spin text-blue-500" size={40} />

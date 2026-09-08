@@ -17,6 +17,7 @@ export const config = {
   matcher: [
     '/sports/:path*',
     '/match/:path*',        // the slug URLs the sitemap lists — the ones that must render
+    '/watch/:path*',        // title pages: listed in the sitemap, so they have to render too
     '/match-center/:path*', // legacy hash links
     '/blogs/:path*',
     '/music/:path*',
