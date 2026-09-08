@@ -1,5 +1,5 @@
 // src/pages/UploadWatchHtml.jsx
-import React, { useState, useContext, useEffect, useCallback } from "react";
+import React, { useState, useContext, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
@@ -19,18 +19,44 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
   const [editDownloads, setEditDownloads] = useState(item.download_links || []);
   const [isSaving, setIsSaving] = useState(false);
 
+  /* The download blocks as they were when this editor opened. Saving compares
+     against them so a block the ingest published in the meantime is kept, while
+     one deliberately deleted here still goes. */
+  const openedWith = useRef([]);
+
   useEffect(() => {
     if (isEditing) {
       setEditData({ ...item });
       setEditEpisodes(item.episodes || []);
       setEditDownloads(item.download_links || []);
+      openedWith.current = (item.download_links || []).map(d => d?.quality || "");
     }
   }, [isEditing, item]);
+
+  /* download_links is written by two things: this editor, and the ingest worker
+     when an upload finishes. Sending the array this form loaded with would undo
+     whatever the worker published while the form sat open — which is how a
+     freshly uploaded 480p season disappeared minutes after it appeared. So the
+     row is re-read at save time and merged by quality key: blocks this editor
+     knows about are its own to change or remove, blocks that appeared since are
+     left exactly as they are. */
+  const mergeDownloads = async (mine) => {
+    const { data, error } = await supabase
+      .from("watch_html").select("download_links").eq("id", item.id).single();
+    if (error || !Array.isArray(data?.download_links)) return mine;   // nothing to merge against
+    const minesKeys = new Set(mine.map(d => d?.quality || ""));
+    const knew = new Set(openedWith.current);
+    const appeared = data.download_links.filter(
+      b => b && !minesKeys.has(b.quality || "") && !knew.has(b.quality || "")
+    );
+    return [...mine, ...appeared];
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       const validEps = editEpisodes.filter(e => e.title || e.tmdb_id || e.direct_url || e.html);
+      const mergedDownloads = await mergeDownloads(editDownloads.filter(d => d.quality));
       
       const { error } = await supabase
         .from("watch_html")
@@ -51,7 +77,7 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
           show_on_hero: editData.show_on_hero,
           is_trending: editData.is_trending,
           episodes: validEps,
-          download_links: editDownloads.filter(d => d.quality)
+          download_links: mergedDownloads
         })
         .eq("id", item.id);
 
