@@ -11,6 +11,7 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
+import NotifyButton from "./NotifyButton";
 
 const LANGUAGES = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
@@ -47,8 +48,10 @@ const SiteFooter = () => (
 
       <div className="text-xs leading-relaxed">
         <p className="text-white font-black uppercase tracking-widest mb-3">AnchorMovies</p>
-        <p>Movies and web series in Tamil, Telugu, Kannada, Hindi, Malayalam and English —
-           streaming in HD with download links.</p>
+        <p className="mb-4">Movies and web series in Tamil, Telugu, Kannada, Hindi, Malayalam and
+           English — streaming in HD with download links.</p>
+        {/* The one channel that does not depend on anyone's ranking algorithm. */}
+        <NotifyButton />
       </div>
     </div>
   </footer>
