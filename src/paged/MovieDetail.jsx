@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Link } from "react-router-dom"; 
+import { absUrl } from "../utils/seo";
 import { supabase } from "../utils/supabaseClient";
 import { backendUrl } from "../utils/api";
 import { Helmet } from "react-helmet";
@@ -192,7 +193,10 @@ const MovieDetail = () => {
   const firstDownload = movie.downloads?.[0];
   const topTitle = `${movieTitle} - ${firstDownload?.format || "HD"} Download`;
   const metaDescription = `Download or watch ${movieTitle} in full HD (${qualities}). Fast and secure streaming available on 1TamilMV and AnchorMovies.`;
-  const canonicalUrl = `https://www.1anchormovies.live/movie/${code}`;
+  /* Was hardcoded to 1anchormovies.live — a domain that no longer resolves.
+     Every one of these pages told Google its real copy lived somewhere
+     unreachable, which is an efficient way to not be indexed. */
+  const canonicalUrl = absUrl(`/movie/${code}`);
 
   return (
     // Updated BG/Container for modern dark theme contrast

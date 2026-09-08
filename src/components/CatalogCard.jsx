@@ -19,6 +19,8 @@ const langLabel = (langs) => {
 };
 
 const CatalogCard = ({ entry, showAge = false }) => {
+  // The raw release name is unreadable on a card; show the clean one.
+  const label = entry.displayTitle || entry.cleanTitle || entry.title;
   const to = entry.streamable
     ? `/watch/${entry.watchSlug}`
     : `/search-torrent?q=${encodeURIComponent(entry.cleanTitle || entry.title)}`;
@@ -31,7 +33,7 @@ const CatalogCard = ({ entry, showAge = false }) => {
       <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/5 shadow-xl transition-all duration-300 group-hover:border-blue-500/60 group-hover:scale-[1.03] group-hover:shadow-blue-900/40">
         <img
           src={entry.cover}
-          alt={entry.title}
+          alt={label}
           loading="lazy"
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           onError={(e) => { e.currentTarget.src = "/default-cover.jpg"; }}
@@ -68,7 +70,7 @@ const CatalogCard = ({ entry, showAge = false }) => {
             <img src={entry.titleLogo} alt="" className="h-7 w-auto max-w-[70%] object-contain object-left mb-1.5 drop-shadow-2xl" />
           ) : (
             <p className="text-[11px] font-black text-white uppercase italic truncate mb-1 drop-shadow-md">
-              {entry.title}
+              {label}
             </p>
           )}
           <span className="flex items-center gap-1.5 text-[9px] font-black text-white uppercase tracking-tighter">
@@ -81,7 +83,7 @@ const CatalogCard = ({ entry, showAge = false }) => {
 
       <div className="mt-2 px-0.5">
         <h3 className="text-[12px] sm:text-[13px] font-bold text-gray-200 group-hover:text-blue-400 transition-colors line-clamp-1">
-          {entry.title}
+          {label}
         </h3>
         {age && (
           <p className="flex items-center gap-1 text-[10px] font-bold text-gray-600 mt-0.5">

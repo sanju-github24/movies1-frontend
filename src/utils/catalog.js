@@ -39,12 +39,11 @@ const fetchAll = async (table, columns) => {
 const norm = (s) => (s || "").trim().toLowerCase();
 
 /* Catalogue titles are release names — "Kantara (2022) TRUE WEB-DL - [4K,
-   1080p & 720p - HEVC…]". Everything from the first bracket or the first
-   " - " onward is encoding detail, useless as a search term. */
-export const cleanTitle = (title) => {
-  const t = (title || "").split(/\s*[([]|\s+-\s+/)[0].trim();
-  return t || (title || "").trim();
-};
+   1080p & 720p - HEVC…]". The shared parser strips the encoding detail; this
+   file used to carry a second, cruder copy that also threw away the year and
+   truncated any name containing " - ". */
+export { cleanTitle, displayTitle } from "./cleanTitle";
+import { cleanTitle, displayTitle } from "./cleanTitle";
 
 const asArray = (v) => {
   if (!v) return [];
@@ -116,6 +115,9 @@ const buildCatalog = async () => {
       key: m.id || m.slug,
       title: m.title || w?.title || m.slug,
       cleanTitle: cleanTitle(m.title || w?.title || m.slug),
+      /* What a card shows. The raw release name stays on `title` for anything
+         that still needs to match against the stored string. */
+      displayTitle: displayTitle(m.title || w?.title || m.slug),
       /* Where a card should go. watchSlug is the streaming page; movieSlug is
          the download page, which is all a download-only title has. */
       watchSlug: streamable ? w.slug : null,

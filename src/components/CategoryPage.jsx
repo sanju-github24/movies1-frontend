@@ -10,6 +10,7 @@ import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Search, Loader2, Frown, Film, AlertCircle } from "lucide-react";
 import { loadCatalog } from "../utils/catalog";
+import { absUrl, jsonLd } from "../utils/seo";
 import CatalogCard from "./CatalogCard";
 
 const PAGE_SIZE = 60;
@@ -61,7 +62,9 @@ const CategoryPage = () => {
         e.subCategory.some((s) => s.toLowerCase() === activeSub.toLowerCase());
       if (!matchesSub) return false;
       if (!q) return true;
-      return e.title.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
+      return e.title.toLowerCase().includes(q)
+        || (e.displayTitle || "").toLowerCase().includes(q)
+        || e.description.toLowerCase().includes(q);
     });
   }, [inLanguage, activeSub, search]);
 
@@ -74,8 +77,34 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-gray-950 px-4 sm:px-8 py-10 text-white">
       <Helmet>
-        <title>{pageName} Movies & Series | 1AnchorMovies</title>
-        <meta name="description" content={`Watch and download ${pageName} movies and series on 1AnchorMovies.`} />
+        <title>{`${pageName} Movies & Web Series — Watch Online in HD | AnchorMovies`}</title>
+        <meta
+          name="description"
+          content={`${filtered.length || ""} ${pageName} movies and web series to watch online in HD`
+            + ` — new releases added daily, with download links.`}
+        />
+        <link rel="canonical" href={absUrl(`/category/${encodeURIComponent(pageName)}`)} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={`${pageName} Movies & Web Series in HD`} />
+        <meta property="og:url" content={absUrl(`/category/${encodeURIComponent(pageName)}`)} />
+        {/* The first screenful, so the collection can show as a list result
+            rather than a single blue link. */}
+        <script type="application/ld+json">{jsonLd({
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: `${pageName} Movies & Web Series`,
+          url: absUrl(`/category/${encodeURIComponent(pageName)}`),
+          mainEntity: {
+            "@type": "ItemList",
+            numberOfItems: filtered.length,
+            itemListElement: visible.slice(0, 20).map((e, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              name: e.displayTitle || e.cleanTitle || e.title,
+              url: absUrl(e.streamable ? `/watch/${e.watchSlug}` : `/movie/${e.movieSlug}`),
+            })),
+          },
+        })}</script>
       </Helmet>
 
       {/* ── Header ── */}

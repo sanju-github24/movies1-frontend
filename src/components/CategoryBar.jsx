@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const languages = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
@@ -25,14 +25,17 @@ const CategoryBar = ({ isMobile = false, onNavigate, onClose }) => {
         <div>
           <h4 className="text-gray-400 font-semibold mb-2">Languages</h4>
           <div className="flex flex-wrap gap-2">
+            {/* Real links so the collections are reachable by a crawler, and
+                so these behave like links for a person too. */}
             {languages.map((lang) => (
-              <button
+              <Link
                 key={lang}
-                onClick={() => handleClick(lang)}
-                className="flex-1 min-w-[100px] px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                to={`/category/${encodeURIComponent(lang)}`}
+                onClick={(e) => { if (onNavigate) { e.preventDefault(); handleClick(lang); } else if (onClose) onClose(); }}
+                className="flex-1 min-w-[100px] px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 text-center"
               >
                 {lang}
-              </button>
+              </Link>
             ))}
           </div>
         </div>

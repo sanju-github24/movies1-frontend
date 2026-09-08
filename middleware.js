@@ -18,6 +18,8 @@ export const config = {
     '/sports/:path*',
     '/match/:path*',        // the slug URLs the sitemap lists — the ones that must render
     '/watch/:path*',        // title pages: listed in the sitemap, so they have to render too
+    '/movie/:path*',        // download pages — also listed, also client-rendered
+    '/category/:path*',     // the language collections a crawler enters through
     '/match-center/:path*', // legacy hash links
     '/blogs/:path*',
     '/music/:path*',

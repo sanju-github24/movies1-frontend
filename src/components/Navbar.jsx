@@ -137,12 +137,6 @@ const Navbar = () => {
     }
   };
 
-  const handleNavigateCategory = (name) => {
-    navigate(`/category/${encodeURIComponent(name)}`);
-    setMobileOpen(false);
-    setLangOpen(false);
-  };
-
   const getInitial = () => {
     if (!session?.user) return "";
     const name = session.user.user_metadata?.full_name;
@@ -174,14 +168,19 @@ const Navbar = () => {
               </button>
               {langOpen && (
                 <div className="absolute top-full mt-2 left-0 w-48 bg-white text-black rounded-xl shadow-2xl py-2 z-50 border border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                  {/* Links, not buttons: an onClick-navigate renders no href,
+                      so a crawler could not follow this menu and the language
+                      collections had nothing pointing at them. It also restores
+                      middle-click and open-in-new-tab. */}
                   {languages.map(lang => (
-                    <button
+                    <Link
                       key={lang}
-                      onClick={() => handleNavigateCategory(lang)}
-                      className="w-full text-left px-4 py-2 hover:bg-blue-50 hover:text-blue-700 transition font-bold text-xs"
+                      to={`/category/${encodeURIComponent(lang)}`}
+                      onClick={() => { setMobileOpen(false); setLangOpen(false); }}
+                      className="block w-full text-left px-4 py-2 hover:bg-blue-50 hover:text-blue-700 transition font-bold text-xs"
                     >
-                      {lang}
-                    </button>
+                      {lang} Movies
+                    </Link>
                   ))}
                 </div>
               )}
