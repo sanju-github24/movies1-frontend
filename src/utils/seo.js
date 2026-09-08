@@ -124,3 +124,29 @@ export function facetPhrase(facets = {}) {
   const src = (facets.sources || [])[0] || '';
   return [res, src].filter(Boolean).join(' ');
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   A stored link that names a domain we no longer own, brought home.
+
+   The site ran on 1anchormovies.live until that domain expired, and 646 rows
+   still carry watch links pointing at it. Those are real "Watch" buttons on
+   the home page and the mobile sheet: a visitor who clicked one left for a
+   domain that stopped resolving in July and never came back.
+
+   The data is being corrected, but code that trusts a stored absolute URL
+   should not be able to strand a visitor again — so anything naming an old
+   domain of ours is rewritten to the origin actually being served.
+   ───────────────────────────────────────────────────────────────────── */
+const LEGACY_HOSTS = /^(www\.)?1anchormovies\.(live|com|net|org)$/i;
+
+export function ownUrl(raw = '') {
+  const s = String(raw).trim();
+  if (!s) return s;
+  try {
+    const u = new URL(s, SITE_ORIGIN || 'https://www.1anchormovies.buzz');
+    if (LEGACY_HOSTS.test(u.hostname)) return `${SITE_ORIGIN}${u.pathname}${u.search}${u.hash}`;
+    return s;
+  } catch {
+    return s;                       // not a URL at all — leave it alone
+  }
+}

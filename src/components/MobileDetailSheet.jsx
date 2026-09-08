@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { ownUrl } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
 import { X, Play, Info, Volume2, VolumeX, Plus, Check, Share2, Star } from "lucide-react";
 import { inMyList, toggleMyList, getRating, setRating } from "../utils/myList";
@@ -92,7 +93,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
     // fall back to the admin-supplied external embed when it is not.
     const canPlayInternally = !!(tmdbId || imdbId || movie.has_watch_html);
     if (!canPlayInternally && movie.watchUrl) {
-      window.location.href = movie.watchUrl;
+      window.location.href = ownUrl(movie.watchUrl);
       return;
     }
 

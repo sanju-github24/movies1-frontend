@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { SITE_ORIGIN } from "../utils/seo";
+import { SITE_ORIGIN, ownUrl } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
@@ -641,7 +641,7 @@ const Header = () => {
                     {movie.watchUrl && (
                       // Mobile: Watch opens the detail sheet (which then goes straight
                       // to the player). Desktop keeps the direct link.
-                      <a href={movie.watchUrl}
+                      <a href={ownUrl(movie.watchUrl)}
                         className="w-full bg-white text-black text-xs font-black py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition"
                         onClick={e => {
                           e.stopPropagation();
