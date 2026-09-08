@@ -1,4 +1,5 @@
 import React, { useContext, useState, useRef } from 'react';
+import { absUrl } from "../utils/seo";
 import { assets } from '../assets/assets';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
@@ -123,7 +124,7 @@ const ResetPassword = () => {
       <Helmet>
         <title>Reset Password | 1AnchorMovies</title>
         <meta name="description" content="Reset your password to access 1AnchorMovies" />
-        <link rel="canonical" href="https://www.1anchormovies.live/reset-password" />
+        <link rel="canonical" href={absUrl("/reset-password")} />
       </Helmet>
 
       <div

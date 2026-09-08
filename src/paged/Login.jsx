@@ -1,4 +1,5 @@
 import React, { useState, useContext } from 'react';
+import { absUrl } from "../utils/seo";
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -107,7 +108,7 @@ const Login = () => {
           name="description"
           content="Login or create your account on 1AnchorMovies to browse, upload, or download the latest HD movies."
         />
-        <link rel="canonical" href="https://www.1anchormovies.live/login" />
+        <link rel="canonical" href={absUrl("/login")} />
       </Helmet>
 
       {/* Background */}

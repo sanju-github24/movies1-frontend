@@ -15,6 +15,7 @@
 export const config = {
   // Only these paths, and never static assets (anything with a file extension).
   matcher: [
+    '/',                    // the home page: most-crawled, and it was not listed
     '/sports/:path*',
     '/match/:path*',        // the slug URLs the sitemap lists — the ones that must render
     '/watch/:path*',        // title pages: listed in the sitemap, so they have to render too

@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { SITE_ORIGIN } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
@@ -401,7 +402,9 @@ const Header = () => {
 
   const adminEmail = "sanjusanjay0444@gmail.com";
   const isAdmin = (userData?.email?.toLowerCase() === adminEmail) || (currentUserEmail?.toLowerCase() === adminEmail);
-  const siteUrl = "https://www.1anchormovies.live";
+  /* The share button was copying 1anchormovies.live — a domain that no longer
+     resolves — so every link a visitor shared was dead on arrival. */
+  const siteUrl = SITE_ORIGIN;
 
   const latestMovies = useMemo(() => {
     return [...movies]

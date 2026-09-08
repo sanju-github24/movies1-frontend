@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useRef } from "react";
+import { absUrl } from "../utils/seo";
 import { assets } from "../assets/assets";
 import { AppContext } from "../context/AppContext";
 import { useNavigate } from "react-router-dom";
@@ -84,7 +85,7 @@ const EmailVerify = () => {
           name="description"
           content="Verify your email to access 1AnchorMovies and start downloading the latest movies."
         />
-        <link rel="canonical" href="https://www.1anchormovies.live/verify-email" />
+        <link rel="canonical" href={absUrl("/verify-email")} />
       </Helmet>
 
       <div

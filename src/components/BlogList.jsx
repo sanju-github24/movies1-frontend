@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { absUrl } from "../utils/seo";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet";
 
@@ -531,7 +532,7 @@ const BlogList = () => {
           name="description"
           content="Live movie news from Bollywood, Tamil, Telugu, Kannada, Malayalam and Hollywood cinema, plus the latest cricket headlines — all on 1AnchorMovies."
         />
-        <link rel="canonical" href="https://www.1anchormovies.live/blogs" />
+        <link rel="canonical" href={absUrl("/blogs")} />
       </Helmet>
 
       <div className="min-h-screen bg-[#0e0e0e] text-white font-['Roboto']">
