@@ -23,9 +23,13 @@
     <link rel="icon" type="image/png" sizes="256x256" href="/favicon-cleaned-256x256.png">
 
     <!-- Open Graph (Facebook / WhatsApp) -->
-    <meta property="og:title" content="1AnchorMovies, 1TamilMV, TamilBlasters – Download Latest South Indian Movies in HD" />
+    <!-- og:title and og:url are deliberately NOT set here. react-helmet appends
+         its tags rather than replacing these, so a static pair would come first
+         and win: every title page was telling scrapers it was the home page of
+         1anchormovies.live, a domain that no longer resolves at all. A page that
+         sets its own now owns them; one that does not falls back to <title> and
+         the URL that was fetched, both of which are already right. -->
     <meta property="og:description" content="HD downloads for Tamil, Telugu, Kannada, Malayalam & Hindi movies. Get fast links & quality prints on 1AnchorMovies, 1TamilMV & TamilBlasters." />
-    <meta property="og:url" content="https://www.1anchormovies.live/" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/preview-image.jpg" /> <!-- Replace with your actual image path -->
 
