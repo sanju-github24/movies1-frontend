@@ -174,7 +174,12 @@ const AppContent = () => {
   ];
   const isBlogViewerPath   = /^\/blogs\/[^/]+$/.test(location.pathname);
   const isWatchPath        = /^\/watch(\/[^/]+)?$/.test(location.pathname);
-  const isPlayerPath       = /^\/player(\/.*)?$/.test(location.pathname);
+  /* Every full-screen player, not just our own. /mx-watch and /hls-watch render
+     the same VideoPlayer as /watch/:slug but were not on this list, so they got
+     the navbar and the footer wrapped around a player sized to the viewport —
+     which is what pushed the page into scrolling and made them look nothing
+     like our own playback page. */
+  const isPlayerPath       = /^\/(player|mx-watch|hls-watch)(\/.*)?$/.test(location.pathname);
   const isAdminPath        = location.pathname.startsWith("/admin");
   const isLiveStreamPlayer = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname);
   const isLiveCricketPath  = location.pathname === "/live-cricket";

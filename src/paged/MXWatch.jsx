@@ -37,7 +37,15 @@ export default function MXWatch() {
         if (r.data?.success) setDetail(r.data);
         else setError(r.data?.error || "Couldn't load this title.");
       } catch (e) {
-        if (alive) setError("Couldn't load this title. Please try again.");
+        /* 503 + unavailable is MX declining to serve this title to our server's
+           region — a fact about the title, not a fault the viewer can retry
+           away. Saying "try again" to that just wastes their time. */
+        const d = e?.response?.data;
+        if (alive) {
+          setError(d?.unavailable
+            ? `This title isn't available to stream here${d.reason ? ` — ${d.reason}` : ""}.`
+            : "Couldn't load this title. Please try again.");
+        }
       } finally {
         if (alive) setLoading(false);
       }
