@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Link } from "react-router-dom"; 
-import { absUrl } from "../utils/seo";
+import { absUrl, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo";
+import { displayTitle } from "../utils/cleanTitle";
 import { supabase } from "../utils/supabaseClient";
 import { backendUrl } from "../utils/api";
 import { Helmet } from "react-helmet";
@@ -188,11 +189,31 @@ const MovieDetail = () => {
   }
 
   // === SEO & Constants ===
-  const qualities = movie.qualities?.join(", ") || "HD";
-  const movieTitle = movie.year ? `${movie.title} (${movie.year})` : movie.title; // Cleaner title format
+  /* This block used to read movie.qualities and movie.year — neither of which
+     is a column on this table. Every one of these pages therefore described
+     itself as "(HD)" and titled itself with the raw release name, answering
+     nobody's search. The facts are in the downloads themselves. */
   const firstDownload = movie.downloads?.[0];
-  const topTitle = `${movieTitle} - ${firstDownload?.format || "HD"} Download`;
-  const metaDescription = `Download or watch ${movieTitle} in full HD (${qualities}). Fast and secure streaming available on 1TamilMV and AnchorMovies.`;
+  const dlLabels = (movie.downloads || []).map((d) => `${d?.quality || ""} ${d?.format || ""}`);
+  const facets = downloadFacets([...dlLabels, movie.title, ...(movie.subCategory || [])]);
+  const quality = facetPhrase(facets);                       // "1080p, 720p and 480p WEB-DL"
+  /* The language column is filled in for 977 of 979 rows, so it is trusted
+     first; the release names are only a fallback for the two that are not. */
+  const langs = (movie.language || []).filter(Boolean).length
+    ? movie.language.filter(Boolean)
+    : languagesFrom([...dlLabels, movie.title]);
+  const sizes = [...new Set((movie.downloads || []).map((d) => (d?.size || "").trim()).filter(Boolean))];
+  const movieTitle = displayTitle(movie.title) || movie.title;
+  const topTitle = `${movieTitle}${quality ? ` — ${quality}` : ""} Download`;
+  /* Said plainly, in the words somebody searching would use: the title, the
+     resolutions, the audio languages and the size — all of which this page
+     genuinely has on it. */
+  const metaDescription = [
+    `Download ${movieTitle}${quality ? ` in ${quality}` : " in HD"}`,
+    langs.length ? ` — ${humanList(langs)} audio` : "",
+    sizes.length ? ` (${sizes.slice(0, 4).join(", ")})` : "",
+    `. Watch online or get the direct download link on AnchorMovies.`,
+  ].join("").slice(0, 300);
   /* Was hardcoded to 1anchormovies.live — a domain that no longer resolves.
      Every one of these pages told Google its real copy lived somewhere
      unreachable, which is an efficient way to not be indexed. */
@@ -203,10 +224,15 @@ const MovieDetail = () => {
     <div className="flex justify-center w-full min-h-screen bg-gray-950 py-8 px-2 sm:px-6">
       {/* SEO */}
       <Helmet>
-        <title>{movieTitle} Full HD Download | Watch Online | 1TamilMV & AnchorMovies</title>
+        {/* The resolutions and languages replace the two competitors' names that
+            used to sit here: they describe what this page really offers, which is
+            both what people search for and what Google will not penalise. */}
+        <title>{`${movieTitle}${quality ? ` ${quality}` : ""} Download`
+          + `${langs.length ? ` — ${humanList(langs.slice(0, 4))}` : ""}`
+          + ` | Watch Online | AnchorMovies`}</title>
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={`${movieTitle} Full HD Download | 1TamilMV & AnchorMovies`} />
+        <meta property="og:title" content={`${movieTitle}${quality ? ` ${quality}` : ""} Download | AnchorMovies`} />
         {/* ... other meta tags ... */}
       </Helmet>
 

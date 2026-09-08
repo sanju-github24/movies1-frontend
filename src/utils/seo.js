@@ -70,3 +70,57 @@ export function titleForSearch(raw = "") {
     season,
   };
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   What a page actually offers, in the words people search with.
+
+   Somebody looking for a file types "kantara 1080p download" or "our universe
+   tamil 720p", and a page that never says "1080p" or "720p" cannot answer
+   them — ours said "(HD)" on all 979 download pages because it read a column
+   that does not exist. These facets come from the download entries themselves,
+   so the page describes what is really there and nothing else.
+   ───────────────────────────────────────────────────────────────────── */
+const RES_ORDER = ['2160p', '4K', '1440p', '1080p', '720p', '480p', '360p'];
+const SRC_ORDER = ['WEB-DL', 'WEBRip', 'BluRay', 'BDRip', 'HDRip', 'HDTV', 'HDTC', 'PreDVD', 'DVDRip'];
+
+/* Releases name languages both ways — "Tamil" and "Tam", "Kan" and "Kannada" —
+   and a search is as likely to be "our universe tamil download" as anything
+   about resolution, so both spellings have to resolve to the same word. */
+const LANGS = [
+  ['Tamil', /\b(Tamil|Tam)\b/i], ['Telugu', /\b(Telugu|Tel)\b/i],
+  ['Hindi', /\b(Hindi|Hin)\b/i], ['Malayalam', /\b(Malayalam|Mal)\b/i],
+  ['Kannada', /\b(Kannada|Kan)\b/i], ['English', /\b(English|Eng)\b/i],
+  ['Korean', /\b(Korean|Kor)\b/i], ['Bengali', /\b(Bengali|Ben)\b/i],
+  ['Marathi', /\b(Marathi|Mar)\b/i], ['Punjabi', /\b(Punjabi|Pun)\b/i],
+];
+
+/** Languages named anywhere in a set of release strings, in a stable order. */
+export function languagesFrom(labels = []) {
+  const text = labels.filter(Boolean).join(' · ');
+  return LANGS.filter(([, re]) => re.test(text)).map(([name]) => name);
+}
+
+/** { resolutions, sources } found across a set of release/quality strings. */
+export function downloadFacets(labels = []) {
+  const text = labels.filter(Boolean).join(' · ');
+  const found = (list, re) => {
+    const hits = new Set((text.match(re) || []).map((x) => x.replace(/[\s-]/g, '').toLowerCase()));
+    return list.filter((v) => hits.has(v.replace(/[\s-]/g, '').toLowerCase()));
+  };
+  return {
+    resolutions: found(RES_ORDER, /\b(2160p|4K|1440p|1080p|720p|480p|360p)\b/gi),
+    sources: found(SRC_ORDER, /\b(WEB[\s-]?DL|WEB[\s-]?Rip|BluRay|BDRip|HDRip|HDTV|HDTC|PreDVD|DVDRip)\b/gi),
+  };
+}
+
+/** "a, b and c" — an English list, because a description is read by people. */
+export const humanList = (xs = []) => (xs.length > 2
+  ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+  : xs.join(' and '));
+
+/** "1080p, 720p and 480p WEB-DL" — the phrase, or "" when nothing is known. */
+export function facetPhrase(facets = {}) {
+  const res = humanList(facets.resolutions || []);
+  const src = (facets.sources || [])[0] || '';
+  return [res, src].filter(Boolean).join(' ');
+}

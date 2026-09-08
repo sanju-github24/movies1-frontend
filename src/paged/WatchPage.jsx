@@ -12,7 +12,7 @@ import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
 import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveShow";
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
-import { absUrl, jsonLd, titleForSearch } from "../utils/seo.js";
+import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck,
   ArrowLeft, List, MonitorPlay,
@@ -1188,16 +1188,35 @@ if (!alive) return;
   const { name: seoName, year: seoYear, season: seoSeason } = titleForSearch(movieMeta.title || "");
   const seoTitle = `${seoName}${seoSeason ? ` Season ${Number(seoSeason)}` : ""}`;
   const seoFull  = `${seoTitle}${seoYear ? ` (${seoYear})` : ""}`;
-  const seoDesc = (movieMeta.overview || tmdbMeta?.overview || "").trim()
-    || `Watch ${seoFull} online in HD on AnchorHD`
-       + `${isTVShow ? ", every episode" : ""}. Streaming and download links.`;
+  /* What this page can actually give someone, named the way they would search
+     for it. The download blocks carry the resolution, the source and — through
+     the file names behind each button — the audio languages, so a query like
+     "our universe 720p tamil download" has something here to match. */
+  const dlBlocks = Array.isArray(movieMeta.download_links) ? movieMeta.download_links : [];
+  const dlLabels = dlBlocks.flatMap((b) => [b?.quality || "", ...(b?.links || []).map((l) => l?.name || l?.path || "")]);
+  const dlQuality = facetPhrase(downloadFacets([...dlLabels, movieMeta.title || ""]));
+  const dlLangs = languagesFrom([...dlLabels, movieMeta.title || ""]);
+  /* The largest block, not the sum of them: a season offered in 480p and 720p
+     is twelve episodes in two qualities, not twenty-four episodes. */
+  const epCount = Math.max(0, ...dlBlocks.map((b) => ((b?.links || []).length > 1 ? b.links.length : 0)));
+
+  const overview = (movieMeta.overview || tmdbMeta?.overview || "").trim();
+  const offer = [
+    dlQuality ? `Download in ${dlQuality}` : "Download",
+    dlLangs.length ? ` — ${humanList(dlLangs.slice(0, 5))} audio` : "",
+    epCount > 1 ? `, all ${epCount} episodes` : "",
+    ".",
+  ].join("");
+  const seoDesc = (`Watch ${seoFull} online in HD on AnchorMovies. ${offer}`
+    + (overview ? ` ${overview}` : "")).slice(0, 300);
   const canonical = absUrl(`/watch/${movieMeta.slug || routeSlug}`);
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-[#070709] text-white pb-24 font-sans overflow-x-hidden">
       <Helmet>
-        <title>{`${seoFull} — Watch Online in HD | AnchorMovies`}</title>
+        <title>{`${seoFull} — Watch Online${dlQuality ? ` & Download ${dlQuality}` : ""}`
+          + `${dlLangs.length ? ` (${dlLangs.slice(0, 3).join(", ")})` : ""} | AnchorMovies`}</title>
         <meta name="description" content={seoDesc.slice(0, 300)} />
         <link rel="canonical" href={canonical} />
         <meta property="og:type" content={isTVShow ? "video.tv_show" : "video.movie"} />
