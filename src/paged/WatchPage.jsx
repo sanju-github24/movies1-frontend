@@ -1848,15 +1848,7 @@ if (!alive) return;
                          checks the Referer and answers "Forbidden origin" without one,
                          so noreferrer would 403 every download. noopener still stops the
                          opened tab reaching back through window.opener. */
-                      /* ?dl=1 asks the worker for content-disposition: attachment, so the
-                         file saves rather than opening in the tab. The same object without
-                         the flag is served inline, which is what lets the player stream it. */
-                      <a key={i}
-                        href={(() => {
-                          const u = (link.path && signedLinks[link.path]) || link.url || "";
-                          return u ? `${u}${u.includes("?") ? "&" : "?"}dl=1` : u;
-                        })()}
-                        target="_blank" rel="noopener"
+                      <a key={i} href={(link.path && signedLinks[link.path]) || link.url} target="_blank" rel="noopener"
                         // A path with no signature yet is not a working link — wait for it
                         // rather than sending someone to a 403.
                         aria-disabled={!!link.path && !signedLinks[link.path]}
