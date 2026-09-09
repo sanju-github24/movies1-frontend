@@ -1,5 +1,6 @@
 import React, { useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { SITE_ORIGIN, ownUrl } from "../utils/seo";
+import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
@@ -50,7 +51,10 @@ function useLiveSports() {
       const r = await fetch(`${API_BASE}/api/bcci/live`);
       if (r.ok) {
         const j = await r.json();
-        (j.liveMatches||[]).forEach(m => out.push({
+        /* India's senior men only. BCCI's live feed now carries every live
+           match in the world, so without this the home page strip fills with
+           Duleep Trophy zonal games and other boards' fixtures. */
+        (j.liveMatches||[]).filter(isIndiaMensMatch).forEach(m => out.push({
           id: `bcci-${m.MatchID}`,
           sport: "cricket", type: "bcci",
           badge: bcciFmt(m.MatchType),

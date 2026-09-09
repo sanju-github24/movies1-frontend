@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays } from "lucide-react";
@@ -28,14 +29,7 @@ const WT20_SERIES_ID   = "12672";
 // 357, 358 = Women U19
 // 389, 390 = Women A / emerging
 // 393 = India A / A-tour (not senior men's)
-const BCCI_EXCLUDE_COMP_IDS = new Set([238, 357, 358, 389, 390, 393]);
-function isIndiaMensMatch(m) {
-  if (BCCI_EXCLUDE_COMP_IDS.has(Number(m.CompetitionID))) return false;
-  // Safety-net: filter any match whose name contains women/junior/A-team keywords
-  const name = (m.MatchName || "").toLowerCase();
-  if (/women|\bw19\b|wu19|under.?19|\bwomen\b|\.a\b| a vs | vs a |india a\b/i.test(m.MatchName || "")) return false;
-  return true;
-}
+
 function bcciFmt(type) {
   const MAP = { "One Day D/N":"ODI","One Day":"ODI","T20":"T20I","Test":"Test","Test D/N":"Test" };
   return MAP[type] || type || "MATCH";
