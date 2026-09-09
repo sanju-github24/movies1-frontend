@@ -408,15 +408,26 @@ const WatchHtmlPage = () => {
 
     let alive = true;
     (async () => {
-      const pairs = await Promise.all([...new Set(paths)].map(async (path) => {
-        try {
-          const { data } = await axios.get(`${backendUrl}/api/download-link`, {
-            params: { path, hours: 24 }, timeout: 10000,
-          });
-          return data?.success ? [path, data.url] : null;
-        } catch { return null; }      // the button falls back to whatever it had
-      }));
-      if (alive) setSignedLinks(Object.fromEntries(pairs.filter(Boolean)));
+      /* Signed a few at a time, and published as they arrive.
+         A 64-episode season asked for 64 signatures at once and showed nothing
+         until the last one landed — so every button on the page waited for the
+         slowest request, and on a phone that is the difference between a usable
+         page and a dead one. Six lanes keeps it quick without burying the
+         backend, and each result enables its own button immediately. */
+      const queue = [...new Set(paths)];
+      const lane = async () => {
+        for (;;) {
+          const path = queue.shift();
+          if (!path || !alive) return;
+          try {
+            const { data } = await axios.get(`${backendUrl}/api/download-link`, {
+              params: { path, hours: 24 }, timeout: 15000,
+            });
+            if (data?.success && alive) setSignedLinks((prev) => ({ ...prev, [path]: data.url }));
+          } catch { /* that button falls back to the url it already had */ }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, queue.length) }, lane));
     })();
     return () => { alive = false; };
   }, [movieMeta?.download_links, backendUrl]);
@@ -1902,8 +1913,11 @@ if (!alive) return;
                       <a key={i} href={(link.path && signedLinks[link.path]) || link.url} target="_blank" rel="noopener"
                         // A path with no signature yet is not a working link — wait for it
                         // rather than sending someone to a 403.
-                        aria-disabled={!!link.path && !signedLinks[link.path]}
-                        onClick={e => { if (link.path && !signedLinks[link.path]) e.preventDefault(); }}
+                        /* Only dead if there is nothing to fall back to. A failed
+                           or still-pending signature used to disable the button even
+                           when the entry carried a perfectly good url. */
+                        aria-disabled={!!link.path && !signedLinks[link.path] && !link.url}
+                        onClick={e => { if (link.path && !signedLinks[link.path] && !link.url) e.preventDefault(); }}
                         className="group p-4 min-h-[44px] rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-green-500/30 hover:bg-green-500/5 transition-all flex items-center gap-3 active:scale-[0.98] touch-manipulation">
                         <div className="p-2 rounded-lg bg-green-500/10 text-green-400 group-hover:bg-green-500/20 transition-colors"><Download size={14}/></div>
                         <p className="text-xs font-bold text-gray-300 group-hover:text-white transition-colors uppercase tracking-wide">{link.label}</p>
