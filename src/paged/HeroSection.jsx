@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
+import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { encodeMatchHash } from "../utils/matchHash";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
@@ -36,21 +37,43 @@ const API_BASE         = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4
 // ─── THUMBNAIL RESOLVER ───────────────────────────────────────────────────────
 const IND_VS_IRE_IMG = "https://images.slivcdn.com/videoasset_images/manage_file/1000019970/178238619430072_IRE_vs_IND_Vaibhav_India_Debut_masthead_large_v3_3200x1800.jpg?h=auto&w=1712&q=eco";
 
+/* Cricket boards do not publish a per-match image — BCCI's feed has no image
+   field at all — so a live match's real thumbnail can only come from a streamer
+   that made one, which is what the FanCode lookup below is for. This is what we
+   show when there is no such thumbnail.
+
+   It used to end at "/women_t20.jpg", so every India men's fixture that was not
+   against Ireland or Afghanistan was headlined with a photo of a women's T20 —
+   the wrong match, the wrong teams, the wrong tournament. The opponent's flag
+   is at least about this fixture, and there is one for every country. */
+const FLAG_ISO = {
+  IND: "in", AUS: "au", PAK: "pk", NZ: "nz", SA: "za", RSA: "za", SL: "lk",
+  BAN: "bd", AFG: "af", IRE: "ie", ZIM: "zw", ENG: "gb-eng", SCO: "gb-sct",
+  NED: "nl", NEP: "np", OMA: "om", UAE: "ae", USA: "us", CAN: "ca", NAM: "na",
+};
+const flagImg = (code) => {
+  const iso = FLAG_ISO[String(code || "").toUpperCase()];
+  return iso ? `https://flagcdn.com/w640/${iso}.png` : null;
+};
+
 function resolveThumbnail(slide) {
   if (slide.sport === "football") return "/fifa_2026.webp";
   const codes = [(slide.home.code || "").toUpperCase(), (slide.away.code || "").toUpperCase()];
   const names = [(slide.home.name || "").toUpperCase(), (slide.away.name || "").toUpperCase()];
-  const hasIND = codes.some(c => c === "IND" || c === "INDIA") || names.some(n => n.includes("INDIA"));
-  const hasAFG = codes.some(c => c === "AFG" || c === "AFGHANISTAN") || names.some(n => n.includes("AFGHANISTAN"));
-  const hasIRE = codes.some(c => c === "IRE" || c === "IRELAND") || names.some(n => n.includes("IRELAND"));
-  if (hasIND && hasIRE) return IND_VS_IRE_IMG;
-  if (hasIND && hasAFG) return "/india-vs-afg.avif";
-  return "/women_t20.jpg";
+  const has = (c, full) => codes.some((x) => x === c) || names.some((n) => n.includes(full));
+  const hasIND = has("IND", "INDIA");
+  if (hasIND && has("IRE", "IRELAND")) return IND_VS_IRE_IMG;
+  if (hasIND && has("AFG", "AFGHANISTAN")) return "/india-vs-afg.avif";
+
+  // Whoever India is playing — their flag says more than a stock photo does.
+  const opponent = codes.find((c) => c && c !== "IND") || "";
+  return flagImg(opponent) || flagImg(codes[0]) || "/banner.jpg";
 }
 
 // ─── BCCI HELPERS ─────────────────────────────────────────────────────────────
-const BCCI_WOMENS_COMP_IDS = new Set([238]);
-function isIndiaMensMatch(m) { return !BCCI_WOMENS_COMP_IDS.has(Number(m.CompetitionID)); }
+/* isIndiaMensMatch is shared with the home page strip and the sports page.
+   This file used to carry its own copy that excluded one competition id and
+   nothing else, so the hero would happily headline a match India was not in. */
 const BCCI_FORMAT_LABEL = { "One Day D/N":"ODI","One Day":"ODI","T20":"T20I","Test":"Test","Test D/N":"Test" };
 function bcciFmt(type) { return BCCI_FORMAT_LABEL[type] || type || "MATCH"; }
 function bcciFmtDate(s) {
