@@ -1246,11 +1246,40 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   const firstTeamMeta  = getIccTeam(firstBatCode);
   const secondTeamMeta = getIccTeam(secondBatCode);
 
-  const inn1Score = rawMd?.["1FallScore"] ? { score: `${rawMd["1FallScore"]}/${rawMd["1FallWickets"]}`, overs: `${rawMd["1FallOvers"]} ov` } : null;
-  const inn2Score = rawMd?.["2FallScore"] ? { score: `${rawMd["2FallScore"]}/${rawMd["2FallWickets"]}`, overs: `${rawMd["2FallOvers"]} ov` } : null;
-  const matchOvers    = rawMd?.MATCH_NO_OF_OVERS || "50";
+  /* Declared before the header derives anything from them: these used to sit
+     thirty lines further down, which was fine while nothing above referenced
+     them and a temporal-dead-zone crash the moment something did. */
+  const isTestMatch = /test/i.test(rawMd?.MatchType || matchData.MatchType || "");
+  const { innings: feedInnings, error: inningsError } =
+    useInnings("bcci", matchData?.MatchID, isTestMatch);
+
+  /* The header used to read its scores from getMatchCenterDetails only, and
+     that feed stopped returning a body — so a match with two completed innings
+     rendered "Yet to bat" against both teams. The scoring feed below has the
+     real totals, so it stands in when the old one is empty. */
+  const feedScore = (i) => {
+    const inn = feedInnings?.[i];
+    if (!inn || inn.Total === undefined || inn.Total === null) return null;
+    return {
+      score: `${inn.Total}/${inn.Wickets}`,
+      overs: inn.Overs ? `${inn.Overs} ov` : "",
+    };
+  };
+  const inn1Score = rawMd?.["1FallScore"]
+    ? { score: `${rawMd["1FallScore"]}/${rawMd["1FallWickets"]}`, overs: `${rawMd["1FallOvers"]} ov` }
+    : feedScore(0);
+  const inn2Score = rawMd?.["2FallScore"]
+    ? { score: `${rawMd["2FallScore"]}/${rawMd["2FallWickets"]}`, overs: `${rawMd["2FallOvers"]} ov` }
+    : feedScore(1);
+  /* Only limited-overs cricket has a per-innings over limit. This defaulted to
+     50 for everything, so a five-day Test and a first-class final were both
+     labelled "50 ov" — a number that is simply not true of either. */
+  const isLimitedOvers = !isTestMatch && !/first[- ]class|multi[- ]day/i.test(rawMd?.MatchType || matchData.MatchType || "");
+  const matchOvers = rawMd?.MATCH_NO_OF_OVERS || (isLimitedOvers ? "50" : "");
   const tossText      = rawMd?.TossDetails || rawMd?.TossText || "";
-  const chasingText   = rawMd?.ChasingText || "";
+  /* "South Zone trail East Zone by 408 runs" — the live feed's own sentence,
+     used when the old match-centre feed has nothing to say. */
+  const chasingText   = rawMd?.ChasingText || matchData?.MatchResult || "";
   const resultComment = (rawMd?.Comments || rawMd?.Commentss || "").trim();
   const mom     = rawMd?.MOM || "";
   const momRuns = rawMd?.MOMRuns || "";
@@ -1260,9 +1289,6 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   // in practice this is empty and the scoring feed below is what renders.
   const scorecardInn  = sc?.scorecardData?.innings || sc?.innings || [];
 
-  const isTestMatch = /test/i.test(rawMd?.MatchType || matchData.MatchType || "");
-  const { innings: feedInnings, error: inningsError } =
-    useInnings("bcci", matchData?.MatchID, isTestMatch);
 
   // Default to the innings being played, and follow it when a new one starts —
   // but never override a reader who has picked one themselves.
@@ -1381,7 +1407,8 @@ function BcciMatchCenter({ matchData, onMatchState }) {
         tossText={tossText}
         seriesText={rawMd?.CompetitionName || matchData.CompetitionName}
         venueText={rawMd?.GroundName || matchData.GroundName}
-        matchTypeText={`${fmt} · ${rawMd?.MatchOrder || matchData.MatchOrder} · ${matchOvers} ov`}
+        matchTypeText={[fmt, rawMd?.MatchOrder || matchData.MatchOrder, matchOvers && `${matchOvers} ov`]
+          .filter(Boolean).join(" · ")}
         countdown={countdown} refreshing={refreshing} onRefresh={() => load()}
       >
 
