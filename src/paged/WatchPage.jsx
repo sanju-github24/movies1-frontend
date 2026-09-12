@@ -470,6 +470,35 @@ const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
     } catch { return null; }
   }, [backendUrl]);
 
+  /* ── no tmdb_id on the row? find one from the title ──────────────────
+     A title added by hand has no ids — Bigg Boss Kannada S13 is one, and every
+     TMDB call below is guarded on having an id, so the page showed episodes
+     with no stills, no names and no air dates while the mobile sheet showed
+     them perfectly. The sheet works because its hook falls back to searching
+     TMDB by title; this is that same fallback.
+
+     Searched as /tv when the row looks like a series: a multi-search happily
+     returns a same-named film, whose id then has no seasons at all. */
+  const resolveTmdbIdByTitle = useCallback(async (rawTitle, looksTV, year) => {
+    if (!backendUrl) return null;
+    const name = titleForSearch(rawTitle || "").name;
+    if (!name) return null;
+    try {
+      if (looksTV) {
+        const { data } = await axios.get(`${backendUrl}/api/tmdb-search`, {
+          params: { query: name, type: "tv" }, timeout: 12000,
+        });
+        const hits = data?.success ? (data.results || []) : [];
+        const pick = (year && hits.find((h) => String(h.year) === String(year))) || hits[0];
+        if (pick) return String(pick.tmdb_id || pick.id);
+      }
+      const { data } = await axios.get(`${backendUrl}/api/tmdb-details`, {
+        params: { title: name, ...(looksTV ? { contentType: "tv" } : {}) }, timeout: 12000,
+      });
+      return data?.success && data.data?.tmdb_id ? String(data.data.tmdb_id) : null;
+    } catch { return null; }
+  }, [backendUrl]);
+
   /* ── fetch episodes for a TV series via /api/tmdb-episodes ── */
 const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   if (!backendUrl) return [];
@@ -966,9 +995,17 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
             // poster / year / runtime / episode names). Episodes present overrides
             // any stale content_type stored on the row.
             const ctype = localEps.length ? "tv" : (watchData.content_type || null);
+            /* A hand-added row has no ids, so look one up from the title before
+               giving up — otherwise every TMDB call below is skipped and the
+               episodes render bare. */
+            let resolvedTmdbId = watchData.tmdb_id || null;
+            if (!resolvedTmdbId && !watchData.imdb_id) {
+              resolvedTmdbId = await resolveTmdbIdByTitle(
+                watchData.title, ctype === "tv" || localEps.length > 0, watchData.year);
+            }
             // Enrich by tmdb_id OR imdb_id so direct visits also get TMDB metadata.
-            tData = (watchData.tmdb_id || watchData.imdb_id)
-              ? await fetchFullTmdb(watchData.tmdb_id, watchData.imdb_id, ctype)
+            tData = (resolvedTmdbId || watchData.imdb_id)
+              ? await fetchFullTmdb(resolvedTmdbId, watchData.imdb_id, ctype)
               : null;
             eps   = localEps;
             if (eps.length === 0 && Array.isArray(tData?.episodes)) eps = tData.episodes;
@@ -978,7 +1015,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               ...watchData,
               // Prefer TMDB's clean title/poster over the messy upload title.
               title:        tData?.title || tData?.name || watchData.title || watchData.slug,
-              tmdb_id:      watchData.tmdb_id || tData?.tmdb_id || null,
+              tmdb_id:      watchData.tmdb_id || resolvedTmdbId || tData?.tmdb_id || null,
               imdb_id:      watchData.imdb_id || null,
               content_type: (eps.length > 0 || ctype === "tv") ? "tv" : (watchData.content_type || tData?.content_type || "movie"),
               poster:       safeURI(tData?.poster_url || watchData.poster || "/default-poster.jpg"),
@@ -1134,7 +1171,7 @@ if (!alive) return;
 
     run();
     return () => { alive = false; };
-  }, [routeSlug, backendUrl, fetchFullTmdb, fetchTmdbEpisodes, location.state]);
+  }, [routeSlug, backendUrl, fetchFullTmdb, fetchTmdbEpisodes, resolveTmdbIdByTitle, location.state]);
 
   /* ── MX "no miss" — once a title loads (any path), check MX and, if found,
        add MX Player to the list. It slots in at its normal priority (after
