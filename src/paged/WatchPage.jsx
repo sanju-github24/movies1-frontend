@@ -811,9 +811,15 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
     autoPlayedRef.current = true;
 
-    // Only hand play straight to the live feed while it is actually on air;
-    // otherwise fall through to the normal episode/AnchorHD path below.
-    if (isLiveNow(movieMeta)) { handlePlayAction(null, "ourhls"); return; }
+    /* Only hand play straight to the live feed while it is actually on air —
+       and only when the viewer did not ask for a specific episode. The detail
+       sheets now offer "Watch Live" and "Watch Latest Episode" side by side,
+       and without this check the second one would silently play the live
+       broadcast during the window: the wrong content, with no hint why. */
+    if (isLiveNow(movieMeta) && !location.state?.preferEpisode) {
+      handlePlayAction(null, "ourhls");
+      return;
+    }
 
     /* AnchorHD (our own R2 stream) plays immediately — that's the whole point of
        coming straight from the detail overlay. Anything else needs a choice, so

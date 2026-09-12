@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Play, Volume2, VolumeX, Star, Plus, ChevronDown, CheckCircle2, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate } from "../utils/titleEpisodes";
+import { getLiveShow } from "../utils/liveShow";
+import LiveShowActions from "../components/LiveShowActions";
 import { inMyList, toggleMyList } from "../utils/myList";
 import { useRecommendations } from "../utils/recommendations";
 import Mp4Trailer from "../components/Mp4Trailer";
@@ -183,10 +185,10 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
 
   /* Play straight into the player — the watch PAGE is never shown. WatchPage
      resolves the servers and opens its player overlay from `autoPlay`. */
-  const play = (ep = null) => {
+  const play = (ep = null, intent = {}) => {
     const episode = ep ? { season: seasonNo(ep), episode: epNo(ep) } : null;
-    if (onNavigate) onNavigate(movie, { autoPlay: true, episode });
-    else navigate(`/watch/${movie.slug}`, { state: { autoPlay: true, autoPlayEpisode: episode } });
+    if (onNavigate) onNavigate(movie, { autoPlay: true, episode, ...intent });
+    else navigate(`/watch/${movie.slug}`, { state: { autoPlay: true, autoPlayEpisode: episode, ...intent } });
     onClose();
   };
   const handlePlayClick = () => play(isTV ? latestEpisode : null);
@@ -290,15 +292,30 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
               </div>
 
               <div className="flex items-center gap-3">
-                <button 
-                  onClick={handlePlayClick}
-                  className="px-8 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black flex items-center gap-2 transition-all transform hover:scale-105 uppercase text-xs tracking-widest shadow-xl"
-                >
-                  <Play size={18} className="fill-current" />
-                  {isTV && latestEpisode
-                    ? <>WATCH S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</>
-                    : "PLAY NOW"}
-                </button>
+                {/* A nightly live show gets its own pair: tonight's broadcast and
+                    last night's episode. Same component as the mobile sheet, so
+                    the two cannot drift apart. The watchlist button beside it
+                    stays either way. */}
+                {getLiveShow(movie) ? (
+                  <div className="flex-1 max-w-md">
+                    <LiveShowActions
+                      movie={movie}
+                      episodes={episodes}
+                      onWatchLive={() => play(null, { live: true })}
+                      onWatchEpisode={(ep) => play(ep, { preferEpisode: true })}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={handlePlayClick}
+                    className="px-8 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black flex items-center gap-2 transition-all transform hover:scale-105 uppercase text-xs tracking-widest shadow-xl"
+                  >
+                    <Play size={18} className="fill-current" />
+                    {isTV && latestEpisode
+                      ? <>WATCH S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</>
+                      : "PLAY NOW"}
+                  </button>
+                )}
                 
                 <button onClick={() => setSaved(toggleMyList(movie))} aria-label="Watchlist"
                   className="p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 backdrop-blur-xl transition-all">

@@ -4,6 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { X, Play, Info, Volume2, VolumeX, Plus, Check, Share2, Star } from "lucide-react";
 import { inMyList, toggleMyList, getRating, setRating } from "../utils/myList";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, langLabel } from "../utils/titleEpisodes";
+import { getLiveShow } from "../utils/liveShow";
+import LiveShowActions from "./LiveShowActions";
 import { useRecommendations } from "../utils/recommendations";
 import Mp4Trailer from "./Mp4Trailer";
 
@@ -81,11 +83,11 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
   const displayTitle = cleanTitle(movie.title) || movie.slug;
 
   /* ── Watch → straight into the player (servers), never the watch page. ── */
-  const goWatch = (ep = null) => {
+  const goWatch = (ep = null, intent = {}) => {
     const episode = ep ? { season: seasonNo(ep), episode: epNo(ep) } : null;
 
     if (onNavigate) {                       // page owns the navigation (WatchListPage)
-      onNavigate(movie, { autoPlay: true, episode });
+      onNavigate(movie, { autoPlay: true, episode, ...intent });
       return;
     }
 
@@ -97,7 +99,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
       return;
     }
 
-    const state = { autoPlay: true, autoPlayEpisode: episode };
+    const state = { autoPlay: true, autoPlayEpisode: episode, ...intent };
     if (tmdbId || imdbId) {
       state.movie = {
         tmdb_id: tmdbId,
@@ -231,7 +233,18 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
             )}
           </div>
 
-          {/* ── Primary action ── */}
+          {/* ── Primary action ──
+              A nightly live show gets its own pair of buttons: tonight's
+              broadcast, and last night's episode. One button cannot offer both,
+              and during the live window a viewer may well want either. */}
+          {getLiveShow(movie) ? (
+            <LiveShowActions
+              movie={movie}
+              episodes={episodes}
+              onWatchLive={() => goWatch(null, { live: true })}
+              onWatchEpisode={(ep) => goWatch(ep, { preferEpisode: true })}
+            />
+          ) : (
           <button onClick={() => goWatch(isTV ? latestEpisode : null)}
             className="w-full bg-gray-100 text-black py-4 rounded-lg font-bold text-base flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-lg">
             <Play className="w-5 h-5 fill-current" />
@@ -239,6 +252,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
               ? <>Watch Latest Season <span className="text-gray-600 font-semibold">S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</span></>
               : isTV ? "Stream Series" : "Watch Now"}
           </button>
+          )}
 
           {genres.length > 0 && (
             <div className="w-full flex items-center gap-2 overflow-x-auto scrollbar-hide text-[13px] font-semibold text-white/90">

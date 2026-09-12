@@ -18,6 +18,17 @@ export { cleanTitle };
 export const epNo = (e) => Number(e?.episodeNumberInSeason || e?.episode || 1);
 export const seasonNo = (e) => Number(e?.season || e?.season_number || 1) || 1;
 export const epStill = (e) => e?.thumbnail || e?.still_path || e?.still || null;
+/* The newest episode held — highest number in the highest season. Distinct from
+   the detail sheets' own `latestEpisode`, which is the FIRST episode of the
+   latest season: right for starting a drama, wrong for a daily show where
+   "latest" means last night. */
+export const newestEpisode = (episodes = []) => {
+  if (!episodes.length) return null;
+  return [...episodes]
+    .sort((a, b) => (seasonNo(a) - seasonNo(b)) || (epNo(a) - epNo(b)))
+    .pop();
+};
+
 export const hasStream = (e) => !!(e?.html || e?.html_code || e?.direct_url || e?.hls_url);
 
 export const langList = (l) => (Array.isArray(l) ? l.filter(Boolean) : l ? [String(l)] : []);
