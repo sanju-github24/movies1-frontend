@@ -1018,8 +1018,12 @@ const WatchListPage = () => {
      opts.episode: { season, episode } to start on. */
   const handleNavigateToWatch = (movie, opts = {}) => {
     saveRecentlyWatched(movie);
+    // Keep any intent flags the sheet sent (today: preferEpisode, set by
+    // "Watch Latest Episode"). Rebuilding this object from scratch used to drop
+    // them, so during the live window that button played the live feed instead.
+    const { autoPlay: _a, episode: _e, ...intent } = opts;
     const playState = opts.autoPlay
-      ? { autoPlay: true, autoPlayEpisode: opts.episode || null }
+      ? { autoPlay: true, autoPlayEpisode: opts.episode || null, ...intent }
       : {};
 
     // MX Player hero slides open the in-SPA MX watch page (VideoPlayer.jsx).

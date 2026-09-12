@@ -795,11 +795,31 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
     let ep = null;
     if (isTV) {
-      ep = want
-        ? episodes.find(e =>
-            String(e.season || 1) === String(want.season) &&
-            String(e.episodeNumberInSeason || e.episode) === String(want.episode))
+      /* Uploaded rows often carry only a season ("13") and a label ("EP06") —
+         no episode number. The detail sheets number those by position before
+         showing them, so the episode the viewer picked is numbered while the
+         row here is not, and a plain field match misses every time: the click
+         then fell through to the server list instead of playing. Number the
+         same way (explicit number, else label, else position in its season)
+         so both sides agree. */
+      const fromLabel = (e) => {
+        const m = String(e?.title || "").match(/(?:^|[^0-9])e(?:p|pisode)?\s*[-. ]?(\d{1,3})(?!\d)/i);
+        return m ? Number(m[1]) : null;
+      };
+      const pos = {};
+      const numbered = episodes.map((e) => {
+        const s = String(e.season || 1);
+        pos[s] = (pos[s] || 0) + 1;
+        const n = Number(e.episodeNumberInSeason ?? e.episode) || fromLabel(e) || pos[s];
+        return { e, s, n };
+      });
+      const hit = want
+        ? numbered.find(({ s, n }) =>
+            s === String(want.season) && String(n) === String(want.episode))
         : null;
+      // Carry the resolved number onto the row so the player title, the resume
+      // key and the dropdown all name the right episode.
+      ep = hit ? { ...hit.e, season: Number(hit.s), episodeNumberInSeason: hit.n, episode: hit.n } : null;
       // The sheet lists every season/episode TMDB knows about, so the pick may be
       // one we haven't uploaded — play it on a server using its numbers.
       if (!ep && want) {
