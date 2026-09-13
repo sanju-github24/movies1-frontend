@@ -469,6 +469,11 @@ const HERO_MS = 6000;
 function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
   const trackRef = useRef(null);
   const [active, setActive] = useState(0);
+  /* Set while a finger is down, and for a moment after the flick settles.
+     Auto-advance is suspended throughout: nothing is more irritating than a
+     carousel that yanks itself along while you are reading a card. */
+  const heldRef = useRef(false);
+  const releaseRef = useRef(0);
 
   /* Which card is under the viewport's centre. Derived from scrollLeft rather
      than from an IntersectionObserver per card: one listener, and it stays
@@ -487,6 +492,50 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(measure); };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => { el.removeEventListener("scroll", onScroll); if (frame) cancelAnimationFrame(frame); };
+  }, [slides.length]);
+
+  /* Advance every four seconds, wrapping at the end.
+
+     It scrolls the track rather than moving an index, because the deck's
+     position is the scroll position — the dots read from it, and a swipe and a
+     tick have to leave it in the same state or the two fight each other. */
+  useEffect(() => {
+    if (slides.length < 2) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    const el = trackRef.current;
+    if (!el) return;
+
+    const hold = () => { heldRef.current = true; clearTimeout(releaseRef.current); };
+    // A flick keeps scrolling after the finger lifts; let it land before
+    // taking the wheel back.
+    const release = () => {
+      clearTimeout(releaseRef.current);
+      releaseRef.current = setTimeout(() => { heldRef.current = false; }, 2500);
+    };
+    el.addEventListener("touchstart", hold, { passive: true });
+    el.addEventListener("touchend", release, { passive: true });
+    el.addEventListener("touchcancel", release, { passive: true });
+
+    const tick = setInterval(() => {
+      if (heldRef.current || document.hidden) return;
+      const card = el.firstElementChild;
+      if (!card) return;
+      const step = card.getBoundingClientRect().width + 12;
+      const next = Math.round(el.scrollLeft / step) + 1;
+      el.scrollTo({
+        left: next >= slides.length ? 0 : next * step,
+        behavior: "smooth",
+      });
+    }, 4000);
+
+    return () => {
+      clearInterval(tick);
+      clearTimeout(releaseRef.current);
+      el.removeEventListener("touchstart", hold);
+      el.removeEventListener("touchend", release);
+      el.removeEventListener("touchcancel", release);
+    };
   }, [slides.length]);
 
   return (
