@@ -60,7 +60,14 @@ function useLiveSports() {
         /* India's senior men only. BCCI's live feed now carries every live
            match in the world, so without this the home page strip fills with
            Duleep Trophy zonal games and other boards' fixtures. */
-        (j.liveMatches||[]).filter(isIndiaMensMatch).forEach(m => out.push({
+        /* Live only. The endpoint is called /live but its array carries
+           finished games too — the AUS v BAN fixtures come back as
+           MatchStatus "complete" — so without this the hero would headline a
+           match that ended hours ago with a "Live now" pill on it. */
+        const isLiveStatus = (m) =>
+          String(m?.MatchStatus ?? "").trim().toLowerCase() === "live";
+
+        (j.liveMatches||[]).filter(isIndiaMensMatch).filter(isLiveStatus).forEach(m => out.push({
           id: `bcci-${m.MatchID}`,
           sport: "cricket", type: "bcci",
           badge: bcciFmt(m.MatchType),

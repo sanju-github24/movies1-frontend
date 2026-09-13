@@ -1238,8 +1238,21 @@ function BcciMatchCenter({ matchData, onMatchState }) {
   useEffect(() => { const t = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000); return () => clearInterval(t); }, [lastUpdate]);
 
   const rawMd = sc?.postMatch?.[0] || sc?.liveMatch?.[0] || sc?.upcomingMatch?.[0] || matchData;
-  const isLive     = rawMd?.MatchStatus === "Live" || sc?.matchStatus === "live";
-  const isFinished = !isLive && (rawMd?.WinningTeamID || rawMd?.MatchStatus === "Result" || rawMd?.MatchStatus === "Post" || sc?.matchStatus === "post" || !!rawMd?.Comments);
+  /* BCCI sends these lowercase — "live", "complete" — and this compared
+     against "Live", "Result" and "Post". "live" === "Live" is false, so a
+     match in progress read as not live and the player never rendered; a
+     finished one fell through the same way. Compared case-insensitively now,
+     against the vocabulary the feed actually uses. */
+  const mStatus = String(rawMd?.MatchStatus ?? "").trim().toLowerCase();
+  const scStatus = String(sc?.matchStatus ?? "").trim().toLowerCase();
+
+  const isLive     = mStatus === "live" || scStatus === "live" || mStatus === "in play";
+  const isFinished = !isLive && (
+    !!rawMd?.WinningTeamID ||
+    ["complete", "result", "post", "end of match", "abandoned", "drawn"].includes(mStatus) ||
+    ["complete", "post", "result"].includes(scStatus) ||
+    !!rawMd?.Comments
+  );
   const fmt        = bcciFmt(rawMd?.MatchType || matchData.MatchType);
   const curInn     = String(rawMd?.CurrentInnings || "1");
 
