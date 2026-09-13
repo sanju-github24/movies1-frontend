@@ -958,7 +958,19 @@ function ResultPopup({ result, mom, momRuns, momWickets, momImg, sport }) {
 }
 
 function LivePlayer({ sport, fancodeChannel }) {
-  const base = sport === "football" ? FOOTBALL_CHANNELS : CRICKET_CHANNELS;
+  /* The match centre plays FanCode and nothing else.
+
+     A match page is about one match, so the full provider list — Star Sports,
+     Willow, Sony, each with its own dropdown — was offering a dozen channels
+     that mostly are not showing this fixture. FanCode's permanent live channel
+     always resolves to whatever match is on, which is the one thing here that
+     is reliably about the game you are looking at.
+
+     The per-match FanCode stream still wins when it resolves: same provider,
+     but pinned to this fixture rather than to whatever is live. */
+  const base = sport === "football"
+    ? FOOTBALL_CHANNELS
+    : CRICKET_CHANNELS.filter((c) => c.id === "fancode-cricbuzz");
   const channels = fancodeChannel ? [fancodeChannel, ...base] : base;
   const [active, setActive] = useState(channels[0]);
   const [switching, setSwitching] = useState(false);
