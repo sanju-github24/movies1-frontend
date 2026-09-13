@@ -272,139 +272,6 @@ function LiveShowBanner() {
   );
 }
 
-// ─── LIVE MATCH STRIP ─────────────────────────────────────────────────────────
-// Clean inline card(s) — one row per live match, click → match center
-function LiveMatchStrip() {
-  const { matches, loading } = useLiveSports();
-  const navigate = useNavigate();
-
-  if (loading || matches.length === 0) return null;
-
-  return (
-    <div className="w-full max-w-[1800px] mt-4 px-0">
-      {/* Header label */}
-      <div className="flex items-center gap-2 mb-2 px-1">
-        <Dot color="#ef4444" size={6}/>
-        <span className="text-[11px] font-black text-red-400 uppercase tracking-[0.2em]">Live Now</span>
-        <span className="text-[11px] font-semibold text-gray-400">· {matches.length} match{matches.length>1?"es":""}</span>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {matches.map(m => (
-          <button
-            key={m.id}
-            onClick={() => navigate(`/match-center/${m.hash}`)}
-            className="w-full text-left group"
-          >
-            <div
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-200 active:scale-[0.99] hover:border-white/10"
-              style={{
-                background: "rgba(255,255,255,0.025)",
-                borderColor: "rgba(255,255,255,0.06)",
-              }}
-            >
-              {/* Sport badge */}
-              <span
-                className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full shrink-0 leading-none"
-                style={{
-                  background: m.sport==="football" ? "rgba(52,211,153,0.1)" : "rgba(139,92,246,0.1)",
-                  color: m.sport==="football" ? "#6ee7b7" : "#c4b5fd",
-                  border: `1px solid ${m.sport==="football" ? "rgba(52,211,153,0.25)" : "rgba(139,92,246,0.25)"}`,
-                }}
-              >
-                {m.sport==="football"
-                  ? <><Goal className="w-3 h-3" aria-hidden="true" /> FIFA</>
-                  : <><Trophy className="w-3 h-3" aria-hidden="true" /> {m.badge}</>}
-              </span>
-
-              {/* Teams + score */}
-              {m.sport === "football" ? (
-                // Football: flag | NAME  score:score  NAME | flag
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-                    <span className="text-[13px] font-black text-white truncate">{m.homeCode}</span>
-                    <div className="w-5 h-4 rounded-[3px] overflow-hidden border border-white/10 shrink-0">
-                      <img src={m.homeFlagUrl} alt="" className="w-full h-full object-cover"
-                        onError={e=>{e.target.style.display="none";}}/>
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1 px-1">
-                    <span className="text-[15px] font-black text-white tabular-nums leading-none">{m.homeScore??"-"}</span>
-                    <span className="text-[10px] text-gray-600 font-bold">:</span>
-                    <span className="text-[15px] font-black text-white tabular-nums leading-none">{m.awayScore??"-"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <div className="w-5 h-4 rounded-[3px] overflow-hidden border border-white/10 shrink-0">
-                      <img src={m.awayFlagUrl} alt="" className="w-full h-full object-cover"
-                        onError={e=>{e.target.style.display="none";}}/>
-                    </div>
-                    <span className="text-[13px] font-black text-white truncate">{m.awayCode}</span>
-                  </div>
-                </div>
-              ) : (
-                // Cricket: two inline team rows
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-base leading-none">{m.homeFlag}</span>
-                      <span className="text-[13px] font-black text-white">{m.homeCode}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {m.homeScore
-                        ? <>
-                            <span className="text-[14px] font-black text-white tabular-nums">{m.homeScore}</span>
-                            {m.homeOvers && <span className="text-[11px] font-semibold text-gray-400 tabular-nums">({m.homeOvers})</span>}
-                          </>
-                        : <span className="text-[11px] font-semibold text-gray-500">Yet to bat</span>
-                      }
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-base leading-none">{m.awayFlag}</span>
-                      <span className="text-[13px] font-black text-gray-200">{m.awayCode}</span>
-                    </div>
-                    <div>
-                      {m.awayScore
-                        ? <span className="text-[14px] font-black text-gray-100 tabular-nums">{m.awayScore}</span>
-                        : <span className="text-[8px] text-gray-700">Yet to bat</span>
-                      }
-                    </div>
-                  </div>
-                  {m.striker && (
-                    <p className="text-[11px] text-amber-300 font-bold pt-1 truncate">{m.striker}</p>
-                  )}
-                  {m.status && !m.striker && (
-                    <p className="text-[11px] text-gray-400 italic truncate">{m.status}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Arrow */}
-              <ChevronRight
-                size={14}
-                className="text-gray-500 group-hover:text-white transition-colors shrink-0"
-              />
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── Hero spotlight ──────────────────────────────────────────────────────────
-   The page used to open on a wall of identical 2:3 posters, which gives the
-   eye nowhere to land and makes every title look equally important. The five
-   newest releases now lead, one at a time.
-
-   Why it rotates rather than sitting on one title: a single hero picks a
-   winner, and on a catalogue that turns over daily that means four other new
-   releases get the same treatment as a title from last month. Rotation keeps
-   the slot honest without spending five screens of height on it.
-
-   Artwork comes from watch_html — the same rows the detail sheet reads — so
-   the hero can never show different art from the page it opens. */
 /* The hero's metadata line: year, certification, seasons, languages.
 
    None of it comes from one place, and two of the four are not in the database
@@ -416,6 +283,13 @@ function LiveMatchStrip() {
    tmdb-details endpoint the detail overlay uses; the episode list on the
    watch_html row is the fallback for seasons when TMDB has no count. */
 function heroMeta(movie, art = {}, extra = {}) {
+  /* A live match has none of the fields below — no year, no certification, no
+     season count — but it does have the two things worth knowing at a glance:
+     the format, and where the game stands. */
+  if (movie.liveKind === LIVE_CRICKET) {
+    const m = movie.match || {};
+    return [m.badge, m.status].filter(Boolean);
+  }
   const langs = Array.isArray(movie.language) ? movie.language : (movie.language ? [movie.language] : []);
   const eps = Array.isArray(art.episodes) ? art.episodes : [];
   const seasons = Number(extra.number_of_seasons) || (eps.length ? new Set(eps.map(seasonNo)).size : 0);
@@ -514,7 +388,7 @@ function CricketCover({ match, compact = false }) {
   );
 }
 
-function LivePill({ label = "Live" }) {
+function LivePill({ label = "Live now" }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
                      text-white bg-red-600 px-3 py-1.5 rounded-full">
@@ -652,7 +526,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
 
                   {isLiveSlide && (
                     <span className="absolute top-4 left-4 z-10">
-                      <LivePill label={isCricketSlide ? (movie.match.badge || "Live") : "Live now"} />
+                      <LivePill />
                     </span>
                   )}
                   {/* Deep enough to carry a title logo and a metadata line, and
@@ -1037,7 +911,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
             <div className={`flex flex-col items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4 min-w-0
                              transition-all duration-700 ease-out motion-reduce:transition-none ${rise}`}>
               {isLiveSlide ? (
-                <LivePill label={isCricketSlide ? (movie.match.badge || "Live") : "Live now"} />
+                <LivePill />
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
                                  text-amber-300 bg-amber-400/10 border border-amber-400/25 px-3 py-1.5 rounded-full">
@@ -1467,8 +1341,9 @@ const Header = () => {
         <div className="bg-gray-950 sm:-ml-[72px] sm:pl-[72px]">
           <div className={`flex flex-col items-center ${GUTTER}`}>
 
-      {/* ── LIVE MATCH STRIP ────────────────────────────────────────────── */}
-      <LiveMatchStrip />
+      {/* The "Live Now" strip that used to sit here is gone: the hero leads
+          with the same matches, and repeating them twenty pixels below it said
+          the same thing twice. */}
 
       {/* ── STORIES ─────────────────────────────────────────────────────── */}
       {(storiesLoading || stories.length > 0) && (

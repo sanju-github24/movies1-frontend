@@ -70,6 +70,20 @@ export const CRICKET_CHANNELS = [
     url: "https://m3u8-player-ashen.vercel.app/?sid=7cswis4w7cn1&chid=FRttXFtDHQ&t=g-emhBJmCgNJIxIWWVESYhcHDAFTLkEQYlQTAxobEhYSZ11YHQQ&lg=GwxGQEEPV0UeGARWVFFcVhcODEEQF18fQV4RBgUaA1VHQF5aGQ4aQBAVQR1fUBwDCEAgNB9GQRgoKyJBAxZV",
     desc: "FanCode — always plays the current live match",
   },
+
+  {
+    id: "fancode-cricbuzz", name: "FanCode", sub: "Live",
+    group: "FanCode",
+    color: "#ec1c24", glow: "rgba(14, 12, 12, 0.3)", border: "rgba(236,28,36,0.25)",
+    bg: "rgba(236,28,36,0.06)", tag: "LIVE", useIcon: false,
+    logo: "/fancode.svg",
+    // Permanent FanCode Live channel — chid=fc_live always resolves to whatever
+    // FanCode match is currently live (fresh signed token on every open).
+    url: "https://m3u8-player-ashen.vercel.app/?sid=8oppyxc7mm4z&src=GwxGQAgaVx4fHBYWBx5TTBYLGgwcCFceXFAMRR4GHxRdR1pRVwMHCxYAHF0BQEA&t=JBFeXF1CWEJeXUMIGw&lg=GwxGQEEPV0UKHRobWVVGGw8DBQMcDxxERBonBBwXB1dbXVUaDwMFAxwPbVJeQB01BQAUFxwDBAcdDlEKXQhcVw",
+    desc: "FanCode by cricbuzz — always plays the current live match",
+  },
+
+
   {
     id: "sony-ten-1", name: "Sony Ten 1", sub: "English",
     group: "Sony",
