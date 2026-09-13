@@ -73,6 +73,15 @@ function useLiveSports() {
           homeOvers: m["1FallOvers"]||"",
           striker: m.CurrentStrikerName ? `★ ${m.CurrentStrikerName} ${m.StrikerRuns}(${m.StrikerBalls})` : "",
           status: m.ChasingText||"",
+          /* Everything below is straight off the feed — no invented view
+             counts or "watching now" figures, because we do not have them and
+             a made-up number on a live card is worse than no number. */
+          homeName:  m.FirstBattingTeamName || m.FirstBattingTeamCode || "",
+          awayName:  m.SecondBattingTeamName || m.SecondBattingTeamCode || "",
+          series:    m.CompetitionName || "",
+          matchOrder: m.MatchOrder || "",
+          venue:     m.GroundName || "",
+          year:      (m.MatchDate || "").slice(0, 4),
           hash: encodeMatchHash({
             sport:"cricket", type:"bcci",
             homeCode: m.FirstBattingTeamCode||"—",
@@ -288,7 +297,7 @@ function heroMeta(movie, art = {}, extra = {}) {
      the format, and where the game stands. */
   if (movie.liveKind === LIVE_CRICKET) {
     const m = movie.match || {};
-    return [m.badge, m.status].filter(Boolean);
+    return ["Cricket", m.badge, m.matchOrder].filter(Boolean);
   }
   const langs = Array.isArray(movie.language) ? movie.language : (movie.language ? [movie.language] : []);
   const eps = Array.isArray(art.episodes) ? art.episodes : [];
@@ -663,7 +672,12 @@ function HeroSpotlight({ movies = [], onOpen }) {
         liveKind: LIVE_CRICKET,
         id: `live-match-${m.id}`,
         match: m,
-        title: `${m.homeCode} v ${m.awayCode}`,
+        /* "AFG vs India 2026" — the way a live fixture is named, rather than
+           a pair of codes. Built from the feed's own team names and date. */
+        title: [
+          `${m.homeCode} vs ${m.awayName || m.awayCode}`,
+          m.year,
+        ].filter(Boolean).join(" "),
         language: [],
       });
     }
@@ -894,9 +908,13 @@ function HeroSpotlight({ movies = [], onOpen }) {
           const x = extra[heroSlug(movie)] || {};
           const meta = heroMeta(movie, a, x);
           // Our own copy first, TMDB's only when we have none of our own.
-          const blurb = shortDescription(movie.description || x.description);
+          const blurb = isCricketSlide
+            ? [movie.match.status, movie.match.venue].filter(Boolean).join(" · ")
+            : shortDescription(movie.description || x.description);
           // watch_html's genres are the curated ones; TMDB's are the fallback.
-          const genres = (a.genres || movie.categories || x.genres || []).filter(Boolean);
+          const genres = isCricketSlide
+            ? [movie.match.series].filter(Boolean)
+            : (a.genres || movie.categories || x.genres || []).filter(Boolean);
           const active = n === i;
           /* Not every title has landscape art. Where it doesn't, the desktop
              slide shows the poster at its own shape as a card rather than
