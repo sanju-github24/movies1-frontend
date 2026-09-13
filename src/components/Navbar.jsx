@@ -4,7 +4,7 @@ import { Link, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { supabase } from "../utils/supabaseClient";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
-import { X, Search, Menu, ChevronDown, LogOut, Settings, MonitorPlay, Tv, Music, Home, Clock3, Globe, User } from "lucide-react";
+import { X, ChevronDown, LogOut, Settings } from "lucide-react";
 /* The rail runs on Material icons rather than Lucide, because it needs a
    matched outline/filled pair for every destination and Lucide ships stroke
    outlines only. Filling a stroke icon does not work — a filled magnifier or
@@ -21,7 +21,7 @@ import {
   MdPublic, MdOutlinePublic,
   MdLanguage, MdOutlineLanguage,
   MdPerson, MdOutlinePerson,
-  MdSearch,
+  MdSearch, MdMenu,
 } from "react-icons/md";
 
 /* ── Desktop rail ──────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
           onClick={() => { onNavigate("/watch"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-xl flex items-center gap-3 text-gray-800 transition"
         >
-          <Tv className="w-5 h-5 text-blue-500" />
+          <MdOutlineMovie className="w-5 h-5 text-blue-500" />
           <span className="text-sm font-bold">Movies & Shows</span>
         </button>
       </li>
@@ -87,7 +87,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
           onClick={() => { onNavigate("/sports"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
         >
-          <MonitorPlay className="w-5 h-5 text-red-500" />
+          <MdOutlineSportsCricket className="w-5 h-5 text-red-500" />
           <span className="text-sm font-black">Live Sports</span>
         </button>
       </li>
@@ -96,7 +96,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
           onClick={() => { onNavigate("/live-stream"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-purple-50 rounded-xl flex items-center gap-3 text-purple-600 transition"
         >
-          <Tv className="w-5 h-5 text-purple-500" />
+          <MdOutlineLiveTv className="w-5 h-5 text-purple-500" />
           <span className="text-sm font-black">Live TV</span>
         </button>
       </li>
@@ -105,7 +105,7 @@ const WatchOptionsPopup = ({ onClose, onNavigate }) => (
           onClick={() => { onNavigate("/music"); onClose(); }}
           className="w-full text-left px-4 py-3 hover:bg-green-50 rounded-xl flex items-center gap-3 text-green-600 transition"
         >
-          <Music className="w-5 h-5 text-green-500" />
+          <MdOutlineMusicNote className="w-5 h-5 text-green-500" />
           <span className="text-sm font-black">Music</span>
         </button>
       </li>
@@ -377,14 +377,14 @@ const Navbar = () => {
 
       {/* ── Mobile Top Bar ── */}
       <div className="sm:hidden sticky top-0 z-50 bg-blue-700 shadow-lg flex items-center justify-between px-4 h-14 border-b border-white/10">
-        <button onClick={() => setMobileOpen(true)} className="p-2">
-          <Menu />
+        <button onClick={() => setMobileOpen(true)} className="p-2" aria-label="Open menu">
+          <MdMenu size={26} />
         </button>
         <Link to="/">
           <img src="/logo_39.png" alt="logo" className="h-8" />
         </Link>
-        <button onClick={() => setMobileSearchOpen(true)} className="p-2">
-          <Search />
+        <button onClick={() => setMobileSearchOpen(true)} className="p-2" aria-label="Search">
+          <MdSearch size={26} />
         </button>
       </div>
 
@@ -407,8 +407,8 @@ const Navbar = () => {
                 placeholder={location.pathname.startsWith("/music") || !!(player?.currentTrack) ? "Search songs, albums, artists..." : "Search movies, series, TMDB IDs..."}
                 className="w-full bg-white/10 border border-white/10 rounded-2xl py-5 px-6 text-xl outline-none focus:border-blue-500 transition-all text-white font-bold"
               />
-              <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 p-3 rounded-xl shadow-lg">
-                <Search size={20} />
+              <button type="submit" aria-label="Search" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 p-3 rounded-xl shadow-lg">
+                <MdSearch size={22} />
               </button>
             </form>
             <div className="mt-10">
@@ -433,27 +433,27 @@ const Navbar = () => {
             <ul className="space-y-2 font-bold text-gray-700 mb-8">
               <li>
                 <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <Home size={20} className="text-blue-600" /> Home
+                  <MdOutlineHome size={22} className="text-blue-600" /> Home
                 </Link>
               </li>
               <li>
                 <Link to="/latest" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <Clock3 size={20} className="text-blue-600" /> Latest Uploads
+                  <MdOutlineWatchLater size={22} className="text-blue-600" /> Latest Uploads
                 </Link>
               </li>
               <li>
                 <Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <Tv size={20} className="text-blue-600" /> Watch Movies
+                  <MdOutlineMovie size={22} className="text-blue-600" /> Watch Movies
                 </Link>
               </li>
               <li>
                 <Link to="/live-stream" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-purple-50 rounded-xl transition">
-                  <Tv size={20} className="text-purple-600" /> Live TV
+                  <MdOutlineLiveTv size={22} className="text-purple-600" /> Live TV
                 </Link>
               </li>
               <li>
                 <Link to="/music" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-green-50 rounded-xl transition">
-                  <Music size={20} className="text-green-600" /> Music
+                  <MdOutlineMusicNote size={22} className="text-green-600" /> Music
                 </Link>
               </li>
               <li>
@@ -462,14 +462,14 @@ const Navbar = () => {
                   className="w-full flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition"
                 >
                   <div className="flex items-center gap-4">
-                    <MonitorPlay size={20} />
+                    <MdOutlineSportsCricket size={22} />
                     <span>Live Sports</span>
                   </div>
                 </button>
               </li>
               <li>
                 <Link to="/blogs" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <Globe size={20} className="text-blue-600" /> Blogs
+                  <MdOutlinePublic size={22} className="text-blue-600" /> Blogs
                 </Link>
               </li>
             </ul>
@@ -500,14 +500,24 @@ const Navbar = () => {
 
       {/* ── Mobile Bottom Navigation Bar ── */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-800 border-t border-white/10 flex justify-around items-center h-16 pb-1 z-[100] shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
+        {/* Same icons as the desktop rail, and the same rule: the page you are
+            on is said by a solid icon, every other one is an outline. */}
         <NavLink to="/" end className={({ isActive }) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
-          <Home size={22} />
-          <span className="text-[10px] font-bold">Home</span>
+          {({ isActive }) => (
+            <>
+              {isActive ? <MdHome size={24} /> : <MdOutlineHome size={24} />}
+              <span className="text-[10px] font-bold">Home</span>
+            </>
+          )}
         </NavLink>
 
         <NavLink to="/latest" className={({ isActive }) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
-          <Clock3 size={22} />
-          <span className="text-[10px] font-bold">Latest</span>
+          {({ isActive }) => (
+            <>
+              {isActive ? <MdWatchLater size={24} /> : <MdOutlineWatchLater size={24} />}
+              <span className="text-[10px] font-bold">Latest</span>
+            </>
+          )}
         </NavLink>
 
         {/* Floating Center Search Button */}
@@ -516,7 +526,7 @@ const Navbar = () => {
             onClick={() => setMobileSearchOpen(true)}
             className="w-14 h-14 bg-white text-blue-700 rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-800 active:scale-90 transition"
           >
-            <Search size={26} />
+            <MdSearch size={28} />
           </button>
         </div>
 
@@ -526,7 +536,7 @@ const Navbar = () => {
             onClick={() => setShowWatchOptions(prev => !prev)}
             className={`flex flex-col items-center gap-1 transition ${isWatchActive ? 'text-white' : 'text-white/50'}`}
           >
-            <Tv size={22} />
+            {isWatchActive ? <MdMovie size={24} /> : <MdOutlineMovie size={24} />}
             <span className="text-[10px] font-bold">Watch</span>
           </button>
           {showWatchOptions && (
@@ -541,7 +551,7 @@ const Navbar = () => {
           onClick={() => { session ? navigate("/profile") : navigate("/auth"); }}
           className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}
         >
-          <User size={22} />
+          {location.pathname === "/profile" ? <MdPerson size={24} /> : <MdOutlinePerson size={24} />}
           <span className="text-[10px] font-bold">Account</span>
         </button>
       </div>
