@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { encodeMatchHash } from "../utils/matchHash";
+import { teamCrest, flagImg } from "../utils/teamCrest";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -46,16 +47,6 @@ const IND_VS_IRE_IMG = "https://images.slivcdn.com/videoasset_images/manage_file
    against Ireland or Afghanistan was headlined with a photo of a women's T20 —
    the wrong match, the wrong teams, the wrong tournament. The opponent's flag
    is at least about this fixture, and there is one for every country. */
-const FLAG_ISO = {
-  IND: "in", AUS: "au", PAK: "pk", NZ: "nz", SA: "za", RSA: "za", SL: "lk",
-  BAN: "bd", AFG: "af", IRE: "ie", ZIM: "zw", ENG: "gb-eng", SCO: "gb-sct",
-  NED: "nl", NEP: "np", OMA: "om", UAE: "ae", USA: "us", CAN: "ca", NAM: "na",
-};
-const flagImg = (code) => {
-  const iso = FLAG_ISO[String(code || "").toUpperCase()];
-  return iso ? `https://flagcdn.com/w640/${iso}.png` : null;
-};
-
 function resolveThumbnail(slide) {
   if (slide.sport === "football") return "/fifa_2026.webp";
   const codes = [(slide.home.code || "").toUpperCase(), (slide.away.code || "").toUpperCase()];
@@ -152,26 +143,6 @@ const ICC_FLAGS = {
 function fmtDateIST(d) {
   try { return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"Asia/Kolkata"}); }
   catch { return ""; }
-}
-
-/* Team crests we host ourselves, by team code.
-
-   The boards' own feeds are not dependable here: BCCI sends a logo URL for
-   some fixtures and nothing for others, and when it is missing the badge fell
-   all the way back to a 🏏 emoji — the same picture for both sides of the
-   match. A crest we ship is always there and always the right team.
-
-   Add a file to /public/teams and a line here to cover another side. */
-const TEAM_CRESTS = {
-  IND: "/teams/ind.webp",
-  AFG: "/teams/afg.webp",
-};
-
-/* Our crest first, then whatever the feed sent, then the country flag. The
-   emoji is the last resort rather than the common case. */
-function teamCrest(code, feedLogo) {
-  const key = String(code || "").toUpperCase();
-  return TEAM_CRESTS[key] || feedLogo || flagImg(key) || null;
 }
 
 // ─── SIDE BUILDER ─────────────────────────────────────────────────────────────

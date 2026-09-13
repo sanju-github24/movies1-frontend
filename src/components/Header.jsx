@@ -11,6 +11,7 @@ import MobileDetailSheet from "./MobileDetailSheet";
 import DesktopDetailOverlay from "../paged/DesktopDetailOverlay";
 import { LIVE_SHOWS, liveStatus, useLiveClock } from "../utils/liveShow";
 import { seasonNo } from "../utils/titleEpisodes";
+import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
@@ -451,6 +452,78 @@ const heroCopyParallax = {
   willChange: "transform, opacity",
 };
 
+/* ── Live slides in the hero ─────────────────────────────────────────────────
+
+   The home page already knew about two kinds of live thing and showed neither
+   in the hero: a cricket match (the strip below it) and a nightly telecast
+   (the banner above it). Both are the most time-sensitive thing on the page
+   while they are on, and both were relegated beneath the newest upload.
+
+   They take very different shapes in the hero, because they are different
+   things:
+
+   - Cricket has no artwork. Boards publish no per-match image, so there is
+     nothing to crop into a 21:9 band — which is why the sports hero fell back
+     to a stock photo of the wrong match for so long. Rather than find a
+     picture, the desktop slide IS the scoreboard: both crests, both scores,
+     drawn by us. On a phone the card carries the two crests facing each other.
+
+   - A telecast does have artwork — it is one of our own titles with a poster
+     and a title logo — so it is shown exactly like a movie, with a live badge.
+     Inventing a different treatment for it would make the same show look like
+     two different products depending on the hour. */
+
+const LIVE_CRICKET = "cricket";
+const LIVE_SHOW    = "show";
+
+/* The scoreboard cover. A composition, not an image: nothing to fetch, correct
+   for any pair of teams, and it updates with the score. */
+function CricketCover({ match, compact = false }) {
+  const home = teamCrest(match.homeCode, match.homeFlagUrl);
+  const away = teamCrest(match.awayCode, match.awayFlagUrl);
+
+  const Side = ({ crest, code, score, overs }) => (
+    <div className="flex flex-col items-center gap-2 min-w-0">
+      <span className={`${compact ? "w-14 h-14" : "w-20 h-20 lg:w-24 lg:h-24"}
+                        rounded-full bg-white/[0.06] ring-1 ring-white/15
+                        flex items-center justify-center overflow-hidden shrink-0`}>
+        {crest
+          ? <img src={crest} alt="" className="w-full h-full object-contain p-2" />
+          : <span className={`${compact ? "text-base" : "text-2xl"} font-black text-white`}>{code}</span>}
+      </span>
+      <span className={`${compact ? "text-[11px]" : "text-sm"} font-black uppercase tracking-widest text-gray-300`}>
+        {code}
+      </span>
+      {score && (
+        <span className={`${compact ? "text-lg" : "text-3xl lg:text-4xl"} font-black text-white leading-none whitespace-nowrap`}>
+          {score}
+          {overs && <span className={`${compact ? "text-[10px]" : "text-sm"} font-bold text-gray-400 ml-1.5`}>({overs})</span>}
+        </span>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="w-full h-full flex items-center justify-center gap-6 sm:gap-12 lg:gap-16 px-4">
+      <Side crest={home} code={match.homeCode} score={match.homeScore} overs={match.homeOvers} />
+      <span className={`${compact ? "text-[10px]" : "text-xs"} font-black uppercase tracking-[0.3em] text-gray-500 shrink-0`}>
+        v
+      </span>
+      <Side crest={away} code={match.awayCode} score={match.awayScore} />
+    </div>
+  );
+}
+
+function LivePill({ label = "Live" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
+                     text-white bg-red-600 px-3 py-1.5 rounded-full">
+      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse motion-reduce:animate-none" />
+      {label}
+    </span>
+  );
+}
+
 const HERO_COUNT = 5;
 const HERO_MS = 6000;
 
@@ -545,8 +618,12 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
         aria-roledescription="carousel" aria-label="Newest releases">
         {slides.map((movie, n) => {
           const a = art[heroSlug(movie)] || {};
-          const src = a.poster || movie.poster || movie.poster_url || a.cover_poster;
-          const logo = a.title_logo || null;
+          const isCricketSlide = movie.liveKind === LIVE_CRICKET;
+          const isLiveSlide    = !!movie.liveKind;
+          // A telecast carries its own artwork on the slide, since watch_html
+          // is read once for it rather than through the shared art map.
+          const src = movie.poster || a.poster || movie.poster_url || a.cover_poster || movie.cover_poster;
+          const logo = movie.title_logo || a.title_logo || null;
           // Same strip the desktop band shows, from the same helper.
           const meta = heroMeta(movie, a, extra[heroSlug(movie)] || {});
 
@@ -558,11 +635,25 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                 aria-label={`${movie.title} — open details`}
                 className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <span className="block aspect-[3/4] relative">
-                  {src && (
+                  {isCricketSlide ? (
+                    /* Both sides facing each other, with the live score. There
+                       is no poster for a match, and a card carrying one team's
+                       flag would be telling half the story. */
+                    <span className="absolute inset-0 flex items-center justify-center
+                                     bg-[radial-gradient(ellipse_80%_60%_at_50%_35%,rgba(37,99,235,0.22),transparent_70%)]">
+                      <CricketCover match={movie.match} compact />
+                    </span>
+                  ) : src ? (
                     <img src={src} alt="" aria-hidden="true"
                       fetchPriority={n === 0 ? "high" : "auto"}
                       loading={n === 0 ? "eager" : "lazy"} decoding="async"
                       className="absolute inset-0 w-full h-full object-cover object-top" />
+                  ) : null}
+
+                  {isLiveSlide && (
+                    <span className="absolute top-4 left-4 z-10">
+                      <LivePill label={isCricketSlide ? (movie.match.badge || "Live") : "Live now"} />
+                    </span>
                   )}
                   {/* Deep enough to carry a title logo and a metadata line, and
                       kept clear of the artwork's top two thirds. */}
@@ -592,12 +683,14 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                   where a watchlist "+" would on other apps — on this site the
                   second thing anyone wants beside Play is the file. */}
               <div className="absolute right-4 bottom-4 flex flex-col items-center gap-3">
+                {!isCricketSlide && (
                 <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
                   aria-label={`Download links for ${movie.title}`}
                   className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/25 text-white
                              flex items-center justify-center active:scale-95 transition-transform">
                   <Download className="w-5 h-5" aria-hidden="true" />
                 </Link>
+                )}
                 <button type="button" onClick={() => onOpen(movie)}
                   aria-label={`Play ${movie.title}`}
                   className="w-14 h-14 rounded-full bg-white text-black shadow-xl
@@ -642,7 +735,67 @@ function HeroSpotlight({ movies = [], onOpen }) {
   };
   const shellRef = useRef(null);
 
-  const slides = useMemo(() => movies.slice(0, HERO_COUNT), [movies]);
+  /* Live cricket, and whichever telecast is on air. Both already had a feed on
+     this page; the hero simply never asked for them. */
+  const { matches: liveMatches } = useLiveSports();
+  const clock = useLiveClock();
+  const [showRow, setShowRow] = useState(null);
+
+  const onAirShow = useMemo(() => {
+    for (const show of Object.values(LIVE_SHOWS)) {
+      if (liveStatus(show, clock).live) return show;
+    }
+    return null;
+  }, [clock]);
+
+  /* The telecast's own artwork, so the hero cannot show something different
+     from the rest of the site for the same title. */
+  useEffect(() => {
+    const slug = onAirShow?.slug;
+    if (!slug) { setShowRow(null); return; }
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("watch_html")
+        .select("slug,title,poster,cover_poster,title_logo,episodes,content_type")
+        .eq("slug", slug).limit(1);
+      if (alive) setShowRow(data?.[0] || null);
+    })();
+    return () => { alive = false; };
+  }, [onAirShow?.slug]);
+
+  /* Live first, then the newest uploads. A match in progress outranks anything
+     published today, and stops being a slide the moment it is over. */
+  const slides = useMemo(() => {
+    const live = [];
+
+    if (onAirShow) {
+      live.push({
+        liveKind: LIVE_SHOW,
+        id: `live-show-${onAirShow.slug}`,
+        slug: onAirShow.slug,
+        show: onAirShow,
+        // Shaped like a movie, because for display purposes it is one.
+        title: showRow?.title || onAirShow.name,
+        poster: showRow?.poster || null,
+        cover_poster: showRow?.cover_poster || null,
+        title_logo: showRow?.title_logo || null,
+        language: [onAirShow.language],
+        watchUrl: `/watch/${onAirShow.slug}`,
+      });
+    }
+
+    for (const m of liveMatches.slice(0, 2)) {
+      live.push({
+        liveKind: LIVE_CRICKET,
+        id: `live-match-${m.id}`,
+        match: m,
+        title: `${m.homeCode} v ${m.awayCode}`,
+        language: [],
+      });
+    }
+
+    return [...live, ...movies].slice(0, HERO_COUNT + live.length);
+  }, [liveMatches, onAirShow, showRow, movies]);
 
   /* One query for all five, not one per slide.
 
@@ -862,6 +1015,8 @@ function HeroSpotlight({ movies = [], onOpen }) {
              on phones leads with the portrait poster instead. */
           const desktopSrc = a.cover_poster || a.poster || movie.poster || movie.poster_url;
           const logo = a.title_logo || null;
+          const isLiveSlide    = !!movie.liveKind;
+          const isCricketSlide = movie.liveKind === LIVE_CRICKET;
           const x = extra[heroSlug(movie)] || {};
           const meta = heroMeta(movie, a, x);
           // Our own copy first, TMDB's only when we have none of our own.
@@ -881,10 +1036,14 @@ function HeroSpotlight({ movies = [], onOpen }) {
           const copy = (
             <div className={`flex flex-col items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4 min-w-0
                              transition-all duration-700 ease-out motion-reduce:transition-none ${rise}`}>
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
-                               text-amber-300 bg-amber-400/10 border border-amber-400/25 px-3 py-1.5 rounded-full">
-                <Flame className="w-3 h-3" aria-hidden="true" /> Newest release
-              </span>
+              {isLiveSlide ? (
+                <LivePill label={isCricketSlide ? (movie.match.badge || "Live") : "Live now"} />
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
+                                 text-amber-300 bg-amber-400/10 border border-amber-400/25 px-3 py-1.5 rounded-full">
+                  <Flame className="w-3 h-3" aria-hidden="true" /> Newest release
+                </span>
+              )}
 
               {logo
                 ? <img src={logo} alt={movie.title}
@@ -927,6 +1086,17 @@ function HeroSpotlight({ movies = [], onOpen }) {
               )}
 
               <div className="flex items-center gap-2.5">
+                {isCricketSlide ? (
+                  /* A match has no file to download and nothing to open in the
+                     detail sheet — it has a scorecard. */
+                  <Link to={`/match-center/${movie.match.hash}`} tabIndex={active ? 0 : -1}
+                    className="inline-flex items-center gap-2 bg-white text-black px-6 sm:px-7 py-3 sm:py-3.5 rounded-xl font-black text-sm
+                               hover:bg-gray-200 active:scale-[0.97] transition-all duration-200
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                    <Play className="w-4 h-4 fill-current" aria-hidden="true" /> Watch live
+                  </Link>
+                ) : (
+                <>
                 <button type="button" onClick={() => onOpen(movie)} tabIndex={active ? 0 : -1}
                   className="inline-flex items-center gap-2 bg-white text-black px-6 sm:px-7 py-3 sm:py-3.5 rounded-xl font-black text-sm
                              hover:bg-gray-200 active:scale-[0.97] transition-all duration-200
@@ -943,6 +1113,8 @@ function HeroSpotlight({ movies = [], onOpen }) {
                              focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
                   <Download className="w-5 h-5" aria-hidden="true" />
                 </Link>
+                </>
+                )}
               </div>
             </div>
           );
@@ -966,14 +1138,27 @@ function HeroSpotlight({ movies = [], onOpen }) {
               {/* ── Desktop: the wide cover art, or the poster as a card when
                      there is no wide art for this title ── */}
               <div className="absolute inset-0 hidden sm:block">
-                {desktopSrc && (
+                {isCricketSlide ? (
+                  /* Our own cover. Boards publish no per-match image, so there
+                     is nothing to crop here — the scoreboard is the artwork,
+                     sitting to the right of the copy. */
+                  <>
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_40%,rgba(37,99,235,0.18),transparent_70%)]" />
+                    <div className="absolute inset-y-0 right-0 w-[52%] flex items-center justify-center pb-10">
+                      <CricketCover match={movie.match} />
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/70 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-950 to-transparent" />
+                  </>
+                ) : null}
+                {!isCricketSlide && desktopSrc && (
                   <img src={desktopSrc} alt="" aria-hidden="true"
                     fetchPriority={n === 0 ? "high" : "auto"} decoding="async"
                     loading={n === 0 ? "eager" : "lazy"}
                     className={`absolute inset-0 w-full h-full object-cover object-center
                                 ${deskWide ? "" : "blur-3xl scale-125 opacity-70 saturate-150"}`} />
                 )}
-                {deskWide ? scrims : (
+                {isCricketSlide ? null : deskWide ? scrims : (
                   <>
                     <div className="absolute inset-0 bg-gradient-to-r from-gray-950/60 via-gray-950/30 to-gray-950/60" />
                     {/* Bottom scrim for the blurred-wash layout too. The wide
@@ -984,7 +1169,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
                   </>
                 )}
 
-                {deskWide ? (
+                {(deskWide || isCricketSlide) ? (
                   <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 2xl:p-14 pb-16 sm:ml-[72px]"
                     style={heroCopyParallax} {...pauseOnHover}>{copy}</div>
                 ) : (
@@ -1139,6 +1324,13 @@ const Header = () => {
   // title) — that table holds the title logo, backdrop and trailer for our uploads,
   // which the plain movies row is missing.
   const openMobileSheet = async (movie) => {
+    /* A live match is not a title: it has no detail sheet, no episodes and no
+       file. Both the desktop button and the phone card land here, so the
+       redirect belongs here rather than at each call site. */
+    if (movie?.liveKind === LIVE_CRICKET) {
+      navigate(`/match-center/${movie.match.hash}`);
+      return;
+    }
     setSheetMovie(movie);   // show immediately with what we already have
     try {
       let { data } = await supabase.from("watch_html").select("*").eq("slug", movie.slug).limit(1);
