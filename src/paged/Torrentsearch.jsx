@@ -21,6 +21,7 @@ import {
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
 import { loadCatalog } from "../utils/catalog";
+import { LIST_SHELL } from "../utils/posterGrid";
 
 /* One fallback index, not a menu. The picker used to offer a choice between
    two, which promised the reader control over something that changes nothing
@@ -427,7 +428,7 @@ const TorrentSearch = () => {
     <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-8 py-10">
       <Helmet><title>Torrent Search | 1AnchorMovies</title></Helmet>
 
-      <div className="max-w-4xl mx-auto">
+      <div className={LIST_SHELL}>
         {/* ── Header ── */}
         <header className="mb-8 border-b border-gray-900 pb-6">
           <div className="flex items-center gap-2 mb-1">

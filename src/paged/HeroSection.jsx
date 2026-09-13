@@ -149,21 +149,29 @@ const ICC_FLAGS = {
   ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",SL:"🇱🇰",AUS:"🇦🇺",IND:"🇮🇳",AFG:"🇦🇫",SA:"🇿🇦",
   PAK:"🇵🇰",NZ:"🇳🇿",WI:"🏴",SCO:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",IRE:"🇮🇪",BAN:"🇧🇩",NED:"🇳🇱",
 };
-function getFifaFlagUrl(c) { return `https://api.fifa.com/api/v3/picture/flags-sq-1/${c}`; }
-function fifaAbbr(t) { return t?.Abbreviation||t?.TeamName?.find(x=>x.Locale==="en-GB")?.Description||""; }
-function fmtIST(d) {
-  try { return new Date(d).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kolkata"}); }
-  catch { return ""; }
-}
 function fmtDateIST(d) {
   try { return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"Asia/Kolkata"}); }
   catch { return ""; }
 }
-function fifaGroupName(m) { return m.GroupName?.find(x=>x.Locale==="en-GB")?.Description||""; }
-function fifaCityStadium(m) {
-  const city=m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description||"";
-  const std=m.Stadium?.Name?.find(x=>x.Locale==="en-GB")?.Description||"";
-  return city?`${city}${std?` · ${std}`:""}`:std;
+
+/* Team crests we host ourselves, by team code.
+
+   The boards' own feeds are not dependable here: BCCI sends a logo URL for
+   some fixtures and nothing for others, and when it is missing the badge fell
+   all the way back to a 🏏 emoji — the same picture for both sides of the
+   match. A crest we ship is always there and always the right team.
+
+   Add a file to /public/teams and a line here to cover another side. */
+const TEAM_CRESTS = {
+  IND: "/teams/ind.webp",
+  AFG: "/teams/afg.webp",
+};
+
+/* Our crest first, then whatever the feed sent, then the country flag. The
+   emoji is the last resort rather than the common case. */
+function teamCrest(code, feedLogo) {
+  const key = String(code || "").toUpperCase();
+  return TEAM_CRESTS[key] || feedLogo || flagImg(key) || null;
 }
 
 // ─── SIDE BUILDER ─────────────────────────────────────────────────────────────
@@ -173,7 +181,7 @@ function buildSide({ code, name, logo, score, overs }) {
   return {
     code: code || "—",
     name: name || code || "—",
-    logo: logo || null,
+    logo: teamCrest(code, logo),
     score: score || null,
     overs: overs || null,
   };
@@ -202,23 +210,6 @@ function setCache(k,d){_cache[k]={data:d,ts:Date.now()};}
 // ─── HIGHLIGHT FETCHERS ───────────────────────────────────────────────────────
 const FIFA_VIDEOS_API="https://cxm-api.fifa.com/fifaplusweb/api/sections/matchdetails/videos";
 
-async function fetchFifaHighlight(matchId,stageId=FIFA_STAGE){
-  if(!matchId)return null;
-  const k=`hero_fifa_hl_v2_${matchId}`;
-  const cached=getCached(k);
-  if(cached!==null&&cached!==undefined)return cached;
-  try{
-    const url=`${FIFA_VIDEOS_API}?locale=en&competitionId=${FIFA_COMPETITION}&seasonId=${FIFA_SEASON}&stageId=${stageId}&matchId=${matchId}`;
-    const res=await fetch(url,{headers:{Accept:"application/json"}});
-    if(!res.ok)return null;
-    const json=await res.json();
-    const items=json?.vodVideosBaseCarousel?.items||[];
-    if(!items.length){setCache(k,null);return null;}
-    const vid=items.find(v=>!/sign language/i.test(v.title||""))||items[0];
-    const hl={title:vid.title,thumbnail:vid.image?.src||null,watchPath:vid.readMorePageUrl||null};
-    setCache(k,hl);return hl;
-  }catch{return null;}
-}
 
 async function fetchIndiaHighlights(smMatchId){
   if(!smMatchId)return null;
@@ -710,6 +701,7 @@ function ThumbnailStrip({slides,activeIdx,onSelect}){
         const isCricket=slide.sport==="cricket";
         const accent=isCricket?"rgba(139,92,246,0.7)":"rgba(30,213,150,0.7)";
         const { home, away } = slide;
+        const hCrest=home.logo, aCrest=away.logo;
         const hFlag=isCricket?(ICC_FLAGS[home.code]||"🏏"):"⚽";
         const aFlag=isCricket?(ICC_FLAGS[away.code]||"🏏"):"🌍";
         const stripBg=resolveThumbnail(slide);
@@ -731,9 +723,13 @@ function ThumbnailStrip({slides,activeIdx,onSelect}){
                 {slide.status==="upcoming"&&<span className="text-[6px] font-black text-gray-500 bg-white/5 rounded px-1 py-0.5">Soon</span>}
               </div>
               <div className="flex items-center justify-between">
-                <span style={{fontSize:16,lineHeight:1}}>{hFlag}</span>
+                {hCrest
+                  ? <img src={hCrest} alt="" className="w-4 h-4 object-contain shrink-0"/>
+                  : <span style={{fontSize:16,lineHeight:1}}>{hFlag}</span>}
                 <span className="text-[7px] font-black text-white/50 uppercase">{home.code} v {away.code}</span>
-                <span style={{fontSize:16,lineHeight:1}}>{aFlag}</span>
+                {aCrest
+                  ? <img src={aCrest} alt="" className="w-4 h-4 object-contain shrink-0"/>
+                  : <span style={{fontSize:16,lineHeight:1}}>{aFlag}</span>}
               </div>
             </div>
             {isActive&&<div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full z-20" style={{background:isCricket?"linear-gradient(90deg,#8b5cf6,#6d28d9)":"linear-gradient(90deg,#1ed596,#059669)"}}/>}
@@ -753,11 +749,11 @@ export default function HeroSection(){
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v9";
+    const ck="hero_slides_v10";   // v10: cricket only — v9 caches may hold FIFA slides
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
-    const liveC=[],finC=[],upC=[],liveF=[],finF=[],upF=[];
+    const liveC=[],finC=[],upC=[];
 
     // FanCode feed (DOCTOR_STRANGE) — used to detect if a BCCI match is live there.
     const fcList = await fetchFancodeMatches();
@@ -976,50 +972,12 @@ export default function HeroSection(){
       }
     }catch{}
 
-    // ── FIFA ──
-    try{
-      const url=`${FIFA_API_BASE}/calendar/matches?language=en&idCompetition=${FIFA_COMPETITION}&idSeason=${FIFA_SEASON}&idStage=${FIFA_STAGE}&count=400`;
-      const res=await fetch(url,{headers:{Accept:"application/json"}});
-      if(res.ok){
-        const json=await res.json(); const all=json.Results||[];
-        const todayStr=new Date().toISOString().slice(0,10);
-        const fifaLive=all.filter(m=>m.MatchStatus===3);
-        const fifaFin=all.filter(m=>m.MatchStatus!==3&&m.HomeTeamScore!==null&&m.HomeTeamScore!==undefined).sort((a,b)=>new Date(b.Date)-new Date(a.Date));
-        const fifaUp=all.filter(m=>m.MatchStatus===0&&(m.HomeTeamScore===null||m.HomeTeamScore===undefined)).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
-        const todayFin=fifaFin.filter(m=>new Date(m.Date).toISOString().slice(0,10)===todayStr);
-
-        const buildFifaSlide=(m,status)=>{
-          const home = buildSide({
-            code: fifaAbbr(m.Home) || "TBD", name: fifaAbbr(m.Home) || "TBD",
-            logo: m.Home?.IdCountry ? getFifaFlagUrl(m.Home.IdCountry) : null,
-            score: m.HomeTeamScore,
-          });
-          const away = buildSide({
-            code: fifaAbbr(m.Away) || "TBD", name: fifaAbbr(m.Away) || "TBD",
-            logo: m.Away?.IdCountry ? getFifaFlagUrl(m.Away.IdCountry) : null,
-            score: m.AwayTeamScore,
-          });
-          return {
-            id:`fifa-${m.IdMatch}`, sport:"football", status,
-            link: mcLink({ sport:"football", type:"fifa", matchId:m.IdMatch, homeCode:fifaAbbr(m.Home)||"—", awayCode:fifaAbbr(m.Away)||"—", leagueLabel:"FIFA WC 2026" }),
-            home, away,
-            tournament:"FIFA World Cup 2026™",
-            group: fifaGroupName(m),
-            venue: fifaCityStadium(m),
-            minute: m.MatchTime || null,
-            dateLabel: fmtDateIST(m.Date),
-            timeLabel: fmtIST(m.Date),
-            countdown: status==="upcoming" ? countdownLabel(m.Date) : "",
-            fifaMatchId: m.IdMatch,                      // used for highlight fetching
-            fifaStageId: m.IdStage || FIFA_STAGE,        // used for highlight fetching
-          };
-        };
-
-        for(const m of fifaLive.slice(0,2)) liveF.push(buildFifaSlide(m,"live"));
-        for(const m of (todayFin.length>0?todayFin:fifaFin).slice(0,2)) finF.push(buildFifaSlide(m,"finished"));
-        for(const m of fifaUp.slice(0,2)) upF.push(buildFifaSlide(m,"upcoming"));
-      }
-    }catch{}
+    /* FIFA is no longer carried in this hero. It is a cricket page — the
+       scores strip, every highlights row, the tournaments and both Watch Live
+       shortcuts are cricket — and a World Cup fixture appearing in the rotation
+       read as a different site's content dropped into the middle of this one.
+       Football still has its own slide component and match-centre route; it
+       simply does not take a turn in the headline any more. */
 
     // ── Fetch highlights for finished slides in parallel ──────────────────────
     // Highlights show in the hero from the moment the match ends until the next
@@ -1031,21 +989,12 @@ export default function HeroSection(){
           .then(h=>{if(h)s.highlight=h;})
           .catch(()=>{})
       ),
-      ...finF.map(s=>
-        fetchFifaHighlight(s.fifaMatchId,s.fifaStageId)
-          .then(h=>{if(h)s.highlight=h;})
-          .catch(()=>{})
-      ),
     ]);
 
-    // ── Order ──
-    let ordered=[];
-    const hasLC=liveC.length>0, hasLF=liveF.length>0;
-    if(hasLC&&hasLF) ordered=[liveC[0],liveF[0],liveC[1]||finC[0]||upC[0],liveF[1]||finF[0]||upF[0]];
-    else if(hasLC) ordered=[liveC[0],liveC[1]||finC[0],finF[0]||upF[0],upC[0]||finC[1]||upF[1]];
-    else if(hasLF) ordered=[liveF[0],liveF[1]||finF[0],finC[0]||upC[0],upF[0]||finC[1]||upC[1]];
-    else ordered=[finC[0]||upC[0],finF[0]||upF[0],upC[0]||finC[1],upF[0]||finF[1]];
-    const final=ordered.filter(Boolean).slice(0,4);
+    /* Order: live first, then just-finished, then what is coming up. Without
+       football to interleave, this is simply the cricket in priority order —
+       the old version needed four branches to decide whose turn it was. */
+    const final=[...liveC, ...finC, ...upC].filter(Boolean).slice(0,4);
     if(final.length>0){setCache(ck,final);setSlides(final);}
     setLoading(false);
   },[]);
@@ -1076,17 +1025,35 @@ export default function HeroSection(){
   const active=slides[activeIdx];
   const isCricket=active?.sport==="cricket";
 
+  /* Nothing to show. Previously a FIFA fixture would almost always fill the
+     hero, so an empty cricket list was hidden; now an off-season day would sit
+     on the loading skeleton forever, because loading is false but there is no
+     active slide. */
+  if(!loading&&!active){
+    return(
+      <section className="relative w-full overflow-hidden bg-gray-950 rounded-none sm:rounded-2xl
+                          flex flex-col items-center justify-center text-center px-6"
+        style={{height:"clamp(220px,30vw,340px)"}}>
+        <p className="text-gray-300 font-black uppercase tracking-widest text-xs">No matches right now</p>
+        <p className="text-gray-500 text-[12px] mt-2 max-w-sm leading-relaxed">
+          Live scores appear here as soon as a match starts. Highlights and fixtures are below.
+        </p>
+      </section>
+    );
+  }
+
   if(loading||!active){
     return(
       <>
         <style>{`@keyframes heroSlowSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes heroProgress{from{width:0%}to{width:100%}}`}</style>
-        <section className="relative w-full overflow-hidden" style={{height:"clamp(300px,50vw,540px)",background:"#030007"}}>
-          <div className="absolute inset-0" style={{background:"linear-gradient(135deg,#0a0015 0%,#100025 50%,rgba(139,92,246,0.1) 100%)"}}/>
-          <div className="relative z-10 flex flex-col justify-end h-full px-4 sm:px-8 pb-5 sm:pb-7 pt-4">
-            <div className="h-4 w-28 rounded-full bg-white/5 animate-pulse mb-2"/>
-            <div className="h-9 sm:h-14 w-44 sm:w-56 rounded-xl bg-white/5 animate-pulse mb-3"/>
-            <div className="h-3 w-36 rounded bg-white/5 animate-pulse mb-4"/>
-            <div className="h-8 sm:h-10 w-28 sm:w-32 rounded-xl bg-purple-900/30 animate-pulse"/>
+        <section className="relative w-full overflow-hidden bg-gray-950 rounded-none sm:rounded-2xl"
+          style={{height:"clamp(320px,46vw,520px)"}}>
+          <div className="absolute inset-0 shimmer"/>
+          <div className="relative z-10 flex flex-col justify-end h-full px-5 sm:px-8 pb-6 sm:pb-8">
+            <div className="h-3.5 w-28 rounded-full bg-white/[0.06] mb-3"/>
+            <div className="h-9 sm:h-12 w-52 sm:w-72 rounded-xl bg-white/[0.06] mb-3"/>
+            <div className="h-3 w-40 rounded bg-white/[0.06] mb-5"/>
+            <div className="h-10 w-32 rounded-xl bg-white/[0.06]"/>
           </div>
         </section>
       </>
@@ -1102,40 +1069,47 @@ export default function HeroSection(){
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
       `}</style>
 
-      <section className="relative w-full overflow-hidden" style={{height:"clamp(300px,50vw,540px)",background:"#030007"}}>
+      {/* The hero was #030007 under a violet wash, with a purple progress bar and
+          purple dots — a colour scheme belonging to nothing else on the site.
+          Neutral ground, white controls: the artwork and the scores carry the
+          colour now. */}
+      <section className="relative w-full overflow-hidden bg-gray-950 rounded-none sm:rounded-2xl"
+        style={{height:"clamp(320px,46vw,520px)"}}>
 
         <div className="absolute inset-0 transition-opacity duration-300" style={{opacity:transitioning?0:1}}>
           {isCricket?<CricketSlide slide={active}/>:<FootballSlide slide={active}/>}
         </div>
 
-        {/* Left arrow */}
-        <button onClick={()=>{goPrev();resetTimer();}}
-          className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border transition-all hover:scale-110 active:scale-95"
-          style={{background:"rgba(0,0,0,0.55)",borderColor:"rgba(255,255,255,0.1)",backdropFilter:"blur(8px)"}}>
-          <ChevronLeft size={14} className="text-white sm:hidden"/>
-          <ChevronLeft size={17} className="text-white hidden sm:block"/>
-        </button>
-
-        {/* Right arrow desktop */}
-        <button onClick={()=>{goNext();resetTimer();}}
-          className="hidden sm:flex absolute top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full items-center justify-center border transition-all hover:scale-110 active:scale-95"
-          style={{right:slides.length>1?"calc(0.75rem + 356px)":"0.75rem",background:"rgba(0,0,0,0.55)",borderColor:"rgba(255,255,255,0.1)",backdropFilter:"blur(8px)"}}>
-          <ChevronRight size={17} className="text-white"/>
-        </button>
-
-        {/* Right arrow mobile */}
-        <button onClick={()=>{goNext();resetTimer();}}
-          className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full flex items-center justify-center border transition-all hover:scale-110 active:scale-95"
-          style={{background:"rgba(0,0,0,0.55)",borderColor:"rgba(255,255,255,0.1)",backdropFilter:"blur(8px)"}}>
-          <ChevronRight size={14} className="text-white"/>
-        </button>
-
-        {/* Mobile dots */}
+        {/* One arrow style for both ends and both breakpoints. The desktop
+            "next" used to be positioned with calc(0.75rem + 356px) to dodge the
+            thumbnail strip, which put it in mid-air whenever the strip was not
+            there. It now sits at the edge like its twin, under the strip. */}
         {slides.length>1&&(
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 sm:hidden">
+          <>
+            <button onClick={()=>{goPrev();resetTimer();}} aria-label="Previous match"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+                         flex items-center justify-center bg-black/60 backdrop-blur-md
+                         ring-1 ring-white/15 text-white hover:bg-black/80 transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <ChevronLeft className="w-5 h-5"/>
+            </button>
+            <button onClick={()=>{goNext();resetTimer();}} aria-label="Next match"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+                         flex items-center justify-center bg-black/60 backdrop-blur-md
+                         ring-1 ring-white/15 text-white hover:bg-black/80 transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <ChevronRight className="w-5 h-5"/>
+            </button>
+          </>
+        )}
+
+        {/* Mobile dots — white, like every other indicator on the site. */}
+        {slides.length>1&&(
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 sm:hidden">
             {slides.map((_,i)=>(
-              <button key={i} onClick={()=>handleSelect(i)} className="rounded-full transition-all"
-                style={{width:i===activeIdx?16:5,height:5,background:i===activeIdx?(isCricket?"#8b5cf6":"#1ed596"):"rgba(255,255,255,0.2)"}}/>
+              <button key={i} onClick={()=>handleSelect(i)} aria-label={`Match ${i+1}`}
+                className={`h-1 rounded-full transition-all duration-300 ${
+                  i===activeIdx ? "w-5 bg-white" : "w-1.5 bg-white/30"}`}/>
             ))}
           </div>
         )}
@@ -1143,9 +1117,10 @@ export default function HeroSection(){
         {slides.length>1&&<ThumbnailStrip slides={slides} activeIdx={activeIdx} onSelect={handleSelect}/>}
 
         {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 z-30 bg-white/[0.04]" style={{height:"2px"}}>
+        <div className="absolute bottom-0 left-0 right-0 z-30 bg-white/10" style={{height:"2px"}}>
           <div key={`${activeIdx}-${active.id}`}
-            style={{height:"100%",borderRadius:"9999px",background:isCricket?"linear-gradient(90deg,#8b5cf6,#6d28d9)":"linear-gradient(90deg,#1ed596,#059669)",animation:"heroProgress 8s linear forwards"}}/>
+            className="h-full bg-white"
+            style={{animation:"heroProgress 8s linear forwards"}}/>
         </div>
       </section>
     </>

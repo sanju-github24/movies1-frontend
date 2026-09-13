@@ -4,6 +4,7 @@ import { supabase } from "../utils/supabaseClient";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Helmet } from "react-helmet";
 import { Loader2, Play, X, TrendingUp, Globe, ListVideo, Volume2, VolumeX, ChevronLeft } from "lucide-react";
+import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import Mp4Trailer from "../components/Mp4Trailer";
@@ -753,7 +754,7 @@ const SearchPage = () => {
         </p>
       </div>
 
-      <div className="max-w-7xl mx-auto">
+      <div className={POSTER_SHELL}>
         <h2 className="text-xl font-black mb-8 px-2 border-l-4 border-blue-600 pl-4 uppercase tracking-[0.2em] flex items-center gap-3">
           {searchQuery
             ? <MagnifyingGlassIcon className="w-5 h-5 text-blue-500" />
@@ -767,7 +768,7 @@ const SearchPage = () => {
             <p className="text-gray-400 font-mono text-[10px] uppercase tracking-[0.4em]">Syncing Engines</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
+          <div className={LANDSCAPE_GRID}>
             {displayList.map((movie) => {
               const isActive =
                 selectedMovie?.id === movie.id ||

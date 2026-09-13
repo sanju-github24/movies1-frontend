@@ -5,6 +5,7 @@ import { MonitorPlay, Zap, ArrowLeft, Loader2, Video, Clock, Trophy, Share2, Inf
 import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient'; 
 import VideoPlayer from "./VideoPlayer"; 
+import { sanitizeEmbed } from "../utils/sanitizeHtml";
 
 const WINFIX_AFFILIATE_LINK = "https://winfix.fun/register?campaignId=anchormovies-2407";
 const BANNER_IMAGE_URL = "https://i.postimg.cc/NfKD2cjX/banner.jpg";
@@ -109,7 +110,7 @@ const LiveStreamPlayer = () => {
     if (isIFrame) {
       return (
         <div className="w-full h-full relative group bg-black" key={activeHighlightSource}>
-          <div className="absolute inset-0 w-full h-full flex items-center justify-center" dangerouslySetInnerHTML={{ __html: activeHighlightSource }} />
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center" dangerouslySetInnerHTML={{ __html: sanitizeEmbed(activeHighlightSource) }} />
           {isPlayingLive && (
              <div className="absolute top-4 left-4 pointer-events-none z-20">
                 <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-2xl animate-pulse">
@@ -147,7 +148,7 @@ const LiveStreamPlayer = () => {
       
       {/* Cinematic Header */}
       <header className="bg-gray-950/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-[100]">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between">
             <div className="flex items-center gap-4">
                 <button onClick={() => navigate('/live-cricket')} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all">
                     <ArrowLeft size={20} className="text-blue-500" />
@@ -173,7 +174,7 @@ const LiveStreamPlayer = () => {
       </header>
 
       {/* Main Player Section */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 space-y-6">
+      <main className="max-w-[1800px] mx-auto py-6 sm:px-6 space-y-6">
         
         {/* Scoreboard Element */}
         {matchData?.status === 'LIVE' && (

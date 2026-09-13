@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ownUrl } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
-import { X, Play, Info, Volume2, VolumeX, Plus, Check, Share2, Star } from "lucide-react";
-import { inMyList, toggleMyList, getRating, setRating } from "../utils/myList";
+import { X, Play, Info, Volume2, VolumeX, Download, Share2, Star } from "lucide-react";
+import { getRating, setRating } from "../utils/myList";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, langLabel } from "../utils/titleEpisodes";
 import { getLiveShow } from "../utils/liveShow";
 import LiveShowActions from "./LiveShowActions";
@@ -27,7 +27,6 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
   const [isMuted, setIsMuted] = useState(true);   // autoplay requires muted start
   const [mp4Live, setMp4Live] = useState(false);  // the MP4 is actually playing
   const [activeSeason, setActiveSeason] = useState(null);
-  const [saved, setSaved] = useState(false);
   const [rating, setStars] = useState(0);
   const [showRate, setShowRate] = useState(false);
   const [shared, setShared] = useState(false);
@@ -43,7 +42,6 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
   }, [movie]);
 
   useEffect(() => {
-    setSaved(inMyList(slug));
     setStars(getRating(slug));
     setShowRate(false);
     setShared(false);
@@ -271,11 +269,15 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
 
           {/* ── Quick actions ── */}
           <div className="w-full flex items-start gap-9 pt-2 pb-1">
-            <button onClick={() => setSaved(toggleMyList(movie))}
+            {/* Downloads, where the watchlist "+" used to be. The torrent page
+                answers a title straight from our own library, so this lands on
+                that title's own download section rather than a search box. */}
+            <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
+              aria-label={`Download links for ${movie.title || "this title"}`}
               className="flex flex-col items-center gap-1.5 text-white active:scale-90 transition-transform">
-              {saved ? <Check className="w-6 h-6 text-blue-400" /> : <Plus className="w-6 h-6" />}
-              <span className="text-[11px] text-gray-300">Watchlist</span>
-            </button>
+              <Download className="w-6 h-6" aria-hidden="true" />
+              <span className="text-[11px] text-gray-300">Download</span>
+            </Link>
             <button onClick={onShare}
               className="flex flex-col items-center gap-1.5 text-white active:scale-90 transition-transform">
               <Share2 className="w-6 h-6" />

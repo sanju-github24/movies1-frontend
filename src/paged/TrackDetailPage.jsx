@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import MusicNavbar from '../components/MusicNavbar';
 import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   Play, Pause, Download, ArrowLeft,
-  Volume2, VolumeX, Loader2, SkipBack, SkipForward, User,
+  Volume2, VolumeX, Loader2, RotateCcw, RotateCw, User,
   Minus, MoreHorizontal, X, ChevronDown
 } from 'lucide-react';
 import { musicApi, backendUrl } from '../utils/api';
@@ -53,7 +52,7 @@ function RecommendCard({ track, baseRgb, lightRgb, navigate }) {
       <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
         <img src={track.poster} alt={track.title}
           style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', transform: hov?'scale(1.06)':'scale(1)', transition:'transform 0.3s' }}
-          onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80'; }} />
+          onError={e => { e.target.src='/default-poster.jpg'; }} />
         {hov && (
           <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <div style={{ width:36, height:36, borderRadius:'50%', background:`rgb(${cardLight})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -75,6 +74,13 @@ export default function TrackDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const player   = useMusicPlayer();
+
+  const SEEK_STEP = 10;   // seconds
+  const nudge = (delta) => {
+    const target = Math.min(Math.max((currentTime || 0) + delta, 0), duration || 0);
+    player?.seekTo(target);
+    if (player?.audioRef?.current) player.audioRef.current.currentTime = target;
+  };
 
   // ── Seed from global cache (survives minimize/maximize) ──────────
   const cachedEntry = player?.trackCache?.[id] || {};
@@ -526,8 +532,7 @@ export default function TrackDetailPage() {
 
   // ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', color:'white', background:'#09090f', position:'relative', overflowX:'hidden' }}>
-      <MusicNavbar />
+    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', color:'white', background:'#030712', position:'relative', overflowX:'hidden' }}>
 
       {/* Background video canvas — both desktop & mobile */}
       {ytPreview ? (
@@ -539,14 +544,14 @@ export default function TrackDetailPage() {
             tabIndex={-1}
           />
           <div style={{ position:'absolute', inset:0, background: isMobile
-            ? `linear-gradient(180deg, rgba(${baseRgb},0.25) 0%, rgba(9,9,15,0.78) 65%, #09090f 100%)`
-            : `radial-gradient(ellipse 100% 70% at 50% 8%, rgba(${baseRgb},0.12) 0%, rgba(9,9,15,0.55) 55%, rgba(9,9,15,0.9) 85%, #09090f 100%)` }} />
+            ? `linear-gradient(180deg, rgba(${baseRgb},0.25) 0%, rgba(9,9,15,0.78) 65%, #030712 100%)`
+            : `radial-gradient(ellipse 100% 70% at 50% 8%, rgba(${baseRgb},0.12) 0%, rgba(9,9,15,0.55) 55%, rgba(9,9,15,0.9) 85%, #030712 100%)` }} />
         </div>
       ) : (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, zIndex:1, pointerEvents:'none',
           background: isMobile
-            ? `linear-gradient(180deg, rgba(${baseRgb},0.55) 0%, #0d0d15 65%, #09090f 100%)`
-            : `radial-gradient(ellipse 90% 55% at 50% 0%, rgba(${baseRgb},0.70) 0%, rgba(${baseRgb},0.25) 45%, #09090f 85%)` }} />
+            ? `linear-gradient(180deg, rgba(${baseRgb},0.55) 0%, #0d0d15 65%, #030712 100%)`
+            : `radial-gradient(ellipse 90% 55% at 50% 0%, rgba(${baseRgb},0.70) 0%, rgba(${baseRgb},0.25) 45%, #030712 85%)` }} />
       )}
 
       <style>{`
@@ -641,9 +646,9 @@ export default function TrackDetailPage() {
                   <div style={{ position:'relative', flexShrink:0 }}>
                     <div style={{ position:'absolute', inset:-20, borderRadius:32, background:`rgba(${baseRgb},0.9)`, filter:'blur(40px)', opacity:isPlaying?0.9:0.5, transform:isPlaying?'scale(1.1)':'scale(1)', transition:'opacity 0.6s,transform 0.6s' }} />
                     <div style={{ position:'relative', width:220, height:220, borderRadius:16, overflow:'hidden', boxShadow:`0 32px 80px rgba(${baseRgb},0.6),0 8px 32px rgba(0,0,0,0.6)`, border:'1px solid rgba(255,255,255,0.1)' }}>
-                      <img src={coverSrc||'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&q=80'} alt={metadata.title}
+                      <img src={coverSrc||'/default-poster.jpg'} alt={metadata.title}
                         style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                        onError={e=>{e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&q=80';}} />
+                        onError={e=>{e.target.src='/default-poster.jpg';}} />
                     </div>
                   </div>
                   <div style={{ flex:1, minWidth:200 }}>
@@ -684,13 +689,15 @@ export default function TrackDetailPage() {
                         style={{ width:'100%' }} />
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-                      <button style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.28)', display:'flex' }}><SkipBack size={20}/></button>
+                      <button onClick={() => nudge(-SEEK_STEP)} aria-label="Back 10 seconds" title="Back 10 seconds"
+                        style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCcw size={20}/></button>
                       <button onClick={player?.togglePlay}
                         style={{ width:58, height:58, borderRadius:'50%', border:'none', cursor:'pointer', background:`rgb(${lightRgb})`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 8px 30px rgba(${lightRgb},0.5)`, transition:'transform 0.15s' }}
                         onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
                         {isPlaying ? <Pause size={24} style={{fill:'#000',color:'#000'}}/> : <Play size={24} style={{fill:'#000',color:'#000',marginLeft:3}}/>}
                       </button>
-                      <button style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.28)', display:'flex' }}><SkipForward size={20}/></button>
+                      <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds" title="Forward 10 seconds"
+                        style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCw size={20}/></button>
                     </div>
                     {/* Desktop download button — hidden for play-only (Gaana) tracks;
                         keep a spacer so the play button stays centered. */}
@@ -801,9 +808,9 @@ export default function TrackDetailPage() {
                   pointerEvents: ytReady ? 'none' : 'auto',
                 }}>
                   <div style={{ position:'relative', width:'100%', aspectRatio:'1', borderRadius:14, overflow:'hidden', boxShadow:'0 20px 48px rgba(0,0,0,0.6)', background:'#07070c', marginTop:10, border:'1px solid rgba(255,255,255,0.06)' }}>
-                    <img src={coverSrc||'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&q=80'} alt={metadata.title}
+                    <img src={coverSrc||'/default-poster.jpg'} alt={metadata.title}
                       style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                      onError={e=>{e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&q=80';}} />
+                      onError={e=>{e.target.src='/default-poster.jpg';}} />
                   </div>
                 </div>
 
@@ -834,17 +841,24 @@ export default function TrackDetailPage() {
                   </div>
                 </div>
 
-                {/* Controls row: SkipBack, SkipBack, Play, SkipFwd, Download (replaces shuffle/repeat) */}
+                {/* Controls row. Was SkipBack, SkipBack, Play, SkipForward —
+                    four buttons with no handler between them, one of them a
+                    duplicate of another. Now: seek back, play, seek forward. */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24, padding:'0 8px' }}>
-                  <button style={{ background:'none', border:'none', color:'rgba(255,255,255,0.3)', cursor:'pointer' }}><SkipBack size={20}/></button>
-                  <button style={{ background:'none', border:'none', color:'white', cursor:'pointer' }}><SkipBack size={24} style={{fill:'white'}}/></button>
+                  <button onClick={() => nudge(-SEEK_STEP)} aria-label="Back 10 seconds"
+                    style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+                    <RotateCcw size={24}/>
+                  </button>
 
-                  <button onClick={player?.togglePlay}
+                  <button onClick={player?.togglePlay} aria-label={isPlaying ? "Pause" : "Play"}
                     style={{ width:60, height:60, borderRadius:'50%', border:'none', cursor:'pointer', background:'white', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', transition:'transform 0.15s' }}>
                     {isPlaying ? <Pause size={24} style={{fill:'#000',color:'#000'}}/> : <Play size={24} style={{fill:'#000',color:'#000',marginLeft:3}}/>}
                   </button>
 
-                  <button style={{ background:'none', border:'none', color:'white', cursor:'pointer' }}><SkipForward size={24} style={{fill:'white'}}/></button>
+                  <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds"
+                    style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+                    <RotateCw size={24}/>
+                  </button>
                   {/* Download replaces repeat/shuffle — hidden for play-only (Gaana) tracks */}
                   {hasDownloads ? (
                     <div>

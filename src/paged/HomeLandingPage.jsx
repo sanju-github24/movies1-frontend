@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
-import MusicNavbar from '../components/MusicNavbar';
 import { musicApi } from '../utils/api';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
+import { POSTER_SHELL } from "../utils/posterGrid";
 
 // Sentinel for the "everything" chip — a language will never be named this.
 const ALL_LANGUAGES = '__all__';
@@ -228,7 +228,7 @@ export default function HomeLandingPage() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#09090f', color: 'white', display: 'flex', flexDirection: 'column' }}>
+    <div className="min-h-dvh bg-gray-950 text-white flex flex-col">
       {/* Otherwise this inherits index.html's site-wide movie-download title. */}
       <Helmet prioritizeSeoTags>
         <title>Trending Songs by Language — Hindi, Tamil, Telugu, Punjabi & More</title>
@@ -242,7 +242,6 @@ export default function HomeLandingPage() {
         <meta property="og:url" content={absUrl('/music')} />
       </Helmet>
 
-      <MusicNavbar />
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -252,37 +251,51 @@ export default function HomeLandingPage() {
         .home-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius:2px; }
       `}</style>
 
-      <div style={{ flex: 1, maxWidth: 1280, width: '100%', margin: '0 auto', padding: '0 20px 60px' }}>
+      <div className={`flex-1 ${POSTER_SHELL} px-4 sm:px-6 lg:px-8 2xl:px-12 pb-24 pt-8 sm:pt-10`}>
+
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter italic mb-6 sm:mb-8">
+          Music
+        </h1>
 
         {/* ── Loading ─────────────────────────────────────────────── */}
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 500, gap: 20 }}>
-            <div style={{ position: 'relative', width: 56, height: 56 }}>
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.08)' }} />
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid transparent', borderTopColor: 'rgba(100,220,180,0.9)', animation: 'spin 0.8s linear infinite' }} />
-              <Music size={18} style={{ position: 'absolute', inset: 0, margin: 'auto', color: 'rgba(100,220,180,0.8)' }} />
+          <div className="space-y-10" aria-busy="true" aria-label="Loading music">
+            <div className="h-[220px] rounded-2xl shimmer" />
+            <div className="flex gap-2">
+              {Array.from({ length: 5 }, (_, i) => <div key={i} className="h-8 w-24 rounded-full shimmer" />)}
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Loading music…</p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: '6px 0 0' }}>Fetching trending tracks</p>
-            </div>
+            {Array.from({ length: 2 }, (_, r) => (
+              <div key={r} className="space-y-3">
+                <div className="h-4 w-40 rounded-full shimmer" />
+                <div className="flex gap-4 overflow-hidden">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <div key={i} className="shrink-0 w-40">
+                      <div className="aspect-square rounded-xl shimmer" />
+                      <div className="h-3 w-3/4 rounded-full shimmer mt-3" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
         ) : error ? (
-          <div style={{ textAlign: 'center', maxWidth: 440, margin: '80px auto', padding: 40, borderRadius: 20, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <Music size={24} style={{ color: '#f87171', margin: '0 auto 16px', display: 'block' }} />
-            <p style={{ fontSize: 16, fontWeight: 900, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Failed to Load</p>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 20 }}>{error}</p>
+          <div className="py-24 text-center">
+            <Music className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+            <p className="text-gray-300 font-black uppercase tracking-widest text-xs">Could not load music</p>
+            <p className="text-gray-500 text-[12px] mt-2 max-w-sm mx-auto leading-relaxed">{error}</p>
             <button onClick={() => window.location.reload()}
-              style={{ background: '#dc2626', color: 'white', border: 'none', padding: '10px 24px', borderRadius: 12, fontWeight: 700, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Retry
+              className="mt-6 bg-white text-black px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest
+                         hover:bg-gray-200 transition-colors">
+              Try again
             </button>
           </div>
 
         ) : Object.keys(categories).length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 14 }}>
-            <Music size={36} style={{ color: 'rgba(255,255,255,0.1)' }} />
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', margin: 0 }}>No tracks found</p>
+          <div className="py-24 text-center">
+            <Music className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+            <p className="text-gray-300 font-black uppercase tracking-widest text-xs">No tracks right now</p>
+            <p className="text-gray-500 text-[12px] mt-2">Trending songs refresh through the day — check back shortly.</p>
           </div>
 
         ) : (
@@ -381,37 +394,30 @@ export default function HomeLandingPage() {
 
             {/* ── Language filter ───────────────────────────────────── */}
             {/* Eight sections is a lot to scroll past to reach the last one, so
-                let a language be picked directly. */}
-            <div
-              className="home-scroll"
-              style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, marginBottom: 22 }}
-            >
+                let a language be picked directly. The chips used to take a
+                different colour per language, derived from a hash of the
+                section name — eight competing accents, none of which meant
+                anything. One neutral chip, white when chosen, matches the rest
+                of the site and makes the choice legible at a glance. */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-6"
+              role="group" aria-label="Filter by language">
               {[ALL_LANGUAGES, ...Object.keys(categories).map(sectionLanguage)].map(lang => {
                 const active = activeLang === lang;
                 const label  = lang === ALL_LANGUAGES ? 'All' : lang;
-                const { light } = deriveRgbFromStr(lang === ALL_LANGUAGES ? 'all' : `Trending in ${lang}`);
                 return (
                   <button
                     key={lang}
+                    type="button"
                     onClick={() => setActiveLang(lang)}
                     aria-pressed={active}
-                    style={{
-                      flexShrink: 0,
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 14px', borderRadius: 20,
-                      fontSize: 11, fontWeight: 800, letterSpacing: '0.06em',
-                      textTransform: 'uppercase', cursor: 'pointer',
-                      color: active ? '#000' : `rgba(${light}, 0.85)`,
-                      background: active ? `rgb(${light})` : `rgba(${light}, 0.1)`,
-                      border: `1px solid rgba(${light}, ${active ? 1 : 0.22})`,
-                      transition: 'all 0.15s',
-                    }}
+                    className={`shrink-0 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest
+                                border transition-colors duration-200
+                                focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
+                                focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
+                      active ? "bg-white text-black border-white"
+                             : "bg-white/[0.04] text-gray-300 border-white/10 hover:bg-white/[0.1] hover:text-white"
+                    }`}
                   >
-                    <span style={{
-                      width: 6, height: 6, borderRadius: '50%',
-                      background: active ? '#000' : `rgb(${light})`,
-                      opacity: active ? 0.45 : 1,
-                    }} />
                     {label}
                   </button>
                 );
@@ -419,7 +425,7 @@ export default function HomeLandingPage() {
             </div>
 
             {/* ── Category sections ─────────────────────────────────── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            <div className="flex flex-col gap-10">
               {Object.entries(categories)
                 .filter(([name]) => activeLang === ALL_LANGUAGES || sectionLanguage(name) === activeLang)
                 .map(([categoryName, tracks]) => (

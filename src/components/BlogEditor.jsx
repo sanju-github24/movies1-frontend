@@ -4,6 +4,7 @@ import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
 import AdminLayout from "./AdminLayout";
+import { sanitizeArticle } from "../utils/sanitizeHtml";
 
 // NOTE: Since I cannot import external libraries like 'react-quill' or 'tinymce',
 // this component will use a placeholder for the HTML editor.
@@ -432,7 +433,7 @@ const BlogEditor = () => {
                     <p className="text-gray-400 text-xs mb-1">Content Preview (Scrollable):</p>
                     <div
                       className="text-gray-300 text-sm max-h-32 overflow-y-auto bg-gray-900 p-3 rounded"
-                      dangerouslySetInnerHTML={{ __html: blog.content.substring(0, 300) + (blog.content.length > 300 ? '...' : '') }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeArticle(blog.content.substring(0, 300) + (blog.content.length > 300 ? '...' : '')) }}
                     />
                 </div>
                 

@@ -12,6 +12,7 @@ import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
 import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveShow";
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
+import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck,
@@ -1392,7 +1393,7 @@ if (!alive) return;
                    onBackClick={closeOverlay}
                  />
                ) :
-               sourceType === "html"  ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSource }} /> :
+               sourceType === "html"  ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: sanitizeEmbed(finalSource) }} /> :
                sourceType === "video" ? (
                  <video
                    src={finalSource}
@@ -1548,7 +1549,7 @@ if (!alive) return;
       {/* ── NAVBAR ── */}
       <header className="fixed top-0 inset-x-0 z-[110] h-16 flex items-center px-4">
         <div className="absolute inset-0 bg-[#070709]/80 backdrop-blur-xl border-b border-white/[0.04]" />
-        <div className="relative max-w-7xl mx-auto w-full flex items-center justify-between">
+        <div className="relative max-w-[1800px] mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)}
               aria-label="Go back"
@@ -1577,7 +1578,7 @@ if (!alive) return;
           </div>
         )}
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
+        <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
 
           {/* Poster */}
           <div className="shrink-0 mx-auto lg:mx-0">
@@ -1731,7 +1732,7 @@ if (!alive) return;
       <MbidadmBanner />
 
       {/* ── MAIN CONTENT ── */}
-      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-20 z-10">
+      <main className="relative max-w-[1800px] mx-auto px-4 sm:px-6 py-12 space-y-20 z-10">
 
         {/* Continue Watching */}
         {continueList.filter(r => r.slug !== movieMeta?.slug).length > 0 && (

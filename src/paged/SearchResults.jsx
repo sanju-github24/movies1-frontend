@@ -22,7 +22,9 @@ import {
   Volume2,
   VolumeX,
   ChevronLeft,
+  Star,
 } from "lucide-react";
+import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 
 /* ====== Helpers ====== */
 const generateSlug = (title) => {
@@ -801,135 +803,169 @@ const SearchResults = () => {
     setSelectedMovie(null);
   };
 
+  /* Refining in place. The page had no field of its own: to change a query you
+     had to go back to the rail, open the search overlay and start again. */
+  const [draft, setDraft] = useState(prettyQuery);
+  useEffect(() => { setDraft(prettyQuery); }, [prettyQuery]);
+  const submitSearch = (e) => {
+    e.preventDefault();
+    const q = draft.trim();
+    if (q) navigate(`/search?query=${encodeURIComponent(q)}`);
+  };
+
+  const chip = (on) =>
+    `px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest border transition-colors duration-200
+     focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
+      on ? "bg-white text-black border-white"
+         : "bg-white/[0.04] text-gray-300 border-white/10 hover:bg-white/[0.1] hover:text-white"}`;
+
   return (
-    <div className="min-h-screen bg-[#0f1014] text-white pb-20 pt-24 px-4 md:px-8">
+    <div className="min-h-dvh bg-gray-950 text-white px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 sm:py-10 pb-24">
       <Helmet>
-        <title>Discovery: {prettyQuery} | AnchorMovies</title>
+        <title>{prettyQuery ? `${prettyQuery} — search` : "Search"} | AnchorMovies</title>
       </Helmet>
 
-      <div className="max-w-7xl mx-auto mb-10">
-        <div className="flex items-center gap-2 text-blue-500 mb-2">
-          <Globe className="animate-pulse" size={18} />
-          <span className="text-[10px] font-black uppercase tracking-[0.3em]">Neural Discovery active</span>
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter italic">
-          Search Results <span className="text-blue-500">"{prettyQuery}"</span>
+      <div className={`${POSTER_SHELL} mb-8`}>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter italic">
+          Search
         </h1>
 
-        {/* ── Type + Language filters ── */}
-        <div className="flex flex-wrap items-center gap-2 mt-6">
+        {/* The field carries the current query, so refining is editing what is
+            already there rather than retyping it. */}
+        <form onSubmit={submitSearch} className="mt-5 max-w-2xl">
+          <div className="flex items-center gap-3 bg-white/[0.04] ring-1 ring-white/10 rounded-xl px-4 py-3
+                          focus-within:ring-blue-500 transition-shadow">
+            <Search className="w-5 h-5 text-gray-500 shrink-0" aria-hidden="true" />
+            <input
+              type="search"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Search movies, series, or paste an IMDb / TMDB id"
+              aria-label="Search"
+              className="bg-transparent outline-none w-full text-sm font-bold placeholder:text-gray-600"
+            />
+            <button type="submit"
+              className="shrink-0 bg-white text-black text-xs font-black uppercase tracking-widest px-4 py-2 rounded-lg
+                         hover:bg-gray-200 transition-colors">
+              Go
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-600">
+            An IMDb id (tt1234567) or TMDB id (603) jumps straight to that title.
+          </p>
+        </form>
+
+        {/* What you are looking at, and how much of it. */}
+        {query && (
+          <p className="mt-6 text-sm text-gray-400">
+            {loading
+              ? <>Searching for <span className="text-white font-bold">&ldquo;{prettyQuery}&rdquo;</span>…</>
+              : <><span className="text-white font-bold">{results.length}</span>{" "}
+                  {results.length === 1 ? "result" : "results"} for{" "}
+                  <span className="text-white font-bold">&ldquo;{prettyQuery}&rdquo;</span></>}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 mt-4" role="group" aria-label="Filter results">
           {SEARCH_TYPES.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setSearchType(value)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
-                searchType === value
-                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
-              }`}
-            >
+            <button key={value} type="button" onClick={() => setSearchType(value)}
+              aria-pressed={searchType === value} className={chip(searchType === value)}>
               {label}
             </button>
           ))}
-          <span className="w-px h-5 bg-white/10 mx-1" />
+          <span className="w-px h-5 bg-white/10 mx-1" aria-hidden="true" />
           {SEARCH_LANGS.map(({ code, label }) => (
-            <button
-              key={code || "all"}
-              onClick={() => setSearchLang(code)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
-                searchLang === code
-                  ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-                  : "bg-[#16181f] border-white/10 text-gray-400 hover:border-blue-500/50 hover:text-white"
-              }`}
-            >
+            <button key={code || "all"} type="button" onClick={() => setSearchLang(code)}
+              aria-pressed={searchLang === code} className={chip(searchLang === code)}>
               {label}
             </button>
           ))}
         </div>
-        <p className="mt-3 text-[10px] text-gray-600 font-bold uppercase tracking-widest">
-          Tip: paste an IMDb ID (tt1234567) or TMDB ID (603) for an exact match
-        </p>
       </div>
 
-      <div className="max-w-7xl mx-auto">
+      <div className={POSTER_SHELL}>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4">
-            <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
-            <p className="text-gray-400 font-mono text-[10px] uppercase tracking-[0.4em]">Syncing Local &amp; Global Streams</p>
+          /* Skeletons in the shape of the cards, rather than a spinner over an
+             empty screen — the page keeps its layout while results land. */
+          <div className={LANDSCAPE_GRID}>
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="rounded-2xl overflow-hidden ring-1 ring-white/[0.06] bg-white/[0.02]">
+                <div className="w-full shimmer" style={{ aspectRatio: "16/10" }} />
+                <div className="p-3"><div className="h-3 w-2/3 rounded-full shimmer" /></div>
+              </div>
+            ))}
           </div>
         ) : results.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
+          <div className={LANDSCAPE_GRID}>
             {results.map((item) => {
               const movie = item.fullData || item.movie || {};
               const isActive = selectedMovie?.slug === item.slug;
 
               return (
-                <div
+                <article
                   key={item.id}
                   onClick={() => handleCardClick(item)}
-                  className={`group relative rounded-2xl overflow-hidden bg-[#16181f] cursor-pointer transition-all duration-400 shadow-2xl
-                    ${
-                      isActive
-                        ? "border-2 border-blue-500 scale-[1.03] shadow-[0_0_30px_rgba(59,130,246,0.3)]"
-                        : "border border-white/5 hover:scale-[1.03] hover:border-blue-500/50"
-                    }`}
+                  className={`group relative rounded-2xl overflow-hidden bg-white/[0.03] cursor-pointer
+                              transition-all duration-300 hover:-translate-y-1 motion-reduce:transform-none
+                              hover:shadow-2xl hover:shadow-black/60 ring-1 ${
+                    isActive ? "ring-blue-500" : "ring-white/[0.06] hover:ring-white/25"}`}
                 >
                   <div className="relative w-full overflow-hidden bg-gray-900" style={{ aspectRatio: "16/10" }}>
                     <img
                       src={item.image}
-                      alt={item.title}
-                      className={`w-full h-full object-cover transition-all duration-700 ${
-                        isActive ? "opacity-30" : "group-hover:opacity-35"
-                      }`}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover transition-transform duration-500
+                                 group-hover:scale-105 motion-reduce:transform-none"
                     />
 
-                    {isActive && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10">
-                        <div className="p-3 bg-blue-500 rounded-full shadow-2xl animate-pulse">
-                          <Play size={18} fill="white" className="text-white" />
-                        </div>
-                      </div>
-                    )}
+                    {/* A scrim carrying the overlay, rather than fading the
+                        artwork to a third of its opacity to make room for it. */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent
+                                    opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                     {item.source === "tmdb" && (
-                      <div className="absolute top-2 right-2 bg-blue-600/85 backdrop-blur-md px-2 py-0.5 rounded-md text-[7px] font-black uppercase flex items-center gap-1 border border-blue-400/30 z-10">
-                        <Globe size={7} /> Global
-                      </div>
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 z-10
+                                       bg-black/70 backdrop-blur-md text-gray-200 border border-white/10
+                                       px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wide">
+                        <Globe className="w-2.5 h-2.5" aria-hidden="true" /> Global
+                      </span>
                     )}
 
-                    <div className="hidden sm:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent flex-col justify-end p-3 pointer-events-none z-20">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        {movie.imdb_rating && (
-                          <>
-                            <div className="bg-[#f5c518] text-black px-1.5 rounded-[3px] font-black text-[8px]">IMDb</div>
-                            <span className="text-[9px] font-black text-white">{movie.imdb_rating}</span>
-                          </>
-                        )}
-                        {movie.content_type === "tv" && (
-                          <div className="flex items-center gap-0.5 text-[8px] font-black text-yellow-400 uppercase ml-1">
-                            <ListVideo size={9} /> TV
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-white rounded-full text-black shadow-xl">
-                          <Play size={9} fill="currentColor" />
-                        </div>
-                        <span className="text-[8px] font-black uppercase tracking-tight">View Details</span>
-                      </div>
+                    <div className="hidden sm:flex absolute inset-x-0 bottom-0 p-3 items-center gap-2 z-20
+                                    opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                      <span className="inline-flex items-center gap-1.5 bg-white text-black
+                                       px-3 py-1.5 rounded-lg text-[11px] font-black">
+                        <Play className="w-3 h-3 fill-current" aria-hidden="true" /> Details
+                      </span>
+                      {movie.imdb_rating && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-amber-300">
+                          <Star className="w-3 h-3 fill-current" aria-hidden="true" />{movie.imdb_rating}
+                        </span>
+                      )}
+                      {movie.content_type === "tv" && (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">Series</span>
+                      )}
                     </div>
                   </div>
 
                   <CardTitleStrip movie={{ title: item.title, title_logo: movie.title_logo, genres: movie.genres }} />
-                </div>
+                </article>
               );
             })}
           </div>
         ) : (
-          <div className="py-24 text-center bg-gray-900/20 rounded-[3rem] border border-dashed border-gray-800 animate-in fade-in duration-700">
-            <Search className="w-16 h-16 mx-auto mb-4 text-gray-800" />
-            <h2 className="text-xl font-black text-gray-400 uppercase tracking-widest italic">Node Not Found</h2>
-            <p className="text-gray-600 text-sm mt-2 font-medium">Try searching for keywords like "Tamil", "2025", or a specific TMDB ID.</p>
+          <div className="py-24 text-center">
+            <Search className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+            <p className="text-gray-300 font-black uppercase tracking-widest text-xs">
+              {query ? <>Nothing found for &ldquo;{prettyQuery}&rdquo;</> : "Search the catalogue"}
+            </p>
+            <p className="text-gray-500 text-[12px] mt-2 max-w-sm mx-auto leading-relaxed">
+              {query
+                ? "Check the spelling, try a shorter phrase, or clear the filters above."
+                : "Type a title above. You can also paste an IMDb or TMDB id."}
+            </p>
           </div>
         )}
       </div>

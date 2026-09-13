@@ -15,6 +15,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet";
+import { sanitizeArticle } from "../utils/sanitizeHtml";
 
 const API = import.meta.env.VITE_BACKEND_URL;
 
@@ -127,19 +128,7 @@ const NewsViewer = () => {
       <div className="min-h-screen bg-[#0e0e0e] text-white font-['Roboto']">
 
         {/* ── Header ── */}
-        <header className="bg-black/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center h-[64px]">
-            <Link to="/" className="text-white text-xl font-bold tracking-wide uppercase">
-              Anchor<span className="text-[#c5c107]">Movies</span>
-            </Link>
-            <nav className="hidden md:flex space-x-6 text-gray-400 font-medium uppercase text-xs tracking-wider">
-              <Link to="/"      className="hover:text-white transition">Home</Link>
-              <Link to="/blogs" className="hover:text-white transition">Blogs</Link>
-              <Link to="/about" className="hover:text-white transition">About</Link>
-              <Link to="/contact" className="hover:text-white transition">Contact</Link>
-            </nav>
-          </div>
-        </header>
+        {/* Site navigation is the rail's job — this page used to draw its own. */}
 
         {/* ── Back bar ── */}
         <div className="border-b border-white/5 bg-black/40">
@@ -294,7 +283,7 @@ const NewsViewer = () => {
                       prose-blockquote:border-l-[#c5c107] prose-blockquote:text-gray-400
                       prose-hr:border-white/10
                     "
-                    dangerouslySetInnerHTML={{ __html: article.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeArticle(article.content) }}
                   />
 
                   {/* Source attribution */}

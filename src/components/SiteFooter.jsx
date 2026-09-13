@@ -50,7 +50,7 @@ const LANGUAGES = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"
 
 const SiteFooter = () => (
   <footer className="w-full border-t border-white/10 bg-gray-950 text-gray-400 mt-16">
-    <div className="max-w-7xl mx-auto px-6 py-10 grid gap-8 sm:grid-cols-3">
+    <div className="max-w-[1800px] mx-auto px-6 py-10 grid gap-8 sm:grid-cols-3">
       <div>
         <h2 className="text-white font-black text-xs uppercase tracking-widest mb-3">
           Browse by language

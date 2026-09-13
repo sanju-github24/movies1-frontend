@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { X, Play, Volume2, VolumeX, Star, Plus, ChevronDown, CheckCircle2, Check } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { X, Play, Volume2, VolumeX, Star, ChevronDown, CheckCircle2, Download } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate } from "../utils/titleEpisodes";
 import { getLiveShow } from "../utils/liveShow";
 import LiveShowActions from "../components/LiveShowActions";
-import { inMyList, toggleMyList } from "../utils/myList";
 import { useRecommendations } from "../utils/recommendations";
 import Mp4Trailer from "../components/Mp4Trailer";
 
@@ -128,7 +127,6 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
   const [mp4Live, setMp4Live] = useState(false);      // the MP4 is actually playing
   const [isEntering, setIsEntering] = useState(false);
   const [activeSeason, setActiveSeason] = useState(null);
-  const [saved, setSaved] = useState(false);
   const navigate = useNavigate();
   const { episodes, seasons, tmdbExtra, trailerMp4, trailerPending } = useTitleEpisodes(movie);
   // Our library first (same genres), then TMDB's own recommendations.
@@ -137,7 +135,6 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
   useEffect(() => {
     setIsEntering(true);
     setActiveSeason(null);          // a new title opens on its newest season
-    setSaved(inMyList(movie?.slug));
   }, [movie]);
 
   /* The artwork holds for a second before any trailer fades in. Timed off the
@@ -317,10 +314,15 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
                   </button>
                 )}
                 
-                <button onClick={() => setSaved(toggleMyList(movie))} aria-label="Watchlist"
+                {/* Downloads, matching the mobile sheet. A watchlist "+" was
+                    the wrong second action for this site — what a visitor wants
+                    beside Play is the file, not a list they rarely revisit. */}
+                <Link to={`/search-torrent?q=${encodeURIComponent(movie?.title || "")}`}
+                  aria-label={`Download links for ${movie?.title || "this title"}`}
+                  title="Download links"
                   className="p-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 backdrop-blur-xl transition-all">
-                    {saved ? <Check size={20} className="text-blue-400" /> : <Plus size={20} />}
-                </button>
+                    <Download size={20} />
+                </Link>
               </div>
             </div>
           </div>

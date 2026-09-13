@@ -212,3 +212,34 @@ input[type="range"]::-moz-range-track {
 @media (prefers-reduced-motion: reduce) {
   .onair-bar { animation: none; transform: scaleY(0.7); }
 }
+
+/* Skeleton shimmer for the homepage grid and stories rail. A moving highlight
+   reads as "loading" where a static grey block reads as broken. */
+@keyframes shimmer-sweep {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; background-position: 0 0; }
+}
+
+/* The desktop nav rail carries no background while it is collapsed, so its
+   icons sit directly on whatever the page is showing — which may be a bright
+   poster. A drop shadow is what keeps them legible there without putting a
+   panel back. Written here rather than as an arbitrary Tailwind variant
+   because `[&_svg]:drop-shadow-[…]` silently generated no CSS in v4. */
+.rail-float svg,
+.rail-float img {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
+}
+

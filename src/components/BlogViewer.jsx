@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../utils/supabaseClient";
 import { absUrl, jsonLd } from "../utils/seo";
+import { sanitizeArticle } from "../utils/sanitizeHtml";
 
 // Blog bodies are HTML. Strip it down to a plain sentence or two for the meta
 // description — Google shows this text, so tags leaking in look broken.
@@ -140,21 +141,7 @@ const BlogViewer = () => {
       </Helmet>
 
       {/* Header */}
-      <header className="bg-[#464646] shadow-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 flex justify-between items-center h-[70px]">
-          <Link to="/" className="flex items-center space-x-2">
-            <h1 className="text-white text-2xl font-bold tracking-wide uppercase">
-              Anchor<span className="text-[#c5c107]">Movies</span>
-            </h1>
-          </Link>
-          <nav className="hidden md:flex space-x-6 text-white font-medium uppercase text-sm">
-            <Link to="/" className="hover:text-[#c5c107] transition">Home</Link>
-            <Link to="/blogs" className="hover:text-[#c5c107] transition">Blogs</Link>
-            <Link to="/about" className="hover:text-[#c5c107] transition">About</Link>
-            <Link to="/contact" className="hover:text-[#c5c107] transition">Contact</Link>
-          </nav>
-        </div>
-      </header>
+      {/* Site navigation is the rail's job — this page used to draw its own. */}
 
       {/* Main Section */}
       <main className="max-w-7xl mx-auto py-10 px-4 grid grid-cols-1 lg:grid-cols-4 gap-10">
@@ -185,7 +172,7 @@ const BlogViewer = () => {
             */}
             <div
               className="max-w-none" 
-              dangerouslySetInnerHTML={{ __html: blog.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeArticle(blog.content) }}
             />
 
             {/* Related Movies Section */}

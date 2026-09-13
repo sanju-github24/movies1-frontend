@@ -9,6 +9,7 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Search, Loader2, Frown, Film, AlertCircle } from "lucide-react";
+import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { loadCatalog } from "../utils/catalog";
 import { absUrl, jsonLd } from "../utils/seo";
 import CatalogCard from "./CatalogCard";
@@ -119,7 +120,7 @@ const CategoryPage = () => {
       </Helmet>
 
       {/* ── Header ── */}
-      <header className="max-w-7xl mx-auto mb-8 border-b border-gray-900 pb-6">
+      <header className={`${POSTER_SHELL} mb-8 border-b border-gray-900 pb-6`}>
         <div className="flex items-center gap-2 mb-1">
           <Film className="w-6 h-6 text-blue-500" />
           <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter italic">
@@ -193,7 +194,7 @@ const CategoryPage = () => {
         </div>
       ) : (
         <>
-          <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+          <div className={`${POSTER_SHELL} ${LANDSCAPE_GRID}`}>
             {visible.map((entry) => (
               <CatalogCard key={entry.key} entry={entry} showAge />
             ))}

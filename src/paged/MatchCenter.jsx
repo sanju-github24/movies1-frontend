@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { absUrl, jsonLd } from "../utils/seo";
 import {
-  ArrowLeft, RefreshCw, Trophy, Star, AlertCircle,
-  Tv2, Signal, Maximize2, PlayCircle
+  RefreshCw, Trophy, Star, AlertCircle,
+  Tv2, Maximize2, PlayCircle
 } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
+import { sanitizeArticle } from "../utils/sanitizeHtml";
 
 // ── FanCode match → live stream channel (cricket match centers) ──────────────
 const FANCODE_FEED = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
@@ -1165,7 +1166,7 @@ function MatchSummaryPanel({ summary, isFinished }) {
           <div
             className="text-[12px] leading-relaxed text-white/60 space-y-3"
             style={{ maxHeight: 480, overflowY: "auto" }}
-            dangerouslySetInnerHTML={{ __html: postHtml.replace(/<img[^>]*>/gi, "") }}
+            dangerouslySetInnerHTML={{ __html: sanitizeArticle(postHtml.replace(/<img[^>]*>/gi, "")) }}
           />
         </div>
       )}
@@ -1176,7 +1177,7 @@ function MatchSummaryPanel({ summary, isFinished }) {
           <div
             className="text-[12px] leading-relaxed text-white/60 space-y-3"
             style={{ maxHeight: 480, overflowY: "auto" }}
-            dangerouslySetInnerHTML={{ __html: preHtml.replace(/<img[^>]*>/gi, "") }}
+            dangerouslySetInnerHTML={{ __html: sanitizeArticle(preHtml.replace(/<img[^>]*>/gi, "")) }}
           />
         </div>
       )}
@@ -2719,7 +2720,6 @@ export default function MatchCenter() {
   // sitemap and the one a person or Google sees. /match-center/:hash is the old
   // base64 link, kept working so anything already shared still opens.
   const { hash, slug } = useParams();
-  const navigate  = useNavigate();
 
   const [resolved,      setResolved]      = useState(null);
   const [resolveError,  setResolveError]  = useState(false);
@@ -2773,17 +2773,20 @@ export default function MatchCenter() {
   // A slug still being looked up isn't a broken link — don't flash an error at
   // the reader, or hand a crawler one while the fixture is still loading.
   if (slug && !payload && !resolveError) return (
-    <div className="min-h-screen bg-[#080808] text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
-      <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/50 animate-spin" />
-      <p className="text-sm text-gray-500">Loading match…</p>
+    <div className="min-h-dvh bg-gray-950 text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
+      <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/60 animate-spin" />
+      <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Loading match</p>
     </div>
   );
 
   if (!payload) return (
-    <div className="min-h-screen bg-[#080808] text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
-      <AlertCircle size={32} className="text-red-500/40" />
-      <p className="text-base text-gray-500">Invalid match link</p>
-      <Link to="/" className="px-5 py-2.5 rounded-xl border border-white/10 text-sm text-gray-400 hover:text-white transition-colors">Back to Home</Link>
+    <div className="min-h-dvh bg-gray-950 text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
+      <AlertCircle className="w-10 h-10 text-gray-700" aria-hidden="true" />
+      <p className="text-gray-300 font-black uppercase tracking-widest text-xs">This match link is not valid</p>
+      <p className="text-gray-500 text-[12px] max-w-sm">It may have expired, or the address was mistyped.</p>
+      <Link to="/sports" className="mt-2 bg-white text-black px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
+        Back to sports
+      </Link>
     </div>
   );
 
@@ -2799,7 +2802,7 @@ export default function MatchCenter() {
   const seoDesc    = `${matchTitle} live score and full scorecard for ${league}. Ball-by-ball updates, innings breakdown, squads and match result.`;
 
   return (
-    <div className="min-h-screen bg-[#050810] text-white font-sans overflow-x-hidden">
+    <div className="min-h-dvh bg-gray-950 text-white font-sans overflow-x-hidden">
       <Helmet prioritizeSeoTags>
         <title>{seoTitle}</title>
         <meta name="description" content={seoDesc} />
@@ -2828,35 +2831,38 @@ export default function MatchCenter() {
 
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: ambientBg }} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl border-b" style={{ background: "rgba(5,8,16,0.88)", borderColor: "rgba(255,255,255,0.07)" }}>
-        <div className="max-w-3xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-white/35 hover:text-white transition-colors shrink-0">
-            <ArrowLeft size={17} />
-            <span className="text-sm font-semibold hidden sm:inline">Back</span>
-          </button>
-          <div className="flex flex-col items-center min-w-0">
-            <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.25em]">{sportLabel}</p>
-            <p className="text-sm font-black text-white truncate max-w-[200px]">
-              {payload.homeCode} <span style={{ color: accent }}>vs</span> {payload.awayCode}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full border shrink-0"
-            style={{ color: accent, borderColor: `${accent}30`, background: `${accent}08` }}>
-            <Signal size={9} />
-            <span className="hidden sm:inline">Center</span>
-          </div>
-        </div>
-      </header>
+      {/* The sticky header is gone. It carried a Back button the rail and the
+          browser both already provide, a "Center" badge that stood for nothing,
+          and the fixture — "IND vs AUS" — directly above an <h1> saying the
+          same thing, so the match name appeared twice on one screen. The title
+          block below is the one that remains. */}
 
-      <main className="relative z-10 max-w-3xl mx-auto px-5 py-6 pb-28">
+      <main className="relative z-10 w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
         {/* Page title */}
-        <div className="mb-6">
-          <p className="text-[9px] font-black text-white/25 uppercase tracking-[0.3em] mb-1">{sportLabel}</p>
-          <h1 className="font-black tracking-tight leading-none text-white" style={{ fontSize: "clamp(2rem,6vw,3.5rem)", letterSpacing: "-0.03em" }}>
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">{sportLabel}</span>
+            {matchState.isLive && (
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest
+                               text-red-400 bg-red-500/10 ring-1 ring-red-500/25 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" />
+                Live
+              </span>
+            )}
+            {matchState.isFinished && (
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400
+                               bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 rounded-full">
+                Finished
+              </span>
+            )}
+          </div>
+
+          <h1 className="font-black tracking-tight leading-none text-white"
+            style={{ fontSize: "clamp(1.75rem,5vw,3rem)", letterSpacing: "-0.03em" }}>
             {payload.homeCode} <span style={{ color: accent }}>vs</span> {payload.awayCode}
           </h1>
-          {payload.leagueLabel && <p className="text-sm text-white/35 mt-2">{payload.leagueLabel}</p>}
+
+          {payload.leagueLabel && <p className="text-sm text-gray-400 mt-2.5">{payload.leagueLabel}</p>}
         </div>
 
         {/* Live stream / result popup */}

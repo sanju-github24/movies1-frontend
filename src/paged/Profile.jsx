@@ -1,249 +1,261 @@
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useMemo } from "react";
 import { AppContext } from "../context/AppContext";
 import { toast } from "react-toastify";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
-import { 
-  User, 
-  Mail, 
-  Edit3, 
-  LogOut, 
-  Loader2, 
-  ShieldCheck,
-  Calendar,
-  ArrowLeft,
-  Save,
-  X,
-  UserCircle,
-  CheckCircle2,
-  Languages,
-  Check,
-  Sun,
-  Moon
-} from "lucide-react"; 
+import {
+  User, Mail, LogOut, Loader2, ShieldCheck, ShieldAlert,
+  Save, Check, Clock3, Bookmark, Download, ChevronRight,
+} from "lucide-react";
+
+const LANGUAGES = ["Hindi", "English", "Kannada", "Tamil", "Telugu", "Malayalam"];
+
+/* Where the viewer goes from here. The page used to offer only "back" and a
+   logo, both of which the rail already does better. */
+const SHORTCUTS = [
+  { to: "/watch",          label: "My watchlist",  hint: "Everything you saved",     Icon: Bookmark },
+  { to: "/latest",         label: "Latest uploads", hint: "Newest first",            Icon: Clock3 },
+  { to: "/search-torrent", label: "Downloads",     hint: "Find links by name",       Icon: Download },
+];
+
+const Card = ({ children, className = "" }) => (
+  <section className={`bg-white/[0.03] ring-1 ring-white/[0.06] rounded-2xl ${className}`}>
+    {children}
+  </section>
+);
+
+const Label = ({ children }) => (
+  <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2">
+    {children}
+  </span>
+);
 
 const Profile = () => {
-  const { setUserData, setIsLoggedIn } = useContext(AppContext); 
+  const { setUserData, setIsLoggedIn } = useContext(AppContext);
   const [session, setSession] = useState(null);
-  const [newName, setNewName] = useState("");
-  const [selectedLangs, setSelectedLangs] = useState([]);
-  const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
-  // 🌓 Theme State (Defaults to Dark)
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem("theme") !== "light";
-  });
-
-  // Updated language list (Bengali and Marathi removed)
-  const availableLanguages = [
-    "Hindi", "English", "Kannada", "Tamil", "Telugu", "Malayalam"
-  ];
-
-  // 🔐 Initial Auth Fetch
-  useEffect(() => {
-    const getSession = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      setSession(currentSession);
-      
-      if (currentSession?.user?.user_metadata) {
-        const metadata = currentSession.user.user_metadata;
-        setNewName(metadata.full_name || currentSession.user.email.split('@')[0]);
-        setSelectedLangs(metadata.languages || []);
-      }
-    };
-    getSession();
-  }, []);
-
+  const [ready, setReady] = useState(false);
+  const [name, setName] = useState("");
+  const [langs, setLangs] = useState([]);
+  const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
-  // 🌓 Toggle Theme Logic
-  const toggleTheme = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    localStorage.setItem("theme", newMode ? "dark" : "light");
-    if (newMode) document.body.classList.add('dark');
-    else document.body.classList.remove('dark');
-  };
+  // What was on the account when the page loaded, so Save can tell whether
+  // anything actually changed rather than always looking available.
+  const [initial, setInitial] = useState({ name: "", langs: [] });
 
-  const toggleLanguage = (lang) => {
-    setSelectedLangs(prev => 
-      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
-    );
-  };
+  useEffect(() => {
+    (async () => {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      setSession(s);
+      if (s?.user) {
+        const meta = s.user.user_metadata || {};
+        const n = meta.full_name || s.user.email.split("@")[0];
+        const l = Array.isArray(meta.languages) ? meta.languages : [];
+        setName(n); setLangs(l); setInitial({ name: n, langs: l });
+      }
+      setReady(true);
+    })();
+  }, []);
 
-  /* Save Name & Languages to Supabase Metadata */
+  const dirty = useMemo(() => {
+    if (name.trim() !== initial.name) return true;
+    if (langs.length !== initial.langs.length) return true;
+    return langs.some((l) => !initial.langs.includes(l));
+  }, [name, langs, initial]);
+
+  const toggleLanguage = (lang) =>
+    setLangs((prev) => (prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]));
+
   const saveProfile = async () => {
-    if (!newName.trim()) return toast.error("Name cannot be empty");
-    
-    setLoading(true);
+    if (!name.trim()) return toast.error("Name cannot be empty");
+    setSaving(true);
     try {
       const { data, error } = await supabase.auth.updateUser({
-        data: { 
-          full_name: newName.trim(),
-          languages: selectedLangs
-        }
+        data: { full_name: name.trim(), languages: langs },
       });
-
       if (error) throw error;
-
-      toast.success("Profile updated successfully!");
-      setSession(prev => ({ ...prev, user: data.user }));
-      setEditing(false);
+      toast.success("Profile updated");
+      setSession((prev) => ({ ...prev, user: data.user }));
+      setInitial({ name: name.trim(), langs });
     } catch (err) {
       toast.error(err.message || "Failed to update profile");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  /* Logout Flow */
   const handleLogout = async () => {
-    setLoading(true);
     try {
       await supabase.auth.signOut();
-      localStorage.clear(); 
+      localStorage.clear();
       setIsLoggedIn(false);
       setUserData(null);
-      toast.success("Logged out from secure session");
-      navigate("/login1");
-    } catch (error) {
-      toast.error("Logout failed");
-    } finally {
-      setLoading(false);
+      toast.success("Signed out");
+      /* /auth, not /login1 — that route does not exist, so signing out used to
+         land on a blank page. */
+      navigate("/auth");
+    } catch {
+      toast.error("Sign out failed");
     }
   };
 
-  if (!session) return (
-    <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-950' : 'bg-gray-50'}`}>
-      <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+  if (!ready) return (
+    <div className="min-h-dvh bg-gray-950 flex items-center justify-center">
+      <Loader2 className="w-9 h-9 animate-spin text-blue-500" aria-hidden="true" />
     </div>
   );
 
+  if (!session) return (
+    <div className="min-h-dvh bg-gray-950 text-white flex flex-col items-center justify-center gap-5 px-6 text-center">
+      <User className="w-10 h-10 text-gray-700" aria-hidden="true" />
+      <p className="text-gray-300 font-black uppercase tracking-widest text-xs">You are not signed in</p>
+      <Link to="/auth" className="bg-white text-black px-7 py-3 rounded-xl font-black text-sm hover:bg-gray-200 transition-colors">
+        Sign in
+      </Link>
+    </div>
+  );
+
+  const user = session.user;
+  const verified = !!user.email_confirmed_at;
+  const initialLetter = (name || user.email)[0].toUpperCase();
+  const since = user.created_at
+    ? new Date(user.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+    : null;
+
   return (
-    <div className={`min-h-screen font-sans selection:bg-blue-500/30 flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-500 ${isDarkMode ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-900'}`}>
-      
-      {/* 🎬 CINEMATIC BACKDROP */}
-      <div className="absolute inset-0 z-0">
-        <div className={`absolute inset-0 bg-[url('https://images.unsplash.com/photo-1478720568477-152d9b164e26?q=80&w=2070')] bg-cover bg-center transition-opacity duration-700 ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} />
-        <div className={`absolute inset-0 transition-colors duration-700 ${isDarkMode ? 'bg-gradient-to-b from-blue-600/10 via-transparent to-gray-950' : 'bg-gradient-to-b from-blue-400/10 via-transparent to-gray-100'}`} />
-        <div className="absolute inset-0 backdrop-blur-3xl" />
-      </div>
+    <div className="min-h-dvh bg-gray-950 text-white px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 sm:py-12">
+      <div className="w-full max-w-[1100px] mx-auto">
 
-      <div className="relative z-10 w-full max-w-[550px] animate-in fade-in slide-in-from-bottom-4 duration-700">
-        
-        {/* Navigation Bar */}
-        <div className="flex items-center justify-between mb-8">
-          <button onClick={() => navigate(-1)} className={`p-3 rounded-full transition-all ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-gray-400' : 'bg-black/5 hover:bg-black/10 text-gray-600'}`}>
-            <ArrowLeft size={20} />
-          </button>
-          
-          <img src="/logo_39.png" className="h-8" alt="logo" />
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter italic mb-6 sm:mb-8">
+          My space
+        </h1>
 
-          {/* 🌓 THEME TOGGLE BUTTON */}
-          <button 
-            onClick={toggleTheme} 
-            className={`p-3 rounded-full transition-all shadow-xl flex items-center justify-center ${isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-white text-blue-600 hover:bg-gray-100 border border-gray-200'}`}
-          >
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-        </div>
+        {/* Identity beside preferences on a wide screen, stacked on a phone.
+            The old page was a single 550px card centred in the window, which
+            left most of a desktop empty and made a short form scroll. */}
+        <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] items-start">
 
-        {/* Profile Card */}
-        <div className={`backdrop-blur-2xl border transition-all duration-500 rounded-[3rem] p-8 md:p-10 shadow-[0_30px_100px_-20px_rgba(0,0,0,0.3)] ${isDarkMode ? 'bg-gray-900/40 border-white/10' : 'bg-white/70 border-black/5'}`}>
-          
-          {/* User Avatar Section */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 p-1 shadow-2xl">
-              <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-                {newName ? (
-                  <span className={`text-3xl font-black italic ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {newName[0].toUpperCase()}
+          {/* ── Who you are ── */}
+          <Card className="p-6 flex flex-col items-center text-center">
+            <span className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 p-[2px]">
+              <span className="w-full h-full rounded-full bg-gray-950 flex items-center justify-center text-3xl font-black">
+                {initialLetter}
+              </span>
+            </span>
+
+            <h2 className="mt-4 text-lg font-black tracking-tight break-words w-full">{name || "Explorer"}</h2>
+
+            {/* Reads the account, rather than claiming "Verified Account" for
+                everyone the way the old badge did. */}
+            {verified ? (
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" /> Email verified
+              </span>
+            ) : (
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-400">
+                <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" /> Email not verified
+              </span>
+            )}
+
+            <p className="mt-4 text-xs text-gray-400 break-all">{user.email}</p>
+            {since && <p className="mt-1 text-[11px] text-gray-600">Member since {since}</p>}
+
+            <button onClick={handleLogout}
+              className="mt-6 w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest
+                         bg-white/[0.04] text-red-400 ring-1 ring-red-500/20
+                         hover:bg-red-500 hover:text-white hover:ring-red-500 transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+              <span className="inline-flex items-center gap-2"><LogOut className="w-4 h-4" aria-hidden="true" /> Sign out</span>
+            </button>
+          </Card>
+
+          {/* ── What you can change ── */}
+          <div className="space-y-5">
+            <Card className="p-6 space-y-6">
+              <div>
+                <Label>Display name</Label>
+                <div className="flex items-center gap-3 bg-black/40 ring-1 ring-white/[0.06] rounded-xl px-4 py-3
+                                focus-within:ring-blue-500 transition-shadow">
+                  <User className="w-4 h-4 text-gray-500 shrink-0" aria-hidden="true" />
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your name" aria-label="Display name"
+                    className="bg-transparent outline-none text-sm font-bold w-full placeholder:text-gray-600" />
+                </div>
+              </div>
+
+              <div>
+                <Label>Preferred languages</Label>
+                <p className="text-[11px] text-gray-500 -mt-1 mb-3">
+                  Used to pick the audio track when a title has several.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {LANGUAGES.map((lang) => {
+                    const on = langs.includes(lang);
+                    return (
+                      <button key={lang} type="button" onClick={() => toggleLanguage(lang)}
+                        aria-pressed={on}
+                        className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest
+                                    border transition-colors duration-200 inline-flex items-center gap-1.5
+                                    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                          on ? "bg-white text-black border-white"
+                             : "bg-white/[0.04] text-gray-300 border-white/10 hover:bg-white/[0.1] hover:text-white"
+                        }`}>
+                        {on && <Check className="w-3 h-3" aria-hidden="true" />}
+                        {lang}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <Label>Email</Label>
+                <div className="flex items-center gap-3 bg-black/20 ring-1 ring-white/[0.04] rounded-xl px-4 py-3">
+                  <Mail className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-gray-400 truncate">{user.email}</span>
+                  <span className="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-600 shrink-0">
+                    Locked
                   </span>
-                ) : (
-                  <UserCircle size={50} className="text-gray-400" />
-                )}
+                </div>
               </div>
-            </div>
-            <h2 className="mt-4 text-2xl font-black uppercase tracking-tighter italic">{newName || "Explorer"}</h2>
-            <div className="flex items-center gap-2 text-blue-500 text-[10px] font-black tracking-[0.2em] uppercase mt-1">
-              <ShieldCheck size={12} /> Verified Account
-            </div>
-          </div>
 
-          <div className="space-y-6">
-            
-            {/* Display Name Section */}
-            <div className="space-y-2">
-              <label className={`text-[10px] font-black uppercase tracking-[0.2em] ml-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Your Name</label>
-              <div className={`flex items-center gap-4 border p-4 rounded-2xl transition-all ${editing ? 'border-blue-500 ring-4 ring-blue-500/10' : (isDarkMode ? 'bg-black/40 border-white/5' : 'bg-gray-50 border-black/5')}`}>
-                <User size={18} className={editing ? 'text-blue-500' : 'text-gray-400'} />
-                <input 
-                  type="text" 
-                  value={newName}
-                  onFocus={() => setEditing(true)}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className={`bg-transparent border-none outline-none text-sm font-bold w-full ${isDarkMode ? 'text-white placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
-                  placeholder="Enter your name"
-                />
-              </div>
-            </div>
+              {/* Save is only offered when there is something to save. */}
+              <button onClick={saveProfile} disabled={saving || !dirty}
+                className="w-full py-3.5 rounded-xl font-black text-sm inline-flex items-center justify-center gap-2
+                           bg-white text-black hover:bg-gray-200 transition-colors
+                           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+                {saving
+                  ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Saving…</>
+                  : <><Save className="w-4 h-4" aria-hidden="true" /> {dirty ? "Save changes" : "Saved"}</>}
+              </button>
+            </Card>
 
-            {/* Language Interests Section */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 ml-2">
-                <Languages size={14} className="text-blue-500" />
-                <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Preferred Languages</label>
-              </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {availableLanguages.map(lang => {
-                  const isActive = selectedLangs.includes(lang);
+            <Card className="p-2">
+              <ul>
+                {SHORTCUTS.map((item) => {
+                  // Bound as a local, not destructured in the parameter list:
+                  // lint exempts capitalised *variables* only, and nothing here
+                  // counts a JSX tag as a use.
+                  const Icon = item.Icon;
+                  const { to, label, hint } = item;
                   return (
-                    <button
-                      key={lang}
-                      onClick={() => toggleLanguage(lang)}
-                      className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border flex items-center justify-center gap-2 ${
-                        isActive 
-                        ? "bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]" 
-                        : (isDarkMode ? "bg-black/20 border-white/5 text-gray-500 hover:border-white/20" : "bg-gray-50 border-black/5 text-gray-400 hover:bg-gray-100")
-                      }`}
-                    >
-                      {isActive && <Check size={10} />}
-                      {lang}
-                    </button>
+                  <li key={to}>
+                    <Link to={to}
+                      className="flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-white/[0.05] transition-colors
+                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                      <Icon className="w-5 h-5 text-gray-400 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">{label}</span>
+                        <span className="block text-[11px] text-gray-500">{hint}</span>
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-600 ml-auto shrink-0" aria-hidden="true" />
+                    </Link>
+                  </li>
                   );
                 })}
-              </div>
-            </div>
-
-            {/* Email (Locked) */}
-            <div className="space-y-2 opacity-60">
-              <label className={`text-[10px] font-black uppercase tracking-[0.2em] ml-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Email Address</label>
-              <div className={`flex items-center gap-4 border p-4 rounded-2xl ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-50 border-black/5'}`}>
-                <Mail size={18} className="text-gray-400" />
-                <span className={`text-sm font-medium truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{session.user.email}</span>
-                <CheckCircle2 size={14} className="ml-auto text-green-600" />
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="pt-4 space-y-3">
-              <button 
-                onClick={saveProfile}
-                disabled={loading}
-                className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all transform active:scale-95 shadow-xl uppercase text-xs tracking-widest ${isDarkMode ? 'bg-white text-black hover:bg-blue-600 hover:text-white' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}
-              >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Save Preferences</>}
-              </button>
-
-              <button 
-                onClick={handleLogout}
-                className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-xs font-black uppercase tracking-widest border ${isDarkMode ? 'bg-red-600/10 hover:bg-red-600 text-red-500 border-red-500/10' : 'bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border-red-100'}`}
-              >
-                <LogOut size={18} /> Logout
-              </button>
-            </div>
+              </ul>
+            </Card>
           </div>
         </div>
       </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays } from "lucide-react";
+import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays, MonitorPlay, BarChart3, Radio } from "lucide-react";
 import HeroSection from "./HeroSection";
 import { absUrl, jsonLd } from "../utils/seo";
 
@@ -220,57 +220,8 @@ function PulsingDot({ color="#ef4444", size=7 }) {
   );
 }
 
-// ─── TOP NAV ──────────────────────────────────────────────────────────────────
-function TopNav() {
-  const loc = useLocation();
-
-  const logoIcon = (src, alt) => <img src={src} alt={alt} style={{ height: 18, width: "auto", maxWidth: 42, objectFit: "contain" }}/>;
-  const navItems = [
-    { to: "/",                 label: "Home", icon: <Home size={14}/> },
-    { to: "/tournament/bcci",  label: "BCCI", icon: logoIcon("/logos/bcci.png", "BCCI") },
-    { to: "/tournament/icc",   label: "ICC",  icon: logoIcon("/logos/icc.png", "ICC") },
-    { to: "/tournament/ipl",   label: "IPL",  icon: logoIcon("/logos/ipl.png", "IPL") },
-    { to: "/watch",            label: "Watch", icon: <Tv2 size={14}/> },
-  ];
-
-  return (
-    <header className="sticky top-0 z-50 w-full bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        {/* Logo */}
-        <Link to="/" className="shrink-0">
-          <img src="/logo_39.png" className="h-6 w-auto" alt="logo" />
-        </Link>
-
-        {/* Nav pills */}
-        <nav className="flex items-center gap-1 bg-white/[0.04] rounded-2xl p-1 border border-white/[0.07]">
-          {navItems.map(({ to, label, icon }) => {
-            const isActive = to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(to.split("?")[0]);
-            return (
-              <Link key={to} to={to}
-                aria-current={isActive ? "page" : undefined}
-                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all duration-200 hover:text-white hover:bg-white/[0.06]"
-                style={{
-                  background: isActive ? "rgba(139,92,246,0.16)" : "transparent",
-                  color: isActive ? "#c4b5fd" : "#8b8fa3",
-                  boxShadow: isActive ? "0 0 14px rgba(139,92,246,0.2)" : "none",
-                }}>
-                {icon}
-                <span className="hidden sm:inline">{label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Live badge */}
-        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1.5 rounded-full border shrink-0"
-          style={{ color:"#ef4444", borderColor:"rgba(239,68,68,0.25)", background:"rgba(239,68,68,0.06)" }}>
-          <PulsingDot color="#ef4444" size={5}/>
-          <span className="hidden sm:inline">Live</span>
-        </div>
-      </div>
-    </header>
-  );
-}
+/* Its TOP NAV is gone: a second set of site links, in pills, on the one
+   page that had them. The rail covers this now. */
 
 // ─── TEAM BADGE (circular for cricket, square for football — BCCI-style) ─────
 // Tracks image-load failure in state and falls back to the flag/globe glyph,
@@ -1679,42 +1630,58 @@ function IplHighlightsRow() {
 }
 
 // ─── CHANNEL SHORTCUT ─────────────────────────────────────────────────────────
-function ChannelShortcut({ label, emoji, desc, color, bg, border, to }) {
+/* One heading treatment for the page, instead of a differently-coloured 11px
+   caption per section. */
+function SportsHeading(props) {
+  const Icon = props.icon;
+  const { children } = props;
   return (
-    <Link to={to} className="flex items-center gap-3 rounded-2xl border p-3.5 transition-all active:scale-[0.98] hover:border-white/20"
-      style={{background:bg, borderColor:border}}>
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-        style={{background:`${color}20`, border:`1px solid ${color}30`}}>
-        <span style={{fontSize:20}}>{emoji}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-black text-white uppercase tracking-tight">{label}</p>
-        <p className="text-[9px] text-gray-600 truncate">{desc}</p>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <Tv2 size={12} style={{color}}/>
-        <span className="text-[9px] font-black uppercase" style={{color}}>Watch</span>
-      </div>
+    <div className="flex items-center gap-2.5 mt-10 mb-4">
+      <Icon className="w-4 h-4 text-gray-400" aria-hidden="true"/>
+      <h2 className="text-sm font-black text-white uppercase tracking-[0.18em]">{children}</h2>
+    </div>
+  );
+}
+
+/* Emoji out, icons in — the rest of the site draws its iconography from one
+   set, and an emoji renders as a different picture on every platform. The
+   per-card violet/sky/amber tints went with them: five accents on one screen,
+   none of which stood for anything. */
+function ChannelShortcut(props) {
+  const Icon = props.Icon;
+  const { label, desc, to } = props;
+  return (
+    <Link to={to}
+      className="group flex items-center gap-4 rounded-2xl p-4 bg-white/[0.03] ring-1 ring-white/[0.06]
+                 hover:bg-white/[0.06] hover:ring-white/20 transition-colors active:scale-[0.99]
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      <span className="w-11 h-11 rounded-xl bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center shrink-0">
+        <Icon className="w-5 h-5 text-gray-200" aria-hidden="true"/>
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[13px] font-black text-white">{label}</span>
+        <span className="block text-[11px] text-gray-500 truncate">{desc}</span>
+      </span>
+      <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors shrink-0" aria-hidden="true"/>
     </Link>
   );
 }
 
 // ─── TOURNAMENT BADGE ─────────────────────────────────────────────────────────
-function TournamentBadge({ emoji, logo, name, subtitle, color, bg, border, to }) {
+function TournamentBadge({ logo, name, subtitle, to }) {
   return (
-    <Link to={to} className="flex flex-col gap-2 rounded-2xl border p-4 transition-all active:scale-[0.97] hover:border-white/20"
-      style={{background:bg, borderColor:border}}>
-      <div className="flex items-center justify-between">
-        {logo
-          ? <img src={logo} alt={name} style={{height:34, width:"auto", maxWidth:96, objectFit:"contain"}}/>
-          : <span style={{fontSize:28}}>{emoji}</span>}
-        <ChevronRight size={14} style={{color}}/>
-      </div>
-      <div>
-        <p className="text-[11px] font-black text-white uppercase tracking-tight leading-tight">{name}</p>
-        <p className="text-[9px] text-gray-600 mt-0.5">{subtitle}</p>
-      </div>
-      <div className="h-0.5 rounded-full w-8" style={{background:color}}/>
+    <Link to={to}
+      className="group flex flex-col gap-3 rounded-2xl p-4 bg-white/[0.03] ring-1 ring-white/[0.06]
+                 hover:bg-white/[0.06] hover:ring-white/20 transition-colors active:scale-[0.99]
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      <span className="flex items-center justify-between">
+        <img src={logo} alt={name} className="h-9 w-auto max-w-[96px] object-contain object-left"/>
+        <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" aria-hidden="true"/>
+      </span>
+      <span className="block">
+        <span className="block text-[12px] font-black text-white uppercase tracking-tight leading-tight">{name}</span>
+        <span className="block text-[11px] text-gray-500 mt-0.5">{subtitle}</span>
+      </span>
     </Link>
   );
 }
@@ -2177,7 +2144,7 @@ export function TournamentPage() {
   const recent   = items.slice(0, 5);   // recent matches strip
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
+    <div className="min-h-dvh bg-gray-950 text-white font-sans overflow-x-hidden">
       <Helmet prioritizeSeoTags>
         <title>{`${cfg.name} Match Highlights — ${cfg.full}`}</title>
         <meta name="description" content={`Watch the latest ${cfg.name} match highlights. ${cfg.tag}.`}/>
@@ -2185,7 +2152,6 @@ export function TournamentPage() {
       </Helmet>
 
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 70% 30% at 50% 0%, ${cfg.accent}22 0%, transparent 55%)` }}/>
-      <TopNav/>
 
       {busy && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2304,13 +2270,14 @@ export default function Homeies({ searchTerm }) {
         style={{background:"radial-gradient(ellipse 70% 28% at 50% 0%, rgba(80,40,160,0.12) 0%, transparent 55%)"}}/>
 
       {/* ── TOP NAV ── */}
-      <TopNav/>
 
       <main className="relative z-10 pb-24">
         {/* ── HERO ── */}
         <HeroSection/>
 
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12">
+
+          <h1 className="sr-only">Live cricket scores, highlights and fixtures</h1>
 
           {/* ── LIVE / SCHEDULED / RECENT ── */}
           <div className="mt-6">
@@ -2327,43 +2294,34 @@ export default function Homeies({ searchTerm }) {
           <IplHighlightsRow/>
 
           {/* ── WATCH LIVE SHORTCUTS ── */}
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-3">
-              <Tv2 size={13} className="text-blue-400"/>
-              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Watch Live</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <ChannelShortcut label="Cricket Live TV" emoji="🏏"
-                desc="Star Sports 1 · English & Hindi · Live matches"
-                color="#8b5cf6" bg="rgba(139,92,246,0.05)" border="rgba(139,92,246,0.15)" to="/live-cricket-tv"/>
-              <ChannelShortcut label="Match Center" emoji="📊"
-                desc="Live scores, scorecards & schedules"
-                color="#38bdf8" bg="rgba(56,189,248,0.05)" border="rgba(56,189,248,0.15)" to="/live-cricket-tv"/>
-            </div>
+          <SportsHeading icon={Tv2}>Watch live</SportsHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ChannelShortcut label="Cricket Live TV" Icon={MonitorPlay}
+              desc="Star Sports 1 · English & Hindi · Live matches"
+              to="/live-cricket-tv"/>
+            {/* Was pointing at /live-cricket-tv, the same place as the card
+                beside it — two different promises, one destination. Scores and
+                scorecards live on /live-cricket. */}
+            <ChannelShortcut label="Match Centre" Icon={BarChart3}
+              desc="Live scores, scorecards & schedules"
+              to="/live-cricket"/>
           </div>
 
           {/* ── TOURNAMENTS ── */}
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-3">
-              <Trophy size={13} className="text-amber-400"/>
-              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Tournaments</span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <TournamentBadge logo="/logos/bcci.png" name="BCCI" subtitle="Team India · Highlights"
-                color="#38bdf8" bg="rgba(56,189,248,0.06)" border="rgba(56,189,248,0.18)" to="/tournament/bcci"/>
-              <TournamentBadge logo="/logos/icc.png" name="ICC" subtitle="World Cup · Highlights"
-                color="#22d3ee" bg="rgba(34,211,238,0.06)" border="rgba(34,211,238,0.18)" to="/tournament/icc"/>
-              <TournamentBadge logo="/logos/ipl.png" name="IPL" subtitle="2026 · Match Highlights"
-                color="#f59e0b" bg="rgba(245,158,11,0.06)" border="rgba(245,158,11,0.18)" to="/tournament/ipl"/>
-            </div>
+          <SportsHeading icon={Trophy}>Tournaments</SportsHeading>
+          <div className="grid grid-cols-3 gap-3">
+            <TournamentBadge logo="/logos/bcci.png" name="BCCI" subtitle="Team India · Highlights" to="/tournament/bcci"/>
+            <TournamentBadge logo="/logos/icc.png"  name="ICC"  subtitle="World Cup · Highlights"  to="/tournament/icc"/>
+            <TournamentBadge logo="/logos/ipl.png"  name="IPL"  subtitle="2026 · Match Highlights" to="/tournament/ipl"/>
           </div>
 
           {/* ── FOOTER NOTE ── */}
-          <div className="mt-10 pb-4">
-            <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-4 py-3 flex items-center gap-3">
-              <span className="text-lg">📡</span>
-              <p className="text-[10px] text-gray-600 font-bold leading-relaxed">
-                Streams are third-party embeds. Use Chrome and disable ad-blocker if the stream doesn't load. Match scores refresh every 10 minutes.
+          <div className="mt-12 pb-4">
+            <div className="rounded-2xl ring-1 ring-white/[0.06] bg-white/[0.02] px-4 py-3.5 flex items-start gap-3">
+              <Radio className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" aria-hidden="true"/>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Streams are third-party embeds — if one does not load, try Chrome with the ad-blocker off.
+                Scores refresh every 10 minutes.
               </p>
             </div>
           </div>

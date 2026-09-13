@@ -18,6 +18,7 @@ import {
   Maximize2
 } from "lucide-react";
 import VideoPlayer from "./VideoPlayer";
+import { sanitizeEmbed } from "../utils/sanitizeHtml";
 
 const VideoPlayerPage = () => {
   const { slug } = useParams();
@@ -242,10 +243,16 @@ const VideoPlayerPage = () => {
           {sourceType === "html" ? (
             <div 
               className="w-full h-full bg-black"
-              dangerouslySetInnerHTML={{ 
-                __html: finalSource.includes('<iframe') 
-                  ? finalSource.replace('<iframe', '<iframe class="w-full h-full border-0"') 
-                  : `<iframe src="${finalSource}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay" class="w-full h-full"></iframe>` 
+              dangerouslySetInnerHTML={{
+                /* The else branch interpolates finalSource straight into a src
+                   attribute — a stored value containing a quote closes the
+                   attribute and writes its own. Sanitising the built string
+                   strips whatever it manages to open. */
+                __html: sanitizeEmbed(
+                  finalSource.includes('<iframe')
+                    ? finalSource.replace('<iframe', '<iframe class="w-full h-full border-0"')
+                    : `<iframe src="${finalSource}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay" class="w-full h-full"></iframe>`
+                )
               }}
             />
           ) : (

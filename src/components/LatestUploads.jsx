@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { Loader2, Calendar, RefreshCw, LayoutGrid, AlertCircle } from "lucide-react";
+import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { loadCatalog, groupByDay } from "../utils/catalog";
 import CatalogCard from "./CatalogCard";
 
@@ -50,7 +51,7 @@ const LatestUploads = () => {
   const newestAt = entries[0]?.createdAt || null;
 
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-8 py-10 bg-gray-950 min-h-screen" aria-labelledby="latest-uploads">
+    <section className={`${POSTER_SHELL} px-4 sm:px-8 py-10 bg-gray-950 min-h-screen`} aria-labelledby="latest-uploads">
       <Helmet>
         <title>Latest Uploads | 1AnchorMovies</title>
         <meta name="description" content="Every title added to 1AnchorMovies, newest first — stream or download in Tamil, Telugu, Kannada, Malayalam, Hindi and English." />
@@ -118,7 +119,7 @@ const LatestUploads = () => {
                 <span className="text-[10px] font-bold text-gray-700">{group.items.length} title{group.items.length > 1 ? "s" : ""}</span>
                 <div className="flex-1 h-px bg-gray-900" />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+              <div className={LANDSCAPE_GRID}>
                 {group.items.map((entry) => (
                   <CatalogCard key={entry.key} entry={entry} showAge />
                 ))}

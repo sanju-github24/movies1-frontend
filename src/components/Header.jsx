@@ -4,10 +4,15 @@ import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
-import { Copy, CornerRightDown, Zap, Film, MonitorPlay, Clock, Sparkles, ChevronRight } from "lucide-react";
+import { Copy, Zap, MonitorPlay, Sparkles, ChevronRight,
+         Goal, Trophy, Play, ImageOff, Flame, Star, Download } from "lucide-react";
 import { AppContext } from "../context/AppContext";
 import MobileDetailSheet from "./MobileDetailSheet";
+import DesktopDetailOverlay from "../paged/DesktopDetailOverlay";
 import { LIVE_SHOWS, liveStatus, useLiveClock } from "../utils/liveShow";
+import { seasonNo } from "../utils/titleEpisodes";
+import { POSTER_GRID } from "../utils/posterGrid";
+import ScrollRow from "./ScrollRow";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -223,7 +228,7 @@ function LiveShowBanner() {
   return (
     <button
       onClick={() => navigate(`/watch/${show.slug}`)}
-      className="w-full max-w-7xl mt-4 text-left group relative overflow-hidden rounded-2xl border border-red-500/30 hover:border-red-500/60 transition-all duration-300 active:scale-[0.995] shadow-[0_0_40px_rgba(239,68,68,0.12)] hover:shadow-[0_0_60px_rgba(239,68,68,0.22)]"
+      className="w-full max-w-[1800px] mt-4 text-left group relative overflow-hidden rounded-2xl border border-red-500/30 hover:border-red-500/60 transition-all duration-300 active:scale-[0.995] shadow-[0_0_40px_rgba(239,68,68,0.12)] hover:shadow-[0_0_60px_rgba(239,68,68,0.22)]"
     >
       {art && (
         <img src={art} alt="" aria-hidden="true"
@@ -237,13 +242,13 @@ function LiveShowBanner() {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.25em] text-white bg-red-600 px-2 py-[3px] rounded-full leading-none">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white bg-red-600 px-2.5 py-1 rounded-full leading-none">
               On Air
             </span>
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-red-300">
+            <span className="text-[11px] font-black uppercase tracking-widest text-red-300">
               {st.episodeLabel}
             </span>
-            <span className="text-[9px] text-gray-500 font-bold">
+            <span className="text-[11px] text-gray-300 font-bold">
               · {st.minutesLeft}m left
             </span>
           </div>
@@ -258,7 +263,7 @@ function LiveShowBanner() {
           )}
         </div>
 
-        <span className="shrink-0 flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-white bg-red-600 group-hover:bg-red-500 px-3 py-2 rounded-xl transition-colors">
+        <span className="shrink-0 flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-white bg-red-600 group-hover:bg-red-500 px-4 py-2.5 rounded-xl transition-colors">
           Watch Live <ChevronRight className="w-3 h-3" />
         </span>
       </div>
@@ -275,12 +280,12 @@ function LiveMatchStrip() {
   if (loading || matches.length === 0) return null;
 
   return (
-    <div className="w-full max-w-7xl mt-4 px-0">
+    <div className="w-full max-w-[1800px] mt-4 px-0">
       {/* Header label */}
       <div className="flex items-center gap-2 mb-2 px-1">
         <Dot color="#ef4444" size={6}/>
-        <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.25em]">Live Now</span>
-        <span className="text-[9px] text-gray-700">· {matches.length} match{matches.length>1?"es":""}</span>
+        <span className="text-[11px] font-black text-red-400 uppercase tracking-[0.2em]">Live Now</span>
+        <span className="text-[11px] font-semibold text-gray-400">· {matches.length} match{matches.length>1?"es":""}</span>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -299,14 +304,16 @@ function LiveMatchStrip() {
             >
               {/* Sport badge */}
               <span
-                className="text-[7px] font-black uppercase tracking-widest px-2 py-1 rounded-full shrink-0 leading-none"
+                className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full shrink-0 leading-none"
                 style={{
                   background: m.sport==="football" ? "rgba(52,211,153,0.1)" : "rgba(139,92,246,0.1)",
-                  color: m.sport==="football" ? "#34d399" : "#a78bfa",
-                  border: `1px solid ${m.sport==="football" ? "rgba(52,211,153,0.2)" : "rgba(139,92,246,0.2)"}`,
+                  color: m.sport==="football" ? "#6ee7b7" : "#c4b5fd",
+                  border: `1px solid ${m.sport==="football" ? "rgba(52,211,153,0.25)" : "rgba(139,92,246,0.25)"}`,
                 }}
               >
-                {m.sport==="football" ? "⚽ FIFA" : `🏏 ${m.badge}`}
+                {m.sport==="football"
+                  ? <><Goal className="w-3 h-3" aria-hidden="true" /> FIFA</>
+                  : <><Trophy className="w-3 h-3" aria-hidden="true" /> {m.badge}</>}
               </span>
 
               {/* Teams + score */}
@@ -339,35 +346,35 @@ function LiveMatchStrip() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="text-base leading-none">{m.homeFlag}</span>
-                      <span className="text-[12px] font-black text-white">{m.homeCode}</span>
+                      <span className="text-[13px] font-black text-white">{m.homeCode}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {m.homeScore
                         ? <>
-                            <span className="text-[13px] font-black text-white tabular-nums">{m.homeScore}</span>
-                            {m.homeOvers && <span className="text-[8px] text-gray-600">({m.homeOvers})</span>}
+                            <span className="text-[14px] font-black text-white tabular-nums">{m.homeScore}</span>
+                            {m.homeOvers && <span className="text-[11px] font-semibold text-gray-400 tabular-nums">({m.homeOvers})</span>}
                           </>
-                        : <span className="text-[8px] text-gray-700">Yet to bat</span>
+                        : <span className="text-[11px] font-semibold text-gray-500">Yet to bat</span>
                       }
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="text-base leading-none">{m.awayFlag}</span>
-                      <span className="text-[12px] font-black text-gray-300">{m.awayCode}</span>
+                      <span className="text-[13px] font-black text-gray-200">{m.awayCode}</span>
                     </div>
                     <div>
                       {m.awayScore
-                        ? <span className="text-[13px] font-black text-gray-300 tabular-nums">{m.awayScore}</span>
+                        ? <span className="text-[14px] font-black text-gray-100 tabular-nums">{m.awayScore}</span>
                         : <span className="text-[8px] text-gray-700">Yet to bat</span>
                       }
                     </div>
                   </div>
                   {m.striker && (
-                    <p className="text-[8px] text-amber-400 font-bold pt-0.5 truncate">{m.striker}</p>
+                    <p className="text-[11px] text-amber-300 font-bold pt-1 truncate">{m.striker}</p>
                   )}
                   {m.status && !m.striker && (
-                    <p className="text-[8px] text-gray-600 italic truncate">{m.status}</p>
+                    <p className="text-[11px] text-gray-400 italic truncate">{m.status}</p>
                   )}
                 </div>
               )}
@@ -375,7 +382,7 @@ function LiveMatchStrip() {
               {/* Arrow */}
               <ChevronRight
                 size={14}
-                className="text-gray-700 group-hover:text-gray-400 transition-colors shrink-0"
+                className="text-gray-500 group-hover:text-white transition-colors shrink-0"
               />
             </div>
           </button>
@@ -385,6 +392,631 @@ function LiveMatchStrip() {
   );
 }
 
+/* ── Hero spotlight ──────────────────────────────────────────────────────────
+   The page used to open on a wall of identical 2:3 posters, which gives the
+   eye nowhere to land and makes every title look equally important. The five
+   newest releases now lead, one at a time.
+
+   Why it rotates rather than sitting on one title: a single hero picks a
+   winner, and on a catalogue that turns over daily that means four other new
+   releases get the same treatment as a title from last month. Rotation keeps
+   the slot honest without spending five screens of height on it.
+
+   Artwork comes from watch_html — the same rows the detail sheet reads — so
+   the hero can never show different art from the page it opens. */
+/* The hero's metadata line: year, certification, seasons, languages.
+
+   None of it comes from one place, and two of the four are not in the database
+   at all. `movies` has no year and no certification column, and neither does
+   `watch_html` — the earlier version of this read movie.year and
+   movie.certification, which are always undefined, so the line silently showed
+   nothing but the languages unless the title happened to carry "(2026)" in its
+   text. Year, certification and the season count come from the same
+   tmdb-details endpoint the detail overlay uses; the episode list on the
+   watch_html row is the fallback for seasons when TMDB has no count. */
+function heroMeta(movie, art = {}, extra = {}) {
+  const langs = Array.isArray(movie.language) ? movie.language : (movie.language ? [movie.language] : []);
+  const eps = Array.isArray(art.episodes) ? art.episodes : [];
+  const seasons = Number(extra.number_of_seasons) || (eps.length ? new Set(eps.map(seasonNo)).size : 0);
+
+  const bits = [];
+  const year = extra.year || String(movie.title || "").match(/\((\d{4})\)/)?.[1];
+  if (year) bits.push(String(year));
+  if (extra.certification) bits.push(extra.certification);
+  if (seasons) bits.push(seasons > 1 ? `${seasons} Seasons` : "1 Season");
+  if (langs.length) bits.push(langs.length > 1 ? `${langs.length} Languages` : langs[0]);
+  return bits;
+}
+
+/* A hero is a place to be tempted, not briefed. Anything past a couple of
+   sentences is unreadable over artwork anyway, so cut on a word boundary
+   rather than letting CSS clip mid-word. */
+function shortDescription(text, words = 28) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const parts = clean.split(" ");
+  return parts.length <= words ? clean : parts.slice(0, words).join(" ") + "…";
+}
+
+/* How fast the hero's copy travels over its artwork as you scroll.
+
+   Reads --hero-p, the 0→1 scroll progress published on the document element
+   each frame. The
+   text clears the frame well before the scroll completes (hence the 1.6) so it
+   is gone by the time the catalogue reaches it, rather than fading out under
+   the first row of posters. */
+const heroCopyParallax = {
+  transform: "translate3d(0, calc(var(--hero-p, 0) * -120px), 0)",
+  opacity: "calc(1 - var(--hero-p, 0) * 1.6)",
+  willChange: "transform, opacity",
+};
+
+const HERO_COUNT = 5;
+const HERO_MS = 6000;
+
+/* ── Mobile hero: a swipe deck ───────────────────────────────────────────────
+   The phone hero used to be the desktop hero with a different crop — one slide
+   filling the frame, advancing on a timer. Nothing about it said there were
+   four more titles behind it, so most visitors saw one release and scrolled
+   past. A deck says it in the layout: the next card is already on screen at
+   the right edge, so the gesture is obvious before any hint appears, and the
+   deck is driven by that gesture rather than by a clock that moves the page
+   under someone mid-read.
+
+   It bleeds past the page gutter deliberately — a card that stops short of the
+   edge reads as a widget on the page, one that runs off it reads as something
+   you can pull. */
+function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
+  const trackRef = useRef(null);
+  const [active, setActive] = useState(0);
+
+  /* Which card is under the viewport's centre. Derived from scrollLeft rather
+     than from an IntersectionObserver per card: one listener, and it stays
+     correct mid-flick instead of only at rest. */
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const card = el.firstElementChild;
+      if (!card) return;
+      const step = card.getBoundingClientRect().width + 12;   // card + gap-3
+      setActive(Math.min(slides.length - 1, Math.max(0, Math.round(el.scrollLeft / step))));
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { el.removeEventListener("scroll", onScroll); if (frame) cancelAnimationFrame(frame); };
+  }, [slides.length]);
+
+  return (
+    <div className="sm:hidden -mx-4">
+      <div ref={trackRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth"
+        aria-roledescription="carousel" aria-label="Newest releases">
+        {slides.map((movie, n) => {
+          const a = art[heroSlug(movie)] || {};
+          const src = a.poster || movie.poster || movie.poster_url || a.cover_poster;
+          const logo = a.title_logo || null;
+          // Same strip the desktop band shows, from the same helper.
+          const meta = heroMeta(movie, a, extra[heroSlug(movie)] || {});
+
+          return (
+            <article key={movie.id || movie.slug}
+              className="snap-start shrink-0 w-[86%] first:ml-0 last:mr-4 relative rounded-2xl overflow-hidden
+                         bg-gray-900 ring-1 ring-white/10">
+              <button type="button" onClick={() => onOpen(movie)}
+                aria-label={`${movie.title} — open details`}
+                className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <span className="block aspect-[3/4] relative">
+                  {src && (
+                    <img src={src} alt="" aria-hidden="true"
+                      fetchPriority={n === 0 ? "high" : "auto"}
+                      loading={n === 0 ? "eager" : "lazy"} decoding="async"
+                      className="absolute inset-0 w-full h-full object-cover object-top" />
+                  )}
+                  {/* Deep enough to carry a title logo and a metadata line, and
+                      kept clear of the artwork's top two thirds. */}
+                  <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/70 to-transparent" />
+
+                  <span className="absolute inset-x-0 bottom-0 p-4 pr-24 flex flex-col items-start gap-2">
+                    {logo
+                      ? <img src={logo} alt={movie.title} className="h-14 w-auto max-w-[85%] object-contain object-left drop-shadow-2xl" />
+                      : <span className="block text-3xl font-black text-white uppercase italic tracking-tighter leading-[0.95] line-clamp-2">
+                          {String(movie.title).split("(")[0].trim()}
+                        </span>}
+                    {meta.length > 0 && (
+                      <span className="flex flex-wrap items-center gap-x-2 text-[12px] font-bold text-gray-300">
+                        {meta.map((bit, k) => (
+                          <React.Fragment key={bit}>
+                            {k > 0 && <span className="text-gray-500" aria-hidden="true">•</span>}
+                            <span>{bit}</span>
+                          </React.Fragment>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </button>
+
+              {/* Stacked at the trailing edge, clear of the title. Download sits
+                  where a watchlist "+" would on other apps — on this site the
+                  second thing anyone wants beside Play is the file. */}
+              <div className="absolute right-4 bottom-4 flex flex-col items-center gap-3">
+                <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
+                  aria-label={`Download links for ${movie.title}`}
+                  className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/25 text-white
+                             flex items-center justify-center active:scale-95 transition-transform">
+                  <Download className="w-5 h-5" aria-hidden="true" />
+                </Link>
+                <button type="button" onClick={() => onOpen(movie)}
+                  aria-label={`Play ${movie.title}`}
+                  className="w-14 h-14 rounded-full bg-white text-black shadow-xl
+                             flex items-center justify-center active:scale-95 transition-transform">
+                  <Play className="w-6 h-6 fill-current ml-0.5" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {slides.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3" aria-hidden="true">
+          {slides.map((m, n) => (
+            <span key={m.id || m.slug}
+              className={`h-1 rounded-full transition-all duration-300 ${
+                n === active ? "w-5 bg-white" : "w-1.5 bg-white/30"}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeroSpotlight({ movies = [], onOpen }) {
+  const [art, setArt] = useState({});      // slug → { cover_poster, poster, title_logo }
+  const { backendUrl } = useContext(AppContext);
+  const [extra, setExtra] = useState({});  // slug → tmdb-details (year, cert, seasons)
+  const [ratio, setRatio] = useState({});  // src → width/height
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  /* Pausing on hover belongs to the copy and the indicators, not to the whole
+     hero. It used to sit on the <section>, which was fine while the hero was a
+     small inset card — but the hero is now full-bleed, ~74dvh and pinned, so
+     the pointer is inside it almost all the time. The carousel was therefore
+     paused permanently: it never advanced, and the indicator never filled. */
+  const pauseOnHover = {
+    onMouseEnter: () => setPaused(true),
+    onMouseLeave: () => setPaused(false),
+  };
+  const shellRef = useRef(null);
+
+  const slides = useMemo(() => movies.slice(0, HERO_COUNT), [movies]);
+
+  /* One query for all five, not one per slide.
+
+     The two tables do not share a slug: movies.slug is the long release slug
+     ("magudam-2026-telugu-true-web-dl-4k-1080p-…") while watch_html.slug is
+     the short one ("magudam"). Matching on movies.slug found nothing, so every
+     slide fell back to the portrait poster and no title logo ever appeared.
+     watchUrl carries the watch_html slug, so read it from there. */
+  const heroSlug = (m) => {
+    const u = m?.watchUrl || "";
+    const hit = u.match(/\/watch\/([^/?#]+)/);
+    return hit ? decodeURIComponent(hit[1]) : (m?.watch_slug || m?.slug || null);
+  };
+
+
+  /* Year and certification for the five slides. Five small calls against an
+     endpoint the detail view already hits for the same titles, fired once the
+     artwork rows have landed because that is where the tmdb ids live. Best
+     effort throughout: a slide with no id, or a call that fails, simply keeps
+     the shorter metadata line rather than blocking the hero. */
+  useEffect(() => {
+    if (!backendUrl || !slides.length) return;
+    let alive = true;
+    (async () => {
+      const rows = await Promise.all(slides.map(async (m) => {
+        const key = heroSlug(m);
+        const id = (art[key] || {}).tmdb_id;
+        if (!key || !id || extra[key]) return null;
+        try {
+          const r = await fetch(`${backendUrl}/api/tmdb-details?tmdbId=${encodeURIComponent(id)}`);
+          if (!r.ok) return null;
+          const j = await r.json();
+          return [key, j?.data || j || {}];
+        } catch { return null; }
+      }));
+      const found = rows.filter(Boolean);
+      if (alive && found.length) setExtra((p) => ({ ...p, ...Object.fromEntries(found) }));
+    })();
+    return () => { alive = false; };
+    // `extra` is read to skip slides already resolved, not to re-run on itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides, art, backendUrl]);
+
+  useEffect(() => {
+    const slugs = [...new Set(slides.map(heroSlug).filter(Boolean))];
+    if (!slugs.length) return;
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from("watch_html")
+        .select("slug,cover_poster,poster,title_logo,episodes,content_type,tmdb_id,genres").in("slug", slugs);
+      if (alive && data) setArt(Object.fromEntries(data.map((r) => [r.slug, r])));
+    })();
+    return () => { alive = false; };
+  }, [slides]);
+
+  /* Auto-advance and the progress bar, off one clock.
+
+     They used to be two: a setInterval that moved the slide, and a CSS
+     animation that filled the bar. The interval was keyed on [slides.length,
+     paused] — not on the slide — so it was never restarted when the slide
+     changed, while the bar restarted every time. Click a dot to jump, or let
+     a cycle complete, and the two were out of phase from then on: the bar
+     would reach the end and sit there, apparently stuck, waiting on an
+     interval that fired at some unrelated moment.
+
+     One rAF loop now measures the elapsed time, paints the bar, and advances
+     the slide at the moment the bar completes, so the bar cannot disagree with
+     the carousel. Elapsed time lives in a ref and the width is written
+     straight to the node: a state update per frame would re-render five slides
+     of artwork sixty times a second to move a 3px bar. */
+  const fillRefs = useRef([]);
+  const elapsedRef = useRef(0);
+  const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  // A new slide starts its bar from empty.
+  useEffect(() => { elapsedRef.current = 0; }, [i]);
+
+  useEffect(() => {
+    const paint = (n, p) => {
+      const el = fillRefs.current[n];
+      if (el) el.style.transform = `scaleX(${p})`;
+    };
+    // Every bar but the current one is empty.
+    fillRefs.current.forEach((el, n) => { if (n !== i) paint(n, 0); });
+
+    if (slides.length < 2) return;
+    // Reduced motion: no crawl, no auto-advance — just mark where you are.
+    if (reducedMotion()) { paint(i, 1); return; }
+    if (paused) return;
+
+    let raf = 0;
+    let last = performance.now();
+    const step = (now) => {
+      elapsedRef.current += now - last;
+      last = now;
+      const p = Math.min(1, elapsedRef.current / HERO_MS);
+      paint(i, p);
+      if (p >= 1) { setI((n) => (n + 1) % slides.length); return; }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [i, slides.length, paused]);
+
+  useEffect(() => { setI(0); }, [slides.length]);
+
+  /* Not every title has landscape art. Forcing a 2:3 poster into a 21:9 hero
+     crops it to an unrecognisable detail — a face, a shoulder — which is what
+     was happening to anything without a cover_poster. Measure the image and
+     lay the slide out to suit it: wide art fills the frame, a portrait poster
+     is shown at its own shape as a card against a blurred wash of itself. */
+  useEffect(() => {
+    slides.forEach((m) => {
+      const a = art[heroSlug(m)] || {};
+      const src = a.cover_poster || a.poster || m.poster || m.poster_url;
+      if (!src || ratio[src] != null) return;
+      const img = new Image();
+      img.onload = () => setRatio((r) => (r[src] != null ? r
+        : { ...r, [src]: img.naturalHeight ? img.naturalWidth / img.naturalHeight : 0 }));
+      img.onerror = () => setRatio((r) => ({ ...r, [src]: 0 }));
+      img.src = src;
+    });
+  }, [slides, art, ratio]);
+
+  /* Scroll-linked parallax, the way the big streaming apps do it.
+
+     The scroll position is published once, as a 0→1 custom property on the
+     shell, and the layers inside read it at their own rate: the artwork holds
+     still while the title logo, the metadata and the buttons rise up across it
+     and fade out, so the copy travels over the poster instead of the whole
+     hero sliding away as one slab. One listener, one write per frame, and the
+     rates live in the markup next to the thing they move.
+
+     Driven by transform and opacity only — animating those stays off the
+     layout path, so the grid below never reflows while you scroll.
+
+     Desktop only: on a phone the hero is most of the screen and moving it
+     while you scroll past it just makes the top of the page look broken. */
+  const frameRef = useRef(0);
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    /* Published on the document element, not on the hero, because the
+       catalogue band below is the hero's sibling and CSS variables inherit
+       down rather than across. The band needs this value to fade its own
+       leading edge in as the hero starts to move. */
+    const root = document.documentElement;
+    const apply = () => {
+      frameRef.current = 0;
+      if (window.innerWidth < 640) {
+        el.style.cssText = "";
+        root.style.removeProperty("--hero-p");
+        return;
+      }
+      const h = el.offsetHeight || 1;
+      const p = Math.min(1, Math.max(0, window.scrollY / (h * 0.85)));
+      root.style.setProperty("--hero-p", String(p));
+      /* The artwork holds at full strength while the copy travels over it, then
+         fades the last of the way out so there is no hard cut when it is taken
+         out of rendering below. No blur: it lives on the same element as the
+         copy, so blurring the poster would smear the title logo along with it. */
+      el.style.opacity = String(Math.min(1, (1 - p) / 0.3));
+      // Once it is gone it should stop catching clicks meant for the grid, and
+      // stop being painted at all — it is pinned, so it never leaves the DOM.
+      el.style.pointerEvents = p > 0.95 ? "none" : "";
+      el.style.visibility = p > 0.99 ? "hidden" : "";
+    };
+    const onScroll = () => {
+      if (frameRef.current) return;
+      frameRef.current = requestAnimationFrame(apply);
+    };
+    apply();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      root.style.removeProperty("--hero-p");
+    };
+  }, [slides.length]);
+
+  if (!slides.length) return null;
+
+  return (
+    /* Sticky on desktop, and edge to edge. The hero used to be a rounded,
+       bordered panel inside the page's gutter — a card about a film rather
+       than the film itself. Full-bleed it reads as the backdrop of the page,
+       and pinning it means the catalogue below travels up over it instead of
+       pushing it off: the hero recedes, dims and scales back while the rows
+       slide across it. The phone deck stays in normal flow, where a pinned
+       hero would eat most of the screen. */
+    <section
+      className="relative w-full sm:sticky sm:top-0 sm:z-0
+                 sm:-ml-[72px] sm:w-[calc(100%+72px)]"
+      /* Focus still pauses everywhere — it only ever lands on the buttons or
+         the indicators. Hover does not: see pauseOnHover below. */
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
+    >
+      {/* Phone and desktop are two different objects here, not one layout with
+          two crops: a swipe deck of cards versus a single wide crossfading
+          band. Trying to serve both from one tree is what left the phone hero
+          with no sign that four more titles sat behind it. */}
+      <MobileHeroDeck slides={slides} art={art} extra={extra} heroSlug={heroSlug} onOpen={onOpen} />
+
+      <div ref={shellRef}
+        className="hidden sm:block relative h-[74dvh] min-h-[460px] max-h-[780px] will-change-transform origin-top
+                   overflow-hidden"
+        aria-roledescription="carousel" aria-label="Newest releases">
+        {slides.map((movie, n) => {
+          const a = art[heroSlug(movie)] || {};
+          /* cover_poster first: this is the wide band, and a 2:3 portrait
+             stretched across it crops to an unrecognisable detail. The deck
+             on phones leads with the portrait poster instead. */
+          const desktopSrc = a.cover_poster || a.poster || movie.poster || movie.poster_url;
+          const logo = a.title_logo || null;
+          const x = extra[heroSlug(movie)] || {};
+          const meta = heroMeta(movie, a, x);
+          // Our own copy first, TMDB's only when we have none of our own.
+          const blurb = shortDescription(movie.description || x.description);
+          // watch_html's genres are the curated ones; TMDB's are the fallback.
+          const genres = (a.genres || movie.categories || x.genres || []).filter(Boolean);
+          const active = n === i;
+          /* Not every title has landscape art. Where it doesn't, the desktop
+             slide shows the poster at its own shape as a card rather than
+             cropping it to an unrecognisable detail. 1.2 rather than 1.0
+             because a squarish image crops badly too. */
+          const r = desktopSrc ? ratio[desktopSrc] : null;
+          const deskWide = r != null && r >= 1.2;
+
+          const rise = active ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0";
+
+          const copy = (
+            <div className={`flex flex-col items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4 min-w-0
+                             transition-all duration-700 ease-out motion-reduce:transition-none ${rise}`}>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em]
+                               text-amber-300 bg-amber-400/10 border border-amber-400/25 px-3 py-1.5 rounded-full">
+                <Flame className="w-3 h-3" aria-hidden="true" /> Newest release
+              </span>
+
+              {logo
+                ? <img src={logo} alt={movie.title}
+                    className="h-10 sm:h-16 lg:h-20 2xl:h-24 w-auto max-w-full object-contain drop-shadow-2xl" />
+                : <h1 className="text-xl sm:text-3xl lg:text-5xl 2xl:text-6xl font-black text-white uppercase italic tracking-tighter max-w-4xl leading-[1.05]">
+                    {String(movie.title).split("(")[0].trim()}
+                  </h1>}
+
+              {/* Year · certification · seasons · languages. One dot-separated
+                  line rather than the old mix of a star, an uppercase label and
+                  a row of language pills — three visual treatments for what is
+                  really one strip of facts. Anything the title does not have
+                  simply drops out, dots and all. */}
+              <div className="flex flex-wrap justify-center sm:justify-start items-center gap-x-2.5 gap-y-1 text-[13px] font-bold text-gray-200">
+                {movie.imdb && (
+                  <span className="inline-flex items-center gap-1 text-amber-300">
+                    <Star className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> {movie.imdb}
+                  </span>
+                )}
+                {meta.map((bit, k) => (
+                  <React.Fragment key={bit}>
+                    {(k > 0 || movie.imdb) && <span className="text-gray-500" aria-hidden="true">•</span>}
+                    <span>{bit}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {blurb && (
+                <p className="text-[13px] sm:text-sm text-gray-300 leading-relaxed max-w-xl line-clamp-3 drop-shadow">
+                  {blurb}
+                </p>
+              )}
+
+              {genres.length > 0 && (
+                <div className="flex flex-wrap justify-center sm:justify-start items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
+                  {genres.slice(0, 4).map((g) => (
+                    <span key={g} className="px-2.5 py-1 rounded-md bg-white/10 text-gray-200 border border-white/10">{g}</span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5">
+                <button type="button" onClick={() => onOpen(movie)} tabIndex={active ? 0 : -1}
+                  className="inline-flex items-center gap-2 bg-white text-black px-6 sm:px-7 py-3 sm:py-3.5 rounded-xl font-black text-sm
+                             hover:bg-gray-200 active:scale-[0.97] transition-all duration-200
+                             focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+                  <Play className="w-4 h-4 fill-current" aria-hidden="true" /> Watch now
+                </button>
+                <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
+                  tabIndex={active ? 0 : -1}
+                  aria-label={`Download links for ${movie.title}`}
+                  title="Download links"
+                  className="inline-flex items-center justify-center w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-xl
+                             bg-white/10 backdrop-blur-md text-white border border-white/20
+                             hover:bg-white/20 active:scale-[0.97] transition-all duration-200
+                             focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+                  <Download className="w-5 h-5" aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          );
+
+          const scrims = (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-gray-950/80 via-gray-950/15 to-transparent" />
+            </>
+          );
+
+          return (
+            <div key={movie.id || movie.slug}
+              className={`absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none
+                          ${active ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              aria-hidden={!active}
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${n + 1} of ${slides.length}`}
+            >
+              {/* ── Desktop: the wide cover art, or the poster as a card when
+                     there is no wide art for this title ── */}
+              <div className="absolute inset-0 hidden sm:block">
+                {desktopSrc && (
+                  <img src={desktopSrc} alt="" aria-hidden="true"
+                    fetchPriority={n === 0 ? "high" : "auto"} decoding="async"
+                    loading={n === 0 ? "eager" : "lazy"}
+                    className={`absolute inset-0 w-full h-full object-cover object-center
+                                ${deskWide ? "" : "blur-3xl scale-125 opacity-70 saturate-150"}`} />
+                )}
+                {deskWide ? scrims : (
+                  <>
+                    <div className="absolute inset-0 bg-gradient-to-r from-gray-950/60 via-gray-950/30 to-gray-950/60" />
+                    {/* Bottom scrim for the blurred-wash layout too. The wide
+                        art already fades to gray-950 at its foot; without the
+                        same here, the full-bleed hero met the catalogue on a
+                        hard edge. */}
+                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-950 to-transparent" />
+                  </>
+                )}
+
+                {deskWide ? (
+                  <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 2xl:p-14 pb-16 sm:ml-[72px]"
+                    style={heroCopyParallax} {...pauseOnHover}>{copy}</div>
+                ) : (
+                  <div className="absolute inset-0 flex flex-row items-center justify-start
+                                  gap-8 lg:gap-12 px-8 lg:px-10 2xl:px-14 pb-12 sm:ml-[72px]"
+                    style={heroCopyParallax} {...pauseOnHover}>
+                    {desktopSrc && (
+                      <img src={desktopSrc} alt=""
+                        className={`h-[70%] max-h-[400px] w-auto aspect-[2/3] object-cover shrink-0
+                                    rounded-2xl ring-1 ring-white/15 shadow-2xl shadow-black/70
+                                    transition-all duration-700 ease-out motion-reduce:transition-none ${rise}`} />
+                    )}
+                    {copy}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Progress bars double as the control: which of five you are on, how
+            far through, and a way to jump. Each is 44px of tap target with a
+            slim visible bar inside it. */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-0 inset-x-0 flex items-center justify-end gap-2 px-5 sm:px-8 lg:px-10 2xl:px-14 pb-6" {...pauseOnHover}>
+            {slides.map((m, n) => (
+              <button key={m.id || m.slug} type="button"
+                onClick={() => setI(n)}
+                aria-label={`Show ${m.title}`}
+                aria-current={n === i}
+                className="group/dot w-10 sm:w-12 shrink-0 h-11 flex items-center cursor-pointer
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">
+                <span className="block w-full h-[3px] rounded-full bg-white/25 overflow-hidden">
+                  <span ref={(el) => { fillRefs.current[n] = el; }}
+                    className="block h-full w-full rounded-full bg-white origin-left"
+                    style={{ transform: "scaleX(0)" }} />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ── Skeletons ───────────────────────────────────────────────────────────────
+   The grid and the stories rail used to render nothing at all until their
+   data landed, so the page arrived as an empty dark screen and then jumped a
+   full viewport when the posters appeared. These hold the exact shape of what
+   is coming, which both explains the wait and keeps the layout still. */
+function PosterSkeleton() {
+  return (
+    <div className="rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02]">
+      <div className="aspect-[2/3] w-full shimmer" />
+      <div className="p-3 flex justify-center">
+        <div className="h-3 w-2/3 rounded-full shimmer" />
+      </div>
+    </div>
+  );
+}
+
+function StorySkeleton() {
+  return (
+    <div className="flex-shrink-0 flex flex-col items-center gap-2">
+      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shimmer" />
+      <div className="h-2.5 w-12 rounded-full shimmer" />
+    </div>
+  );
+}
+
+/* Reading localStorage can throw outright in a private window or with site
+   data blocked, and it was being parsed once per card inside the render loop.
+   Read it once, defensively. */
+function readViewedStories() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("viewedStories") || "[]");
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch { return new Set(); }
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const Header = () => {
   const { userData, movies = [] } = useContext(AppContext);
@@ -392,6 +1024,7 @@ const Header = () => {
   const [currentUserEmail, setCurrentUserEmail] = useState("");
 
   const [stories, setStories] = useState([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
   const [activeStory, setActiveStory] = useState(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -400,7 +1033,25 @@ const Header = () => {
   const [showMemberPopup, setShowMemberPopup] = useState(false);
   const [showBettingPopup, setShowBettingPopup] = useState(false);
 
-  const [sheetMovie, setSheetMovie] = useState(null);   // mobile: full-screen detail sheet
+  const [sheetMovie, setSheetMovie] = useState(null);   // the title whose details are open
+  const [isMuted, setIsMuted] = useState(true);         // desktop overlay's trailer
+
+  /* Which detail surface to open. The hero handed every click to the mobile
+     sheet regardless of viewport, so clicking "Watch now" on a desktop got a
+     phone layout stretched across the window — a full-width button and a
+     trailer the height of the screen. Tracked as state off matchMedia rather
+     than read from innerWidth at click time, so the surface that opens and the
+     one that renders can never disagree. */
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const onChange = (e) => setIsDesktop(e.matches);
+    setIsDesktop(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const movieGridRef = useRef(null);
   const navigate = useNavigate();
 
@@ -417,7 +1068,13 @@ const Header = () => {
       .slice(0, 100);
   }, [movies]);
 
-  const isMobileView = () => window.innerWidth < 640;
+  const heroSlides = useMemo(() => latestMovies.slice(0, 5), [latestMovies]);
+  /* The grid skips whatever the hero is already showing, so the top of the
+     page never repeats itself. */
+  const gridMovies = useMemo(() => {
+    const shown = new Set(heroSlides.map((m) => m.id));
+    return latestMovies.filter((m) => !shown.has(m.id));
+  }, [latestMovies, heroSlides]);
 
   // Pool for "More Like This" — the sheet scores it on shared genres (ours and
   // TMDB's) and tops it up with TMDB's own recommendations.
@@ -466,18 +1123,37 @@ const Header = () => {
   };
 
   const handleCardClick = (movie, event) => {
-    if (isMobileView()) {
-      event.stopPropagation();
-      event.preventDefault();
-      openMobileSheet(movie);   // open the full-screen detail sheet on mobile
+    event.stopPropagation();
+    event.preventDefault();
+    openMobileSheet(movie);
+  };
+
+  /* The desktop overlay plays through its host rather than navigating itself,
+     so the home page has to supply the same route the mobile sheet builds for
+     itself: our own watch page when the title is resolvable, and the
+     admin-supplied embed only when it is not. */
+  const playFromDetail = (movie, opts = {}) => {
+    const { autoPlay: _a, episode, ...intent } = opts;
+    const canPlayInternally = !!(movie.tmdb_id || movie.imdb_id || movie.has_watch_html);
+    if (!canPlayInternally && movie.watchUrl) {
+      window.location.href = ownUrl(movie.watchUrl);
+      return;
     }
+    navigate(`/watch/${movie.watch_slug || movie.slug}`, {
+      state: { autoPlay: true, autoPlayEpisode: episode || null, ...intent },
+    });
+    setSheetMovie(null);
   };
 
   useEffect(() => {
     supabase.from("stories").select("*")
       .order("created_at", { ascending: false }).limit(20)
-      .then(({ data, error }) => { if (!error) setStories(data); });
+      .then(({ data, error }) => { if (!error) setStories(data || []); })
+      .then(() => setStoriesLoading(false), () => setStoriesLoading(false));
   }, []);
+
+  // One read per render pass, not one per card.
+  const viewedStories = useMemo(() => readViewedStories(), [stories]);
 
   const handleCopy = async () => {
     try {
@@ -500,181 +1176,275 @@ const Header = () => {
     localStorage.setItem("hasJoinedTelegram", "true");
   };
 
+  /* The page gutter, applied per band rather than once on the shell — the hero
+     has to reach both edges, so it cannot sit inside a padded parent. */
+  const GUTTER = "px-4 sm:px-6 lg:px-8 2xl:px-12";
+
   return (
-    <div className="flex flex-col items-center mt-1 px-4 sm:px-5 w-full bg-gray-950 min-h-screen">
+    <div className="w-full bg-gray-950 min-h-dvh">
 
       {/* ── ON-AIR TELECAST ─────────────────────────────────────────────── */}
-      <LiveShowBanner />
+      <div className={`flex flex-col items-center ${GUTTER}`}>
+        <LiveShowBanner />
+      </div>
+
+      {/* ── HERO SPOTLIGHT — full bleed, pinned behind everything below ─── */}
+      <HeroSpotlight movies={heroSlides} onOpen={openMobileSheet} />
+
+      {/* Everything from here rides over the pinned hero — z-10 against the
+          hero's z-0, so as the page scrolls the catalogue travels across it.
+
+          It starts exactly at the hero's bottom edge and not a pixel higher.
+          An earlier version pulled this band up 96px for a soft cross-fade,
+          which looked right and broke the hero: a div hit-tests over its whole
+          box whether or not anything is painted there, so that strip sat on
+          top of Watch now, Download and the five progress bars and swallowed
+          every click. The hero's own bottom scrim already fades to gray-950,
+          so the seam needs no help. */}
+      <div className="relative z-10">
+        {/* The band's leading edge, softened. Pinned behind the hero, this band
+            slides up across the artwork as you scroll and its top was cutting
+            a hard horizontal line through the picture.
+
+            Absolutely positioned and pointer-events-none, so unlike the earlier
+            negative-margin version it paints over the hero without taking its
+            clicks. Its opacity rides --hero-p: at rest there is no fade at all,
+            which keeps the hero's own buttons and progress bars at full
+            strength, and it ramps in (x3, so it is fully on early) the moment
+            the page starts to move and the edge would otherwise show. */}
+        <div aria-hidden="true"
+          className="hidden sm:block absolute inset-x-0 -top-28 h-28 pointer-events-none
+                     sm:-ml-[72px] bg-gradient-to-b from-transparent to-gray-950"
+          style={{ opacity: "calc(var(--hero-p, 0) * 3)" }} />
+
+        {/* The ground runs the full width of the window while the content on it
+            stays clear of the rail. Without the break-out the band covered only
+            the padded area, and since the hero now passes under the rail, a
+            72px ribbon of artwork stayed visible down the left of the
+            catalogue as the page scrolled. Pull the box left, push the padding
+            back: same content position, wider background. */}
+        <div className="bg-gray-950 sm:-ml-[72px] sm:pl-[72px]">
+          <div className={`flex flex-col items-center ${GUTTER}`}>
 
       {/* ── LIVE MATCH STRIP ────────────────────────────────────────────── */}
       <LiveMatchStrip />
 
       {/* ── STORIES ─────────────────────────────────────────────────────── */}
-      {stories.length > 0 && (
-        <div className="w-full max-w-7xl mt-4">
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-4 border border-gray-800 shadow-xl">
-            <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2 uppercase tracking-widest">
-              <Sparkles className="w-4 h-4 text-yellow-500"/> Featured Stories
-            </h3>
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide py-1">
-              {stories.map((story, idx) => (
-                <div key={story.id}
-                  onClick={() => { setActiveStory(story); setActiveStoryIndex(idx); }}
-                  className="flex-shrink-0 flex flex-col items-center group cursor-pointer">
-                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-[2px] transition-transform group-hover:scale-110 ${
-                    JSON.parse(localStorage.getItem("viewedStories")||"[]").includes(story.id)
-                      ? "bg-gray-700" : "bg-gradient-to-tr from-blue-500 to-cyan-400"
-                  }`}>
-                    <div className="bg-gray-950 rounded-full w-full h-full p-1 overflow-hidden">
-                      <img src={story.poster_url} className="w-full h-full object-cover rounded-full" alt=""/>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-2 truncate w-16 text-center">{story.title}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MOVIE GRID ──────────────────────────────────────────────────── */}
-      {latestMovies.length > 0 && (
-        <div className="w-full max-w-7xl px-3 sm:px-6 py-6 bg-gray-900/40 rounded-3xl border border-gray-800 my-6 space-y-8">
-
-          {/* Section header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800 pb-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-red-500/10 p-2 rounded-xl">
-                <Clock className="w-6 h-6 text-red-500 animate-pulse"/>
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Fresh Releases</h2>
-                <p className="text-gray-500 text-xs font-medium">Recently updated HD quality movies</p>
-              </div>
-            </div>
-            <button onClick={handleCopy}
-              className="flex items-center gap-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 hover:text-white transition-all">
-              {copied ? "Link Copied!" : "Invite Friends"} <Copy className="w-4 h-4"/>
-            </button>
-          </div>
-
-          {/* Admin panel */}
-          {isAdmin && (
-            <div className="w-full p-4 bg-red-950/20 border border-red-500/30 rounded-2xl text-center space-y-3">
-              <Link to="/admin" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-red-400 hover:text-red-300 font-black uppercase italic tracking-tighter transition-all">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"/>
-                ACCESS SECURE ADMIN PANEL
-              </Link>
-              <a href="https://upload.1anchormovies.buzz" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 font-black uppercase italic tracking-tighter transition-all">
-                <MonitorPlay className="w-4 h-4"/>
-                R2 MOVIE UPLOADER
-              </a>
-            </div>
-          )}
-
-          {/* Telegram banner */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-blue-900/20 to-cyan-900/20 rounded-2xl p-6 border border-blue-500/10 group">
-            <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-                  <FaTelegramPlane className="text-blue-500 text-2xl"/>
-                </div>
-                <div className="text-center sm:text-left">
-                  <h3 className="text-white font-bold text-lg">Never miss a movie!</h3>
-                  <p className="text-blue-300/60 text-sm">Join our updates for instant HD links.</p>
-                </div>
-              </div>
-              <a href="https://t.me/anchor2025"
-                className="bg-cyan-500 hover:bg-cyan-400 text-white px-8 py-3 rounded-2xl font-black text-sm tracking-widest shadow-xl shadow-cyan-500/20 transition-all flex items-center gap-2">
-                <Zap className="w-4 h-4 fill-white"/> JOIN TELEGRAM
-              </a>
-            </div>
-          </div>
-
-          {/* Movie grid */}
-          <div ref={movieGridRef}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-            {latestMovies.map(movie => {
-              return (
-                <div key={movie.id}
-                  className="group relative bg-gray-950 rounded-2xl overflow-hidden border border-gray-800 transition-all hover:border-blue-500/50 cursor-pointer"
-                  onClick={e => handleCardClick(movie, e)}>
-                  <div className="aspect-[2/3] relative overflow-hidden">
-                    <img src={movie.poster||movie.poster_url||"/default-poster.jpg"} alt={movie.title}
-                      loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"/>
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
-                      {movie.note && (
-                        <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xl uppercase">
-                          {movie.note}
-                        </span>
-                      )}
-                      <span className="text-[10px] font-black bg-black/60 backdrop-blur-md text-blue-400 px-2 py-0.5 rounded border border-white/10">
-                        {formatTimeAgo(movie.homepage_added_at||movie.created_at)}
+      {(storiesLoading || stories.length > 0) && (
+        <div className="w-full max-w-[1800px] mt-6">
+          <div className="bg-white/[0.03] backdrop-blur-md rounded-2xl p-5 border border-white/[0.06]">
+            <h2 className="text-xs font-black text-gray-300 mb-4 flex items-center gap-2 uppercase tracking-[0.2em]">
+              <Sparkles className="w-4 h-4 text-amber-400" aria-hidden="true" /> Featured Stories
+            </h2>
+            <ScrollRow className="py-1" label="Featured stories">
+              {storiesLoading
+                ? Array.from({ length: 6 }, (_, i) => <StorySkeleton key={i} />)
+                : stories.map((story, idx) => (
+                  <button key={story.id} type="button"
+                    onClick={() => { setActiveStory(story); setActiveStoryIndex(idx); }}
+                    aria-label={`Open story: ${story.title || "untitled"}`}
+                    className="flex-shrink-0 flex flex-col items-center group cursor-pointer rounded-xl
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+                    <span className={`block w-16 h-16 sm:w-20 sm:h-20 rounded-full p-[2px] transition-transform duration-200 group-hover:scale-105 motion-reduce:transform-none ${
+                      viewedStories.has(story.id)
+                        ? "bg-white/15" : "bg-gradient-to-tr from-blue-500 to-cyan-400"
+                    }`}>
+                      <span className="block bg-gray-950 rounded-full w-full h-full p-1 overflow-hidden">
+                        <img src={story.poster_url} loading="lazy"
+                          className="w-full h-full object-cover rounded-full"
+                          alt={story.title ? `${story.title} poster` : ""} />
                       </span>
-                    </div>
-                    {movie.subCategory && (
-                      <div className="absolute top-2 right-2">
-                        <span className="text-[9px] font-black bg-red-500 backdrop-blur-md text-white px-2 py-0.5 rounded border border-white/20 shadow-lg uppercase tracking-tighter">
-                          {movie.subCategory}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute bottom-2 right-2 flex gap-1">
-                      {movie.imdb && (
-                        <span className="bg-yellow-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg">
-                          IMDb {movie.imdb}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="p-3 text-center">
-                    <h2 className="text-xs sm:text-sm font-bold text-gray-200 truncate group-hover:text-blue-400 transition-colors"
-                      style={{ color: movie.linkColor||"" }}>
-                      {movie.title}
-                    </h2>
-                  </div>
-                  <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm hidden sm:flex flex-col items-center justify-center p-4 gap-3 transition-all duration-300 opacity-0 group-hover:opacity-100">
-                    <Link to={`/movie/${movie.slug}`}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-3 rounded-xl flex items-center justify-center gap-2 transition"
-                      onClick={e=>e.stopPropagation()}>
-                      <Film className="w-4 h-4"/> DETAILS
-                    </Link>
-                    {movie.watchUrl && (
-                      // Mobile: Watch opens the detail sheet (which then goes straight
-                      // to the player). Desktop keeps the direct link.
-                      <a href={ownUrl(movie.watchUrl)}
-                        className="w-full bg-white text-black text-xs font-black py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition"
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (isMobileView()) { e.preventDefault(); openMobileSheet(movie); }
-                        }}>
-                        <MonitorPlay className="w-4 h-4"/> WATCH NOW
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    </span>
+                    <span className="text-[11px] text-gray-300 mt-2 truncate w-16 text-center">{story.title}</span>
+                  </button>
+                ))}
+            </ScrollRow>
           </div>
         </div>
       )}
 
-      {/* ── MOBILE DETAIL SHEET ─────────────────────────────────────────── */}
-      <MobileDetailSheet
-        movie={sheetMovie}
-        onClose={() => setSheetMovie(null)}
-        relatedMovies={sheetRelated}
-        onSelectMovie={openMobileSheet}
-      />
+      {/* ── CATALOGUE ───────────────────────────────────────────────────── */}
+      {/* The catalogue no longer announces itself. "Fresh Releases", the
+          language chips and the invite button were a heading, a filter bar and
+          a button-only row standing between the hero and the posters — three
+          bands of chrome before any artwork, and once the first two went the
+          third was left holding an empty row on its own. The posters are the
+          page, so they start immediately under the hero; language is still
+          browsable from the rail, and inviting moved to the footer. */}
+      <section className="w-full max-w-[1800px] mt-6 mb-10 sm:mb-12">
+
+        {/* Admin panel */}
+        {isAdmin && (
+          <div className="w-full p-4 mb-6 bg-red-950/20 border border-red-500/30 rounded-2xl text-center space-y-3">
+            <Link to="/admin" target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 text-red-400 hover:text-red-300 font-black uppercase italic tracking-tighter transition-colors">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-ping motion-reduce:animate-none" aria-hidden="true" />
+              Access secure admin panel
+            </Link>
+            <a href="https://upload.1anchormovies.buzz" target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 font-black uppercase italic tracking-tighter transition-colors">
+              <MonitorPlay className="w-4 h-4" aria-hidden="true" /> R2 movie uploader
+            </a>
+          </div>
+        )}
+
+        {/* Poster grid. Cards are buttons — they were divs with onClick and
+            entirely unreachable by keyboard — and the title now sits on the
+            artwork under a scrim instead of in a separate strip below it, so
+            a row of cards reads as one band of artwork rather than as
+            alternating bars of poster and grey. */}
+        <div ref={movieGridRef} className={POSTER_GRID}>
+          {movies.length === 0
+            ? Array.from({ length: 12 }, (_, i) => <PosterSkeleton key={i} />)
+            : gridMovies.map((movie, i) => (
+              <article key={movie.id}
+                className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06]
+                           transition-all duration-300 hover:ring-white/25 hover:-translate-y-1
+                           focus-within:ring-blue-400 motion-reduce:transform-none
+                           hover:shadow-2xl hover:shadow-black/60">
+                <button type="button"
+                  onClick={e => handleCardClick(movie, e)}
+                  aria-label={`${movie.title} — open details`}
+                  className="block w-full text-left cursor-pointer focus:outline-none">
+                  <span className="block aspect-[2/3] relative overflow-hidden">
+                    <img src={movie.poster || movie.poster_url || "/default-poster.jpg"} alt=""
+                      loading={i < 6 ? "eager" : "lazy"}
+                      fetchPriority={i < 6 ? "high" : "auto"}
+                      decoding="async"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 motion-reduce:transform-none" />
+
+                    {/* Scrim carrying the title — always on, so the name is
+                        readable without hovering. */}
+                    <span className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black via-black/75 to-transparent" />
+
+                    {movie.note && (
+                      <span className="absolute top-2 left-2 text-[9px] font-black bg-red-600 text-white px-2 py-1 rounded-md uppercase tracking-wide">
+                        {movie.note}
+                      </span>
+                    )}
+                    {movie.imdb && (
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] font-black
+                                       bg-black/70 backdrop-blur-md text-amber-300 px-2 py-1 rounded-md border border-white/10">
+                        <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />{movie.imdb}
+                      </span>
+                    )}
+
+                    <span className="absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
+                      <span className="block text-[12px] sm:text-[13px] font-bold text-white leading-snug line-clamp-2"
+                        style={{ color: movie.linkColor || "" }}>
+                        {String(movie.title).split("(")[0].trim()}
+                      </span>
+                      <span className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-300">
+                        {movie.subCategory && <span className="uppercase tracking-wider">{movie.subCategory}</span>}
+                        {movie.subCategory && <span className="text-gray-600" aria-hidden="true">·</span>}
+                        <span>{formatTimeAgo(movie.homepage_added_at || movie.created_at)}</span>
+                      </span>
+                    </span>
+                  </span>
+                </button>
+
+                {/* Actions rise out of the bottom edge on hover, and on keyboard
+                    focus too — the old pair was reachable by mouse only. */}
+                <div className="absolute inset-x-0 bottom-0 p-2.5 flex gap-2 translate-y-full opacity-0 pointer-events-none
+                                bg-gradient-to-t from-black via-black/90 to-transparent
+                                transition-all duration-300 motion-reduce:transition-none
+                                group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto
+                                group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto
+                                hidden sm:flex">
+                  {movie.watchUrl && (
+                    <a href={ownUrl(movie.watchUrl)}
+                      className="flex-1 bg-white text-black text-[11px] font-black py-2.5 rounded-lg flex items-center justify-center gap-1.5
+                                 hover:bg-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      onClick={e => {
+                        e.stopPropagation();
+                      }}>
+                      <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> Play
+                    </a>
+                  )}
+                  <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
+                    aria-label={`Download links for ${movie.title}`}
+                    title="Download links"
+                    className="px-3 bg-white/15 backdrop-blur-md text-white border border-white/20 rounded-lg flex items-center justify-center
+                               hover:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    onClick={e => e.stopPropagation()}>
+                    <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
+              </article>
+            ))}
+        </div>
+
+        {/* Loaded, but this filter has nothing behind it. */}
+        {movies.length > 0 && gridMovies.length === 0 && (
+          <div className="py-20 text-center">
+            <ImageOff className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+            <p className="text-gray-300 font-black uppercase tracking-widest text-xs">
+              Nothing here in the catalogue
+            </p>
+            <p className="text-gray-500 text-[11px] mt-2">New titles appear as soon as they are published.</p>
+          </div>
+        )}
+
+        {/* Telegram banner — moved below the catalogue. It used to sit between
+            the heading and the posters, so the first thing under "Fresh
+            Releases" was an ad for a different platform. */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-blue-900/30 to-cyan-900/20 rounded-2xl p-5 sm:p-6 border border-blue-500/15 mt-10">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <span className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                <FaTelegramPlane className="text-blue-500 text-2xl" aria-hidden="true" />
+              </span>
+              <div className="text-center sm:text-left">
+                <h3 className="text-white font-bold text-base sm:text-lg">Never miss a release</h3>
+                <p className="text-blue-200/70 text-sm mt-0.5">Join our channel for instant HD links.</p>
+              </div>
+            </div>
+            <a href="https://t.me/anchor2025" target="_blank" rel="noopener noreferrer"
+              className="bg-cyan-500 hover:bg-cyan-400 text-black px-7 py-3 rounded-2xl font-black text-sm tracking-widest
+                         shadow-xl shadow-cyan-500/20 transition-colors flex items-center gap-2 shrink-0
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+              <Zap className="w-4 h-4 fill-current" aria-hidden="true" /> Join Telegram
+            </a>
+          </div>
+        </div>
+      </section>
+
+          </div>
+        </div>
+      </div>
+      {/* ── end of the band that rides over the hero ───────────────────── */}
+
+      {/* ── DETAIL SURFACE — overlay on desktop, sheet on a phone ───────── */}
+      {isDesktop ? (
+        <DesktopDetailOverlay
+          movie={sheetMovie}
+          onClose={() => setSheetMovie(null)}
+          onNavigate={playFromDetail}
+          onSelectMovie={openMobileSheet}
+          relatedMovies={sheetRelated}
+          isMuted={isMuted}
+          setIsMuted={setIsMuted}
+        />
+      ) : (
+        <MobileDetailSheet
+          movie={sheetMovie}
+          onClose={() => setSheetMovie(null)}
+          relatedMovies={sheetRelated}
+          onSelectMovie={openMobileSheet}
+        />
+      )}
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
-      <footer className="w-full py-12 text-center border-t border-gray-900 mt-12 bg-gray-950/50">
+      <footer className="relative z-10 w-full py-12 text-center border-t border-gray-900 mt-12 bg-gray-950 sm:-ml-[72px] sm:pl-[72px]">
         <div className="flex flex-col items-center gap-4">
-          <Link to="/"><img src="/logo_39.png" className="h-8 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all" alt="Logo"/></Link>
-          <p className="text-gray-600 text-[10px] tracking-[0.3em] font-bold uppercase">© 1TamilMV & AnchorMovies 2026</p>
+          <Link to="/"><img src="/logo_39.png" className="h-8 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-200" alt="AnchorMovies home"/></Link>
+          <button onClick={handleCopy} type="button"
+            className="inline-flex items-center gap-2 bg-white/[0.06] text-gray-200 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-bold
+                       hover:bg-white/[0.12] hover:text-white transition-colors duration-200
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
+            {copied ? "Link copied" : "Invite friends"} <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+          <p className="text-gray-600 text-[10px] tracking-[0.3em] font-bold uppercase">© AnchorMovies 2026</p>
         </div>
       </footer>
     </div>

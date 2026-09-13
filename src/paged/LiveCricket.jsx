@@ -6,19 +6,7 @@ import { supabase } from "../utils/supabaseClient";
 import { DateTime } from "luxon";
 
 /* ================= NAVBAR & HERO (Unchanged) ================= */
-const LivePageNavbar = () => (
-  <nav className="sticky top-0 w-full bg-black/90 text-white z-[100] h-16 flex items-center px-4 sm:px-8">
-    <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
-      <Link to="/" className="flex items-center">
-        <img src="/logo_3.png" alt="Anchor Movies" className="w-28 md:w-32" />
-      </Link>
-      <div className="flex gap-4 text-sm text-gray-300">
-        <Link to="/" className="hover:text-white transition">Home</Link>
-        <Link to="/schedule" className="hover:text-white transition">Schedule</Link>
-      </div>
-    </div>
-  </nav>
-);
+/* LivePageNavbar removed — the rail is the site's navigation. */
 
 const LiveHero = () => (
   <div className="relative h-[320px] sm:h-[420px] bg-cover bg-center" style={{ backgroundImage: "url('/live-cricket.png')" }}>
@@ -128,10 +116,9 @@ const LiveCricket = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <LivePageNavbar />
       <LiveHero />
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
+      <section className="max-w-[1800px] mx-auto px-4 sm:px-8 py-10">
         
         {/* SECTION 1: ONGOING TOURNAMENTS */}
         {ongoingSeries.length > 0 && (

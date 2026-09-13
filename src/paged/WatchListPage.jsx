@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useContext } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { readContinueList, removeProgress, progressPercent as cwPercent, timeLeft as cwTimeLeft, hasNextEpisode as cwHasNext } from "../utils/continueWatching";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -249,99 +249,8 @@ const buildTmdbMovie = (t) => {
   };
 };
 
-/* ====== Mobile Bottom Navigation ====== */
-const MobileNav = ({ session, onSearchClick, showSearch }) => {
-  const location = useLocation();
-  const path = location.pathname;
-
-  const navItems = [
-    {
-      label: "Home",
-      path: "/",
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? 0 : 1.8} className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
-    },
-    {
-      label: "Search",
-      isAction: true,
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5">
-          <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="M21 21l-4.35-4.35" />
-        </svg>
-      ),
-    },
-    {
-      label: "Watchlist",
-      path: "/watchlist",
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? 0 : 1.8} className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-        </svg>
-      ),
-    },
-    {
-      label: "Torrents",
-      path: "/search-torrent",
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-    },
-    {
-      label: "Profile",
-      path: session ? "/profile" : "/auth",
-      icon: (active) => session ? (
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${active ? "bg-white text-blue-600" : "bg-blue-600 text-white"}`}>
-          {session.user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() ||
-            session.user?.email?.charAt(0)?.toUpperCase() || "U"}
-        </div>
-      ) : (
-        <UserCircle className="w-5 h-5" />
-      ),
-    },
-  ];
-
-  return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-[150] bg-black/90 backdrop-blur-xl border-t border-white/5"
-         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className="flex items-center justify-around px-2 py-2">
-        {navItems.map((item) => {
-          const isActive = item.isAction ? showSearch : (item.path === "/" ? path === "/" : path.startsWith(item.path));
-          const isTorrents = item.path === "/search-torrent";
-
-          if (item.isAction) {
-            return (
-              <button key="search" onClick={onSearchClick}
-                className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90">
-                <span className={isActive ? "text-blue-400" : "text-gray-500"}>{item.icon(isActive)}</span>
-                <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? "text-blue-400" : "text-gray-600"}`}>{item.label}</span>
-              </button>
-            );
-          }
-
-          return (
-            <Link key={item.path} to={item.path}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all active:scale-90 relative">
-              {isActive && (
-                <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
-              )}
-              <span className={`transition-colors ${isActive ? "text-blue-400" : isTorrents ? "text-red-400/70" : "text-gray-500"}`}>
-                {item.icon(isActive)}
-              </span>
-              <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${isActive ? "text-blue-400" : isTorrents ? "text-red-400/70" : "text-gray-600"}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-};
+/* Its mobile bottom nav is gone too — the site navbar already puts one on
+   every phone screen, and this page was stacking a second on top of it. */
 
 /* ====== Component: Netflix-Style Trending Numbers Row ====== */
 /* ====== Component: Hotstar-Style Trending Numbers Row ====== */
@@ -377,15 +286,15 @@ const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 
   };
 
   return (
-    <div className="mb-16 w-full max-w-7xl px-4 mx-auto overflow-visible">
-      <h2 className="text-xl font-bold text-gray-200 mb-10 px-2 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
+    <div className="mb-16 w-full overflow-visible">
+      <h2 className="text-xl font-bold text-gray-200 mb-10 mx-6 sm:mx-20 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
         <TrendingUp className="w-5 h-5 text-blue-500" /> {title}
       </h2>
 
       <div className="relative group/row">
         <div
           ref={rowRef}
-          className="flex overflow-x-auto scrollbar-hide scroll-smooth pt-2 pb-16 px-2"
+          className="flex overflow-x-auto scrollbar-hide scroll-smooth pt-2 pb-16 pl-6 sm:pl-20 pr-10"
           style={{ gap: "52px" }}
         >
           {movies.slice(0, limit).map((movie, index) => (
@@ -549,15 +458,15 @@ const GenreRow = ({ title, movies, onSelect }) => {
   }, [movies]);
 
   return (
-    <div className="mb-12 w-full max-w-7xl px-4 mx-auto overflow-visible">
-      <h2 className="text-xl font-bold text-gray-200 mb-4 px-2 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
+    <div className="mb-12 w-full overflow-visible">
+      <h2 className="text-xl font-bold text-gray-200 mb-4 mx-6 sm:mx-20 border-l-4 border-blue-600 pl-3 uppercase tracking-widest flex items-center gap-2">
         {title} <span className="text-[10px] text-gray-500 font-normal">({movies?.length || 0})</span>
       </h2>
       <div className="relative group/row">
         {showLeft && (
           <button onClick={() => scroll("left")} className="absolute left-[-10px] top-0 bottom-0 z-[60] flex items-center justify-center w-12 text-white bg-black/60 backdrop-blur-sm hover:bg-blue-600 transition-all rounded-r-xl opacity-0 group-hover/row:opacity-100">◀</button>
         )}
-        <div ref={rowRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-14 pt-4 px-2">
+        <div ref={rowRef} className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-14 pt-4 pl-6 sm:pl-20 pr-10">
           {movies.map((movie, i) => (
             <div
               key={movie.id ?? movie.slug ?? i}
@@ -640,7 +549,6 @@ const WatchListPage = () => {
   const [movies, setMovies] = useState([]);
   const [allMovies, setAllMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
   const [userLangs, setUserLangs] = useState([]);
   // Committed language choices that drive TMDB fetching (only updated on save,
   // not while the user is still toggling options in the popup)
@@ -683,7 +591,6 @@ const WatchListPage = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
       const langs = s?.user?.user_metadata?.languages || [];
       setUserLangs(langs);
       setFetchLangs(langs);
@@ -691,8 +598,6 @@ const WatchListPage = () => {
       if (s?.user && !s.user.user_metadata?.hasSelectedLanguage) setShowLangPopup(true);
       setAuthChecked(true);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => subscription.unsubscribe();
   }, []);
 
   const handleLangSelect = (name) =>
@@ -1210,13 +1115,6 @@ const WatchListPage = () => {
     return () => { clearTimeout(slideTimer); clearTimeout(trailerTimer); clearTimeout(fadeTimer); };
   }, [currentSlide, heroMovies, isMobile, currentHero, currentHeroMp4]);
 
-  const getProfileInitial = () => {
-    if (!session?.user) return "";
-    const metaName = session.user.user_metadata?.full_name;
-    if (metaName?.trim()) return metaName.trim().charAt(0).toUpperCase();
-    return session.user.email.charAt(0).toUpperCase();
-  };
-
   if (loading) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center">
       <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
@@ -1266,48 +1164,19 @@ const WatchListPage = () => {
         </div>
       )}
 
-      {/* ── Desktop Header ── */}
-      <header className={`fixed top-0 inset-x-0 z-[100] transition-all duration-300 ${scrolled || showSearch ? "bg-black/95 backdrop-blur-md shadow-2xl" : "bg-transparent"}`}>
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/"><img src="/logo_39.png" alt="Logo" className="h-9 sm:h-10" /></Link>
-
-          <nav className={`hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
-            <Link to="/" className="hover:text-blue-400 transition">Home</Link>
-            <Link to="/latest" className="hover:text-blue-400 transition">Latest</Link>
-            <Link to="/watchlist" className="text-blue-500 border-b-2 border-blue-500 pb-1">My Watchlist</Link>
-            <Link to="/search-torrent" className="flex items-center gap-1.5 text-red-400 hover:text-red-300 transition border border-red-500/30 px-3 py-0.5 rounded-full hover:border-red-400 hover:bg-red-500/10">
-              <span>⚡</span> Torrents
-            </Link>
-            <Link to="/sports" className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition border border-blue-500/30 px-3 py-0.5 rounded-full hover:border-blue-400 hover:bg-blue-500/10">
-              <span>📺</span> Sports Live
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setShowSearch(!showSearch); if (showSearch) setSearch(""); }} className="p-2 hover:bg-white/10 rounded-full transition">
-              {showSearch ? <XMarkIcon className="w-6 h-6" /> : <MagnifyingGlassIcon className="w-6 h-6" />}
-            </button>
-            <Link to={session ? "/profile" : "/auth"} className={`group relative flex items-center justify-center transition-opacity duration-1000 ${!infoVisible ? "opacity-40" : "opacity-100"}`}>
-              {session ? (
-                <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white/20 overflow-hidden shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all group-hover:border-blue-400 group-hover:scale-105">
-                  <span className="text-sm font-black text-white">{getProfileInitial()}</span>
-                </div>
-              ) : (
-                <div className="p-2 text-gray-400 hover:text-white transition-all hover:scale-110">
-                  <UserCircle className="w-7 h-7" />
-                </div>
-              )}
-            </Link>
-          </div>
-        </div>
+      {/* The site links, the logo and the profile avatar that used to live here
+          are the rail's job now — this page was drawing a second navigation bar
+          with its own set of destinations and its own styling. What is left is
+          the one control that genuinely belongs to this page: its search. */}
+      <header className={`fixed top-0 right-0 z-[100] p-4 sm:p-6 transition-all duration-300 ${scrolled || showSearch ? "bg-gradient-to-b from-black/80 to-transparent" : ""}`}>
+        <button onClick={() => { setShowSearch(!showSearch); if (showSearch) setSearch(""); }}
+          aria-label={showSearch ? "Close search" : "Search your watchlist"}
+          className="p-2 hover:bg-white/10 rounded-full transition">
+          {showSearch ? <XMarkIcon className="w-6 h-6" /> : <MagnifyingGlassIcon className="w-6 h-6" />}
+        </button>
       </header>
 
-      {/* ── Mobile Bottom Nav ── */}
-      <MobileNav
-        session={session}
-        onSearchClick={() => { setShowSearch(v => !v); if (showSearch) setSearch(""); }}
-        showSearch={showSearch}
-      />
+
 
       {showSearch ? (
         <div className="pt-20 pb-24 md:pb-0">
@@ -1441,11 +1310,11 @@ const WatchListPage = () => {
           {/* ── Main content ── */}
           <main className="relative z-20 pb-32 md:pb-32 mt-4">
             {continueList.length > 0 && (
-              <div className="mb-12 max-w-7xl mx-auto px-4 overflow-visible">
-                <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest px-2 font-black">
+              <div className="mb-12 w-full overflow-visible">
+                <h2 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2 uppercase tracking-widest mx-6 sm:mx-20 font-black">
                   <Clock3 className="w-5 h-5" /> CONTINUE WATCHING
                 </h2>
-                <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide px-2">
+                <div className="flex gap-6 overflow-x-auto pb-10 pt-4 scrollbar-hide pl-6 sm:pl-20 pr-10">
                   {continueList.map((r) => {
                     const next = cwHasNext(r);   // finished episode with a next one queued
                     const goPlay = () => {

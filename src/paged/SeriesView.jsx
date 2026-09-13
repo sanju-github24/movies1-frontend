@@ -5,6 +5,7 @@ import { MonitorPlay, ArrowLeft, Zap, Calendar, Box, Video, PlayCircle, Loader2,
 import { toast } from "react-toastify";
 import { supabase } from '../utils/supabaseClient';
 import { DateTime } from 'luxon';
+import { sanitizeEmbed } from "../utils/sanitizeHtml";
 
 /* ================= COMPONENT: HIGHLIGHT CARD ================= */
 const HighlightCard = ({ highlight, matchPoster, matchSlug }) => {
@@ -181,7 +182,7 @@ const SeriesView = () => {
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-950/80 to-gray-950" />
                 </div>
                 
-                <div className="relative max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center gap-10">
+                <div className="relative max-w-[1800px] mx-auto px-6 py-12 flex flex-col md:flex-row items-center gap-10">
                     <div className="max-w-[240px] w-full aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-white/5">
                         <img src={series?.cover_image_url || "/default-series.jpg"} className="w-full h-full object-cover" alt="Series Cover" />
                     </div>
@@ -211,13 +212,13 @@ const SeriesView = () => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 py-10 space-y-20">
+            <main className="max-w-[1800px] mx-auto px-6 py-10 space-y-20">
                 {/* Series Highlights Iframe Area */}
                 {showSeriesHighlights && series?.highlights_source && (
                     <div className="animate-in slide-in-from-top duration-500">
                         <div className="relative aspect-video rounded-3xl overflow-hidden bg-black border border-white/5 ring-1 ring-white/10 shadow-2xl">
                             {series.highlights_source.startsWith('<iframe') ? (
-                                <div className="absolute inset-0 w-full h-full" dangerouslySetInnerHTML={{ __html: series.highlights_source }} />
+                                <div className="absolute inset-0 w-full h-full" dangerouslySetInnerHTML={{ __html: sanitizeEmbed(series.highlights_source) }} />
                             ) : (
                                 <div className="flex items-center justify-center h-full text-center">
                                     <p className="text-gray-500 font-bold p-10">Stream Source Detected. Switch to full player to view.</p>

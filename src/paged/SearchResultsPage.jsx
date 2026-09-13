@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import MusicNavbar from '../components/MusicNavbar';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
 import { musicApi } from '../utils/api';
@@ -110,8 +109,7 @@ export default function SearchResultsPage() {
 
     return (
       <div style={{ minHeight: '100vh', background: '#09090f', color: 'white', display: 'flex', flexDirection: 'column' }}>
-        <MusicNavbar />
-
+  
         {/* Gradient background — derived from slug, renders immediately */}
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -426,7 +424,6 @@ export default function SearchResultsPage() {
 
   return (
     <div style={{ minHeight:'100vh', background:'#09090f', color:'white', display:'flex', flexDirection:'column' }}>
-      <MusicNavbar />
 
       <div style={{ maxWidth:1200, width:'100%', margin:'0 auto', padding:'24px 16px', flex:1 }}>
 

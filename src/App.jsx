@@ -164,48 +164,47 @@ const AppContent = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Navbar/CategoryBar hide logic ──
-  const hidePaths = [
-    "/login", "/auth", "/verify-account", "/reset-password",
-    "/blogs", "/update-password", "/search-torrent", "/live-cricket-tv","/match-center",
-    // Same page as /match-center, reached by its slug URL — hide the same chrome
-    // so the two routes don't render differently.
-    "/match"
-  ];
-  const isBlogViewerPath   = /^\/blogs\/[^/]+$/.test(location.pathname);
-  const isWatchPath        = /^\/watch(\/[^/]+)?$/.test(location.pathname);
-  /* Every full-screen player, not just our own. /mx-watch and /hls-watch render
-     the same VideoPlayer as /watch/:slug but were not on this list, so they got
-     the navbar and the footer wrapped around a player sized to the viewport —
-     which is what pushed the page into scrolling and made them look nothing
-     like our own playback page. */
-  const isPlayerPath       = /^\/(player|mx-watch|hls-watch)(\/.*)?$/.test(location.pathname);
-  const isAdminPath        = location.pathname.startsWith("/admin");
-  const isLiveStreamPlayer = /^\/live-cricket\/player\/[^/]+$/.test(location.pathname);
-  const isLiveCricketPath  = location.pathname === "/live-cricket";
-  const isSportsPath       = location.pathname === "/sports";
-  const isTournamentPath   = location.pathname.startsWith("/tournament");
-  const isMusicPath        = location.pathname.startsWith("/music");
-  // NOTE: /live-stream is NOT hidden — navbar shows on Live TV page
+  /* ── Navbar hide logic ──
+     The rail is the site's navigation and every page that a visitor can
+     navigate to now carries it. Several pages used to be listed here and then
+     drew a site navbar of their own instead — two different sets of links, in
+     two different styles, depending on where you happened to be.
+
+     What stays without chrome is only what is not a page in that sense: the
+     auth screens, the admin studio, and the full-screen players, where a rail
+     down the side of a video is just something covering the video. */
+  const authPaths = ["/login", "/auth", "/verify-account", "/reset-password", "/update-password"];
+
+  /* /watch is the watchlist — a browsing page, and a rail destination.
+     /watch/:slug is the player. One regex used to cover both, which is why the
+     watchlist had to grow its own header. */
+  const isPlayerPath = /^\/(player|mx-watch|hls-watch)(\/.*)?$/.test(location.pathname)
+    || /^\/watch\/[^/]+$/.test(location.pathname)
+    || /^\/live-cricket\/player\/[^/]+$/.test(location.pathname)
+    || location.pathname === "/live-cricket-tv";
+  const isAdminPath = location.pathname.startsWith("/admin");
 
   const hideNavbar =
-    hidePaths.includes(location.pathname) ||
-    isBlogViewerPath ||
-    isWatchPath ||
+    authPaths.includes(location.pathname) ||
     isPlayerPath ||
-    isAdminPath ||
-    isLiveCricketPath ||
-    isLiveStreamPlayer ||
-    isSportsPath ||
-    isTournamentPath ||
-    isMusicPath;
+    isAdminPath;
 
   const handleNavigate = (name) => {
     navigate(`/category/${encodeURIComponent(name)}`);
   };
 
   return (
-    <div className="bg-black min-h-screen text-white relative overflow-x-hidden">
+    /* The desktop nav is a fixed 72px rail down the left edge, so every page
+       that shows chrome has to start clear of it. Padding on the shell rather
+       than a margin on each page: the rail is position:fixed and this element
+       creates no containing block, so it stays put while the content moves.
+
+       overflow-x-CLIP, not hidden. `hidden` makes this element a scroll
+       container, which silently breaks position:sticky for everything inside
+       it — the home page's hero has to stay pinned while the catalogue scrolls
+       over it. `clip` stops the same horizontal overflow without creating a
+       scrollport. */
+    <div className={`bg-black min-h-screen text-white relative overflow-x-clip ${!hideNavbar ? "sm:pl-[72px]" : ""}`}>
       <LockoutOverlay />
       <ToastContainer position="top-center" autoClose={3000} theme="dark" />
 
