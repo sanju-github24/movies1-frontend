@@ -6,7 +6,8 @@ import {
   Volume2, VolumeX, Loader2, RotateCcw, RotateCw, User,
   Minus, MoreHorizontal, X, ChevronDown
 } from 'lucide-react';
-import { musicApi, backendUrl } from '../utils/api';
+import { musicApi } from '../utils/api';
+import { fetchTrack, playableUrl } from '../utils/saavn';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from string
@@ -191,23 +192,13 @@ export default function TrackDetailPage() {
     setShowDlMenu(false);
     setShowDotsMenu(false);
 
-    // ── THE CRITICAL PATH CORRECTION ──
-    // Streaming tracks are namespaced "<source>__<id>" (underscores, not a colon
-    // — a colon in the URL path is rejected/mis-routed by many CDNs/hosts). Pass
-    // the id straight through so the backend routes it to that source's
-    // extractor. Search returns "saavn__" ids now; "gaana__"/"gaana:" still
-    // arrive from older links and caches. Otherwise, check if the route ID
-    // contains un-parsed search markers from a fallback card click.
-    const isStreamingId = id.startsWith('saavn__') || id.startsWith('gaana__') || id.startsWith('gaana:');
-    const isLooseQuery = !isStreamingId && !id.includes('-mp3-song') && !id.includes('.html');
-    const endpoint = isStreamingId
-      ? `/api/songs/track?id=${encodeURIComponent(id)}`
-      : isLooseQuery
-        ? `/api/songs/track?resolve=${encodeURIComponent(id.replace(/-/g, ' '))}`
-        : `/api/songs/track?id=${encodeURIComponent(id)}`;
+    // The route id is a JioSaavn song id. Links and caches from before the move
+    // to this API carry a "saavn__"/"gaana__" namespace; strip a "saavn__" one
+    // and it is the same id underneath. A "gaana__" id belonged to a catalogue
+    // we no longer read, so it has no song to resolve to.
+    const songId = id.replace(/^saavn__/, '');
 
-    musicApi(endpoint)
-      .then(r => { if (!r.ok) throw new Error('Failed to fetch track'); return r.json(); })
+    fetchTrack(songId)
       .then(d => {
         if (!d.success || !d.stream_url) throw new Error(d.error || 'Stream URL could not be resolved.');
         setTrackData(d);
@@ -220,13 +211,11 @@ export default function TrackDetailPage() {
         const meta = d.metadata || {};
         const seed = meta.cover_image || id || '';
         const { base, light } = deriveRgbFromStr(seed);
-        // These CDNs only serve their own site's Referer — JioSaavn answers 403
-        // without one — so route the stream through the backend proxy, which
-        // sends the right headers and re-serves it same-origin with CORS. The
-        // proxy passes audio files straight through and only rewrites manifests.
-        const streamUrl = isStreamingId
-          ? `${backendUrl}/api/gaana/hls?url=${encodeURIComponent(d.stream_url)}`
-          : d.stream_url;
+        // saavncdn only serves a request carrying a jiosaavn.com Referer, which
+        // a browser cannot set, so the audio goes through the backend proxy —
+        // it sends the right headers and re-serves the bytes same-origin with
+        // CORS, passing audio files straight through.
+        const streamUrl = playableUrl(d.stream_url);
         if (!isAlreadyPlaying) {
           player?.loadTrack({
             id,
@@ -355,13 +344,12 @@ export default function TrackDetailPage() {
   const colorSeed = coverSrc || id || '';
   const { base: baseRgb, light: lightRgb } = useMemo(() => deriveRgbFromStr(colorSeed), [colorSeed]);
 
-  // Gaana tracks stream over HLS and are play-only — they carry no downloads,
-  // so every download affordance is gated on this rather than on the source.
+  // JioSaavn tracks are play-only — they carry no downloads, so every download
+  // affordance is gated on this rather than on the source.
   const hasDownloads = !!(trackData?.downloads && Object.keys(trackData.downloads).length > 0);
-  // Clean title fallback (strips the source namespace and slug hyphens). Only
-  // shows until metadata lands; a JioSaavn id is opaque, so it reads as noise
-  // rather than a title — better than leaving "saavn__" on screen either way.
-  const titleFallback = id.replace(/^(saavn|gaana)__/, '').replace(/^gaana:/, '').replace(/-/g, ' ');
+  // Shown only until metadata lands. A JioSaavn id is opaque, so there is no
+  // title to recover from it — say so rather than print the id.
+  const titleFallback = 'Loading…';
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
@@ -699,7 +687,7 @@ export default function TrackDetailPage() {
                       <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds" title="Forward 10 seconds"
                         style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCw size={20}/></button>
                     </div>
-                    {/* Desktop download button — hidden for play-only (Gaana) tracks;
+                    {/* Desktop download button — hidden for play-only tracks;
                         keep a spacer so the play button stays centered. */}
                     {hasDownloads ? <DownloadMenu /> : <div style={{ width:28, flexShrink:0 }} />}
                   </div>
@@ -776,7 +764,7 @@ export default function TrackDetailPage() {
                     <Minus size={15} style={{ color:`rgb(${lightRgb})` }} />
                     Minimize Player
                   </button>
-                  {/* Download options inside dots menu — omitted for play-only (Gaana) tracks */}
+                  {/* Download options inside dots menu — omitted for play-only tracks */}
                   {hasDownloads && <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'2px 0' }} />}
                   {hasDownloads && Object.entries(trackData.downloads).map(([bitrate, dlUrl]) => (
                     <button key={bitrate} onClick={() => { setShowDotsMenu(false); triggerDownload(dlUrl, bitrate); }}
@@ -859,7 +847,7 @@ export default function TrackDetailPage() {
                     style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                     <RotateCw size={24}/>
                   </button>
-                  {/* Download replaces repeat/shuffle — hidden for play-only (Gaana) tracks */}
+                  {/* Download replaces repeat/shuffle — hidden for play-only tracks */}
                   {hasDownloads ? (
                     <div>
                       <button onClick={() => setShowDlMenu(v=>!v)}

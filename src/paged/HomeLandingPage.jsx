@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
-import { musicApi } from '../utils/api';
+import { fetchHomeRows } from '../utils/saavn';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
@@ -199,8 +199,9 @@ function CategorySection({ name, tracks, navigate, setPreview, onSeeAll }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sections arrive as "Trending in <Language>"; the chips show just the language.
-const sectionLanguage = (name) => name.replace(/^Trending in\s+/i, '');
+// Sections are named for their chart ("Hindi Top 50"); the chips show just the
+// language, so trim the chart part off.
+const sectionLanguage = (name) => name.replace(/\s+Top 50$/i, '');
 
 export default function HomeLandingPage() {
   const [categories, setCategories] = useState({});
@@ -211,11 +212,7 @@ export default function HomeLandingPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    musicApi('/api/songs/homepage')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to retrieve songs homepage data from scraper backend');
-        return res.json();
-      })
+    fetchHomeRows()
       .then(data => { setCategories(data); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
   }, []);

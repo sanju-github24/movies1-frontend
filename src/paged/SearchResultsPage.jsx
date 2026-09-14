@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
-import { musicApi } from '../utils/api';
+import { fetchSearch, fetchListing } from '../utils/saavn';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from any string — no CORS, instant, unique per slug
@@ -81,12 +81,12 @@ export default function SearchResultsPage() {
     const cached = sessionStorage.getItem(cacheKey(query));
     if (cached) { try { setResults(JSON.parse(cached)); setLoading(false); return; } catch(_) { sessionStorage.removeItem(cacheKey(query)); } }
     setLoading(true); setError(null);
-    musicApi(`/api/songs/search?q=${encodeURIComponent(query.trim())}`)
-      .then(r => { if (!r.ok) throw new Error('Failed to fetch results'); return r.json(); })
+    const q = query.trim();
+    (isDirectListing ? fetchListing(q) : fetchSearch(q))
       .then(d => {
         const r = { songs: d.songs||[], albums: d.albums||[], artists: d.artists||[], metadata: d.metadata||{} };
         setResults(r);
-        // Only cache non-empty results — caching a failed/empty scrape would
+        // Only cache non-empty results — caching a failed or empty lookup would
         // keep the page stuck rendering nothing on every revisit.
         const count = r.songs.length + r.albums.length + r.artists.length;
         if (count > 0) {
@@ -97,7 +97,7 @@ export default function SearchResultsPage() {
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [query]);
+  }, [query, isDirectListing]);
 
   const total = results.songs.length + results.albums.length + results.artists.length;
 
@@ -394,7 +394,7 @@ export default function SearchResultsPage() {
     const [hov, setHov] = useState(false);
     const { light } = useMemo(() => deriveRgbFromStr(artist.poster || artist.id), []);
     return (
-      <div onClick={() => saveAndGo(`/music/search?find=artist:${artist.id}`)}
+      <div onClick={() => saveAndGo(`/music/search?find=artist:${encodeURIComponent(artist.title)}`)}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
         style={{ ...cardBase, background: hov ? `rgba(${light}, 0.12)` : 'rgba(255,255,255,0.04)', borderColor: hov ? `rgba(${light}, 0.3)` : 'rgba(255,255,255,0.07)', display:'flex', flexDirection: viewMode==='grid' ? 'column' : 'row', alignItems:'center', gap: viewMode==='grid' ? 12 : 14, padding: viewMode==='grid' ? '20px 12px 16px' : '12px 14px', transform: hov && viewMode==='grid' ? 'translateY(-3px)' : 'none' }}
       >

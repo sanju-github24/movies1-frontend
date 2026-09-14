@@ -7,15 +7,15 @@ export function useMusicPlayer() {
   return useContext(MusicPlayerContext);
 }
 
-// Gaana tracks stream over HLS (.m3u8); Pendujatt tracks are plain MP3 files.
-// Everything music-side goes through the backend proxy (the CDNs need their own
-// site's Referer), so the proxy path alone says nothing about the format: it may
-// wrap an HLS manifest or a plain audio file, e.g. a JioSaavn .mp4. Judge by
-// what it wraps, or hls.js gets handed an MP4 and the track never plays.
+// Every music stream goes through the backend proxy (saavncdn needs a
+// jiosaavn.com Referer the browser can't send), so the proxy path alone says
+// nothing about the format: it may wrap an HLS manifest or a plain audio file,
+// which is what a JioSaavn track is (a .mp4). Judge by what it wraps, or hls.js
+// gets handed an MP4 and the track never plays.
 const isHlsUrl = (url) => {
   if (typeof url !== 'string') return false;
   if (/\.m3u8(\?|#|$)/i.test(url)) return true;
-  if (/\/api\/(gaana|mux)\/hls\b/i.test(url)) {
+  if (/\/api\/(music\/stream|gaana\/hls|mux\/hls)\b/i.test(url)) {
     try {
       const inner = new URL(url, window.location.href).searchParams.get('url');
       // No ?url= to inspect — assume a manifest, as the path name implies.
@@ -116,7 +116,7 @@ export function MusicPlayerProvider({ children }) {
       // If the track is supposed to be playing but the clock hasn't moved for
       // ~1.5s, un-stick it: nudge past a buffer hole when audio is buffered
       // ahead, otherwise kick the segment loader (and resume if it silently
-      // paused). This is what keeps a Gaana HLS track from dying mid-song.
+      // paused). This is what keeps an HLS track from dying mid-song.
       let lastTime = 0;
       let frozenTicks = 0;
       stallWatchdogRef.current = setInterval(() => {
@@ -185,7 +185,7 @@ export function MusicPlayerProvider({ children }) {
       setIsMinimized(true);
       setIsRestoredSession(true);
       // Load audio but don't play; seek once buffered. Handles both MP3 and
-      // HLS sources (a restored Gaana token may have expired — that just fails
+      // HLS sources (a restored token may have expired — that just fails
       // to buffer, the same as any stale stream, and the user can re-open it).
       attachSource(saved.streamUrl, () => { audio.currentTime = resumeTime; });
     } catch (_) {}
