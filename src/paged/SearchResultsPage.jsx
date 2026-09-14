@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
+import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
 import { fetchSearch, fetchListing } from '../utils/saavn';
 
@@ -427,14 +428,18 @@ export default function SearchResultsPage() {
 
       <div style={{ maxWidth:1200, width:'100%', margin:'0 auto', padding:'24px 16px', flex:1 }}>
 
-        {/* Search banner */}
-        <div style={{ display:'flex', alignItems:'center', gap:12, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:'14px 20px', marginBottom:20 }}>
-          <Search size={15} style={{ color:'#5eead4', flexShrink:0 }} />
-          <p style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.45)', flex:1, margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-            Results for: <span style={{ color:'#5eead4', fontWeight:700 }}>"{query}"</span>
-          </p>
-          {!loading && total>0 && (
-            <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.3)', background:'rgba(255,255,255,0.07)', padding:'4px 10px', borderRadius:8, flexShrink:0 }}>{total} found</span>
+        {/* The field itself, seeded with this search — a result that is not
+            quite the song you meant is refined here, rather than by reopening
+            the rail's search panel. This replaced a banner that only restated
+            the query back at you. */}
+        <div style={{ marginBottom: 20 }}>
+          <MusicSearchBar initialQuery={query} />
+          {!loading && (
+            <p style={{ fontSize:12, fontWeight:500, color:'rgba(255,255,255,0.35)', margin:'10px 2px 0' }}>
+              {total > 0
+                ? <>{total} result{total === 1 ? '' : 's'} for <span style={{ color:'#5eead4', fontWeight:700 }}>"{query}"</span></>
+                : <>Nothing found for <span style={{ color:'rgba(255,255,255,0.55)', fontWeight:700 }}>"{query}"</span></>}
+            </p>
           )}
         </div>
 

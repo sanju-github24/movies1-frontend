@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
 import { fetchHomeRows } from '../utils/saavn';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
+import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
 
@@ -253,6 +254,14 @@ export default function HomeLandingPage() {
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter italic mb-6 sm:mb-8">
           Music
         </h1>
+
+        {/* Searching is the main thing you come here to do, so it sits on the
+            page rather than behind the rail's search panel. Above the rows and
+            outside the loading branch: it works while the charts are still
+            arriving, and it stays put if they fail to. */}
+        <div className="mb-8 sm:mb-10 max-w-2xl">
+          <MusicSearchBar />
+        </div>
 
         {/* ── Loading ─────────────────────────────────────────────── */}
         {loading ? (
