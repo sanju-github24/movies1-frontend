@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, CalendarDays, MonitorPlay, BarChart3, Radio } from "lucide-react";
 import HeroSection from "./HeroSection";
 import { absUrl, jsonLd } from "../utils/seo";
+import LiveTabsSection from "../components/LiveTabsSection";
 
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -2283,6 +2284,14 @@ export default function Homeies({ searchTerm }) {
           <div className="mt-6">
             <LiveNowStrip/>
           </div>
+
+          {/* ── LIVE CHANNELS & FIXTURES ──
+              Whatever is on behind the player's tabs, from the tab URLs saved
+              in the admin: live fixtures with their feed artwork, the upcoming
+              ones beside them, and playback in a frame so nobody leaves the
+              site to watch. It fetches its own rows and renders nothing until
+              a tab has been added, so the page is unchanged until then. */}
+          <LiveTabsSection />
 
           {/* ── ICC HIGHLIGHTS (World Cup match highlights) ── */}
           <IccHighlightsRow/>

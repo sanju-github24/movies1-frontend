@@ -4,6 +4,7 @@ import { MonitorPlay, Clock, Box, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { DateTime } from "luxon";
+import LiveTabsSection from "../components/LiveTabsSection";
 
 /* ================= NAVBAR & HERO (Unchanged) ================= */
 /* LivePageNavbar removed — the rail is the site's navigation. */
@@ -147,6 +148,12 @@ const LiveCricket = () => {
             </div>
             )}
         </div>
+
+        {/* SECTION 2b: WHAT IS ON BEHIND THE PLAYER'S TABS
+            Reads the tab URLs saved in the admin and lists each one's live and
+            upcoming fixtures, with the artwork their feeds supply. Fetches its
+            own rows, so this page does not need to know where they are kept. */}
+        <LiveTabsSection heading="Live Channels & Fixtures" />
 
         {/* SECTION 3: COMPLETED SERIES (ARCHIVE) */}
         {endedSeries.length > 0 && (

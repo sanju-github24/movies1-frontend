@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { supabase } from "../utils/supabaseClient";
 import { Radio, Clock3, Play, X, AlertCircle } from "lucide-react";
 import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
@@ -223,14 +224,44 @@ const Section = ({ row }) => {
   );
 };
 
-/* Given every saved row, render only the ones that are tab URLs. Bundles are
-   drawn elsewhere on the page and are left alone here. */
-const LiveTabsSection = ({ rows }) => {
-  const tabRows = (rows || []).filter((r) => parseTabUrl(r.bundle_url));
+/* Render the saved rows that are tab URLs, leaving bundles to whoever draws
+   those.
+
+   Rows may be handed in by a page that has already loaded them, or fetched
+   here when the page has not — that way this drops onto any page without
+   that page needing to know the table exists. */
+const LiveTabsSection = ({ rows, heading }) => {
+  const [fetched, setFetched] = useState(null);
+  const given = Array.isArray(rows);
+
+  useEffect(() => {
+    if (given) return;
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("live_channel_bundles")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (alive) setFetched(error ? [] : data || []);
+    })();
+    return () => { alive = false; };
+  }, [given]);
+
+  const source = given ? rows : fetched;
+  // Still loading its own rows: say nothing rather than flash an empty heading.
+  if (!source) return null;
+
+  const tabRows = source.filter((r) => parseTabUrl(r.bundle_url));
   if (!tabRows.length) return null;
 
   return (
     <div className="mt-10">
+      {heading && (
+        <h2 className="text-xl font-semibold tracking-wide flex items-center gap-2 mb-6 text-red-400">
+          <Radio className="w-5 h-5" aria-hidden="true" /> {heading}
+        </h2>
+      )}
       {tabRows.map((row) => <Section key={row.id} row={row} />)}
     </div>
   );
