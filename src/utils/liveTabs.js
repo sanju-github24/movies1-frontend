@@ -76,3 +76,73 @@ export function startLabel(item) {
   const m = raw.match(/^(\d{1,2}:\d{2})(?::\d{2})?\s*(AM|PM)?/i);
   return m ? `${m[1]}${m[2] ? " " + m[2].toUpperCase() : ""}` : raw;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Fixtures for the heroes
+
+   The heroes used to read a publisher's JSON straight off GitHub. That meant
+   the site had its own idea of what FanCode was showing, separate from the
+   player's, and the two drifted: different shapes, different fields, and a
+   second place to fix whenever a publisher changed something. These read the
+   same worker the player reads, so there is one answer to "what is on".
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Where the heroes send a viewer to watch. The admin can save any player URL
+   for the listings; a hero has no row to read one from, so it uses this. */
+export const PLAYER_BASE = "https://m3u8-player-ashen.vercel.app/";
+
+/* India, as a feed spells it — "India", "IND", "India Women", "Team India".
+   Deliberately word-bounded: "Indians" is a Mumbai Indians match, not India,
+   and "Indies" is the West Indies. */
+const INDIA = /\b(india|ind)\b/i;
+const NOT_INDIA = /\b(indians|indies|indiana)\b/i;
+
+export function isIndiaFixture(item) {
+  const hay = `${item?.name || ""} ${item?.event || ""}`;
+  if (NOT_INDIA.test(hay)) return false;
+  return INDIA.test(hay);
+}
+
+/* "Ludhiana Lions vs Amritsar Soormas" → the two sides, for a hero that shows
+   them apart. A fixture the feed names any other way keeps its whole title. */
+export function splitTeams(name) {
+  const m = String(name || "").split(/\s+vs\.?\s+/i);
+  return m.length === 2 ? { home: m[0].trim(), away: m[1].trim() } : null;
+}
+
+/* Live and upcoming across both fixture tabs, each row tagged with where it
+   came from so a hero can link back into the right one.
+
+   A failing feed is not allowed to take the other down with it: one source
+   being unreachable should cost that source's fixtures, nothing more. */
+export async function fetchHeroFixtures({ upcomingPerSource = 2 } = {}) {
+  const keys = ["fc", "sony"];
+  const settled = await Promise.allSettled(keys.map((k) => fetchTabFeed(k)));
+
+  const live = [];
+  const upcoming = [];
+
+  settled.forEach((r, i) => {
+    if (r.status !== "fulfilled") return;
+    const key = keys[i];
+    const tag = (m) => ({ ...m, tabKey: key, source: TAB_DEFS[key].label });
+
+    live.push(...(r.value.live || []).map(tag));
+
+    /* India first, then the feed's own order — which is roughly by start time.
+       Two per source rather than two overall, so one busy publisher cannot
+       crowd the other out of the hero entirely. */
+    const soon = (r.value.upcoming || []).map(tag);
+    soon.sort((a, b) => Number(isIndiaFixture(b)) - Number(isIndiaFixture(a)));
+    upcoming.push(...soon.slice(0, upcomingPerSource));
+  });
+
+  live.sort((a, b) => Number(isIndiaFixture(b)) - Number(isIndiaFixture(a)));
+  return { live, upcoming };
+}
+
+/* The address that plays one fixture, with the player's own chrome kept out
+   of the way — see solo in the player. */
+export function heroPlayUrl(item) {
+  return tabItemUrl(PLAYER_BASE, item.tabKey, item.id, true);
+}

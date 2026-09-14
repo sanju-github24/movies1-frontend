@@ -4,6 +4,8 @@ import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { encodeMatchHash } from "../utils/matchHash";
 import { teamCrest, flagImg } from "../utils/teamCrest";
+import { fetchTabFeed, fetchHeroFixtures, splitTeams, heroPlayUrl } from "../utils/liveTabs";
+import LiveViewer from "../components/LiveViewer";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -90,34 +92,40 @@ function countdownLabel(dateStr) {
   return `${days} DAY${days!==1?"S":""} TO GO`;
 }
 
-// ─── FANCODE (DOCTOR_STRANGE feed) ────────────────────────────────────────────
+// ─── FANCODE ──────────────────────────────────────────────────────────────────
 // We cross-check each BCCI men's match against FanCode's live/scheduled list.
-// If the same match is LIVE on FanCode, we use FanCode's match thumbnail in the hero.
-const FANCODE_JSON = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
-
+// If the same match is LIVE on FanCode, we use FanCode's match thumbnail here.
+//
+// Read through our own worker rather than a publisher's GitHub file directly.
+// That file was one of several the site and the player each fetched on their
+// own, in different shapes — so the two could disagree about what was on, and
+// every change a publisher made had to be absorbed twice. The worker settles
+// on one shape and one answer; this reshapes it to what the hero already reads.
 async function fetchFancodeMatches() {
-  const k = "hero_fancode_v1";
+  const k = "hero_fancode_v2";
   const cached = getCached(k);
   if (cached !== null && cached !== undefined) return cached;
   try {
-    const res = await fetch(`${FANCODE_JSON}?_=${Date.now()}`);
-    if (!res.ok) { setCache(k, []); return []; }
-    const json = await res.json();
-    const matches = (json.matches || []).map(m => ({
-      matchId: m.match_id,
-      category: m.category || "",
-      titleRaw: m.title || "",
-      title: (m.title || "").toLowerCase(),
-      status: (m.status || "").toUpperCase(),        // LIVE | NOT_STARTED | COMPLETED
-      tournament: m.tournament || "",
-      teams: (m.team || []).map(t => (t.name || "").toLowerCase()),
-      teamNames: (m.team || []).map(t => t.name || "").filter(Boolean),
-      startTime: m.startTime || "",
-      // Match thumbnail for the hero background. BG_IMAGE / APP / image are the
-      // reliable cms-media match cards; TATAPLAY/CLOUDFARE 404 for many matches.
-      thumb: (m.image_cdn && (m.image_cdn.BG_IMAGE || m.image_cdn.APP)) || m.image
-             || (m.image_cdn && m.image_cdn.TATAPLAY) || null,
-    }));
+    const { live, upcoming } = await fetchTabFeed("fc");
+    const shape = (m, status) => {
+      const sides = splitTeams(m.name);
+      return {
+        matchId: m.id,
+        category: m.category || "",
+        titleRaw: m.name || "",
+        title: (m.name || "").toLowerCase(),
+        status,
+        tournament: m.event || "",
+        teams: sides ? [sides.home.toLowerCase(), sides.away.toLowerCase()] : [],
+        teamNames: sides ? [sides.home, sides.away] : [],
+        startTime: m.start || "",
+        thumb: m.poster || m.logo || null,
+      };
+    };
+    const matches = [
+      ...live.map(m => shape(m, "LIVE")),
+      ...upcoming.map(m => shape(m, "NOT_STARTED")),
+    ];
     setCache(k, matches);
     return matches;
   } catch { setCache(k, []); return []; }
@@ -278,7 +286,7 @@ function FootballHeroBg(){
 }
 
 // ─── CRICKET SLIDE (BCCI-card style: badge + name stacked, centered VS, footer) ──
-function CricketSlide({slide}){
+function CricketSlide({slide, onPlay}){
   const { home, away } = slide;
   const isLive=slide.status==="live";
   const isFinished=slide.status==="finished";
@@ -465,6 +473,22 @@ function CricketSlide({slide}){
             {streamLoading?"Loading…":"Watch Highlights"}
           </button>
         ):(
+          slide.playSrc ? (
+          /* A fixture we can actually play opens in place. Everything else is
+             a scorecard or a highlight, which lives on its own route. */
+          <button type="button" onClick={()=>onPlay&&onPlay(slide)}
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:`linear-gradient(135deg,${fmtColor},${isODI?"#b45309":isTest?"#b91c1c":"#6d28d9"})`,
+              boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
+              color:"#fff",
+            }}>
+            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
+          </button>
+          ) : (
           <Link to={slide.link || "/live-cricket-tv"}
             className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
             style={{
@@ -477,6 +501,7 @@ function CricketSlide({slide}){
             <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
             {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
           </Link>
+          )
         )}
       </div>
     </div>
@@ -484,7 +509,7 @@ function CricketSlide({slide}){
 }
 
 // ─── FOOTBALL SLIDE (same badge-over-name BCCI layout) ───────────────────────
-function FootballSlide({slide}){
+function FootballSlide({slide, onPlay}){
   const { home, away } = slide;
   const isLive=slide.status==="live";
   const isFinished=slide.status==="finished";
@@ -645,6 +670,22 @@ function FootballSlide({slide}){
             {streamLoading?"Loading…":"Watch Highlights"}
           </button>
         ):(
+          slide.playSrc ? (
+          /* A fixture we can actually play opens in place. Everything else is
+             a scorecard or a highlight, which lives on its own route. */
+          <button type="button" onClick={()=>onPlay&&onPlay(slide)}
+            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
+            style={{
+              fontSize:"clamp(8px,2vw,13px)",
+              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
+              background:"linear-gradient(135deg,#1ed596,#059669)",
+              boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
+              color:"#fff",
+            }}>
+            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
+            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
+          </button>
+          ) : (
           <Link to={slide.link || "/live-cricket-tv"}
             className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
             style={{
@@ -657,6 +698,7 @@ function FootballSlide({slide}){
             <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
             {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
           </Link>
+          )
         )}
       </div>
     </div>
@@ -716,11 +758,13 @@ export default function HeroSection(){
   const [slides,setSlides]=useState([]);
   const [loading,setLoading]=useState(true);
   const [activeIdx,setActiveIdx]=useState(0);
+  // A fixture the hero can play opens here rather than on the player's site.
+  const [playing,setPlaying]=useState(null);
   const [transitioning,setTransitioning]=useState(false);
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v10";   // v10: cricket only — v9 caches may hold FIFA slides
+    const ck="hero_slides_v11";   // v11: carries watchable fixtures; v10 caches have none
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
@@ -962,10 +1006,45 @@ export default function HeroSection(){
       ),
     ]);
 
-    /* Order: live first, then just-finished, then what is coming up. Without
-       football to interleave, this is simply the cricket in priority order —
-       the old version needed four branches to decide whose turn it was. */
-    const final=[...liveC, ...finC, ...upC].filter(Boolean).slice(0,4);
+    /* ── Anything playable right now, and what is next ──
+       BCCI knows the fixtures; only these feeds know which of them can
+       actually be watched. A live one earns the top of the hero, because it is
+       the single most useful thing this page can offer at that moment.
+       Upcoming ones fill in behind, two from each source, India first. */
+    const playC=[], playUpC=[];
+    try{
+      const { live: fxLive, upcoming: fxSoon } = await fetchHeroFixtures({ upcomingPerSource: 2 });
+
+      const toSlide=(m,status)=>{
+        const sides = splitTeams(m.name);
+        const home = buildSide({ code:"", name: sides ? sides.home : (m.name||"") });
+        const away = sides ? buildSide({ code:"", name: sides.away }) : null;
+        return {
+          id:`fx-${m.tabKey}-${m.id}`, sport:"cricket", status,
+          // Plays in place — see playSrc below; no link to follow off the page.
+          link:null, playSrc: heroPlayUrl(m), playTitle: m.name,
+          home, away,
+          heroImage: m.poster || m.logo || null,
+          tournament: m.event || m.source,
+          matchFmt: m.category || "",
+          venue:"",
+          dateLabel:"", timeLabel: m.start || "",
+          countdown:"",
+          watchOn: m.source,
+        };
+      };
+
+      /* Two live at most. The hero holds four slides and BCCI's own live and
+         finished matches want a place in it too. */
+      fxLive.slice(0,2).forEach(m=>playC.push(toSlide(m,"live")));
+      fxSoon.forEach(m=>playUpC.push(toSlide(m,"upcoming")));
+    }catch{ /* the feeds are optional; BCCI still fills the hero */ }
+
+    /* Order: what can be watched now, then BCCI's live, then just-finished,
+       then what is coming up. Without football to interleave, this is simply
+       the cricket in priority order — the old version needed four branches to
+       decide whose turn it was. */
+    const final=[...playC, ...liveC, ...finC, ...upC, ...playUpC].filter(Boolean).slice(0,4);
     if(final.length>0){setCache(ck,final);setSlides(final);}
     setLoading(false);
   },[]);
@@ -1048,7 +1127,16 @@ export default function HeroSection(){
         style={{height:"clamp(320px,46vw,520px)"}}>
 
         <div className="absolute inset-0 transition-opacity duration-300" style={{opacity:transitioning?0:1}}>
-          {isCricket?<CricketSlide slide={active}/>:<FootballSlide slide={active}/>}
+          {isCricket
+            ?<CricketSlide slide={active} onPlay={setPlaying}/>
+            :<FootballSlide slide={active} onPlay={setPlaying}/>}
+
+          <LiveViewer
+            open={!!playing}
+            title={playing?.playTitle || ""}
+            src={playing?.playSrc || ""}
+            onClose={()=>setPlaying(null)}
+          />
         </div>
 
         {/* One arrow style for both ends and both breakpoints. The desktop

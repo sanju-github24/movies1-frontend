@@ -14,6 +14,8 @@ import { seasonNo } from "../utils/titleEpisodes";
 import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
+import { fetchHeroFixtures, splitTeams, heroPlayUrl } from "../utils/liveTabs";
+import LiveViewer from "./LiveViewer";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -98,6 +100,39 @@ function useLiveSports() {
         }));
       }
     } catch {}
+
+    /* Anything watchable right now on FanCode or SonyLiv.
+       BCCI and WT20 above say which matches exist; these say which ones this
+       site can actually put on screen — so a live fixture reaches the home
+       hero as something to watch, not only something to read a score about.
+       India first, and only a couple, because the hero is not a listings page.
+
+       A failing feed costs its own fixtures and nothing else; the rest of the
+       hero is built from other sources entirely. */
+    try {
+      const { live: playable } = await fetchHeroFixtures({ upcomingPerSource: 0 });
+      playable.slice(0, 2).forEach((m) => {
+        const sides = splitTeams(m.name);
+        out.push({
+          id: `fx-${m.tabKey}-${m.id}`,
+          sport: "cricket", type: "fixture",
+          badge: (m.category || m.source || "LIVE").toUpperCase(),
+          homeCode: sides ? sides.home : (m.name || ""),
+          awayCode: sides ? sides.away : "",
+          homeFlag: null, awayFlag: null,
+          homeScore: null, awayScore: null, homeOvers: "", striker: "",
+          status: m.event || "",
+          homeName: sides ? sides.home : (m.name || ""),
+          awayName: sides ? sides.away : "",
+          series: m.event || m.source,
+          venue: "", matchOrder: "",
+          poster: m.poster || m.logo || null,
+          // Not a scorecard link: this one plays.
+          playSrc: heroPlayUrl(m),
+          playTitle: m.name,
+        });
+      });
+    } catch { /* the feeds are optional here */ }
 
     // WT20 Women's T20 WC
     try {
@@ -985,7 +1020,19 @@ function HeroSpotlight({ movies = [], onOpen }) {
               )}
 
               <div className="flex items-center gap-2.5">
-                {isCricketSlide ? (
+                {isCricketSlide && movie.match?.playSrc ? (
+                  /* This one is watchable, not just readable: the feeds gave
+                     us a stream for it, so the button plays it here rather
+                     than sending anyone to a scorecard of a match they could
+                     be watching. */
+                  <button type="button" tabIndex={active ? 0 : -1}
+                    onClick={() => onOpen(movie)}
+                    className="inline-flex items-center gap-2 bg-white text-black px-6 sm:px-7 py-3 sm:py-3.5 rounded-xl font-black text-sm
+                               hover:bg-gray-200 active:scale-[0.97] transition-all duration-200
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                    <Play className="w-4 h-4 fill-current" aria-hidden="true" /> Watch live
+                  </button>
+                ) : isCricketSlide ? (
                   /* A match has no file to download and nothing to open in the
                      detail sheet — it has a scorecard. */
                   <Link to={`/match-center/${movie.match.hash}`} tabIndex={active ? 0 : -1}
@@ -1167,6 +1214,8 @@ const Header = () => {
   const [showBettingPopup, setShowBettingPopup] = useState(false);
 
   const [sheetMovie, setSheetMovie] = useState(null);   // the title whose details are open
+  // A live fixture the feeds gave us a stream for, playing over the page.
+  const [heroPlaying, setHeroPlaying] = useState(null);
   const [isMuted, setIsMuted] = useState(true);         // desktop overlay's trailer
 
   /* Which detail surface to open. The hero handed every click to the mobile
@@ -1227,6 +1276,11 @@ const Header = () => {
        file. Both the desktop button and the phone card land here, so the
        redirect belongs here rather than at each call site. */
     if (movie?.liveKind === LIVE_CRICKET) {
+      // Watchable fixtures play; the rest have a scorecard and nothing else.
+      if (movie.match?.playSrc) {
+        setHeroPlaying({ src: movie.match.playSrc, title: movie.match.playTitle || movie.title });
+        return;
+      }
       navigate(`/match-center/${movie.match.hash}`);
       return;
     }
@@ -1554,6 +1608,14 @@ const Header = () => {
         </div>
       </div>
       {/* ── end of the band that rides over the hero ───────────────────── */}
+
+      {/* ── LIVE FIXTURE — plays over the page, like the detail surface ─── */}
+      <LiveViewer
+        open={!!heroPlaying}
+        title={heroPlaying?.title || ""}
+        src={heroPlaying?.src || ""}
+        onClose={() => setHeroPlaying(null)}
+      />
 
       {/* ── DETAIL SURFACE — overlay on desktop, sheet on a phone ───────── */}
       {isDesktop ? (
