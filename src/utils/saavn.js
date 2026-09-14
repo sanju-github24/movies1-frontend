@@ -54,12 +54,36 @@ const clock = (seconds) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
+// JioSaavn masters every track at these bitrates and serves each as its own
+// file, the URL differing only in the suffix. A track without a 320k master
+// exists up to 160k — its media_url says so by coming back as _160.
+const BITRATES = [320, 160, 96, 48];
+
+/**
+ * Every quality this track can be saved at, highest first, as
+ * { '320 kbps': url }. Each URL goes through the proxy: saavncdn needs a
+ * jiosaavn.com Referer, and the page reads the bytes to name the file itself,
+ * which needs CORS. The filename rides along for the fallback that opens the
+ * URL directly instead.
+ */
+function downloadUrls(mediaUrl, title) {
+  const m = /^(.*)_(\d+)\.mp4(\?.*)?$/.exec(mediaUrl || '');
+  if (!m) return {};
+  const [, base, maxBitrate, qs = ''] = m;
+  const name = `${(title || 'Song').replace(/[^\w\s()-]/g, '').replace(/\s+/g, ' ').trim() || 'Song'}.m4a`;
+  return Object.fromEntries(
+    BITRATES
+      .filter(b => b <= Number(maxBitrate))
+      .map(b => [`${b} kbps`, `${playableUrl(`${base}_${b}.mp4${qs}`)}&download=${encodeURIComponent(name)}`])
+  );
+}
+
 /** A song object shaped into what the track page and the player consume. */
 export function toTrack(song) {
   return {
     success: Boolean(song?.media_url),
     stream_url: song?.media_url || null,
-    downloads: {},
+    downloads: downloadUrls(song?.media_url, song?.song),
     metadata: {
       title:       song?.song || 'Untitled',
       cover_image: song?.image || '',

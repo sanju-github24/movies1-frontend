@@ -344,8 +344,9 @@ export default function TrackDetailPage() {
   const colorSeed = coverSrc || id || '';
   const { base: baseRgb, light: lightRgb } = useMemo(() => deriveRgbFromStr(colorSeed), [colorSeed]);
 
-  // JioSaavn tracks are play-only — they carry no downloads, so every download
-  // affordance is gated on this rather than on the source.
+  // A track is downloadable at whatever bitrates it was mastered at; a song
+  // that resolved to no playable url has none. Every download affordance is
+  // gated on this rather than on the source.
   const hasDownloads = !!(trackData?.downloads && Object.keys(trackData.downloads).length > 0);
   // Shown only until metadata lands. A JioSaavn id is opaque, so there is no
   // title to recover from it — say so rather than print the id.
@@ -415,7 +416,9 @@ export default function TrackDetailPage() {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       const clean = (metadata.title||'Song').replace(/[^a-zA-Z0-9\s\-_()]/g,'').replace(/\s+/g,' ').trim();
-      a.download = `${clean} (${bitrate}).mp3`;
+      // JioSaavn serves AAC in an MP4 container, not MP3 — naming it .mp3 gives
+      // the player the wrong codec hint and some just refuse the file.
+      a.download = `${clean} (${bitrate}).m4a`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
     } catch (_) { window.open(url,'_blank'); }
     finally { setDownloading(false); setDlBitrate(''); }
@@ -687,7 +690,7 @@ export default function TrackDetailPage() {
                       <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds" title="Forward 10 seconds"
                         style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCw size={20}/></button>
                     </div>
-                    {/* Desktop download button — hidden for play-only tracks;
+                    {/* Desktop download button — hidden when nothing is downloadable;
                         keep a spacer so the play button stays centered. */}
                     {hasDownloads ? <DownloadMenu /> : <div style={{ width:28, flexShrink:0 }} />}
                   </div>
@@ -764,7 +767,7 @@ export default function TrackDetailPage() {
                     <Minus size={15} style={{ color:`rgb(${lightRgb})` }} />
                     Minimize Player
                   </button>
-                  {/* Download options inside dots menu — omitted for play-only tracks */}
+                  {/* Download options inside dots menu — omitted when nothing is downloadable */}
                   {hasDownloads && <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'2px 0' }} />}
                   {hasDownloads && Object.entries(trackData.downloads).map(([bitrate, dlUrl]) => (
                     <button key={bitrate} onClick={() => { setShowDotsMenu(false); triggerDownload(dlUrl, bitrate); }}
@@ -847,7 +850,7 @@ export default function TrackDetailPage() {
                     style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                     <RotateCw size={24}/>
                   </button>
-                  {/* Download replaces repeat/shuffle — hidden for play-only tracks */}
+                  {/* Download replaces repeat/shuffle — hidden when nothing is downloadable */}
                   {hasDownloads ? (
                     <div>
                       <button onClick={() => setShowDlMenu(v=>!v)}
