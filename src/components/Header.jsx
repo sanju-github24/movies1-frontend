@@ -14,7 +14,7 @@ import { seasonNo } from "../utils/titleEpisodes";
 import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
-import { fetchHeroFixtures, splitTeams, heroPlayUrl } from "../utils/liveTabs";
+import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA } from "../utils/liveTabs";
 import LiveViewer from "./LiveViewer";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
@@ -709,6 +709,15 @@ function HeroSpotlight({ movies = [], onOpen }) {
       });
     }
 
+    /* Always on, so it needs no feed to say whether it is running. It sits
+       after a live match, which is time-bound and therefore the more urgent
+       thing to headline, and ahead of the uploads. */
+    live.push({
+      ...BIGG_BOSS_KANNADA,
+      liveKind: LIVE_SHOW,
+      id: `live-stream-${BIGG_BOSS_KANNADA.id}`,
+    });
+
     for (const m of liveMatches.slice(0, 2)) {
       live.push({
         liveKind: LIVE_CRICKET,
@@ -1020,7 +1029,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
               )}
 
               <div className="flex items-center gap-2.5">
-                {isCricketSlide && movie.match?.playSrc ? (
+                {(movie.playSrc || (isCricketSlide && movie.match?.playSrc)) ? (
                   /* This one is watchable, not just readable: the feeds gave
                      us a stream for it, so the button plays it here rather
                      than sending anyone to a scorecard of a match they could
@@ -1275,12 +1284,16 @@ const Header = () => {
     /* A live match is not a title: it has no detail sheet, no episodes and no
        file. Both the desktop button and the phone card land here, so the
        redirect belongs here rather than at each call site. */
+    /* Anything the site can play opens here: a live fixture carries its
+       address on the match, a channel carries it on the slide itself. */
+    const playSrc = movie?.playSrc || movie?.match?.playSrc;
+    if (playSrc) {
+      setHeroPlaying({ src: playSrc, title: movie.playTitle || movie.match?.playTitle || movie.title });
+      return;
+    }
+
     if (movie?.liveKind === LIVE_CRICKET) {
-      // Watchable fixtures play; the rest have a scorecard and nothing else.
-      if (movie.match?.playSrc) {
-        setHeroPlaying({ src: movie.match.playSrc, title: movie.match.playTitle || movie.title });
-        return;
-      }
+      // A fixture with no stream has a scorecard and nothing else.
       navigate(`/match-center/${movie.match.hash}`);
       return;
     }

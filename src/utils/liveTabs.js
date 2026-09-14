@@ -146,3 +146,35 @@ export async function fetchHeroFixtures({ upcomingPerSource = 2 } = {}) {
 export function heroPlayUrl(item) {
   return tabItemUrl(PLAYER_BASE, item.tabKey, item.id, true);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Bigg Boss Kannada, running 24/7
+
+   A fixture comes and goes; this one is always on, so it is named here rather
+   than discovered from a feed. One definition because three places show it —
+   the home hero, the watch page hero and the watch page itself — and they must
+   not disagree about its artwork or where it plays.
+
+   Shaped like a title, because to every hero on this site it is one: the same
+   poster, cover and language fields a film would carry.
+   ───────────────────────────────────────────────────────────────────────── */
+const BB_KANNADA_ART =
+  "https://img10.hotstar.com/image/upload/sources/r1/cms/prod/2305/1788708712305-h.jpg";
+
+export const BIGG_BOSS_KANNADA = {
+  id: "bigg-boss-kannada-live",
+  slug: "bigg-boss-kannada-live",
+  title: "Bigg Boss Kannada 24/7",
+  poster: BB_KANNADA_ART,
+  cover_poster: BB_KANNADA_ART,
+  title_logo: null,
+  language: ["Kannada"],
+  genres: ["Reality", "Live"],
+  description: "The Kannada house, streaming live around the clock.",
+  content_type: "tv",
+  isLiveStream: true,
+  /* bb is the player's Hotstar tab and bb-kannada the channel inside it; solo
+     keeps the player's own chrome out of the way, since this opens framed. */
+  playSrc: tabItemUrl(PLAYER_BASE, "bb", "bb-kannada", true),
+  playTitle: "Bigg Boss Kannada 24/7",
+};

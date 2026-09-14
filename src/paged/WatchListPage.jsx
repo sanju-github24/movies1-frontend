@@ -87,6 +87,8 @@ import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
 import DesktopDetailOverlay from "./DesktopDetailOverlay";
 import MobileDetailSheet from "../components/MobileDetailSheet";
+import { BIGG_BOSS_KANNADA } from "../utils/liveTabs";
+import LiveViewer from "../components/LiveViewer";
 
 /* ===== Helper: Save Recently Watched ===== */
 const saveRecentlyWatched = (movie) => {
@@ -566,6 +568,8 @@ const WatchListPage = () => {
   const [resumeRefresh, setResumeRefresh] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [heroTrailerActive, setHeroTrailerActive] = useState(false);
+  // The 24/7 channel, playing over the page.
+  const [livePlaying, setLivePlaying] = useState(null);
   const [heroMp4, setHeroMp4] = useState({});          // hero slug → IMDb MP4 trailer
   const [heroMp4Live, setHeroMp4Live] = useState(false);   // the slide's MP4 is playing
   // Ticks every 20s so the nightly-telecast badges flip themselves at 9:30 and
@@ -778,7 +782,9 @@ const WatchListPage = () => {
         const tmdbHero = tmdbWithAssets.sort(() => 0.5 - Math.random()).slice(0, 4);
         const localOthers = merged.filter(m => !adminHero.some(a => a.id === m.id));
         const localExtra = localOthers.sort(() => 0.5 - Math.random()).slice(0, 2);
-        setHeroMovies([...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
+        /* The 24/7 channel leads the hero: it is the one thing here that is
+           live right now, and unlike a film it cannot be watched later. */
+        setHeroMovies([BIGG_BOSS_KANNADA, ...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
 
         // Prepend MX Player's current spotlight (6 slides, with HLS trailers).
         (async () => {
@@ -802,7 +808,13 @@ const WatchListPage = () => {
               mx_type: s.mxType || null,
               source: "mxplayer",
             }));
-            if (mxSlides.length) setHeroMovies((prev) => [...mxSlides, ...prev].slice(0, 13));
+            /* Behind the live channel, ahead of everything else — a spotlight
+               title is not more urgent than something airing now. */
+            if (mxSlides.length) setHeroMovies((prev) => {
+              const live = prev.filter((m) => m.isLiveStream);
+              const rest = prev.filter((m) => !m.isLiveStream);
+              return [...live, ...mxSlides, ...rest].slice(0, 13);
+            });
           } catch (e) { console.warn("MX hero unavailable"); }
         })();
 
@@ -922,6 +934,13 @@ const WatchListPage = () => {
      the server and opens the player overlay straight away.
      opts.episode: { season, episode } to start on. */
   const handleNavigateToWatch = (movie, opts = {}) => {
+    /* A live channel has no watch page to go to — no episodes, no servers, no
+       file. It plays here instead, and nothing below this needs to know. */
+    if (movie?.playSrc) {
+      setLivePlaying({ src: movie.playSrc, title: movie.playTitle || movie.title });
+      return;
+    }
+
     saveRecentlyWatched(movie);
     // Keep any intent flags the sheet sent (today: preferEpisode, set by
     // "Watch Latest Episode"). Rebuilding this object from scratch used to drop
@@ -1396,6 +1415,14 @@ const WatchListPage = () => {
           </main>
         </>
       )}
+
+      {/* ── Live channel — plays over the page, like the detail surfaces ── */}
+      <LiveViewer
+        open={!!livePlaying}
+        title={livePlaying?.title || ""}
+        src={livePlaying?.src || ""}
+        onClose={() => setLivePlaying(null)}
+      />
 
       {/* ── Mobile Movie Detail Sheet ── */}
       {isMobile && (
