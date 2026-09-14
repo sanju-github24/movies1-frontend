@@ -280,22 +280,27 @@ export default function TrackDetailPage() {
       .catch(() => {});
   }, [trackData]);
 
-  // ── Fetch lyrics — only when the panel is open and there are any ──
+  // ── Fetch lyrics ──────────────────────────────────────────────────
+  // Asked for on every track rather than when the panel is opened: the answer
+  // is what decides whether there is a panel to show at all. The song's own
+  // has_lyrics flag would be the cheap way to know, but JioSaavn sets it per
+  // request — from our server it is "false" for everything, including tracks
+  // whose words the lyrics endpoint returns in full — so it cannot be trusted
+  // to hide anything.
   useEffect(() => {
-    if (!lyricsOpen || lyrics || lyricsLoading) return;
-    if (!trackData?.metadata?.has_lyrics) return;
+    if (!trackData || lyrics || lyricsLoading) return;
     const songId = id.replace(/^saavn__/, '');
     setLyricsLoading(true);
     fetchLyrics(songId)
+      // A failure is indistinguishable from a song with no words, and neither
+      // is worth interrupting playback over: the panel simply does not appear.
+      .catch(() => ({ lines: [], copyright: '' }))
       .then(d => {
         setLyrics(d);
         player?.updateTrackCache(id, { lyrics: d });
       })
-      // A track whose words fail to load shows the panel's empty state; it is
-      // not worth interrupting playback over.
-      .catch(() => setLyrics({ lines: [], copyright: '' }))
       .finally(() => setLyricsLoading(false));
-  }, [lyricsOpen, lyrics, lyricsLoading, trackData?.metadata?.has_lyrics, id]);
+  }, [trackData, lyrics, lyricsLoading, id]);
 
   // ── Fetch recommendations — write atomically to global cache ──
   useEffect(() => {
@@ -520,9 +525,14 @@ export default function TrackDetailPage() {
   // JioSaavn ships the words as one block of text with no timing information,
   // so these sit beside the song rather than following it — there is nothing
   // to sync a highlight to. Blank entries in the text are stanza breaks.
+  //
+  // Nothing renders until the words are actually in hand: roughly half the
+  // catalogue has none, and which half cannot be known in advance (see the
+  // fetch above), so a header that might turn out to have nothing under it
+  // would be the wrong thing to show while waiting.
   const LyricsPanel = () => {
-    if (!trackData?.metadata?.has_lyrics) return null;
     const lines = lyrics?.lines || [];
+    if (lines.length === 0) return null;
 
     return (
       <div style={{ marginTop: 28, borderRadius: 16, background: `rgba(${baseRgb},0.18)`, border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
@@ -536,37 +546,22 @@ export default function TrackDetailPage() {
           </div>
           <span style={{ fontSize:11, fontWeight:900, letterSpacing:'0.05em', textTransform:'uppercase', color:'rgba(255,255,255,0.85)' }}>Lyrics</span>
           <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }} />
-          {lyricsLoading && <Loader2 size={12} style={{ color:`rgb(${lightRgb})`, animation:'spin 0.8s linear infinite' }} />}
           {lyricsOpen ? <ChevronUp size={14} style={{ color:'rgba(255,255,255,0.4)' }} /> : <ChevronDown size={14} style={{ color:'rgba(255,255,255,0.4)' }} />}
         </button>
 
         {lyricsOpen && (
           <div style={{ padding:'0 18px 18px' }}>
-            {lyricsLoading && lines.length === 0 ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} style={{ height:11, borderRadius:3, background:'rgba(255,255,255,0.06)', width:`${[72,58,80,64,50,70][i]}%` }} />
-                ))}
-              </div>
-            ) : lines.length === 0 ? (
-              <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.3)', margin:0 }}>
-                The words for this one could not be loaded.
-              </p>
-            ) : (
-              <>
-                {/* Capped so the words never push the rest of the page out of
-                    reach; the block scrolls on its own once past that. */}
-                <div className="lyrics-scroll" style={{ maxHeight:340, overflowY:'auto', paddingRight:6 }}>
-                  {lines.map((line, i) => (
-                    line
-                      ? <p key={i} style={{ fontSize:14, lineHeight:1.75, fontWeight:500, color:'rgba(255,255,255,0.78)', margin:0 }}>{line}</p>
-                      : <div key={i} style={{ height:14 }} />
-                  ))}
-                </div>
-                {lyrics?.copyright && (
-                  <p style={{ fontSize:10, color:'rgba(255,255,255,0.22)', margin:'14px 0 0', letterSpacing:'0.04em' }}>{lyrics.copyright}</p>
-                )}
-              </>
+            {/* Capped so the words never push the rest of the page out of
+                reach; the block scrolls on its own once past that. */}
+            <div className="lyrics-scroll" style={{ maxHeight:340, overflowY:'auto', paddingRight:6 }}>
+              {lines.map((line, i) => (
+                line
+                  ? <p key={i} style={{ fontSize:14, lineHeight:1.75, fontWeight:500, color:'rgba(255,255,255,0.78)', margin:0 }}>{line}</p>
+                  : <div key={i} style={{ height:14 }} />
+              ))}
+            </div>
+            {lyrics?.copyright && (
+              <p style={{ fontSize:10, color:'rgba(255,255,255,0.22)', margin:'14px 0 0', letterSpacing:'0.04em' }}>{lyrics.copyright}</p>
             )}
           </div>
         )}

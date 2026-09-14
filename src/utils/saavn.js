@@ -96,10 +96,6 @@ export function toTrack(song) {
       added_on:    song?.release_date || song?.year || 'N/A',
       page_url:    song?.perma_url || (song?.id ? `https://www.jiosaavn.com/song/${song.id}` : ''),
       language:    song?.language || '',
-      // Whether there are words to fetch at all — roughly half the catalogue
-      // has none, and the lyrics panel hides itself rather than fetching to
-      // find out.
-      has_lyrics:  song?.has_lyrics === 'true',
     },
     source: 'saavn',
     error: song?.media_url ? null : 'JioSaavn returned no playable url for this song.',
@@ -163,11 +159,15 @@ export async function fetchTrack(songId, { lyrics = false } = {}) {
 }
 
 /**
- * A track's lyrics, as lines.
+ * A track's lyrics, as lines. Empty `lines` means this song has none.
  *
- * JioSaavn returns one block of text with <br> between lines and no timing
- * data of any kind, so these can be shown beside a playing song but not
- * followed along with it — there is nothing to sync a highlight to.
+ * Always ask; never decide from the song's own `has_lyrics` flag. JioSaavn
+ * sets that per request — from our server's IP it comes back "false" for every
+ * track, including ones the lyrics endpoint then returns fifty lines for — so
+ * gating on it shows lyrics in development and never in production.
+ *
+ * The words carry no timing data of any kind, so they can be shown beside a
+ * playing song but not followed along with it: there is nothing to sync to.
  */
 export async function fetchLyrics(songId) {
   const data = await getJson(`/lyrics/?query=${encodeURIComponent(songId)}`);
