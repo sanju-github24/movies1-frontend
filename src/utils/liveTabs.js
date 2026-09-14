@@ -34,8 +34,10 @@ export function parseTabUrl(url) {
 
 /* Where a viewer goes when they pick a fixture: the player, on that tab, with
    that item already chosen. */
-export function tabItemUrl(base, key, id) {
-  return `${base}?tab=${encodeURIComponent(key)}${id ? `&id=${encodeURIComponent(id)}` : ""}`;
+export function tabItemUrl(base, key, id, solo = false) {
+  return `${base}?tab=${encodeURIComponent(key)}`
+    + (id ? `&id=${encodeURIComponent(id)}` : "")
+    + (solo ? "&solo=1" : "");
 }
 
 /* Live and upcoming for one tab.

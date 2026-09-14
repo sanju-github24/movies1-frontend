@@ -78,16 +78,22 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
  * it break in two places. So the player runs in a frame, addressed by the tab
  * link, and the viewer stays on AnchorHD. */
 const Viewer = ({ open, title, src, onClose }) => {
-  /* Escape closes it, and the page behind must not scroll while it is up. */
+  /* Escape closes it, the page behind must not scroll while it is up, and the
+     player closes it too: in solo mode anything that would have dropped the
+     viewer back onto the player's own launcher sends this instead, so the end
+     of a match leaves AnchorHD rather than someone else's channel list. */
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onMsg = (e) => { if (e.data && e.data.type === "anchor:close") onClose(); };
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
+    window.addEventListener("message", onMsg);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("message", onMsg);
     };
   }, [open, onClose]);
 
@@ -95,7 +101,7 @@ const Viewer = ({ open, title, src, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex flex-col"
+      className="fixed inset-0 z-[2147483000] bg-black/95 backdrop-blur-sm flex flex-col"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -205,7 +211,10 @@ const Section = ({ row }) => {
             <Card key={`l-${m.id}`} item={m} live
                   href={tabItemUrl(parsed.base, parsed.key, m.id)}
                   fallbackPoster={row.thumbnail}
-                  onPlay={(item, src) => setPlaying({ title: item.name, src })} />
+                  onPlay={(item) => setPlaying({
+                    title: item.name,
+                    src: tabItemUrl(parsed.base, parsed.key, item.id, true),
+                  })} />
           ))}
           {upcoming.map((m, i) => (
             <Card key={`u-${m.id || i}`} item={m} live={false}
