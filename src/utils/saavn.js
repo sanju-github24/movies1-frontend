@@ -95,8 +95,11 @@ export function toTrack(song) {
       duration:    clock(song?.duration),
       added_on:    song?.release_date || song?.year || 'N/A',
       page_url:    song?.perma_url || (song?.id ? `https://www.jiosaavn.com/song/${song.id}` : ''),
-      lyrics:      song?.lyrics || null,
       language:    song?.language || '',
+      // Whether there are words to fetch at all — roughly half the catalogue
+      // has none, and the lyrics panel hides itself rather than fetching to
+      // find out.
+      has_lyrics:  song?.has_lyrics === 'true',
     },
     source: 'saavn',
     error: song?.media_url ? null : 'JioSaavn returned no playable url for this song.',
@@ -157,6 +160,22 @@ export async function fetchListing(query) {
 export async function fetchTrack(songId, { lyrics = false } = {}) {
   const song = await getJson(`/song/get?song_id=${encodeURIComponent(songId)}&lyrics=${lyrics}`);
   return toTrack(song);
+}
+
+/**
+ * A track's lyrics, as lines.
+ *
+ * JioSaavn returns one block of text with <br> between lines and no timing
+ * data of any kind, so these can be shown beside a playing song but not
+ * followed along with it — there is nothing to sync a highlight to.
+ */
+export async function fetchLyrics(songId) {
+  const data = await getJson(`/lyrics/?query=${encodeURIComponent(songId)}`);
+  if (!data.status || !data.lyrics) return { lines: [], copyright: '' };
+  return {
+    lines: data.lyrics.split(/<br\s*\/?>/i).map(l => l.trim()),
+    copyright: data.copyright || '',
+  };
 }
 
 /**

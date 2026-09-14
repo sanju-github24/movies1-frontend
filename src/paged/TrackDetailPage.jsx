@@ -4,10 +4,14 @@ import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   Play, Pause, Download, ArrowLeft,
   Volume2, VolumeX, Loader2, RotateCcw, RotateCw, User,
-  Minus, MoreHorizontal, X, ChevronDown
+  Minus, MoreHorizontal, X, ChevronDown, ChevronUp, Mic2
 } from 'lucide-react';
 import { musicApi } from '../utils/api';
-import { fetchTrack, playableUrl } from '../utils/saavn';
+import { fetchTrack, playableUrl, fetchLyrics } from '../utils/saavn';
+
+// Whether the lyrics panel is open is a preference, not per-track state — it
+// should hold as you move from song to song.
+const LYRICS_PREF = 'music_lyrics_panel';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from string
@@ -127,6 +131,22 @@ export default function TrackDetailPage() {
   const [ytPreview,   setYtPreview]   = useState(cachedEntry.ytPreview || null);
   const [ytReady,     setYtReady]     = useState(false);
 
+  // Lyrics, cached per track like everything else here so reopening a song
+  // does not re-fetch them. Whether the panel is open is a preference that
+  // outlives the track, so it lives in localStorage instead.
+  const [lyrics,        setLyrics]        = useState(cachedEntry.lyrics || null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [lyricsOpen,    setLyricsOpen]    = useState(() => {
+    try { return localStorage.getItem(LYRICS_PREF) !== 'closed'; } catch { return true; }
+  });
+
+  const toggleLyrics = () => setLyricsOpen(open => {
+    // Private windows and blocked site data both throw here; the toggle still
+    // works for this visit, it just will not be remembered.
+    try { localStorage.setItem(LYRICS_PREF, open ? 'closed' : 'open'); } catch { /* not remembered */ }
+    return !open;
+  });
+
   const dlMenuRef   = useRef(null);
   const dotsMenuRef = useRef(null);
 
@@ -150,6 +170,8 @@ export default function TrackDetailPage() {
     const entry = player?.trackCache?.[id] || {};
     setTrackData(entry.trackData || null);
     setYtPreview(entry.ytPreview || null);
+    setLyrics(entry.lyrics || null);
+    setLyricsLoading(false);
     setError(null);
     setYtReady(false);
     
@@ -257,6 +279,23 @@ export default function TrackDetailPage() {
       })
       .catch(() => {});
   }, [trackData]);
+
+  // ── Fetch lyrics — only when the panel is open and there are any ──
+  useEffect(() => {
+    if (!lyricsOpen || lyrics || lyricsLoading) return;
+    if (!trackData?.metadata?.has_lyrics) return;
+    const songId = id.replace(/^saavn__/, '');
+    setLyricsLoading(true);
+    fetchLyrics(songId)
+      .then(d => {
+        setLyrics(d);
+        player?.updateTrackCache(id, { lyrics: d });
+      })
+      // A track whose words fail to load shows the panel's empty state; it is
+      // not worth interrupting playback over.
+      .catch(() => setLyrics({ lines: [], copyright: '' }))
+      .finally(() => setLyricsLoading(false));
+  }, [lyricsOpen, lyrics, lyricsLoading, trackData?.metadata?.has_lyrics, id]);
 
   // ── Fetch recommendations — write atomically to global cache ──
   useEffect(() => {
@@ -477,6 +516,64 @@ export default function TrackDetailPage() {
     </div>
   );
 
+  // ── Lyrics ────────────────────────────────────────────────────────
+  // JioSaavn ships the words as one block of text with no timing information,
+  // so these sit beside the song rather than following it — there is nothing
+  // to sync a highlight to. Blank entries in the text are stanza breaks.
+  const LyricsPanel = () => {
+    if (!trackData?.metadata?.has_lyrics) return null;
+    const lines = lyrics?.lines || [];
+
+    return (
+      <div style={{ marginTop: 28, borderRadius: 16, background: `rgba(${baseRgb},0.18)`, border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+        <button
+          onClick={toggleLyrics}
+          aria-expanded={lyricsOpen}
+          style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'14px 18px', background:'none', border:'none', cursor:'pointer', textAlign:'left' }}
+        >
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:6, background:`rgba(${lightRgb},0.15)`, flexShrink:0 }}>
+            <Mic2 size={11} style={{ color:`rgb(${lightRgb})` }} />
+          </div>
+          <span style={{ fontSize:11, fontWeight:900, letterSpacing:'0.05em', textTransform:'uppercase', color:'rgba(255,255,255,0.85)' }}>Lyrics</span>
+          <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }} />
+          {lyricsLoading && <Loader2 size={12} style={{ color:`rgb(${lightRgb})`, animation:'spin 0.8s linear infinite' }} />}
+          {lyricsOpen ? <ChevronUp size={14} style={{ color:'rgba(255,255,255,0.4)' }} /> : <ChevronDown size={14} style={{ color:'rgba(255,255,255,0.4)' }} />}
+        </button>
+
+        {lyricsOpen && (
+          <div style={{ padding:'0 18px 18px' }}>
+            {lyricsLoading && lines.length === 0 ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} style={{ height:11, borderRadius:3, background:'rgba(255,255,255,0.06)', width:`${[72,58,80,64,50,70][i]}%` }} />
+                ))}
+              </div>
+            ) : lines.length === 0 ? (
+              <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.3)', margin:0 }}>
+                The words for this one could not be loaded.
+              </p>
+            ) : (
+              <>
+                {/* Capped so the words never push the rest of the page out of
+                    reach; the block scrolls on its own once past that. */}
+                <div className="lyrics-scroll" style={{ maxHeight:340, overflowY:'auto', paddingRight:6 }}>
+                  {lines.map((line, i) => (
+                    line
+                      ? <p key={i} style={{ fontSize:14, lineHeight:1.75, fontWeight:500, color:'rgba(255,255,255,0.78)', margin:0 }}>{line}</p>
+                      : <div key={i} style={{ height:14 }} />
+                  ))}
+                </div>
+                {lyrics?.copyright && (
+                  <p style={{ fontSize:10, color:'rgba(255,255,255,0.22)', margin:'14px 0 0', letterSpacing:'0.04em' }}>{lyrics.copyright}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const Recommendations = () => {
     if (singersList.length === 0) return null;
 
@@ -553,6 +650,9 @@ export default function TrackDetailPage() {
         .rec-scroll::-webkit-scrollbar { height:4px; }
         .rec-scroll::-webkit-scrollbar-track { background:rgba(255,255,255,0.04); border-radius:2px; }
         .rec-scroll::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:2px; }
+        .lyrics-scroll::-webkit-scrollbar { width:4px; }
+        .lyrics-scroll::-webkit-scrollbar-track { background:rgba(255,255,255,0.04); border-radius:2px; }
+        .lyrics-scroll::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:2px; }
 
         /* Volume slider — filled portion tracks accent color exactly */
         .vol-track {
@@ -728,6 +828,7 @@ export default function TrackDetailPage() {
                   ) : null;
                 })()}
 
+                <LyricsPanel />
                 <Recommendations />
               </div>
             )}
@@ -890,6 +991,7 @@ export default function TrackDetailPage() {
                   ) : null;
                 })()}
 
+                <LyricsPanel />
                 <Recommendations />
               </div>
             )}
