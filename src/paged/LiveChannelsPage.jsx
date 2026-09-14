@@ -282,9 +282,19 @@ async function resolveBundle(parsed, logoMap) {
 }
 
 // ─── Global CSS ───────────────────────────────────────────────────────────────
+/* Scoped to this page, not the document.
+ *
+ * The reset below used to be written as a bare `*`, which reaches everything
+ * on screen — including the nav rail, which is rendered outside this page and
+ * positioned fixed. Zeroing its padding and margin left the rail collapsed and
+ * the page appearing to run over it, but only while this route was open, which
+ * made it look like a layout bug here rather than a stylesheet reaching out.
+ *
+ * Everything is prefixed with .lc-page so it stops at this page's own subtree.
+ * The font import stays at the top: @import is only valid before other rules. */
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  .lc-page, .lc-page *, .lc-page *::before, .lc-page *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   @keyframes spin       { to { transform: rotate(360deg) } }
   @keyframes pulse-dot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
@@ -292,50 +302,50 @@ const GLOBAL_CSS = `
   @keyframes shimmer    { 0%{background-position:-600px 0} 100%{background-position:600px 0} }
   @keyframes slide-down { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 
-  ::-webkit-scrollbar        { width:4px;height:4px }
-  ::-webkit-scrollbar-track  { background:transparent }
-  ::-webkit-scrollbar-thumb  { background:rgba(255,255,255,0.1);border-radius:4px }
+  .lc-page ::-webkit-scrollbar        { width:4px;height:4px }
+  .lc-page ::-webkit-scrollbar-track  { background:transparent }
+  .lc-page ::-webkit-scrollbar-thumb  { background:rgba(255,255,255,0.1);border-radius:4px }
 
-  .ch-card {
+  .lc-page .ch-card {
     transition: transform 0.18s cubic-bezier(.34,1.56,.64,1),
                 box-shadow 0.18s ease,
                 border-color 0.18s ease,
                 background 0.18s ease !important;
     cursor: pointer;
   }
-  .ch-card:hover:not(.active) {
+  .lc-page .ch-card:hover:not(.active) {
     transform: translateY(-3px) scale(1.02);
     box-shadow: 0 12px 32px rgba(0,0,0,0.5) !important;
     border-color: rgba(255,255,255,0.14) !important;
     background: rgba(255,255,255,0.07) !important;
   }
-  .ch-card:active { transform: scale(0.97) !important; }
+  .lc-page .ch-card:active { transform: scale(0.97) !important; }
 
-  .cat-pill { transition: all 0.15s ease; cursor: pointer; }
-  .cat-pill:hover { filter: brightness(1.15); transform: translateY(-1px); }
-  .cat-pill:active { transform: scale(0.96); }
+  .lc-page .cat-pill { transition: all 0.15s ease; cursor: pointer; }
+  .lc-page .cat-pill:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  .lc-page .cat-pill:active { transform: scale(0.96); }
 
-  .strip-ch { transition: background 0.13s, border-color 0.13s; cursor: pointer; }
-  .strip-ch:hover:not(.active) { background: rgba(255,255,255,0.08) !important; }
+  .lc-page .strip-ch { transition: background 0.13s, border-color 0.13s; cursor: pointer; }
+  .lc-page .strip-ch:hover:not(.active) { background: rgba(255,255,255,0.08) !important; }
 
-  .watch-btn {
+  .lc-page .watch-btn {
     transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), filter 0.15s;
     cursor: pointer;
   }
-  .watch-btn:hover { transform: scale(1.05); filter: brightness(1.12); }
-  .watch-btn:active { transform: scale(0.97); }
+  .lc-page .watch-btn:hover { transform: scale(1.05); filter: brightness(1.12); }
+  .lc-page .watch-btn:active { transform: scale(0.97); }
 
-  .collapse-btn { transition: all 0.15s; cursor: pointer; }
-  .collapse-btn:hover { background: rgba(255,255,255,0.1) !important; color: #f4f4f6 !important; }
+  .lc-page .collapse-btn { transition: all 0.15s; cursor: pointer; }
+  .lc-page .collapse-btn:hover { background: rgba(255,255,255,0.1) !important; color: #f4f4f6 !important; }
 
-  .nav-input:focus {
+  .lc-page .nav-input:focus {
     outline: none;
     border-color: rgba(240,62,62,0.55) !important;
     background: rgba(255,255,255,0.09) !important;
     box-shadow: 0 0 0 3px rgba(240,62,62,0.08);
   }
 
-  .shimmer-block {
+  .lc-page .shimmer-block {
     background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
     background-size: 600px 100%;
     animation: shimmer 1.4s ease infinite;
@@ -467,7 +477,7 @@ const LiveChannelsPage = () => {
 
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ minHeight: "100dvh", background: tokens.bg.base, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div className="lc-page" style={{ minHeight: "100dvh", background: tokens.bg.base, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, system-ui, sans-serif" }}>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
         <div style={{ position: "relative", width: 56, height: 56 }}>
@@ -490,7 +500,7 @@ const LiveChannelsPage = () => {
   );
 
   return (
-    <div style={{ minHeight: "100dvh", background: tokens.bg.base, color: tokens.text.primary, fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div className="lc-page" style={{ minHeight: "100dvh", background: tokens.bg.base, color: tokens.text.primary, fontFamily: "Inter, system-ui, sans-serif" }}>
       <style>{GLOBAL_CSS}</style>
 
       {/* ══ NAVBAR ══════════════════════════════════════════════════════════════ */}
