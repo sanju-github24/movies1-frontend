@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Radio, Clock3, ExternalLink, AlertCircle } from "lucide-react";
+import { Radio, Clock3, Play, X, AlertCircle } from "lucide-react";
 import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
 
@@ -10,22 +10,25 @@ import { LANDSCAPE_GRID } from "../utils/posterGrid";
  * and what is next. Nothing is stored about the fixtures themselves — they
  * change hourly, and a copy would be wrong by the time anyone looked. */
 
-const Card = ({ item, href, live, fallbackPoster }) => {
+const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
   const poster = posterFor(item, fallbackPoster);
   const when = startLabel(item);
 
   /* Upcoming rows have no URL because they are not signed yet. Rendering them
-     as links would promise something that can only fail, so they are plain. */
-  const Tag = href ? "a" : "div";
+     as playable would promise something that can only fail, so they are plain.
+
+     A live one is a button rather than a link: it plays here, in the page the
+     viewer is already on, instead of handing them off to another site. */
+  const Tag = href ? "button" : "div";
   const linkProps = href
-    ? { href, target: "_blank", rel: "noopener noreferrer" }
+    ? { type: "button", onClick: () => onPlay(item, href) }
     : {};
 
   return (
     <Tag
       {...linkProps}
-      className={`group relative block overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06]
-                  ${href ? "hover:ring-white/20 transition-shadow" : "cursor-default"}`}
+      className={`group relative block w-full text-left overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06]
+                  ${href ? "hover:ring-white/20 transition-shadow cursor-pointer" : "cursor-default"}`}
     >
       <div className="relative aspect-video bg-black/40">
         {poster ? (
@@ -50,7 +53,7 @@ const Card = ({ item, href, live, fallbackPoster }) => {
 
         {href && (
           <span className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex">
-            <ExternalLink className="w-6 h-6 text-white" aria-hidden="true" />
+            <Play className="w-7 h-7 text-white fill-white" aria-hidden="true" />
           </span>
         )}
       </div>
@@ -65,9 +68,72 @@ const Card = ({ item, href, live, fallbackPoster }) => {
   );
 };
 
+/* Plays without leaving the site.
+ *
+ * The stream itself is the player's problem, not this page's: these CDNs want
+ * headers a browser will not set, a token that rotates hourly, and for two of
+ * them an Indian address — all of which the player and its proxy already
+ * handle. Reimplementing that here would mean maintaining it twice and having
+ * it break in two places. So the player runs in a frame, addressed by the tab
+ * link, and the viewer stays on AnchorHD. */
+const Viewer = ({ open, title, src, onClose }) => {
+  /* Escape closes it, and the page behind must not scroll while it is up. */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 shrink-0">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5
+                         text-[10px] font-black uppercase tracking-widest text-white">
+          <Radio className="w-3 h-3" aria-hidden="true" /> Live
+        </span>
+        <p className="text-sm font-bold text-white truncate">{title}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close player"
+          className="ml-auto shrink-0 rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <X className="w-5 h-5" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-4 sm:pb-6">
+        <iframe
+          key={src}
+          src={src}
+          title={title}
+          className="w-full h-full rounded-xl bg-black ring-1 ring-white/10"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  );
+};
+
 const Section = ({ row }) => {
   const parsed = parseTabUrl(row.bundle_url);
   const [state, setState] = useState({ loading: true, live: [], upcoming: [], error: null });
+  const [playing, setPlaying] = useState(null);
 
   useEffect(() => {
     if (!parsed) return;
@@ -101,14 +167,16 @@ const Section = ({ row }) => {
             {live.length} live{upcoming.length ? ` · ${upcoming.length} upcoming` : ""}
           </span>
         )}
-        <a
-          href={tabItemUrl(parsed.base, parsed.key)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => setPlaying({
+            title: row.name || parsed.def.label,
+            src: tabItemUrl(parsed.base, parsed.key),
+          })}
           className="ml-auto text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white"
         >
-          Open tab
-        </a>
+          Browse all
+        </button>
       </div>
 
       {loading && (
@@ -135,7 +203,8 @@ const Section = ({ row }) => {
           {live.map((m) => (
             <Card key={`l-${m.id}`} item={m} live
                   href={tabItemUrl(parsed.base, parsed.key, m.id)}
-                  fallbackPoster={row.thumbnail} />
+                  fallbackPoster={row.thumbnail}
+                  onPlay={(item, src) => setPlaying({ title: item.name, src })} />
           ))}
           {upcoming.map((m, i) => (
             <Card key={`u-${m.id || i}`} item={m} live={false}
@@ -143,6 +212,13 @@ const Section = ({ row }) => {
           ))}
         </div>
       )}
+
+      <Viewer
+        open={!!playing}
+        title={playing?.title || ""}
+        src={playing?.src || ""}
+        onClose={() => setPlaying(null)}
+      />
     </section>
   );
 };
