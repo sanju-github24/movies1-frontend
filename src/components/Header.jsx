@@ -14,7 +14,7 @@ import { seasonNo } from "../utils/titleEpisodes";
 import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
-import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA } from "../utils/liveTabs";
+import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import LiveViewer from "./LiveViewer";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
@@ -673,6 +673,16 @@ function HeroSpotlight({ movies = [], onOpen }) {
     return null;
   }, [clock]);
 
+  /* The 24/7 channel's artwork, read from the show's own row rather than
+     taken off Hotstar — the hero would otherwise carry a different cover than
+     the one that title shows everywhere else on the site. */
+  const [bbCard, setBbCard] = useState(BIGG_BOSS_KANNADA);
+  useEffect(() => {
+    let alive = true;
+    withBiggBossArt().then((c) => { if (alive) setBbCard(c); });
+    return () => { alive = false; };
+  }, []);
+
   /* The telecast's own artwork, so the hero cannot show something different
      from the rest of the site for the same title. */
   useEffect(() => {
@@ -713,9 +723,9 @@ function HeroSpotlight({ movies = [], onOpen }) {
        after a live match, which is time-bound and therefore the more urgent
        thing to headline, and ahead of the uploads. */
     live.push({
-      ...BIGG_BOSS_KANNADA,
+      ...bbCard,
       liveKind: LIVE_SHOW,
-      id: `live-stream-${BIGG_BOSS_KANNADA.id}`,
+      id: `live-stream-${bbCard.id}`,
     });
 
     for (const m of liveMatches.slice(0, 2)) {
@@ -734,7 +744,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
     }
 
     return [...live, ...movies].slice(0, HERO_COUNT + live.length);
-  }, [liveMatches, onAirShow, showRow, movies]);
+  }, [liveMatches, onAirShow, showRow, movies, bbCard]);
 
   /* One query for all five, not one per slide.
 

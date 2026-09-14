@@ -87,7 +87,7 @@ import { AppContext } from "../context/AppContext";
 import SearchPage from "./SearchPage";
 import DesktopDetailOverlay from "./DesktopDetailOverlay";
 import MobileDetailSheet from "../components/MobileDetailSheet";
-import { BIGG_BOSS_KANNADA } from "../utils/liveTabs";
+import { withBiggBossArt } from "../utils/liveTabs";
 import LiveViewer from "../components/LiveViewer";
 
 /* ===== Helper: Save Recently Watched ===== */
@@ -784,7 +784,13 @@ const WatchListPage = () => {
         const localExtra = localOthers.sort(() => 0.5 - Math.random()).slice(0, 2);
         /* The 24/7 channel leads the hero: it is the one thing here that is
            live right now, and unlike a film it cannot be watched later. */
-        setHeroMovies([BIGG_BOSS_KANNADA, ...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
+        setHeroMovies([...adminHero, ...localExtra, ...tmdbHero].slice(0, 7));
+
+        /* The channel leads the hero once its artwork is read: it is the one
+           thing here that is live now, and unlike a film cannot wait. */
+        withBiggBossArt().then((card) =>
+          setHeroMovies((prev) => [card, ...prev.filter((m) => !m.isLiveStream)].slice(0, 7))
+        );
 
         // Prepend MX Player's current spotlight (6 slides, with HLS trailers).
         (async () => {

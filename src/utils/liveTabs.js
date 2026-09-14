@@ -1,3 +1,5 @@
+import { supabase } from "./supabaseClient";
+
 /* The player's tabs, as the site sees them.
  *
  * A bundle URL carries its streams inside it, so it stops working the moment
@@ -158,16 +160,21 @@ export function heroPlayUrl(item) {
    Shaped like a title, because to every hero on this site it is one: the same
    poster, cover and language fields a film would carry.
    ───────────────────────────────────────────────────────────────────────── */
-const BB_KANNADA_ART =
-  "https://img10.hotstar.com/image/upload/sources/r1/cms/prod/2305/1788708712305-h.jpg";
+/* The show already exists on the site, so its artwork is already decided.
+   Taking a picture off Hotstar instead would put a different cover on the
+   hero than the one the same show carries everywhere else. */
+export const BB_KANNADA_SLUG = "bigg-boss-kannada-13";
 
 export const BIGG_BOSS_KANNADA = {
   id: "bigg-boss-kannada-live",
-  slug: "bigg-boss-kannada-live",
+  slug: BB_KANNADA_SLUG,
   title: "Bigg Boss Kannada 24/7",
-  poster: BB_KANNADA_ART,
-  cover_poster: BB_KANNADA_ART,
-  title_logo: null,
+  /* What the row held when this was written, so the hero paints correctly on
+     the first frame rather than flashing an empty card while the row loads.
+     withBiggBossArt replaces them with whatever the row says now. */
+  poster: "https://i.postimg.cc/YC7FmbJ7/1788701176331-v.avif",
+  cover_poster: "https://i.postimg.cc/MZjfPCw1/1788701208098-i.avif",
+  title_logo: "https://i.postimg.cc/sxFxC2zQ/eb-Xd7J1-removebg-preview.png",
   language: ["Kannada"],
   genres: ["Reality", "Live"],
   description: "The Kannada house, streaming live around the clock.",
@@ -178,3 +185,27 @@ export const BIGG_BOSS_KANNADA = {
   playSrc: tabItemUrl(PLAYER_BASE, "bb", "bb-kannada", true),
   playTitle: "Bigg Boss Kannada 24/7",
 };
+
+/* The same card, with the artwork the show currently carries.
+   Read rather than copied, so changing the cover in one place changes it in
+   the heroes too — otherwise the two drift and only one of them is noticed. */
+export async function withBiggBossArt() {
+  try {
+    const { data } = await supabase
+      .from("watch_html")
+      .select("poster,cover_poster,title_logo")
+      .eq("slug", BB_KANNADA_SLUG)
+      .limit(1);
+    const row = data && data[0];
+    if (!row) return BIGG_BOSS_KANNADA;
+    return {
+      ...BIGG_BOSS_KANNADA,
+      poster: row.poster || BIGG_BOSS_KANNADA.poster,
+      cover_poster: row.cover_poster || BIGG_BOSS_KANNADA.cover_poster,
+      title_logo: row.title_logo || BIGG_BOSS_KANNADA.title_logo,
+    };
+  } catch {
+    // The card is still worth showing with the artwork we shipped with.
+    return BIGG_BOSS_KANNADA;
+  }
+}
