@@ -47,12 +47,34 @@ function parseBundleUrl(bundleUrl) {
 // ── MODE within the single tab ────────────────────────────────────────────────
 const MODE_SINGLE = "single";
 const MODE_MERGE  = "merge";
+const MODE_TAB    = "tab";
+
+/* The player's tabs, each addressable by a URL of its own.
+ *
+ * A bundle URL has the streams encoded inside it, so it stops working when
+ * the tokens behind them rotate — hourly for these feeds. A tab URL names the
+ * tab and nothing else, and whoever opens it reads the feed fresh, so it is
+ * saved once and left alone. The live page lists what is on each of them,
+ * with what is coming up. */
+const PLAYER_TABS = [
+  { key: "sony", label: "SonyLiv",    hint: "Live cricket, football and more from SonyLiv" },
+  { key: "fc",   label: "FanCode",    hint: "FanCode's live fixtures" },
+  { key: "live", label: "Live TV",    hint: "The JioTV channel list" },
+  { key: "bb",   label: "Bigg Boss",  hint: "The 24/7 feeds, one per language" },
+];
 
 const LiveChannelsUpload = () => {
   const { userData } = useContext(AppContext);
   const [sessionEmail, setSessionEmail] = useState("");
 
   // ── Single paste form ──────────────────────────────────────────────────────
+  const [tabPlayerUrl, setTabPlayerUrl]   = useState("");
+  const [tabKey, setTabKey]               = useState("sony");
+  const [tabName, setTabName]             = useState("");
+  const [tabThumb, setTabThumb]           = useState("");
+  const [tabCat, setTabCat]               = useState("Sports");
+  const [tabActive, setTabActive]         = useState(true);
+
   const [bundleName, setBundleName]       = useState("");
   const [bundleUrl, setBundleUrl]         = useState("");
   const [thumbnail, setThumbnail]         = useState("");
@@ -163,6 +185,45 @@ const LiveChannelsUpload = () => {
 
     if (error) { toast.error(editingId ? "Update failed" : "Upload failed"); console.error(error); }
     else { toast.success(editingId ? "Bundle updated ✅" : "Bundle added ✅"); resetForm(); fetchBundles(); }
+    setLoading(false);
+  };
+
+  // ── SUBMIT tab link ───────────────────────────────────────────────────────
+  const handleTabSubmit = async (e) => {
+    e.preventDefault();
+    const base = tabPlayerUrl.trim().replace(/\?.*$/, "").replace(/\/$/, "");
+    if (!base) return toast.error("Player URL is required");
+
+    let finalUrl;
+    try {
+      // Built through URL so a typo fails here rather than on the live page.
+      const u = new URL(base);
+      u.searchParams.set("tab", tabKey);
+      finalUrl = u.toString();
+    } catch {
+      return toast.error("That player URL is not a valid address");
+    }
+
+    const def = PLAYER_TABS.find((t) => t.key === tabKey);
+    setLoading(true);
+    const { error } = await supabase.from("live_channel_bundles").insert([{
+      name: tabName.trim() || def.label,
+      bundle_url: finalUrl,
+      thumbnail: tabThumb.trim() || null,
+      category: tabCat.trim() || "Sports",
+      is_active: tabActive,
+      // Its fixtures are whatever the feed says at the time, so there is no
+      // count to store; zero here means "ask the feed", not "empty".
+      channel_count: 0,
+      uploaded_by: userData?.email || sessionEmail || "admin",
+    }]);
+
+    if (error) { toast.error("Save failed"); console.error(error); }
+    else {
+      toast.success(`${def.label} tab added ✅`);
+      setTabName(""); setTabThumb("");
+      fetchBundles();
+    }
     setLoading(false);
   };
 
@@ -286,7 +347,106 @@ const LiveChannelsUpload = () => {
           >
             🔀 All Channels (Merge URLs)
           </button>
+          <button
+            onClick={() => setMode(MODE_TAB)}
+            className={`flex-1 py-3 text-sm font-semibold transition ${mode === MODE_TAB ? "bg-blue-600 text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-800"}`}
+          >
+            🗂 Player Tab
+          </button>
         </div>
+
+        {/* ══════════════════════════════════════ MODE: TAB LINK */}
+        {mode === MODE_TAB && (
+          <form onSubmit={handleTabSubmit} className="space-y-4 bg-gray-900 p-6 rounded-xl border border-gray-800">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Saves a link to one of the player&apos;s tabs. Unlike a bundle it holds no
+              streams, so it keeps working when their tokens rotate — the live page reads
+              the feed each time and lists what is on now and what is next.
+            </p>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">Player URL *</label>
+              <input
+                value={tabPlayerUrl}
+                onChange={(e) => setTabPlayerUrl(e.target.value)}
+                placeholder="https://m3u8-player-ashen.vercel.app/"
+                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">Tab *</label>
+              <div className="grid grid-cols-2 gap-2">
+                {PLAYER_TABS.map((t) => (
+                  <button
+                    type="button"
+                    key={t.key}
+                    onClick={() => setTabKey(t.key)}
+                    className={`text-left px-3 py-2 rounded-lg border transition ${
+                      tabKey === t.key
+                        ? "bg-blue-600 border-blue-500 text-white"
+                        : "bg-black border-gray-700 text-gray-300 hover:border-gray-500"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{t.label}</span>
+                    <span className="block text-[11px] opacity-70">{t.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">Heading</label>
+                <input
+                  value={tabName}
+                  onChange={(e) => setTabName(e.target.value)}
+                  placeholder={PLAYER_TABS.find((t) => t.key === tabKey)?.label}
+                  className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">Category</label>
+                <input
+                  value={tabCat}
+                  onChange={(e) => setTabCat(e.target.value)}
+                  className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">
+                Fallback poster
+              </label>
+              <input
+                value={tabThumb}
+                onChange={(e) => setTabThumb(e.target.value)}
+                placeholder="Used only for fixtures the feed sends no artwork for"
+                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" checked={tabActive} onChange={(e) => setTabActive(e.target.checked)} />
+              Show on the live page
+            </label>
+
+            {tabPlayerUrl.trim() && (
+              <p className="text-[11px] text-gray-500 break-all">
+                Saves as: {tabPlayerUrl.trim().replace(/\?.*$/, "").replace(/\/$/, "")}?tab={tabKey}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-3 rounded-lg font-semibold transition"
+            >
+              {loading ? "Saving…" : "Add tab"}
+            </button>
+          </form>
+        )}
 
         {/* ══════════════════════════════════════ MODE: SINGLE PASTE */}
         {mode === MODE_SINGLE && (

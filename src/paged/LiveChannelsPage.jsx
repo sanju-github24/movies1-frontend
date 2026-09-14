@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { useNavigate } from "react-router-dom";
+import LiveTabsSection from "../components/LiveTabsSection";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const tokens = {
@@ -850,6 +851,12 @@ const LiveChannelsPage = () => {
             />
           );
         })}
+
+        {/* Fixtures behind the player's own tabs. Saved as tab URLs rather
+            than bundles, so they survive the hourly token rotation, and read
+            live on render — a stored copy would be stale by the time anyone
+            looked at it. */}
+        {!searchTerm && <LiveTabsSection rows={bundles} />}
       </div>
     </div>
   );
