@@ -15,6 +15,7 @@ import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
+import { codeForTeam } from "../utils/teamCrest";
 import LiveViewer from "./LiveViewer";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
@@ -113,13 +114,23 @@ function useLiveSports() {
       const { live: playable } = await fetchHeroFixtures({ upcomingPerSource: 0 });
       playable.slice(0, 2).forEach((m) => {
         const sides = splitTeams(m.name);
+        /* The feeds name their sides and nothing else, so the code every flag
+           lookup here needs has to come from the name. Without it the cover
+           drew an empty circle with "Australia" faded inside, having asked for
+           the flag of a country called AUSTRALIA rather than AUS.
+           A club resolves to nothing, which is right — it has no flag. */
+        const hc = codeForTeam(sides ? sides.home : m.name);
+        const ac = codeForTeam(sides ? sides.away : "");
         out.push({
           id: `fx-${m.tabKey}-${m.id}`,
           sport: "cricket", type: "fixture",
           badge: (m.category || m.source || "LIVE").toUpperCase(),
-          homeCode: sides ? sides.home : (m.name || ""),
-          awayCode: sides ? sides.away : "",
-          homeFlag: null, awayFlag: null,
+          // The code where there is one, the name where there is not: the
+          // cover prints this, and "Kashima Antlers" beats a blank circle.
+          homeCode: hc || (sides ? sides.home : (m.name || "")),
+          awayCode: ac || (sides ? sides.away : ""),
+          homeFlag: hc ? getFlag(hc) : null,
+          awayFlag: ac ? getFlag(ac) : null,
           homeScore: null, awayScore: null, homeOvers: "", striker: "",
           status: m.event || "",
           homeName: sides ? sides.home : (m.name || ""),

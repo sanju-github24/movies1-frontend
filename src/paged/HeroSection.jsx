@@ -6,6 +6,7 @@ import { encodeMatchHash } from "../utils/matchHash";
 import { teamCrest, flagImg } from "../utils/teamCrest";
 import { fetchTabFeed, fetchHeroFixtures, splitTeams, heroPlayUrl } from "../utils/liveTabs";
 import LiveViewer from "../components/LiveViewer";
+import { codeForTeam } from "../utils/teamCrest";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -1055,8 +1056,11 @@ export default function HeroSection(){
 
       const toSlide=(m,status)=>{
         const sides = splitTeams(m.name);
-        const home = buildSide({ code:"", name: sides ? sides.home : (m.name||"") });
-        const away = sides ? buildSide({ code:"", name: sides.away }) : null;
+        /* Same as the home hero: the code comes from the name, or the flag
+           has nothing to look up. */
+        const home = buildSide({ code: codeForTeam(sides ? sides.home : m.name),
+                                 name: sides ? sides.home : (m.name||"") });
+        const away = sides ? buildSide({ code: codeForTeam(sides.away), name: sides.away }) : null;
         return {
           id:`fx-${m.tabKey}-${m.id}`, sport:"cricket", status,
           // Plays in place — see playSrc below; no link to follow off the page.
