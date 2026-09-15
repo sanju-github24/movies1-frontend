@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ownUrl } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
 import { X, Play, Info, Volume2, VolumeX, Download, Share2, Star } from "lucide-react";
@@ -141,7 +142,12 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
     langLabel(movie.language),
   ].filter(Boolean);
 
-  return (
+  /* On the body, like the live viewer and for the same reason: z-index ranks
+     siblings inside a stacking context, and this opens from pages that make
+     their own — the hero's parallax uses a transform and will-change, either
+     of which is enough. Trapped in one, a z-index of two billion still lost to
+     the phone's bottom bar at z-100, which drew across the foot of the sheet. */
+  return createPortal((
     <div className="fixed inset-0 z-[2147483000] bg-gray-950 flex flex-col animate-in fade-in slide-in-from-bottom duration-500">
       {/* ── Top bar: title + close ── */}
       <div className="flex items-center justify-between gap-4 px-5 py-4 shrink-0 border-b border-white/5 bg-gray-950">
@@ -379,5 +385,5 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Radio, X, Loader2 } from "lucide-react";
 
 /* Plays without leaving the site.
@@ -63,7 +64,17 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
 
   if (!open || !currentSrc) return null;
 
-  return (
+  /* Rendered on the body, not where it is written.
+   *
+   * z-index only ranks siblings within a stacking context, and this sits
+   * inside pages that make their own — the hero's parallax alone uses both a
+   * transform and will-change, either of which is enough. A fixed child of one
+   * is trapped in it, so a z-index of two billion still lost to the phone's
+   * bottom bar at z-100, which drew over the player's controls.
+   *
+   * A portal puts it at the top level, where the number finally means what it
+   * says. Nothing else needs changing, and no page has to know. */
+  return createPortal((
     <div
       className="fixed inset-0 z-[2147483000] bg-black/95 backdrop-blur-sm flex flex-col"
       role="dialog"
@@ -106,7 +117,8 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-3 sm:pb-6">
+      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-3 sm:pb-6"
+           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
         <div className="relative w-full h-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10">
           <iframe
             key={currentSrc}
@@ -139,7 +151,7 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 };
 
 export default LiveViewer;
