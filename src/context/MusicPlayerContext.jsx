@@ -167,6 +167,28 @@ export function MusicPlayerProvider({ children }) {
   // only shown on /music pages; it becomes a live session once the user plays it.
   const [isRestoredSession, setIsRestoredSession] = useState(false);
 
+  /* The queue, and the order it is played in.
+   *
+   * Two arrays rather than one shuffled copy: the queue keeps the order the
+   * songs were given in, and `order` holds indexes into it. Shuffling rebuilds
+   * only the second, so turning shuffle off returns to the album's own order
+   * from wherever you are, rather than to a list that has been rearranged
+   * under you. */
+  const [queue, setQueue] = useState([]);
+  const [queueIndex, setQueueIndex] = useState(-1);
+  const [shuffle, setShuffle] = useState(false);
+  const [repeat, setRepeat] = useState("off");   // off | all | one
+
+  /* The audio element's listeners are wired once, so they cannot see state —
+     they read these. */
+  const queueRef  = useRef([]);
+  const orderRef  = useRef([]);
+  const posRef    = useRef(-1);
+  const repeatRef = useRef("off");
+  const shuffleRef = useRef(false);
+  const advanceRef = useRef(null);
+
+
   // Ref mirrors currentTrack so event handlers never have stale closures
   const currentTrackRef = useRef(null);
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
@@ -213,7 +235,12 @@ export function MusicPlayerProvider({ children }) {
     // Playing makes a restored session live again (mini player everywhere)
     const onPlay          = () => { setIsPlaying(true); setIsRestoredSession(false); };
     const onPause         = () => setIsPlaying(false);
-    const onEnded         = () => { setIsPlaying(false); setCurrentTime(0); };
+    /* Held in a ref because these listeners are wired once and would
+       otherwise keep calling the first version of next() forever. */
+    const onEnded         = () => {
+      setIsPlaying(false); setCurrentTime(0);
+      if (advanceRef.current) advanceRef.current();
+    };
     const onVolumeChange  = () => { setVolume(audio.volume); setIsMuted(audio.muted); };
 
     audio.addEventListener('timeupdate',    onTimeUpdate);
@@ -258,6 +285,159 @@ export function MusicPlayerProvider({ children }) {
     audio.pause();
     attachSource(trackInfo.streamUrl, tryPlay);
   }, [attachSource]);
+
+  /* Shuffled once per queue, not per song: a fresh order each time would let
+     the same track come round twice in a row and never reach others. Fisher
+     Yates, with the song playing now pinned to the front so shuffling does not
+     interrupt it. */
+  const buildOrder = useCallback((len, keepFirst, shuffled) => {
+    const idx = Array.from({ length: len }, (_, i) => i);
+    if (!shuffled) return idx;
+    for (let i = len - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    if (keepFirst >= 0) {
+      const at = idx.indexOf(keepFirst);
+      if (at > 0) { idx.splice(at, 1); idx.unshift(keepFirst); }
+    }
+    return idx;
+  }, []);
+
+  const playQueue = useCallback((tracks, startIndex = 0) => {
+    if (!Array.isArray(tracks) || !tracks.length) return;
+    const order = buildOrder(tracks.length, startIndex, shuffleRef.current);
+    const pos = Math.max(0, order.indexOf(startIndex));
+    setQueue(tracks); queueRef.current = tracks;
+    orderRef.current = order;
+    posRef.current = pos; setQueueIndex(order[pos]);
+    loadTrack(tracks[order[pos]]);
+  }, [buildOrder, loadTrack]);
+
+  /* step(+1) at the end of the queue stops unless repeat says otherwise;
+     step(-1) within the first few seconds of a song goes back, otherwise it
+     restarts the one playing — the behaviour every music app has. */
+  const step = useCallback((delta) => {
+    const tracks = queueRef.current, order = orderRef.current;
+    if (!tracks.length || !order.length) return;
+
+    if (delta > 0 && repeatRef.current === "one") {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+      return;
+    }
+
+    let pos = posRef.current + delta;
+    if (pos >= order.length) {
+      if (repeatRef.current !== "all") { audioRef.current.pause(); return; }
+      pos = 0;
+    }
+    if (pos < 0) {
+      if (repeatRef.current !== "all") { audioRef.current.currentTime = 0; return; }
+      pos = order.length - 1;
+    }
+    posRef.current = pos;
+    setQueueIndex(order[pos]);
+    loadTrack(tracks[order[pos]]);
+  }, [loadTrack]);
+
+  const next = useCallback(() => step(1), [step]);
+  const previous = useCallback(() => {
+    if (audioRef.current.currentTime > 4) { audioRef.current.currentTime = 0; return; }
+    step(-1);
+  }, [step]);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle((on) => {
+      const now = !on;
+      shuffleRef.current = now;
+      const tracks = queueRef.current;
+      if (tracks.length) {
+        const playing = orderRef.current[posRef.current];
+        orderRef.current = buildOrder(tracks.length, playing, now);
+        posRef.current = Math.max(0, orderRef.current.indexOf(playing));
+      }
+      return now;
+    });
+  }, [buildOrder]);
+
+  const cycleRepeat = useCallback(() => {
+    setRepeat((r) => {
+      const nextMode = r === "off" ? "all" : r === "all" ? "one" : "off";
+      repeatRef.current = nextMode;
+      return nextMode;
+    });
+  }, []);
+
+  useEffect(() => { advanceRef.current = next; }, [next]);
+
+  /* What the phone shows while the screen is off.
+   *
+   * Without this the lock screen falls back to the tab: our logo and whatever
+   * the page is called, which tells nobody what is playing. Given the metadata
+   * it shows the song, the artist and the cover art instead, the way a music
+   * app does — and its buttons drive the queue rather than only the audio
+   * element, so skip moves to the next song instead of doing nothing. */
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (!currentTrack) { navigator.mediaSession.metadata = null; return; }
+
+    const art = currentTrack.poster;
+    navigator.mediaSession.metadata = new window.MediaMetadata({
+      title: currentTrack.title || "Unknown track",
+      artist: currentTrack.artist || "",
+      album: currentTrack.album || "AnchorHD",
+      /* Several sizes because each platform picks its own, and one that has
+         to be scaled up looks like a thumbnail on a lock screen. They are the
+         same file — the CDN serves whatever it has — so this costs nothing. */
+      artwork: art ? [96, 128, 192, 256, 384, 512].map((px) => ({
+        src: art, sizes: `${px}x${px}`, type: "image/jpeg",
+      })) : [],
+    });
+  }, [currentTrack]);
+
+  /* The buttons on the lock screen and in the notification. Set once the
+     handlers exist; passing null to one removes it, which is how the platform
+     knows to grey it out rather than show a control that does nothing. */
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const audio = audioRef.current;
+    const set = (action, fn) => { try { ms.setActionHandler(action, fn); } catch { /* unsupported here */ } };
+
+    set("play",  () => audio.play().catch(() => {}));
+    set("pause", () => audio.pause());
+    set("nexttrack",     () => next());
+    set("previoustrack", () => previous());
+    set("seekbackward", (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d?.seekOffset || 10)); });
+    set("seekforward",  (d) => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d?.seekOffset || 10)); });
+    set("seekto", (d) => { if (d?.seekTime != null) audio.currentTime = d.seekTime; });
+    set("stop", () => { audio.pause(); audio.currentTime = 0; });
+
+    return () => {
+      ["play","pause","nexttrack","previoustrack","seekbackward","seekforward","seekto","stop"]
+        .forEach((a) => set(a, null));
+    };
+  }, [next, previous]);
+
+  /* Keeps the scrubber on the lock screen honest. Without it the bar sits at
+     zero and never moves, whatever the audio is doing. */
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+    if (!duration || !isFinite(duration)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: audioRef.current.playbackRate || 1,
+        position: Math.min(currentTime, duration),
+      });
+    } catch { /* some builds reject a position past duration mid-seek */ }
+  }, [currentTime, duration]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
 
   // ── Toggle play / pause ───────────────────────────────────────
   const togglePlay = useCallback(() => {
@@ -354,6 +534,13 @@ export function MusicPlayerProvider({ children }) {
     isMinimized, setIsMinimized,
     isRestoredSession,
     audioRef,
+
+    // ── Queue, shuffle and repeat ──
+    queue, queueIndex, shuffle, repeat,
+    playQueue, next, previous, toggleShuffle, cycleRepeat,
+    /* The song playing now, as an index into the queue, so a list can mark it
+       without comparing objects. -1 when what is playing did not come from
+       one — a single track opened on its own. */
     trackCache,
     updateTrackCache,
     addArtistRec,
