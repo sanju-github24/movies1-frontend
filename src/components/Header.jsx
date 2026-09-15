@@ -467,6 +467,29 @@ const HERO_MS = 6000;
    It bleeds past the page gutter deliberately — a card that stops short of the
    edge reads as a widget on the page, one that runs off it reads as something
    you can pull. */
+/* The short slug inside a release slug.
+ *
+ * movies.slug is the whole release name — title, year, languages, every
+ * quality and size — while watch_html.slug is just the title. That table
+ * holds the wide cover and the title logo, so a slide whose watchUrl had
+ * not been built yet looked its artwork up under the long name, found
+ * nothing, and fell back to the portrait poster blurred across the band.
+ *
+ * The year is where one becomes the other, and every release slug has one.
+ * Anything without a year is returned untouched and simply matches itself. */
+const shortSlug = (slug) => {
+const m = /^(.*?)-(?:19|20)\d{2}(?:-|$)/.exec(String(slug || ""));
+  return m ? m[1] : null;
+};
+
+const heroSlug = (m) => {
+const u = m?.watchUrl || "";
+const hit = u.match(/\/watch\/([^/?#]+)/);
+  if (hit) return decodeURIComponent(hit[1]);
+  if (m?.watch_slug) return m.watch_slug;
+  return shortSlug(m?.slug) || m?.slug || null;
+};
+
 function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
   const trackRef = useRef(null);
   const [active, setActive] = useState(0);
@@ -757,11 +780,6 @@ function HeroSpotlight({ movies = [], onOpen }) {
      the short one ("magudam"). Matching on movies.slug found nothing, so every
      slide fell back to the portrait poster and no title logo ever appeared.
      watchUrl carries the watch_html slug, so read it from there. */
-  const heroSlug = (m) => {
-    const u = m?.watchUrl || "";
-    const hit = u.match(/\/watch\/([^/?#]+)/);
-    return hit ? decodeURIComponent(hit[1]) : (m?.watch_slug || m?.slug || null);
-  };
 
 
   /* Year and certification for the five slides. Five small calls against an
@@ -793,7 +811,12 @@ function HeroSpotlight({ movies = [], onOpen }) {
   }, [slides, art, backendUrl]);
 
   useEffect(() => {
-    const slugs = [...new Set(slides.map(heroSlug).filter(Boolean))];
+    /* Both spellings: heroSlug prefers the short one, but a slide that does
+       carry a watchUrl already resolves under it, and asking for the raw slug
+       too costs nothing and covers rows stored under the long name. */
+    const slugs = [...new Set(
+      slides.flatMap((m) => [heroSlug(m), m?.slug]).filter(Boolean)
+    )];
     if (!slugs.length) return;
     let alive = true;
     (async () => {
@@ -967,7 +990,12 @@ function HeroSpotlight({ movies = [], onOpen }) {
              stretched across it crops to an unrecognisable detail. The deck
              on phones leads with the portrait poster instead. */
           const desktopSrc = a.cover_poster || a.poster || movie.poster || movie.poster_url;
-          const logo = a.title_logo || null;
+          /* The row's logo first, then whatever the slide brought — a
+             telecast and the live channel each carry their own, having been
+             read from watch_html directly rather than through this map. The
+             phone deck already looked in both places; this one did not, so a
+             slide with a logo of its own showed plain text on desktop. */
+          const logo = a.title_logo || movie.title_logo || null;
           const isLiveSlide    = !!movie.liveKind;
           const isCricketSlide = movie.liveKind === LIVE_CRICKET;
           /* The scoreboard cover exists because a board publishes no image for
