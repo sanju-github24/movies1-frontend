@@ -790,6 +790,19 @@ export default function TrackDetailPage() {
                         keep a spacer so the play button stays centered. */}
                     {hasDownloads ? <DownloadMenu /> : <div style={{ width:28, flexShrink:0 }} />}
                   </div>
+
+                  {/* Saving a song belongs with the controls for it, not in
+                      the other layout — which is where this went first, so the
+                      view most people use never showed it. */}
+                  <div style={{ marginTop:20, paddingTop:18, borderTop:'1px solid rgba(255,255,255,0.07)' }}>
+                    <AddToPlaylist track={{
+                      id,
+                      title: metadata.title || titleFallback,
+                      artist: metadata.singer || "",
+                      poster: metadata.cover_image || null,
+                    }} />
+                  </div>
+
                   {/* Desktop download list as fallback buttons */}
                   {trackData?.downloads && Object.keys(trackData.downloads).length > 0 && (
                     <div style={{ marginTop:22, paddingTop:18, borderTop:'1px solid rgba(255,255,255,0.07)' }}>
