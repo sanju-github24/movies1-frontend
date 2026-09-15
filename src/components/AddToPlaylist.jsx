@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ListPlus, Check, Plus, Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
 import { listPlaylists, createPlaylist, addTrack } from "../utils/playlists";
@@ -15,7 +16,30 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
   const [signedIn, setSignedIn] = useState(false);
   const [name, setName] = useState("");
   const [err, setErr] = useState(null);
+  const [at, setAt] = useState(null);      // where on screen to draw the menu
   const box = useRef(null);
+  const menu = useRef(null);
+
+  /* A card sits in a row that scrolls sideways, and a scrolling box clips what
+     grows out of it — which is why the menu appeared as a grey sliver above
+     the card with the list cut off. Drawn on the body instead and positioned
+     to the button, it is clipped by nothing.
+   
+     Measured from the button each time rather than remembered: the row it sits
+     in moves. */
+  const place = () => {
+    const b = box.current?.getBoundingClientRect();
+    if (!b) return;
+    const W = 256, GAP = 8, H = 300;
+    const below = window.innerHeight - b.bottom;
+    setAt({
+      // Above the button when there is no room beneath it.
+      top: below > H + GAP ? b.bottom + GAP : Math.max(GAP, b.top - H - GAP),
+      // Kept on screen at both edges, wherever the card has scrolled to.
+      left: Math.min(Math.max(GAP, b.right - W), window.innerWidth - W - GAP),
+      width: W,
+    });
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
@@ -24,14 +48,30 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
   // A click anywhere else closes it, as a menu should.
   useEffect(() => {
     if (!open) return;
-    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const away = (e) => {
+      if (box.current?.contains(e.target)) return;
+      if (menu.current?.contains(e.target)) return;   // it lives elsewhere in the DOM now
+      setOpen(false);
+    };
     const esc = (e) => { if (e.key === "Escape") setOpen(false); };
+    /* Fixed to the viewport, so it would otherwise sit still while the row
+       scrolls out from under it. Re-placed on both, and true on the scroll
+       listener so a scrolling row reports too, not just the page. */
+    const follow = () => place();
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
   }, [open]);
 
   const show = async () => {
+    place();
     setOpen(true); setErr(null);
     if (lists) return;
     try { setLists(await listPlaylists()); }
@@ -88,10 +128,10 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
           : <><ListPlus className="w-4 h-4" aria-hidden="true" /> Add to playlist</>}
       </button>
 
-      {open && (
-        <div role="menu"
-          className={`absolute z-50 w-64 rounded-xl bg-gray-900 ring-1 ring-white/10 shadow-2xl p-2
-                      ${compact ? "bottom-full mb-2 right-0" : "mt-2"}`}>
+      {open && at && createPortal((
+        <div role="menu" ref={menu}
+          style={{ position: "fixed", top: at.top, left: at.left, width: at.width }}
+          className="z-[2147483000] rounded-xl bg-gray-900 ring-1 ring-white/10 shadow-2xl p-2">
           {!signedIn && (
             <p className="text-xs text-gray-400 p-3">Sign in to save songs to a playlist.</p>
           )}
@@ -148,7 +188,7 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
 
           {err && <p className="text-[11px] text-amber-400 px-3 pb-2">{err}</p>}
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 };
