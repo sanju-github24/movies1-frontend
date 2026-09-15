@@ -269,7 +269,14 @@ export function MusicPlayerProvider({ children }) {
   }, []);
 
   // ── Load a new track and auto-play ────────────────────────────
-  const loadTrack = useCallback(async (trackInfo) => {
+  /* `minimized` decides whether anything is left on screen.
+   *
+   * This was written for the track page, which draws a full player of its own,
+   * so it always expanded. A song started from a card or a playlist plays on
+   * the music page, where nothing draws one — so the audio ran with no player
+   * visible anywhere and no way to pause it. Those paths ask for the mini
+   * player; the track page still asks for the full one. */
+  const loadTrack = useCallback(async (trackInfo, { minimized = false } = {}) => {
     const audio = audioRef.current;
 
     // Reset UI state immediately
@@ -277,7 +284,7 @@ export function MusicPlayerProvider({ children }) {
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
-    setIsMinimized(false);
+    setIsMinimized(minimized);
     setIsRestoredSession(false);
 
     // Auto-play once enough data is buffered
@@ -354,7 +361,7 @@ export function MusicPlayerProvider({ children }) {
     setQueue(tracks); queueRef.current = tracks;
     orderRef.current = order;
     posRef.current = pos; setQueueIndex(order[pos]);
-    loadTrack(tracks[order[pos]]);
+    loadTrack(tracks[order[pos]], { minimized: true });
   }, [buildOrder, loadTrack]);
 
   /* step(+1) at the end of the queue stops unless repeat says otherwise;
@@ -381,7 +388,7 @@ export function MusicPlayerProvider({ children }) {
     }
     posRef.current = pos;
     setQueueIndex(order[pos]);
-    loadTrack(tracks[order[pos]]);
+    loadTrack(tracks[order[pos]], { minimized: true });
   }, [loadTrack]);
 
   const next = useCallback(() => step(1), [step]);
