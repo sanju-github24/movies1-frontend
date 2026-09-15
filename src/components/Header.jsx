@@ -482,6 +482,28 @@ const m = /^(.*?)-(?:19|20)\d{2}(?:-|$)/.exec(String(slug || ""));
   return m ? m[1] : null;
 };
 
+/* The artwork row for a slide, whichever name it is filed under.
+ *
+ * heroSlug answers with one name, and picking one was the mistake: a slide
+ * whose watchUrl carries the full release name resolved to that and stopped,
+ * never trying the short one the row is actually stored under. Every spelling
+ * is tried here instead, and the first that exists wins — they cannot
+ * disagree, since only one of them is ever a row. */
+const pickArt = (art, m) => {
+  if (!art || !m) return {};
+  const u = m.watchUrl || "";
+  const fromUrl = (u.match(/\/watch\/([^/?#]+)/) || [])[1];
+  const names = [
+    fromUrl && decodeURIComponent(fromUrl),
+    m.watch_slug,
+    shortSlug(m.slug),
+    m.slug,
+    shortSlug(fromUrl && decodeURIComponent(fromUrl)),
+  ];
+  for (const n of names) if (n && art[n]) return art[n];
+  return {};
+};
+
 const heroSlug = (m) => {
 const u = m?.watchUrl || "";
 const hit = u.match(/\/watch\/([^/?#]+)/);
@@ -568,7 +590,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
         className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth"
         aria-roledescription="carousel" aria-label="Newest releases">
         {slides.map((movie, n) => {
-          const a = art[heroSlug(movie)] || {};
+          const a = pickArt(art, movie);
           const isCricketSlide = movie.liveKind === LIVE_CRICKET;
           const isLiveSlide    = !!movie.liveKind;
           // A telecast carries its own artwork on the slide, since watch_html
@@ -792,8 +814,10 @@ function HeroSpotlight({ movies = [], onOpen }) {
     let alive = true;
     (async () => {
       const rows = await Promise.all(slides.map(async (m) => {
+        // extra stays keyed by heroSlug, as every reader of it expects; the
+        // id itself comes from whichever row actually holds this title.
         const key = heroSlug(m);
-        const id = (art[key] || {}).tmdb_id;
+        const id = pickArt(art, m).tmdb_id;
         if (!key || !id || extra[key]) return null;
         try {
           const r = await fetch(`${backendUrl}/api/tmdb-details?tmdbId=${encodeURIComponent(id)}`);
@@ -815,7 +839,8 @@ function HeroSpotlight({ movies = [], onOpen }) {
        carry a watchUrl already resolves under it, and asking for the raw slug
        too costs nothing and covers rows stored under the long name. */
     const slugs = [...new Set(
-      slides.flatMap((m) => [heroSlug(m), m?.slug]).filter(Boolean)
+      slides.flatMap((m) => [heroSlug(m), m?.slug, shortSlug(m?.slug), shortSlug(heroSlug(m))])
+            .filter(Boolean)
     )];
     if (!slugs.length) return;
     let alive = true;
@@ -885,7 +910,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
      is shown at its own shape as a card against a blurred wash of itself. */
   useEffect(() => {
     slides.forEach((m) => {
-      const a = art[heroSlug(m)] || {};
+      const a = pickArt(art, m);
       const src = a.cover_poster || a.poster || m.poster || m.poster_url;
       if (!src || ratio[src] != null) return;
       const img = new Image();
@@ -985,7 +1010,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
                    overflow-hidden"
         aria-roledescription="carousel" aria-label="Newest releases">
         {slides.map((movie, n) => {
-          const a = art[heroSlug(movie)] || {};
+          const a = pickArt(art, movie);
           /* cover_poster first: this is the wide band, and a 2:3 portrait
              stretched across it crops to an unrecognisable detail. The deck
              on phones leads with the portrait poster instead. */
