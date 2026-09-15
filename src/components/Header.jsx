@@ -353,6 +353,18 @@ function heroMeta(movie, art = {}, extra = {}) {
      the format, and where the game stands. */
   if (movie.liveKind === LIVE_CRICKET) {
     const m = movie.match || {};
+
+    /* A fixture from the feeds says what sport it is; a board match does not,
+       being cricket by definition. Leading with "Cricket" regardless and then
+       printing the feed's own category after it produced "Cricket · FOOTBALL"
+       — the line contradicting itself in four words. */
+    if (m.type === "fixture") {
+      const sport = m.badge ? m.badge[0] + m.badge.slice(1).toLowerCase() : "Live";
+      // The competition, unless it only repeats the sport back.
+      const series = m.series && m.series.toLowerCase() !== sport.toLowerCase() ? m.series : null;
+      return [sport, series].filter(Boolean);
+    }
+
     return ["Cricket", m.badge, m.matchOrder].filter(Boolean);
   }
   const langs = Array.isArray(movie.language) ? movie.language : (movie.language ? [movie.language] : []);
