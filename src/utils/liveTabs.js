@@ -15,10 +15,13 @@ import { supabase } from "./supabaseClient";
 const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 
 export const TAB_DEFS = {
-  sony: { key: "sony", label: "SonyLiv",   feed: `${WORKER}?feed=sonyliv` },
-  fc:   { key: "fc",   label: "FanCode",   feed: `${WORKER}?feed=fancode` },
-  live: { key: "live", label: "Live TV",   feed: null },
-  bb:   { key: "bb",   label: "Bigg Boss", feed: null },
+  sony:   { key: "sony",   label: "SonyLiv",       feed: `${WORKER}?feed=sonyliv` },
+  fc:     { key: "fc",     label: "FanCode",       feed: `${WORKER}?feed=fancode` },
+  /* Schedule only — the feed behind it carries no streams, so its cards link
+     to where a fixture can be watched instead of playing one. */
+  willow: { key: "willow", label: "Willow Cricket", feed: `${WORKER}?feed=willow` },
+  live:   { key: "live",   label: "Live TV",       feed: null },
+  bb:     { key: "bb",     label: "Hotstar",       feed: null },
 };
 
 /* A tab URL looks like https://player/?tab=sony — anything else (a bundle,

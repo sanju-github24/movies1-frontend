@@ -57,10 +57,11 @@ const MODE_TAB    = "tab";
  * saved once and left alone. The live page lists what is on each of them,
  * with what is coming up. */
 const PLAYER_TABS = [
-  { key: "sony", label: "SonyLiv",    hint: "Live cricket, football and more from SonyLiv" },
-  { key: "fc",   label: "FanCode",    hint: "FanCode's live fixtures" },
-  { key: "live", label: "Live TV",    hint: "The JioTV channel list" },
-  { key: "bb",   label: "Bigg Boss",  hint: "The 24/7 feeds, one per language" },
+  { key: "sony",   label: "SonyLiv",        hint: "Live cricket, football and more from SonyLiv" },
+  { key: "fc",     label: "FanCode",        hint: "FanCode's live fixtures" },
+  { key: "willow", label: "Willow Cricket", hint: "Upcoming cricket — schedule and artwork, no streams" },
+  { key: "live",   label: "Live TV",        hint: "The JioTV channel list" },
+  { key: "bb",     label: "Hotstar",        hint: "Bigg Boss, Star Sports and the Star/Colors channels" },
 ];
 
 const LiveChannelsUpload = () => {

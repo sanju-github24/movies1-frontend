@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
-import { Radio, Clock3, Play, AlertCircle } from "lucide-react";
+import { Radio, Clock3, Play, ExternalLink, AlertCircle } from "lucide-react";
 import LiveViewer from "./LiveViewer";
 import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
@@ -13,6 +13,10 @@ import { LANDSCAPE_GRID } from "../utils/posterGrid";
  * change hourly, and a copy would be wrong by the time anyone looked. */
 
 const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
+  /* Some fixtures have nowhere to play but somewhere to watch — the Willow
+     schedule is all of these. An outward link is the honest action there:
+     better than a dead card, and it does not pretend the site can play it. */
+  const external = !href && item.link ? item.link : null;
   const poster = posterFor(item, fallbackPoster);
   const when = startLabel(item);
 
@@ -21,16 +25,18 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
 
      A live one is a button rather than a link: it plays here, in the page the
      viewer is already on, instead of handing them off to another site. */
-  const Tag = href ? "button" : "div";
+  const Tag = href ? "button" : external ? "a" : "div";
   const linkProps = href
     ? { type: "button", onClick: () => onPlay(item, href) }
-    : {};
+    : external
+      ? { href: external, target: "_blank", rel: "noopener noreferrer" }
+      : {};
 
   return (
     <Tag
       {...linkProps}
       className={`group relative block w-full text-left overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06]
-                  ${href ? "hover:ring-white/20 transition-shadow cursor-pointer" : "cursor-default"}`}
+                  ${href || external ? "hover:ring-white/20 transition-shadow cursor-pointer" : "cursor-default"}`}
     >
       <div className="relative aspect-video bg-black/40">
         {poster ? (
@@ -53,9 +59,11 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
           {live ? "Live" : "Upcoming"}
         </span>
 
-        {href && (
+        {(href || external) && (
           <span className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex">
-            <Play className="w-7 h-7 text-white fill-white" aria-hidden="true" />
+            {href
+              ? <Play className="w-7 h-7 text-white fill-white" aria-hidden="true" />
+              : <ExternalLink className="w-6 h-6 text-white" aria-hidden="true" />}
           </span>
         )}
       </div>
