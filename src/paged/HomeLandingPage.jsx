@@ -7,6 +7,7 @@ import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Play, Flame, ChevronRight } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
 import PlaylistPanel from "../components/PlaylistPanel";
+import AddToPlaylist from "../components/AddToPlaylist";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
 
 // Sentinel for the "everything" chip — a language will never be named this.
