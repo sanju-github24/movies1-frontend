@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Play, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { encodeMatchHash } from "../utils/matchHash";
 import { teamCrest, flagImg } from "../utils/teamCrest";
@@ -272,7 +272,9 @@ function CricketHeroBg({ away }){
       <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 opacity-[0.10]">
         <span style={{fontSize:"clamp(80px,16vw,200px)",lineHeight:1,filter:"blur(3px)"}}>{aFlag}</span>
       </div>
-      <div className="absolute" style={{top:"-40%",right:"-10%",width:"70%",height:"200%",background:"conic-gradient(from 200deg at 60% 50%,transparent 0deg,rgba(139,92,246,0.07) 30deg,transparent 60deg)",animation:"heroSlowSpin 20s linear infinite"}}/>
+      {/* No slowly rotating wash. It turned behind the hero forever, which
+          reads as something loading that never finishes, and the artwork it
+          sat under is the thing worth looking at. */}
     </div>
   );
 }
@@ -280,7 +282,7 @@ function FootballHeroBg(){
   return(
     <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
       <div className="absolute inset-0 opacity-[0.025]" style={{backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 49px,rgba(255,255,255,1) 49px,rgba(255,255,255,1) 50px)"}}/>
-      <div className="absolute" style={{top:"-50%",right:"-20%",width:"80%",height:"200%",background:"conic-gradient(from 200deg at 60% 50%,transparent 0deg,rgba(30,213,150,0.07) 40deg,transparent 80deg)",animation:"heroSlowSpin 25s linear infinite"}}/>
+      {/* Removed with its cricket twin, for the same reason. */}
     </div>
   );
 }
@@ -357,9 +359,15 @@ function CricketSlide({slide, onPlay}){
           style={{objectPosition:"center 22%"}}
           onError={(e)=>{ if(e.currentTarget.src!==fallbackBg){ e.currentTarget.onerror=null; e.currentTarget.src=fallbackBg; } }}/>
         {/* Cinematic scrim: readable text at bottom-left, subject stays vivid on the right */}
-        <div className="absolute inset-0" style={{background:`linear-gradient(105deg, ${base} 0%, ${base}f2 26%, ${base}99 46%, transparent 72%)`}}/>
-        <div className="absolute bottom-0 left-0 right-0" style={{height:"62%",background:`linear-gradient(to top, ${btm} 4%, ${btm}cc 32%, transparent 100%)`}}/>
-        <div className="absolute top-0 left-0 right-0 h-24" style={{background:`linear-gradient(to bottom, ${btm}e6, transparent)`}}/>
+        {/* Three passes, and the copy sits on all of them.
+            The left wash used to run out at 72% and the floor at 62%, which
+            left the title and the teams competing with whatever the artwork
+            was doing behind them — bright kit and faces, usually. Carried
+            further and deepened: solid where the words are, clear where the
+            picture is worth seeing. */}
+        <div className="absolute inset-0" style={{background:`linear-gradient(100deg, ${base} 0%, ${base}fa 32%, ${base}d9 52%, ${base}66 70%, transparent 88%)`}}/>
+        <div className="absolute bottom-0 left-0 right-0" style={{height:"78%",background:`linear-gradient(to top, ${btm} 0%, ${btm}f2 22%, ${btm}99 48%, transparent 100%)`}}/>
+        <div className="absolute top-0 left-0 right-0 h-28" style={{background:`linear-gradient(to bottom, ${btm}f2, transparent)`}}/>
         {/* Soft vignette for depth */}
         <div className="absolute inset-0 pointer-events-none" style={{boxShadow:"inset 0 0 140px 40px rgba(0,0,0,0.55)"}}/>
       </div>
@@ -485,8 +493,16 @@ function CricketSlide({slide, onPlay}){
               boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
               color:"#fff",
             }}>
-            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
+            {/* No play triangle on a fixture that has not started — the icon
+                is a promise, and an upcoming match cannot keep it. */}
+            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
+            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
+            {slide.scorecardOnly?"View Scorecard"
+              :isLive?"Watch Live"
+              :isFinished?"View Scorecard"
+              :slide.countdown?`Starts ${slide.countdown}`
+              :slide.timeLabel?`Starts ${slide.timeLabel}`
+              :"Match Preview"}
           </button>
           ) : (
           <Link to={slide.link || "/live-cricket-tv"}
@@ -498,8 +514,16 @@ function CricketSlide({slide, onPlay}){
               boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
               color:"#fff",
             }}>
-            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"View Scorecard":"Watch Now"}
+            {/* No play triangle on a fixture that has not started — the icon
+                is a promise, and an upcoming match cannot keep it. */}
+            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
+            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
+            {slide.scorecardOnly?"View Scorecard"
+              :isLive?"Watch Live"
+              :isFinished?"View Scorecard"
+              :slide.countdown?`Starts ${slide.countdown}`
+              :slide.timeLabel?`Starts ${slide.timeLabel}`
+              :"Match Preview"}
           </Link>
           )
         )}
@@ -682,8 +706,14 @@ function FootballSlide({slide, onPlay}){
               boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
               color:"#fff",
             }}>
-            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
+            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
+            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
+            {slide.scorecardOnly?"View Scorecard"
+              :isLive?"Watch Live"
+              :isFinished?"Match Highlights"
+              :slide.countdown?`Starts ${slide.countdown}`
+              :slide.timeLabel?`Starts ${slide.timeLabel}`
+              :"Match Preview"}
           </button>
           ) : (
           <Link to={slide.link || "/live-cricket-tv"}
@@ -695,8 +725,14 @@ function FootballSlide({slide, onPlay}){
               boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
               color:"#fff",
             }}>
-            <Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            {slide.scorecardOnly?"View Scorecard":isLive?"Watch Live":isFinished?"Match Highlights":"Watch Now"}
+            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
+            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
+            {slide.scorecardOnly?"View Scorecard"
+              :isLive?"Watch Live"
+              :isFinished?"Match Highlights"
+              :slide.countdown?`Starts ${slide.countdown}`
+              :slide.timeLabel?`Starts ${slide.timeLabel}`
+              :"Match Preview"}
           </Link>
           )
         )}
@@ -1096,7 +1132,6 @@ export default function HeroSection(){
   if(loading||!active){
     return(
       <>
-        <style>{`@keyframes heroSlowSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes heroProgress{from{width:0%}to{width:100%}}`}</style>
         <section className="relative w-full overflow-hidden bg-gray-950 rounded-none sm:rounded-2xl"
           style={{height:"clamp(320px,46vw,520px)"}}>
           <div className="absolute inset-0 shimmer"/>
@@ -1114,8 +1149,6 @@ export default function HeroSection(){
   return(
     <>
       <style>{`
-        @keyframes heroSlowSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        @keyframes heroProgress{from{width:0%}to{width:100%}}
         .animate-fade-in{animation:fadeIn 0.4s ease-out forwards}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
       `}</style>
@@ -1176,12 +1209,10 @@ export default function HeroSection(){
 
         {slides.length>1&&<ThumbnailStrip slides={slides} activeIdx={activeIdx} onSelect={handleSelect}/>}
 
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 z-30 bg-white/10" style={{height:"2px"}}>
-          <div key={`${activeIdx}-${active.id}`}
-            className="h-full bg-white"
-            style={{animation:"heroProgress 8s linear forwards"}}/>
-        </div>
+        {/* No progress bar. A white line crawling across the foot of the hero
+            every eight seconds draws the eye away from the match it sits under
+            and tells nobody anything they wanted — the deck still advances on
+            its own, and the dots and the strip both say where it is. */}
       </section>
     </>
   );
