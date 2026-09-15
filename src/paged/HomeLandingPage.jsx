@@ -7,6 +7,7 @@ import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
+import PlaylistPanel from "../components/PlaylistPanel";
 
 // Sentinel for the "everything" chip — a language will never be named this.
 const ALL_LANGUAGES = '__all__';
@@ -447,6 +448,13 @@ export default function HomeLandingPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── Your playlists ──
+          Below the browsing rows: what someone kept is worth more than what
+          we are suggesting, but they came here to find something new. */}
+      <div className="px-4 sm:px-6 lg:px-8 pb-4">
+        <PlaylistPanel />
       </div>
 
       {/* Mini YouTube Player */}

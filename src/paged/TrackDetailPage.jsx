@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { musicApi } from '../utils/api';
 import { fetchTrack, playableUrl, fetchLyrics } from '../utils/saavn';
+import AddToPlaylist from "../components/AddToPlaylist";
 
 // Whether the lyrics panel is open is a preference, not per-track state — it
 // should hold as you move from song to song.
@@ -914,6 +915,18 @@ export default function TrackDetailPage() {
                     <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', fontWeight:500, margin:'4px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{metadata.singer||'Unknown Artist'}</p>
                   </div>
                   {hasDownloads && <DownloadMenu />}
+                </div>
+
+                {/* On its own line rather than in the row above: that row is a
+                    title, an artist and a 28px button, and a pill wedged into
+                    it pushes the name it belongs to out of view. */}
+                <div style={{ marginBottom: 18 }}>
+                  <AddToPlaylist track={{
+                    id,
+                    title: metadata.title || titleFallback,
+                    artist: metadata.singer || "",
+                    poster: metadata.cover_image || null,
+                  }} />
                 </div>
 
                 {/* Seek bar */}

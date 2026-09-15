@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
+import { resolveStream } from "../utils/playlists";
 
 export const MusicPlayerContext = createContext(null);
 
@@ -263,7 +264,7 @@ export function MusicPlayerProvider({ children }) {
   }, []);
 
   // ── Load a new track and auto-play ────────────────────────────
-  const loadTrack = useCallback((trackInfo) => {
+  const loadTrack = useCallback(async (trackInfo) => {
     const audio = audioRef.current;
 
     // Reset UI state immediately
@@ -281,9 +282,36 @@ export function MusicPlayerProvider({ children }) {
       });
     };
 
-    // Load new source (MP3 via native <audio>, HLS via hls.js) and auto-play.
     audio.pause();
-    attachSource(trackInfo.streamUrl, tryPlay);
+
+    /* A song from a playlist arrives with an id and no stream, because none is
+       stored — a saved URL carries a token that dies within hours, so it is
+       asked for at the moment of playing instead. A track opened directly
+       already has one and skips this entirely.
+     
+       If the answer is no, the queue moves on rather than stopping: one
+       unavailable song should not end the listening. */
+    let src = trackInfo.streamUrl;
+    if (!src && trackInfo.id) {
+      const wanted = trackInfo.id;
+      try {
+        const { streamUrl, metadata } = await resolveStream(wanted);
+        // Another song may have been chosen while this was in flight.
+        if (currentTrackRef.current?.id !== wanted) return;
+        src = streamUrl;
+        setCurrentTrack((t) => (t && t.id === wanted
+          ? { ...t, streamUrl, poster: t.poster || metadata.cover_image || null }
+          : t));
+      } catch (e) {
+        console.warn('[MusicPlayer] could not resolve', wanted, e.message);
+        if (advanceRef.current) advanceRef.current();
+        return;
+      }
+    }
+    if (!src) return;
+
+    // Load new source (MP3 via native <audio>, HLS via hls.js) and auto-play.
+    attachSource(src, tryPlay);
   }, [attachSource]);
 
   /* Shuffled once per queue, not per song: a fresh order each time would let
