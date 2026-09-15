@@ -264,14 +264,15 @@ function FootballTeamBadge({ team, size = "clamp(28px,5vw,48px)" }) {
 }
 
 // ─── BACKGROUNDS ─────────────────────────────────────────────────────────────
-function CricketHeroBg({ away }){
-  const aFlag = ICC_FLAGS[away.code] || "🏏";
+/* Nothing left to draw over a photograph. Kept as a component because the
+   football hero has its own and the slide chooses between them; if the grid
+   is ever wanted back for the fallback case, it belongs here. */
+function CricketHeroBg(){
   return(
     <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
-      <div className="absolute inset-0 opacity-[0.035]" style={{backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,0.5) 39px,rgba(255,255,255,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,0.5) 39px,rgba(255,255,255,0.5) 40px)"}}/>
-      <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 opacity-[0.10]">
-        <span style={{fontSize:"clamp(80px,16vw,200px)",lineHeight:1,filter:"blur(3px)"}}>{aFlag}</span>
-      </div>
+      {/* Grid and giant blurred flag removed. They were drawn for the fallback
+          background, where there is no photograph to compete with — over one,
+          they are texture on top of a picture that did not need it. */}
       {/* No slowly rotating wash. It turned behind the hero forever, which
           reads as something loading that never finishes, and the artwork it
           sat under is the thing worth looking at. */}
@@ -358,20 +359,21 @@ function CricketSlide({slide, onPlay}){
         <img src={bgImg} alt="" className="w-full h-full object-cover animate-fade-in"
           style={{objectPosition:"center 22%"}}
           onError={(e)=>{ if(e.currentTarget.src!==fallbackBg){ e.currentTarget.onerror=null; e.currentTarget.src=fallbackBg; } }}/>
-        {/* Cinematic scrim: readable text at bottom-left, subject stays vivid on the right */}
-        {/* Three passes, and the copy sits on all of them.
-            The left wash used to run out at 72% and the floor at 62%, which
-            left the title and the teams competing with whatever the artwork
-            was doing behind them — bright kit and faces, usually. Carried
-            further and deepened: solid where the words are, clear where the
-            picture is worth seeing. */}
-        <div className="absolute inset-0" style={{background:`linear-gradient(100deg, ${base} 0%, ${base}fa 32%, ${base}d9 52%, ${base}66 70%, transparent 88%)`}}/>
-        <div className="absolute bottom-0 left-0 right-0" style={{height:"78%",background:`linear-gradient(to top, ${btm} 0%, ${btm}f2 22%, ${btm}99 48%, transparent 100%)`}}/>
-        <div className="absolute top-0 left-0 right-0 h-28" style={{background:`linear-gradient(to bottom, ${btm}f2, transparent)`}}/>
-        {/* Soft vignette for depth */}
-        <div className="absolute inset-0 pointer-events-none" style={{boxShadow:"inset 0 0 140px 40px rgba(0,0,0,0.55)"}}/>
+        {/* The picture has to survive this.
+            Five layers were darkening it — these three, a vignette, and the
+            textured background painted over the top — and deepening two of
+            them turned most of the frame black with a sliver of photo on the
+            right. They are back to carrying the copy and no more: the left
+            wash clears by 62% so the subjects stay lit, the floor lifts by
+            just over half, and the vignette is a suggestion rather than a
+            frame. Text sits bottom-left, where the floor and the wash overlap
+            and both are near solid. */}
+        <div className="absolute inset-0" style={{background:`linear-gradient(100deg, ${base}f2 0%, ${base}cc 24%, ${base}70 44%, transparent 62%)`}}/>
+        <div className="absolute bottom-0 left-0 right-0" style={{height:"56%",background:`linear-gradient(to top, ${btm}f7 0%, ${btm}b8 30%, transparent 100%)`}}/>
+        <div className="absolute top-0 left-0 right-0 h-24" style={{background:`linear-gradient(to bottom, ${btm}b3, transparent)`}}/>
+        <div className="absolute inset-0 pointer-events-none" style={{boxShadow:"inset 0 0 110px 8px rgba(0,0,0,0.30)"}}/>
       </div>
-      <CricketHeroBg away={away}/>
+      <CricketHeroBg/>
 
       <div className="relative z-10 flex flex-col justify-end h-full px-4 sm:px-8 pb-5 sm:pb-7 pt-4 sm:pt-5">
 
