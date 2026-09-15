@@ -2280,18 +2280,18 @@ export default function Homeies({ searchTerm }) {
 
           <h1 className="sr-only">Live cricket scores, highlights and fixtures</h1>
 
+          {/* ── LIVE CHANNELS & FIXTURES ──
+              Directly under the hero, because it is the only thing on this
+              page that can be watched right now — the strips and rows below
+              are scores and highlights, which keep. Built from the tab URLs
+              saved in the admin; it fetches its own rows and renders nothing
+              until a tab has been added, so the page is unchanged until then. */}
+          <LiveTabsSection />
+
           {/* ── LIVE / SCHEDULED / RECENT ── */}
           <div className="mt-6">
             <LiveNowStrip/>
           </div>
-
-          {/* ── LIVE CHANNELS & FIXTURES ──
-              Whatever is on behind the player's tabs, from the tab URLs saved
-              in the admin: live fixtures with their feed artwork, the upcoming
-              ones beside them, and playback in a frame so nobody leaves the
-              site to watch. It fetches its own rows and renders nothing until
-              a tab has been added, so the page is unchanged until then. */}
-          <LiveTabsSection />
 
           {/* ── ICC HIGHLIGHTS (World Cup match highlights) ── */}
           <IccHighlightsRow/>

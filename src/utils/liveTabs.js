@@ -212,3 +212,21 @@ export async function withBiggBossArt() {
     return BIGG_BOSS_KANNADA;
   }
 }
+
+/* Two publishers carrying one match.
+ *
+ * "Afghanistan vs India" and "India vs Afghanistan [Hindi]" are the same
+ * fixture named twice, so the sides are lowercased, stripped of the bracketed
+ * language and sorted — order is not information here. A title that is not a
+ * fixture at all falls back to itself, which simply means it matches nothing
+ * but itself. */
+export function fixtureKey(item) {
+  const raw = String(item?.name || "")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const sides = raw.split(/\s+vs\.?\s+/);
+  if (sides.length !== 2) return raw;
+  return sides.map((x) => x.replace(/[^a-z0-9 ]/g, "").trim()).sort().join(" v ");
+}

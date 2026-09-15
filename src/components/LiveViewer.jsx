@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { Radio, X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Radio, X, Loader2 } from "lucide-react";
 
 /* Plays without leaving the site.
  *
@@ -8,16 +8,36 @@ import { Radio, X } from "lucide-react";
  * them an Indian address — all of which the player and its proxy already
  * handle. Reimplementing that here would mean maintaining it twice and having
  * it break in two places. So the player runs in a frame, addressed by the tab
- * link, and the viewer stays on AnchorHD. */
-const LiveViewer = ({ open, title, src, onClose }) => {
+ * link, and the viewer stays on AnchorHD.
+ *
+ * `sources` is how the same fixture reaches us from more than one place. Two
+ * publishers often carry one match, and when one stalls the other usually
+ * does not, so the viewer offers the swap rather than making someone go back
+ * and hunt for the other card. A single source renders no switcher at all. */
+const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
+  const list = (sources && sources.length ? sources : (src ? [{ label: "Live", src }] : []));
+  const [idx, setIdx] = useState(0);
+  const [ready, setReady] = useState(false);
+
+  const current = list[idx] || list[0];
+  const currentSrc = current?.src || "";
+
+  // A new fixture starts at its first source, and covered again.
+  useEffect(() => { setIdx(0); }, [src, open]);
+  useEffect(() => { setReady(false); }, [currentSrc]);
+
   /* Escape closes it, the page behind must not scroll while it is up, and the
-     player closes it too: in solo mode anything that would have dropped the
-     viewer back onto the player's own launcher sends this instead, so the end
-     of a match leaves AnchorHD rather than someone else's channel list. */
+     player talks back: it says when the picture is actually up, and — in solo
+     mode — when anything would have dropped the viewer onto its own launcher,
+     which closes this instead of showing someone else's page. */
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    const onMsg = (e) => { if (e.data && e.data.type === "anchor:close") onClose(); };
+    const onMsg = (e) => {
+      const t = e.data && e.data.type;
+      if (t === "anchor:close") onClose();
+      if (t === "anchor:playing") setReady(true);
+    };
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
@@ -29,7 +49,7 @@ const LiveViewer = ({ open, title, src, onClose }) => {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !currentSrc) return null;
 
   return (
     <div
@@ -38,12 +58,12 @@ const LiveViewer = ({ open, title, src, onClose }) => {
       aria-modal="true"
       aria-label={title}
     >
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 shrink-0">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5
-                         text-[10px] font-black uppercase tracking-widest text-white">
+                         text-[10px] font-black uppercase tracking-widest text-white shrink-0">
           <Radio className="w-3 h-3" aria-hidden="true" /> Live
         </span>
-        <p className="text-sm font-bold text-white truncate">{title}</p>
+        <p className="text-xs sm:text-sm font-bold text-white truncate">{title}</p>
         <button
           type="button"
           onClick={onClose}
@@ -55,15 +75,56 @@ const LiveViewer = ({ open, title, src, onClose }) => {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-4 sm:pb-6">
-        <iframe
-          key={src}
-          src={src}
-          title={title}
-          className="w-full h-full rounded-xl bg-black ring-1 ring-white/10"
-          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-          allowFullScreen
-        />
+      {list.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto px-3 sm:px-6 pb-2 shrink-0">
+          {list.map((s, i) => (
+            <button
+              key={s.src}
+              type="button"
+              onClick={() => setIdx(i)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider
+                          transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white
+                          ${i === idx
+                            ? "bg-white text-black"
+                            : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-3 sm:pb-6">
+        <div className="relative w-full h-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10">
+          <iframe
+            key={currentSrc}
+            src={currentSrc}
+            title={title}
+            className="w-full h-full"
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+
+          {/* Covers the frame until the picture is up. The player behind it is
+              another site, and however briefly its chrome shows while a feed
+              resolves, it reads as someone else's page inside this one. */}
+          {!ready && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
+              {poster && (
+                <img
+                  src={poster}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover opacity-25"
+                />
+              )}
+              <Loader2 className="relative w-8 h-8 animate-spin text-white/80" aria-hidden="true" />
+              <p className="relative text-[11px] font-black uppercase tracking-[0.2em] text-white/60">
+                Starting live stream
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Radio, Clock3, Play, ExternalLink, AlertCircle } from "lucide-react";
 import LiveViewer from "./LiveViewer";
-import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel } from "../utils/liveTabs";
+import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel, fixtureKey } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
 
 /* Fixtures behind the player's tabs, on the live page.
@@ -78,50 +78,39 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
   );
 };
 
-const Section = ({ row }) => {
-  const parsed = parseTabUrl(row.bundle_url);
-  const [state, setState] = useState({ loading: true, live: [], upcoming: [], error: null });
-  const [playing, setPlaying] = useState(null);
-
-  useEffect(() => {
-    if (!parsed) return;
-    let alive = true;
-    (async () => {
-      try {
-        const { live, upcoming } = await fetchTabFeed(parsed.key);
-        if (alive) setState({ loading: false, live, upcoming, error: null });
-      } catch (e) {
-        if (alive) setState({ loading: false, live: [], upcoming: [], error: e.message });
-      }
-    })();
-    return () => { alive = false; };
-  // parsed is derived from row.bundle_url, so that is the real dependency.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.bundle_url]);
-
+const Section = ({ row, parsed, state, altSources, onPlay }) => {
   if (!parsed) return null;
 
   const { loading, live, upcoming, error } = state;
   const total = live.length + upcoming.length;
 
+  /* Everywhere this fixture is carried, this tab first — the one the viewer
+     pressed should be the one that starts. */
+  const sourcesFor = (m) => {
+    const here = { label: parsed.def.label, src: tabItemUrl(parsed.base, parsed.key, m.id, true) };
+    const others = (altSources.get(fixtureKey(m)) || []).filter((o) => o.key !== parsed.key);
+    return [here, ...others.map((o) => ({ label: o.label, src: o.src }))];
+  };
+
   return (
-    <section className="mb-10">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight italic">
+    <section className="mb-8 sm:mb-10">
+      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <h2 className="text-base sm:text-xl font-black uppercase tracking-tight italic truncate">
           {row.name || parsed.def.label}
         </h2>
         {!loading && !error && (
-          <span className="text-[11px] font-bold text-gray-500">
+          <span className="hidden sm:inline text-[11px] font-bold text-gray-500 shrink-0">
             {live.length} live{upcoming.length ? ` · ${upcoming.length} upcoming` : ""}
           </span>
         )}
         <button
           type="button"
-          onClick={() => setPlaying({
+          onClick={() => onPlay({
             title: row.name || parsed.def.label,
             src: tabItemUrl(parsed.base, parsed.key),
+            poster: row.thumbnail || null,
           })}
-          className="ml-auto text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white"
+          className="ml-auto shrink-0 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white"
         >
           Browse all
         </button>
@@ -150,11 +139,12 @@ const Section = ({ row }) => {
         <div className={LANDSCAPE_GRID}>
           {live.map((m) => (
             <Card key={`l-${m.id}`} item={m} live
-                  href={tabItemUrl(parsed.base, parsed.key, m.id)}
+                  href={tabItemUrl(parsed.base, parsed.key, m.id, true)}
                   fallbackPoster={row.thumbnail}
-                  onPlay={(item) => setPlaying({
+                  onPlay={(item) => onPlay({
                     title: item.name,
-                    src: tabItemUrl(parsed.base, parsed.key, item.id, true),
+                    sources: sourcesFor(item),
+                    poster: posterFor(item, row.thumbnail),
                   })} />
           ))}
           {upcoming.map((m, i) => (
@@ -163,25 +153,14 @@ const Section = ({ row }) => {
           ))}
         </div>
       )}
-
-      <LiveViewer
-        open={!!playing}
-        title={playing?.title || ""}
-        src={playing?.src || ""}
-        onClose={() => setPlaying(null)}
-      />
     </section>
   );
 };
 
-/* Render the saved rows that are tab URLs, leaving bundles to whoever draws
-   those.
-
-   Rows may be handed in by a page that has already loaded them, or fetched
-   here when the page has not — that way this drops onto any page without
-   that page needing to know the table exists. */
 const LiveTabsSection = ({ rows, heading }) => {
   const [fetched, setFetched] = useState(null);
+  const [feeds, setFeeds] = useState({});
+  const [playing, setPlaying] = useState(null);
   const given = Array.isArray(rows);
 
   useEffect(() => {
@@ -199,20 +178,82 @@ const LiveTabsSection = ({ rows, heading }) => {
   }, [given]);
 
   const source = given ? rows : fetched;
-  // Still loading its own rows: say nothing rather than flash an empty heading.
-  if (!source) return null;
+  const tabRows = (source || []).filter((r) => parseTabUrl(r.bundle_url));
 
-  const tabRows = source.filter((r) => parseTabUrl(r.bundle_url));
+  /* One fetch per tab, here rather than in each section.
+     Two rows can point at the same tab, and a section that fetched its own
+     could not see what the others hold — which is what matching a fixture
+     across publishers needs. */
+  const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url).key))).join(",");
+
+  useEffect(() => {
+    if (!keys) return;
+    let alive = true;
+    keys.split(",").forEach(async (key) => {
+      try {
+        const { live, upcoming } = await fetchTabFeed(key);
+        if (alive) setFeeds((f) => ({ ...f, [key]: { loading: false, live, upcoming, error: null } }));
+      } catch (e) {
+        if (alive) setFeeds((f) => ({ ...f, [key]: { loading: false, live: [], upcoming: [], error: e.message } }));
+      }
+    });
+    return () => { alive = false; };
+  }, [keys]);
+
+  /* Which tabs carry each live fixture. Built from every feed at once, so a
+     match on two publishers can be swapped between rather than hunted for. */
+  const altSources = useMemo(() => {
+    const map = new Map();
+    tabRows.forEach((r) => {
+      const p = parseTabUrl(r.bundle_url);
+      const f = feeds[p.key];
+      (f?.live || []).forEach((m) => {
+        const k = fixtureKey(m);
+        const at = map.get(k) || [];
+        if (!at.some((o) => o.key === p.key)) {
+          at.push({ key: p.key, label: p.def.label, src: tabItemUrl(p.base, p.key, m.id, true) });
+        }
+        map.set(k, at);
+      });
+    });
+    return map;
+  }, [feeds, keys]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!source) return null;      // still loading its own rows
   if (!tabRows.length) return null;
 
+  const EMPTY = { loading: true, live: [], upcoming: [], error: null };
+
   return (
-    <div className="mt-10">
+    <div className="mt-8 sm:mt-10">
       {heading && (
-        <h2 className="text-xl font-semibold tracking-wide flex items-center gap-2 mb-6 text-red-400">
-          <Radio className="w-5 h-5" aria-hidden="true" /> {heading}
+        <h2 className="text-lg sm:text-xl font-semibold tracking-wide flex items-center gap-2 mb-4 sm:mb-6 text-red-400">
+          <Radio className="w-5 h-5 shrink-0" aria-hidden="true" /> {heading}
         </h2>
       )}
-      {tabRows.map((row) => <Section key={row.id} row={row} />)}
+
+      {tabRows.map((row) => {
+        const parsed = parseTabUrl(row.bundle_url);
+        return (
+          <Section
+            key={row.id}
+            row={row}
+            parsed={parsed}
+            state={feeds[parsed.key] || EMPTY}
+            altSources={altSources}
+            onPlay={setPlaying}
+          />
+        );
+      })}
+
+      <LiveViewer
+        open={!!playing}
+        title={playing?.title || ""}
+        src={playing?.src || ""}
+        sources={playing?.sources}
+        poster={playing?.poster}
+        onClose={() => setPlaying(null)}
+      />
     </div>
   );
 };
