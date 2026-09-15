@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { musicApi } from "./api";
+import { fetchTrack, playableUrl } from "./saavn";
 
 /* Playlists, as calls rather than storage.
  *
@@ -107,13 +107,20 @@ export async function removeTrack(rowId) {
 /* The stream for one track, fetched when it is about to play.
  *
  * This is the reason nothing is stored: ask at the moment of playing and the
- * answer is always current, however old the playlist is. */
+ * answer is always current, however old the playlist is.
+ *
+ * Asked through the same path the rest of the music pages use. The first
+ * version of this called /api/songs/track, which the backend no longer has —
+ * the music pages moved to /api/saavn and those routes went with the move, so
+ * every playlist song 404'd.
+ *
+ * The CDN only serves a request carrying a jiosaavn.com Referer, which a
+ * browser cannot set, so the URL handed back is the backend's proxy rather
+ * than the CDN's own. */
 export async function resolveStream(trackId) {
-  const res = await musicApi(`/api/songs/track?id=${encodeURIComponent(trackId)}`);
-  if (!res.ok) throw new Error(`Could not load that track (${res.status})`);
-  const d = await res.json();
+  const d = await fetchTrack(trackId);
   if (!d.success || !d.stream_url) throw new Error(d.error || "No stream for that track");
-  return { streamUrl: d.stream_url, metadata: d.metadata || {} };
+  return { streamUrl: playableUrl(d.stream_url), metadata: d.metadata || {} };
 }
 
 /* A stored row in the shape the player takes. streamUrl is deliberately

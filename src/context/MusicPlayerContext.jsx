@@ -188,6 +188,11 @@ export function MusicPlayerProvider({ children }) {
   const repeatRef = useRef("off");
   const shuffleRef = useRef(false);
   const advanceRef = useRef(null);
+  /* Consecutive songs that would not resolve. Moving past a dead one is right;
+     moving past every one of them in turn, forever, is not — with repeat on,
+     a queue nothing in it resolves would circle and ask the server again for
+     each, as fast as the requests came back. */
+  const failRef = useRef(0);
 
 
   // Ref mirrors currentTrack so event handlers never have stale closures
@@ -304,11 +309,20 @@ export function MusicPlayerProvider({ children }) {
           : t));
       } catch (e) {
         console.warn('[MusicPlayer] could not resolve', wanted, e.message);
-        if (advanceRef.current) advanceRef.current();
+        failRef.current += 1;
+        /* One pass and no further: once every song in the queue has been tried
+           there is nothing left to move on to, and going round again only
+           repeats the same requests. A single track gets one attempt. */
+        const limit = Math.max(1, queueRef.current.length);
+        if (failRef.current < limit && advanceRef.current) advanceRef.current();
+        else audioRef.current.pause();
         return;
       }
     }
     if (!src) return;
+
+    // Something played, so the run of failures is over.
+    failRef.current = 0;
 
     // Load new source (MP3 via native <audio>, HLS via hls.js) and auto-play.
     attachSource(src, tryPlay);
@@ -334,6 +348,7 @@ export function MusicPlayerProvider({ children }) {
 
   const playQueue = useCallback((tracks, startIndex = 0) => {
     if (!Array.isArray(tracks) || !tracks.length) return;
+    failRef.current = 0;
     const order = buildOrder(tracks.length, startIndex, shuffleRef.current);
     const pos = Math.max(0, order.indexOf(startIndex));
     setQueue(tracks); queueRef.current = tracks;
