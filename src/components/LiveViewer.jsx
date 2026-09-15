@@ -24,7 +24,18 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
 
   // A new fixture starts at its first source, and covered again.
   useEffect(() => { setIdx(0); }, [src, open]);
-  useEffect(() => { setReady(false); }, [currentSrc]);
+
+  /* Covered again for each source, but never indefinitely.
+     The cover lifts when the player says the picture is up, when it says it
+     failed, or after this long regardless — a signal that never arrives must
+     not leave someone watching a spinner over a frame that has either started
+     or given a reason, both of which are worth seeing. */
+  useEffect(() => {
+    setReady(false);
+    if (!currentSrc) return;
+    const t = setTimeout(() => setReady(true), 12000);
+    return () => clearTimeout(t);
+  }, [currentSrc]);
 
   /* Escape closes it, the page behind must not scroll while it is up, and the
      player talks back: it says when the picture is actually up, and — in solo
@@ -36,7 +47,8 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
     const onMsg = (e) => {
       const t = e.data && e.data.type;
       if (t === "anchor:close") onClose();
-      if (t === "anchor:playing") setReady(true);
+      // Uncover on either outcome: the reason it failed is behind this.
+      if (t === "anchor:playing" || t === "anchor:error") setReady(true);
     };
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";

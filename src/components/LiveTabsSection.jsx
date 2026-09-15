@@ -103,17 +103,9 @@ const Section = ({ row, parsed, state, altSources, onPlay }) => {
             {live.length} live{upcoming.length ? ` · ${upcoming.length} upcoming` : ""}
           </span>
         )}
-        <button
-          type="button"
-          onClick={() => onPlay({
-            title: row.name || parsed.def.label,
-            src: tabItemUrl(parsed.base, parsed.key),
-            poster: row.thumbnail || null,
-          })}
-          className="ml-auto shrink-0 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white"
-        >
-          Browse all
-        </button>
+        {/* No "browse all": it was the one path that opened the player without
+            solo, and so the one that showed its tab bar and URL box inside our
+            page. Everything that tab holds is already on this one. */}
       </div>
 
       {loading && (
