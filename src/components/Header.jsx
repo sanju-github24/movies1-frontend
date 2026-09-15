@@ -551,6 +551,8 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
           // A telecast carries its own artwork on the slide, since watch_html
           // is read once for it rather than through the shared art map.
           const src = movie.poster || a.poster || movie.poster_url || a.cover_poster || movie.cover_poster;
+          // As on desktop: the cover stands in for a match with no picture.
+          const useCover = isCricketSlide && !src;
           const logo = movie.title_logo || a.title_logo || null;
           // Same strip the desktop band shows, from the same helper.
           const meta = heroMeta(movie, a, extra[heroSlug(movie)] || {});
@@ -563,10 +565,9 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                 aria-label={`${movie.title} — open details`}
                 className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <span className="block aspect-[3/4] relative">
-                  {isCricketSlide ? (
-                    /* Both sides facing each other, with the live score. There
-                       is no poster for a match, and a card carrying one team's
-                       flag would be telling half the story. */
+                  {useCover ? (
+                    /* Both sides facing each other, with the live score — for
+                       a match the feeds gave us no picture for. */
                     <span className="absolute inset-0 flex items-center justify-center
                                      bg-[radial-gradient(ellipse_80%_60%_at_50%_35%,rgba(37,99,235,0.22),transparent_70%)]">
                       <CricketCover match={movie.match} compact />
@@ -969,6 +970,13 @@ function HeroSpotlight({ movies = [], onOpen }) {
           const logo = a.title_logo || null;
           const isLiveSlide    = !!movie.liveKind;
           const isCricketSlide = movie.liveKind === LIVE_CRICKET;
+          /* The scoreboard cover exists because a board publishes no image for
+             a match. The fixture feeds do — so where there is one, it is the
+             backdrop, and the cover is what stands in when there is not.
+             Gating on "is a match" rather than "has no picture" is why a
+             fixture with perfectly good artwork drew two faded circles on an
+             empty page. */
+          const useCover = isCricketSlide && !desktopSrc;
           const x = extra[heroSlug(movie)] || {};
           const meta = heroMeta(movie, a, x);
           // Our own copy first, TMDB's only when we have none of our own.
@@ -1106,10 +1114,8 @@ function HeroSpotlight({ movies = [], onOpen }) {
               {/* ── Desktop: the wide cover art, or the poster as a card when
                      there is no wide art for this title ── */}
               <div className="absolute inset-0 hidden sm:block">
-                {isCricketSlide ? (
-                  /* Our own cover. Boards publish no per-match image, so there
-                     is nothing to crop here — the scoreboard is the artwork,
-                     sitting to the right of the copy. */
+                {useCover ? (
+                  /* Our own cover, for a match with no artwork of its own. */
                   <>
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_40%,rgba(37,99,235,0.18),transparent_70%)]" />
                     <div className="absolute inset-y-0 right-0 w-[52%] flex items-center justify-center pb-10">
@@ -1119,14 +1125,14 @@ function HeroSpotlight({ movies = [], onOpen }) {
                     <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-950 to-transparent" />
                   </>
                 ) : null}
-                {!isCricketSlide && desktopSrc && (
+                {!useCover && desktopSrc && (
                   <img src={desktopSrc} alt="" aria-hidden="true"
                     fetchPriority={n === 0 ? "high" : "auto"} decoding="async"
                     loading={n === 0 ? "eager" : "lazy"}
                     className={`absolute inset-0 w-full h-full object-cover object-center
                                 ${deskWide ? "" : "blur-3xl scale-125 opacity-70 saturate-150"}`} />
                 )}
-                {isCricketSlide ? null : deskWide ? scrims : (
+                {useCover ? null : deskWide ? scrims : (
                   <>
                     <div className="absolute inset-0 bg-gradient-to-r from-gray-950/60 via-gray-950/30 to-gray-950/60" />
                     {/* Bottom scrim for the blurred-wash layout too. The wide
@@ -1137,7 +1143,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
                   </>
                 )}
 
-                {(deskWide || isCricketSlide) ? (
+                {(deskWide || useCover) ? (
                   <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 2xl:p-14 pb-16 sm:ml-[72px]"
                     style={heroCopyParallax} {...pauseOnHover}>{copy}</div>
                 ) : (
