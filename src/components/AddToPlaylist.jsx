@@ -8,7 +8,7 @@ import { listPlaylists, createPlaylist, addTrack } from "../utils/playlists";
  * The lists are fetched when the menu opens rather than on mount: most people
  * never press it, and a track page should not query the database for something
  * nobody asked to see. */
-const AddToPlaylist = ({ track, className = "" }) => {
+const AddToPlaylist = ({ track, className = "", compact = false }) => {
   const [open, setOpen] = useState(false);
   const [lists, setLists] = useState(null);
   const [state, setState] = useState({});      // playlist id → saving | saved | already
@@ -65,22 +65,33 @@ const AddToPlaylist = ({ track, className = "" }) => {
 
   return (
     <div className={`relative ${className}`} ref={box}>
+      {/* On a card there is room for a circle and nothing else, so the label
+          moves to the tooltip. Same menu underneath either way. */}
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : show())}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5
-                   text-[11px] font-black uppercase tracking-widest text-white
-                   hover:bg-white/20 transition-colors
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        aria-label="Add to playlist"
+        title="Add to playlist"
+        className={compact
+          ? `w-8 h-8 rounded-full bg-white/[0.12] ring-1 ring-white/20 text-white
+             flex items-center justify-center hover:bg-white/25 transition-colors
+             focus:outline-none focus-visible:ring-2 focus-visible:ring-white`
+          : `inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5
+             text-[11px] font-black uppercase tracking-widest text-white
+             hover:bg-white/20 transition-colors
+             focus:outline-none focus-visible:ring-2 focus-visible:ring-white`}
       >
-        <ListPlus className="w-4 h-4" aria-hidden="true" /> Add to playlist
+        {compact
+          ? <Plus className="w-4 h-4" aria-hidden="true" />
+          : <><ListPlus className="w-4 h-4" aria-hidden="true" /> Add to playlist</>}
       </button>
 
       {open && (
         <div role="menu"
-          className="absolute z-50 mt-2 w-64 rounded-xl bg-gray-900 ring-1 ring-white/10 shadow-2xl p-2">
+          className={`absolute z-50 w-64 rounded-xl bg-gray-900 ring-1 ring-white/10 shadow-2xl p-2
+                      ${compact ? "bottom-full mb-2 right-0" : "mt-2"}`}>
           {!signedIn && (
             <p className="text-xs text-gray-400 p-3">Sign in to save songs to a playlist.</p>
           )}

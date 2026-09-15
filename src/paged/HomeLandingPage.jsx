@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
 import { fetchHomeRows } from '../utils/saavn';
-import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import MusicSearchBar from '../components/MusicSearchBar';
-import { Music, Play, Flame, ChevronRight, Youtube } from 'lucide-react';
+import { Music, Play, Flame, ChevronRight } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
 import PlaylistPanel from "../components/PlaylistPanel";
+import { useMusicPlayer } from "../context/MusicPlayerContext";
 
 // Sentinel for the "everything" chip — a language will never be named this.
 const ALL_LANGUAGES = '__all__';
@@ -44,13 +44,18 @@ function deriveRgbFromStr(str) {
 // Track card — exact same style as RecommendCard in TrackDetailPage
 // ─────────────────────────────────────────────────────────────────────────
 // TrackCard accepts setPreview to open the mini player
-function TrackCard({ track, navigate, setPreview }) {
+function TrackCard({ track, tracks, index, onPlay }) {
   const [hov, setHov] = useState(false);
   const { light } = useMemo(() => deriveRgbFromStr(track.poster || track.id), [track.poster, track.id]);
 
+  /* Plays the row from here rather than this one song alone, which is what a
+     row of songs implies — and what next and shuffle then have to work with.
+     None of them carry a stream; the player asks for each as it comes up. */
+  const play = (e) => { e.stopPropagation(); onPlay(tracks, index); };
+
   return (
     <div
-      onClick={() => navigate(`/music/track/${track.id}`)}
+      onClick={play}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
@@ -81,7 +86,7 @@ function TrackCard({ track, navigate, setPreview }) {
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.48)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
             {/* Play (navigate) */}
             <div
-              onClick={(e) => { e.stopPropagation(); navigate(`/music/track/${track.id}`); }}
+              onClick={play}
               style={{
                 width: 38, height: 38, borderRadius: '50%',
                 background: `rgb(${light})`,
@@ -92,19 +97,11 @@ function TrackCard({ track, navigate, setPreview }) {
             >
               <Play size={14} style={{ fill: '#000', color: '#000', marginLeft: 2 }} />
             </div>
-            {/* YouTube preview */}
-            <div
-              onClick={(e) => { e.stopPropagation(); setPreview({ trackId: track.id, title: track.title, artist: track.artist, poster: track.poster, accent: light }); }}
-              style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.12)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-              title="Preview on YouTube"
-            >
-              <Youtube size={12} style={{ color: 'white' }} />
+            {/* Where the YouTube preview was. Sending someone to a different
+                site to hear thirty seconds of a song this page can play in
+                full was the odd one out; keeping it is what it is worth. */}
+            <div onClick={(e) => e.stopPropagation()}>
+              <AddToPlaylist compact track={track} />
             </div>
           </div>
         )}
@@ -139,8 +136,8 @@ function TrackCard({ track, navigate, setPreview }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Section (horizontal scroll strip)
 // ─────────────────────────────────────────────────────────────────────────
-function CategorySection({ name, tracks, navigate, setPreview, onSeeAll }) {
-  const { base, light } = useMemo(() => deriveRgbFromStr(name), [name]);
+function CategorySection({ name, tracks, onPlay, onSeeAll }) {
+  const { light } = useMemo(() => deriveRgbFromStr(name), [name]);
 
   return (
     <section style={{ marginBottom: 12 }}>
@@ -192,8 +189,8 @@ function CategorySection({ name, tracks, navigate, setPreview, onSeeAll }) {
         className="home-scroll"
         style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 10 }}
       >
-        {tracks.map(track => (
-          <TrackCard key={track.id} track={track} navigate={navigate} setPreview={setPreview} />
+        {tracks.map((track, i) => (
+          <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} />
         ))}
       </div>
     </section>
@@ -209,7 +206,14 @@ export default function HomeLandingPage() {
   const [categories, setCategories] = useState({});
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
-  const [preview,    setPreview]    = useState(null);
+  /* Cards play the row they are in, so next and shuffle have something to
+     work with. Nothing here carries a stream; the player asks for each song
+     as it reaches the front of the queue. */
+  const musicPlayer = useMusicPlayer();
+  const startRow = useCallback((rowTracks, index) => {
+    if (!rowTracks?.length) return;
+    musicPlayer.playQueue(rowTracks, index);
+  }, [musicPlayer]);
   const [activeLang, setActiveLang] = useState(ALL_LANGUAGES);
   const navigate = useNavigate();
 
@@ -263,6 +267,14 @@ export default function HomeLandingPage() {
         <div className="mb-8 sm:mb-10 max-w-2xl">
           <MusicSearchBar />
         </div>
+
+        {/* ── Your playlists ──
+            Above the charts rather than under them. What someone kept is the
+            reason they came back; what we are recommending is the reason they
+            came the first time. It draws nothing at all until there is
+            something to draw, so the charts stay at the top for anyone who has
+            saved nothing yet. */}
+        <PlaylistPanel />
 
         {/* ── Loading ─────────────────────────────────────────────── */}
         {loading ? (
@@ -440,8 +452,7 @@ export default function HomeLandingPage() {
                     key={categoryName}
                     name={categoryName}
                     tracks={tracks}
-                    navigate={navigate}
-                    setPreview={setPreview}
+                    onPlay={startRow}
                     onSeeAll={() => setActiveLang(sectionLanguage(categoryName))}
                   />
                 ))}
@@ -450,23 +461,6 @@ export default function HomeLandingPage() {
         )}
       </div>
 
-      {/* ── Your playlists ──
-          Below the browsing rows: what someone kept is worth more than what
-          we are suggesting, but they came here to find something new. */}
-      <div className="px-4 sm:px-6 lg:px-8 pb-4">
-        <PlaylistPanel />
-      </div>
-
-      {/* Mini YouTube Player */}
-      {preview && (
-        <MiniYouTubePlayer
-          trackTitle={preview.title}
-          trackArtist={preview.artist}
-          trackPoster={preview.poster}
-          accentRgb={preview.accent}
-          onClose={() => setPreview(null)}
-        />
-      )}
     </div>
   );
 }
