@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Radio, Clock3, Play, ExternalLink, AlertCircle } from "lucide-react";
 import LiveViewer from "./LiveViewer";
-import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel, fixtureKey } from "../utils/liveTabs";
+import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel, fixtureKey, isIndiaFixture } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
 
 /* Fixtures behind the player's tabs, on the live page.
@@ -12,7 +12,7 @@ import { LANDSCAPE_GRID } from "../utils/posterGrid";
  * and what is next. Nothing is stored about the fixtures themselves — they
  * change hourly, and a copy would be wrong by the time anyone looked. */
 
-const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
+const Card = ({ item, href, live, fallbackPoster, badge, onPlay }) => {
   /* Some fixtures have nowhere to play but somewhere to watch — the Willow
      schedule is all of these. An outward link is the honest action there:
      better than a dead card, and it does not pretend the site can play it. */
@@ -59,6 +59,16 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
           {live ? "Live" : "Upcoming"}
         </span>
 
+        {/* Which publisher this came from — with everything merged into one
+            row, the card is the only place left that can say. */}
+        {badge && (
+          <span className="absolute top-2 right-2 rounded-md bg-black/70 px-2 py-0.5
+                           text-[10px] font-black uppercase tracking-widest text-gray-200
+                           ring-1 ring-white/15">
+            {badge}
+          </span>
+        )}
+
         {(href || external) && (
           <span className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex">
             {href
@@ -78,74 +88,33 @@ const Card = ({ item, href, live, fallbackPoster, onPlay }) => {
   );
 };
 
-const Section = ({ row, parsed, state, altSources, onPlay }) => {
-  if (!parsed) return null;
+/* One row of what is on, then a short list of what is next.
+ *
+ * It used to be a section per tab, each with its own live and upcoming rows.
+ * That put the same match in two places when two publishers carried it, and
+ * buried the handful of things playing now under forty fixtures that are not.
+ *
+ * So: everything live, merged and deduplicated, first — that is what someone
+ * opening a sports page wants. Then what is coming up, a few at a time, with
+ * the rest behind a button. */
+const UPCOMING_SHOWN = 6;
 
-  const { loading, live, upcoming, error } = state;
-  const total = live.length + upcoming.length;
-
-  /* Everywhere this fixture is carried, this tab first — the one the viewer
-     pressed should be the one that starts. */
-  const sourcesFor = (m) => {
-    const here = { label: parsed.def.label, src: tabItemUrl(parsed.base, parsed.key, m.id, true) };
-    const others = (altSources.get(fixtureKey(m)) || []).filter((o) => o.key !== parsed.key);
-    return [here, ...others.map((o) => ({ label: o.label, src: o.src }))];
-  };
-
+const Group = (props) => {
+  const Icon = props.icon;
+  const { title, tone, count, children } = props;
   return (
-    <section className="mb-8 sm:mb-10">
-      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-        <h2 className="text-base sm:text-xl font-black uppercase tracking-tight italic truncate">
-          {row.name || parsed.def.label}
-        </h2>
-        {!loading && !error && (
-          <span className="hidden sm:inline text-[11px] font-bold text-gray-500 shrink-0">
-            {live.length} live{upcoming.length ? ` · ${upcoming.length} upcoming` : ""}
-          </span>
-        )}
-        {/* No "browse all": it was the one path that opened the player without
-            solo, and so the one that showed its tab bar and URL box inside our
-            page. Everything that tab holds is already on this one. */}
-      </div>
-
-      {loading && (
-        <div className={LANDSCAPE_GRID}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="aspect-video rounded-xl bg-white/[0.04] animate-pulse" />
-          ))}
-        </div>
+  <section className="mb-8 sm:mb-10">
+    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+      <h2 className={`text-base sm:text-xl font-black uppercase tracking-tight italic ${tone}`}>
+        <Icon className="inline w-4 h-4 sm:w-5 sm:h-5 mr-2 -mt-0.5" aria-hidden="true" />
+        {title}
+      </h2>
+      {count > 0 && (
+        <span className="text-[11px] font-bold text-gray-500 shrink-0">{count}</span>
       )}
-
-      {error && (
-        <p className="flex items-center gap-2 text-xs text-amber-400">
-          <AlertCircle className="w-4 h-4" aria-hidden="true" />
-          {parsed.def.label} feed is unavailable right now.
-        </p>
-      )}
-
-      {!loading && !error && total === 0 && (
-        <p className="text-xs text-gray-500">Nothing scheduled on {parsed.def.label} right now.</p>
-      )}
-
-      {!loading && !error && total > 0 && (
-        <div className={LANDSCAPE_GRID}>
-          {live.map((m) => (
-            <Card key={`l-${m.id}`} item={m} live
-                  href={tabItemUrl(parsed.base, parsed.key, m.id, true)}
-                  fallbackPoster={row.thumbnail}
-                  onPlay={(item) => onPlay({
-                    title: item.name,
-                    sources: sourcesFor(item),
-                    poster: posterFor(item, row.thumbnail),
-                  })} />
-          ))}
-          {upcoming.map((m, i) => (
-            <Card key={`u-${m.id || i}`} item={m} live={false}
-                  href={null} fallbackPoster={row.thumbnail} />
-          ))}
-        </div>
-      )}
-    </section>
+    </div>
+    {children}
+  </section>
   );
 };
 
@@ -153,6 +122,7 @@ const LiveTabsSection = ({ rows, heading }) => {
   const [fetched, setFetched] = useState(null);
   const [feeds, setFeeds] = useState({});
   const [playing, setPlaying] = useState(null);
+  const [showAllSoon, setShowAllSoon] = useState(false);
   const given = Array.isArray(rows);
 
   useEffect(() => {
@@ -171,13 +141,10 @@ const LiveTabsSection = ({ rows, heading }) => {
 
   const source = given ? rows : fetched;
   const tabRows = (source || []).filter((r) => parseTabUrl(r.bundle_url));
-
-  /* One fetch per tab, here rather than in each section.
-     Two rows can point at the same tab, and a section that fetched its own
-     could not see what the others hold — which is what matching a fixture
-     across publishers needs. */
   const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url).key))).join(",");
 
+  /* One fetch per tab. Two saved rows can point at the same one, and matching
+     a fixture across publishers needs every feed in the same place anyway. */
   useEffect(() => {
     if (!keys) return;
     let alive = true;
@@ -192,29 +159,52 @@ const LiveTabsSection = ({ rows, heading }) => {
     return () => { alive = false; };
   }, [keys]);
 
-  /* Which tabs carry each live fixture. Built from every feed at once, so a
-     match on two publishers can be swapped between rather than hunted for. */
-  const altSources = useMemo(() => {
-    const map = new Map();
+  /* Everything from every tab, each fixture once.
+     A match two publishers carry becomes one card holding both, so the viewer
+     picks a source in the player rather than guessing between two tiles. */
+  const { live, soon, loading } = useMemo(() => {
+    const liveBy = new Map();
+    const soonBy = new Map();
+    let pending = false;
+
     tabRows.forEach((r) => {
       const p = parseTabUrl(r.bundle_url);
       const f = feeds[p.key];
-      (f?.live || []).forEach((m) => {
+      if (!f) { pending = true; return; }
+
+      (f.live || []).forEach((m) => {
         const k = fixtureKey(m);
-        const at = map.get(k) || [];
-        if (!at.some((o) => o.key === p.key)) {
-          at.push({ key: p.key, label: p.def.label, src: tabItemUrl(p.base, p.key, m.id, true) });
+        const at = liveBy.get(k) || { item: m, poster: posterFor(m, r.thumbnail), sources: [] };
+        if (!at.sources.some((x) => x.key === p.key)) {
+          at.sources.push({ key: p.key, label: p.def.label, src: tabItemUrl(p.base, p.key, m.id, true) });
         }
-        map.set(k, at);
+        liveBy.set(k, at);
+      });
+
+      (f.upcoming || []).forEach((m) => {
+        const k = fixtureKey(m);
+        if (liveBy.has(k)) return;           // already on: not "coming up"
+        if (!soonBy.has(k)) {
+          soonBy.set(k, { item: m, poster: posterFor(m, r.thumbnail), label: p.def.label });
+        }
       });
     });
-    return map;
+
+    /* India first in both, then as the feeds ordered them — roughly by start
+       time, which is the only ordering they agree on. */
+    const byIndia = (a, b) => Number(isIndiaFixture(b.item)) - Number(isIndiaFixture(a.item));
+    return {
+      live: [...liveBy.values()].sort(byIndia),
+      soon: [...soonBy.values()].sort(byIndia),
+      loading: pending,
+    };
   }, [feeds, keys]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!source) return null;      // still loading its own rows
-  if (!tabRows.length) return null;
+  if (!source || !tabRows.length) return null;
 
-  const EMPTY = { loading: true, live: [], upcoming: [], error: null };
+  const shownSoon = showAllSoon ? soon : soon.slice(0, UPCOMING_SHOWN);
+  const hidden = soon.length - shownSoon.length;
+  const nothing = !loading && !live.length && !soon.length;
 
   return (
     <div className="mt-8 sm:mt-10">
@@ -224,24 +214,82 @@ const LiveTabsSection = ({ rows, heading }) => {
         </h2>
       )}
 
-      {tabRows.map((row) => {
-        const parsed = parseTabUrl(row.bundle_url);
-        return (
-          <Section
-            key={row.id}
-            row={row}
-            parsed={parsed}
-            state={feeds[parsed.key] || EMPTY}
-            altSources={altSources}
-            onPlay={setPlaying}
-          />
-        );
-      })}
+      {loading && (
+        <div className={LANDSCAPE_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="aspect-video rounded-xl bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {nothing && (
+        <p className="flex items-center gap-2 text-xs text-gray-500">
+          <AlertCircle className="w-4 h-4" aria-hidden="true" />
+          Nothing is on right now, and nothing is scheduled.
+        </p>
+      )}
+
+      {!loading && live.length > 0 && (
+        <Group title="Live now" icon={Radio} tone="text-red-400" count={live.length}>
+          <div className={LANDSCAPE_GRID}>
+            {live.map((e) => (
+              <Card
+                key={`l-${e.sources[0].src}`}
+                item={e.item}
+                live
+                href={e.sources[0].src}
+                fallbackPoster={e.poster}
+                badge={e.sources.length > 1 ? `${e.sources.length} sources` : e.sources[0].label}
+                onPlay={(item) => setPlaying({
+                  title: item.name,
+                  sources: e.sources.map(({ label, src }) => ({ label, src })),
+                  poster: e.poster,
+                })}
+              />
+            ))}
+          </div>
+        </Group>
+      )}
+
+      {!loading && soon.length > 0 && (
+        <Group title="Coming up" icon={Clock3} tone="text-gray-300" count={soon.length}>
+          <div className={LANDSCAPE_GRID}>
+            {shownSoon.map((e, i) => (
+              <Card key={`u-${e.item.id || i}`} item={e.item} live={false}
+                    href={null} fallbackPoster={e.poster} badge={e.label} />
+            ))}
+          </div>
+
+          {/* The feeds together run to dozens of fixtures, most of them days
+              out. A few, and the rest for whoever wants them. */}
+          {hidden > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllSoon(true)}
+              className="mt-4 w-full sm:w-auto rounded-xl bg-white/[0.06] px-5 py-2.5 text-[11px] font-black
+                         uppercase tracking-widest text-gray-300 ring-1 ring-white/10
+                         hover:bg-white/[0.12] hover:text-white transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              Explore {hidden} more
+            </button>
+          )}
+          {showAllSoon && soon.length > UPCOMING_SHOWN && (
+            <button
+              type="button"
+              onClick={() => setShowAllSoon(false)}
+              className="mt-4 w-full sm:w-auto rounded-xl px-5 py-2.5 text-[11px] font-black
+                         uppercase tracking-widest text-gray-500 hover:text-white transition-colors"
+            >
+              Show fewer
+            </button>
+          )}
+        </Group>
+      )}
 
       <LiveViewer
         open={!!playing}
         title={playing?.title || ""}
-        src={playing?.src || ""}
         sources={playing?.sources}
         poster={playing?.poster}
         onClose={() => setPlaying(null)}

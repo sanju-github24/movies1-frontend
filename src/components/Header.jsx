@@ -126,7 +126,10 @@ function useLiveSports() {
           awayName: sides ? sides.away : "",
           series: m.event || m.source,
           venue: "", matchOrder: "",
+          /* Both, because the hero reaches for a cover first and a poster
+             second — a fixture that set only one showed a blank backdrop. */
           poster: m.poster || m.logo || null,
+          cover_poster: m.poster || m.logo || null,
           // Not a scorecard link: this one plays.
           playSrc: heroPlayUrl(m),
           playTitle: m.name,

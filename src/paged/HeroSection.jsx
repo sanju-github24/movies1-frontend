@@ -1025,6 +1025,7 @@ export default function HeroSection(){
           link:null, playSrc: heroPlayUrl(m), playTitle: m.name,
           home, away,
           heroImage: m.poster || m.logo || null,
+          fancodeThumb: m.poster || m.logo || null,   // what the slide reads for its backdrop
           tournament: m.event || m.source,
           matchFmt: m.category || "",
           venue:"",
