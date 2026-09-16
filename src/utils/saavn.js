@@ -33,6 +33,51 @@ export const CHART_PLAYLISTS = [
   { name: 'Marathi Top 50',   id: '1134710071' },
 ];
 
+/* Which chart a language draws on, for the radio below. These are the same
+   JioSaavn charts the home page is built from, keyed by the `language` field a
+   song actually carries. */
+const LANGUAGE_CHARTS = {
+  hindi:     '1134543272',
+  english:   '1134595537',
+  punjabi:   '1134543511',
+  tamil:     '1134651042',
+  telugu:    '1134643225',
+  kannada:   '1134591169',
+  malayalam: '1134705865',
+  marathi:   '1134710071',
+};
+
+/* A song in a language we hold no chart for still has to be followed by
+   something, and what is trending is the least wrong answer available. */
+const FALLBACK_CHART = '110858205';   // Trending Today
+
+/**
+ * What to play after a song finishes, so listening does not stop at the end of
+ * whatever was clicked.
+ *
+ * Songs in the same language, best first. "Best" is not ours to judge, so it
+ * is JioSaavn's chart for that language — already ranked, already current —
+ * rather than a rating we would have to invent. `exclude` carries the ids
+ * already heard this session so the radio moves forward instead of circling.
+ *
+ * Returns [] only when there is genuinely nothing left; the caller decides
+ * whether that ends the session or starts it round again.
+ */
+export async function fetchRadio(language, exclude = []) {
+  const key = String(language || '').trim().toLowerCase();
+  const chart = LANGUAGE_CHARTS[key] || FALLBACK_CHART;
+  const skip = new Set(exclude);
+
+  const pick = async (id) => (await fetchPlaylist(id, 50)).filter(s => s.id && !skip.has(s.id));
+
+  const sameLanguage = await pick(chart);
+  if (sameLanguage.length) return sameLanguage;
+
+  /* Heard the whole of one chart. Rather than stop, widen to what is trending
+     across languages — and only if that is exhausted too is there nothing. */
+  return chart === FALLBACK_CHART ? [] : pick(FALLBACK_CHART);
+}
+
 /** A song object from the API, shaped into the card the rows and lists render. */
 export function toCard(song) {
   const title = song.song || song.title || 'Untitled';

@@ -4,7 +4,7 @@ import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   Play, Pause, Download, ArrowLeft,
   Volume2, VolumeX, Loader2, RotateCcw, RotateCw, User,
-  Minus, MoreHorizontal, X, ChevronDown, ChevronUp, Mic2
+  Minus, MoreHorizontal, X, ChevronDown, ChevronUp, Mic2, Radio
 } from 'lucide-react';
 import { musicApi } from '../utils/api';
 import { fetchTrack, playableUrl, fetchLyrics } from '../utils/saavn';
@@ -245,6 +245,10 @@ export default function TrackDetailPage() {
             title:     meta.title   || titleFallback,
             artist:    meta.singer  || 'Unknown Artist',
             poster:    meta.cover_image || '',
+            // What the radio picks the next songs by. This track already has a
+            // stream, so the player never resolves it and would otherwise not
+            // learn the language from anywhere.
+            language:  meta.language || '',
             streamUrl,
             lightRgb:  light,
             baseRgb:   base,
@@ -280,6 +284,20 @@ export default function TrackDetailPage() {
       })
       .catch(() => {});
   }, [trackData]);
+
+  /* Follow the radio. When one song rolls into the next the page is still
+     showing the one that finished — its title, its artwork, its lyrics — while
+     something else plays. Move the route to whatever is playing so the page
+     is about that song instead.
+
+     Replace rather than push: the songs the radio chose were never navigated
+     to, so Back should return to wherever the listening started rather than
+     walking back up a queue. Nothing reloads — the track page skips loading a
+     song that is already playing.  */
+  useEffect(() => {
+    const playing = player?.currentTrack?.id;
+    if (playing && playing !== id) navigate(`/music/track/${playing}`, { replace: true });
+  }, [player?.currentTrack?.id, id, navigate]);
 
   // ── Fetch lyrics ──────────────────────────────────────────────────
   // Asked for on every track rather than when the panel is opened: the answer
@@ -876,6 +894,20 @@ export default function TrackDetailPage() {
                     onMouseLeave={e=>e.currentTarget.style.background='none'}>
                     <Minus size={15} style={{ color:`rgb(${lightRgb})` }} />
                     Minimize Player
+                  </button>
+                  {/* The radio, and the way to stop it. Playback carrying on by
+                      itself is the kind of thing a listener must be able to
+                      switch off where they are, rather than by pausing every
+                      song that follows. */}
+                  <button onClick={() => { setShowDotsMenu(false); player?.toggleAutoplay?.(); }}
+                    style={{ width:'100%', padding:'11px 16px', textAlign:'left', background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.85)', display:'flex', alignItems:'center', gap:10, transition:'background 0.12s' }}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                    <Radio size={15} style={{ color: player?.autoplay ? `rgb(${lightRgb})` : 'rgba(255,255,255,0.35)' }} />
+                    <span style={{ flex:1 }}>Keep playing similar</span>
+                    <span style={{ fontSize:10, fontWeight:900, letterSpacing:'0.1em', textTransform:'uppercase', color: player?.autoplay ? `rgb(${lightRgb})` : 'rgba(255,255,255,0.3)' }}>
+                      {player?.autoplay ? 'On' : 'Off'}
+                    </span>
                   </button>
                   {/* Download options inside dots menu — omitted when nothing is downloadable */}
                   {hasDownloads && <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'2px 0' }} />}

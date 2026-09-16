@@ -1,8 +1,13 @@
 import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
 import { resolveStream } from "../utils/playlists";
+import { fetchRadio } from "../utils/saavn";
 
 export const MusicPlayerContext = createContext(null);
+
+/* Whether one song should be followed by another is a preference, not a
+   property of the song, so it outlives the track and lives here. */
+const AUTOPLAY_PREF = 'music_autoplay_radio';
 
 export function useMusicPlayer() {
   return useContext(MusicPlayerContext);
@@ -180,6 +185,13 @@ export function MusicPlayerProvider({ children }) {
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState("off");   // off | all | one
 
+  /* The radio: when a song ends with nothing queued behind it, more in the
+     same language are fetched and play on, until the listener says otherwise.
+     On by default — a song ending in silence is the thing being fixed. */
+  const [autoplay, setAutoplay] = useState(() => {
+    try { return localStorage.getItem(AUTOPLAY_PREF) !== 'off'; } catch { return true; }
+  });
+
   /* The audio element's listeners are wired once, so they cannot see state —
      they read these. */
   const queueRef  = useRef([]);
@@ -193,6 +205,16 @@ export function MusicPlayerProvider({ children }) {
      a queue nothing in it resolves would circle and ask the server again for
      each, as fast as the requests came back. */
   const failRef = useRef(0);
+
+  const autoplayRef = useRef(true);
+  useEffect(() => { autoplayRef.current = autoplay; }, [autoplay]);
+
+  /* Everything played this session, so the radio goes somewhere new rather
+     than round the top of the same chart. */
+  const playedRef = useRef(new Set());
+  /* One refill at a time: `ended` and a failed resolve can both reach for the
+     radio at once, and two answers would queue the same songs twice. */
+  const radioBusyRef = useRef(false);
 
 
   // Ref mirrors currentTrack so event handlers never have stale closures
@@ -303,6 +325,8 @@ export function MusicPlayerProvider({ children }) {
      
        If the answer is no, the queue moves on rather than stopping: one
        unavailable song should not end the listening. */
+    if (trackInfo?.id) playedRef.current.add(trackInfo.id);
+
     let src = trackInfo.streamUrl;
     if (!src && trackInfo.id) {
       const wanted = trackInfo.id;
@@ -312,7 +336,10 @@ export function MusicPlayerProvider({ children }) {
         if (currentTrackRef.current?.id !== wanted) return;
         src = streamUrl;
         setCurrentTrack((t) => (t && t.id === wanted
-          ? { ...t, streamUrl, poster: t.poster || metadata.cover_image || null }
+          ? { ...t, streamUrl,
+              poster: t.poster || metadata.cover_image || null,
+              // What the radio picks its next songs by.
+              language: t.language || metadata.language || '' }
           : t));
       } catch (e) {
         console.warn('[MusicPlayer] could not resolve', wanted, e.message);
@@ -356,6 +383,9 @@ export function MusicPlayerProvider({ children }) {
   const playQueue = useCallback((tracks, startIndex = 0) => {
     if (!Array.isArray(tracks) || !tracks.length) return;
     failRef.current = 0;
+    // Choosing a list to play starts the history over: what was heard before
+    // it should not decide what the radio plays after it.
+    playedRef.current = new Set();
     const order = buildOrder(tracks.length, startIndex, shuffleRef.current);
     const pos = Math.max(0, order.indexOf(startIndex));
     setQueue(tracks); queueRef.current = tracks;
@@ -364,18 +394,80 @@ export function MusicPlayerProvider({ children }) {
     loadTrack(tracks[order[pos]], { minimized: true });
   }, [buildOrder, loadTrack]);
 
+  /* More songs to follow this one: same language, chart order, nothing already
+     heard. Appended to the queue rather than replacing it, so whatever was
+     playing keeps its place and its history.
+
+     A song played on its own has no queue at all, so one is started here with
+     it at the front — which is what makes a single track picked out of search
+     carry on into a session rather than ending in silence.
+
+     Returns whether there is now something to move on to. */
+  const extendRadio = useCallback(async () => {
+    if (!autoplayRef.current || radioBusyRef.current) return false;
+    const seed = currentTrackRef.current;
+    if (!seed?.id) return false;
+
+    radioBusyRef.current = true;
+    try {
+      let more = await fetchRadio(seed.language, [...playedRef.current]);
+      if (!more.length) {
+        /* Every chart we can reach has been heard. The listener has not asked
+           to stop, so start the history over and go round again rather than
+           going quiet — minus the song playing now, which must not repeat
+           straight into itself. */
+        playedRef.current = new Set([seed.id]);
+        more = await fetchRadio(seed.language, [seed.id]);
+        if (!more.length) return false;
+      }
+
+      const hadQueue = queueRef.current.length > 0 && orderRef.current.length > 0;
+      const base = hadQueue ? queueRef.current : [seed];
+      const tracks = [...base, ...more];
+      const added = Array.from({ length: more.length }, (_, i) => base.length + i);
+      if (shuffleRef.current) {
+        for (let i = added.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [added[i], added[j]] = [added[j], added[i]];
+        }
+      }
+
+      setQueue(tracks);
+      queueRef.current = tracks;
+      // A queue that already existed keeps its order and its position; a single
+      // song becomes position 0 of a new one.
+      orderRef.current = hadQueue ? [...orderRef.current, ...added] : [0, ...added];
+      if (!hadQueue) { posRef.current = 0; setQueueIndex(0); }
+      return true;
+    } catch (e) {
+      console.warn('[MusicPlayer] radio could not extend:', e.message);
+      return false;
+    } finally {
+      radioBusyRef.current = false;
+    }
+  }, []);
+
   /* step(+1) at the end of the queue stops unless repeat says otherwise;
      step(-1) within the first few seconds of a song goes back, otherwise it
      restarts the one playing — the behaviour every music app has. */
-  const step = useCallback((delta) => {
-    const tracks = queueRef.current, order = orderRef.current;
-    if (!tracks.length || !order.length) return;
-
+  const step = useCallback(async (delta) => {
     if (delta > 0 && repeatRef.current === "one") {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch(() => {});
       return;
     }
+
+    /* Running past the end is where the radio comes in — and so is a song
+       playing on its own, which reaches here with no queue behind it at all.
+       Only forwards: stepping back off the front is not a reason to fetch. */
+    if (delta > 0
+        && repeatRef.current !== "all"
+        && posRef.current + delta >= orderRef.current.length) {
+      if (!(await extendRadio())) { audioRef.current.pause(); return; }
+    }
+
+    const tracks = queueRef.current, order = orderRef.current;
+    if (!tracks.length || !order.length) return;
 
     let pos = posRef.current + delta;
     if (pos >= order.length) {
@@ -389,13 +481,23 @@ export function MusicPlayerProvider({ children }) {
     posRef.current = pos;
     setQueueIndex(order[pos]);
     loadTrack(tracks[order[pos]], { minimized: true });
-  }, [loadTrack]);
+  }, [loadTrack, extendRadio]);
 
   const next = useCallback(() => step(1), [step]);
   const previous = useCallback(() => {
     if (audioRef.current.currentTime > 4) { audioRef.current.currentTime = 0; return; }
     step(-1);
   }, [step]);
+
+  /* The one control the radio needs: it runs until it is told not to. The
+     choice is remembered, since it is about how someone likes to listen rather
+     than about this song. */
+  const toggleAutoplay = useCallback(() => {
+    setAutoplay((on) => {
+      try { localStorage.setItem(AUTOPLAY_PREF, on ? 'off' : 'on'); } catch { /* not remembered */ }
+      return !on;
+    });
+  }, []);
 
   const toggleShuffle = useCallback(() => {
     setShuffle((on) => {
@@ -588,6 +690,9 @@ export function MusicPlayerProvider({ children }) {
     // ── Queue, shuffle and repeat ──
     queue, queueIndex, shuffle, repeat,
     playQueue, next, previous, toggleShuffle, cycleRepeat,
+    /* The radio: keeps songs coming in the same language once the queue runs
+       dry, until this is turned off. */
+    autoplay, toggleAutoplay,
     /* The song playing now, as an index into the queue, so a list can mark it
        without comparing objects. -1 when what is playing did not come from
        one — a single track opened on its own. */
