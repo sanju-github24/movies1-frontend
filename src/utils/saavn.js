@@ -33,49 +33,99 @@ export const CHART_PLAYLISTS = [
   { name: 'Marathi Top 50',   id: '1134710071' },
 ];
 
-/* Which chart a language draws on, for the radio below. These are the same
-   JioSaavn charts the home page is built from, keyed by the `language` field a
-   song actually carries. */
+/* Which charts a language draws on, for the radio below. Two each rather than
+   one: the top-50 alone is eighty songs short of a station, and a listener who
+   leaves it running would hear the same fifty come round. The superhits chart
+   is what is current, the most-searched one is what people actually go
+   looking for, and together they are a pool worth shuffling. */
 const LANGUAGE_CHARTS = {
-  hindi:     '1134543272',
-  english:   '1134595537',
-  punjabi:   '1134543511',
-  tamil:     '1134651042',
-  telugu:    '1134643225',
-  kannada:   '1134591169',
-  malayalam: '1134705865',
-  marathi:   '1134710071',
+  hindi:     ['1134543272', '946682072'],
+  english:   ['1134595537', '945969391'],
+  punjabi:   ['1134543511', '946945296'],
+  tamil:     ['1134651042', '1026391929'],
+  telugu:    ['1134643225', '951897805'],
+  kannada:   ['1134591169', '948035636'],
+  malayalam: ['1134705865', '951898142'],
+  marathi:   ['1134710071', '951898019'],
 };
 
 /* A song in a language we hold no chart for still has to be followed by
    something, and what is trending is the least wrong answer available. */
-const FALLBACK_CHART = '110858205';   // Trending Today
+const FALLBACK_CHARTS = ['110858205'];   // Trending Today
+
+/* A random order that still respects how well listened-to a song is.
+ *
+ * Not a plain shuffle, which would play a song nobody streams as readily as one
+ * everybody does; and not play-count order either, which would be the same
+ * sequence every time. Each song draws a key of random^(1/weight) and the
+ * highest keys go first — weighted sampling without replacement. A better-rated
+ * song is likelier to come up early, but never certain to, so two runs of the
+ * same station are not the same run.
+ *
+ * The weight is the log of the play count, not the count itself. These span
+ * from a few hundred thousand to half a billion, and weighting by that
+ * directly would let one song win every draw.
+ */
+function weightedShuffle(songs) {
+  return songs
+    .map((song) => ({ song, k: Math.random() ** (1 / Math.log10((song.plays || 0) + 10)) }))
+    .sort((a, b) => b.k - a.k)
+    .map((x) => x.song);
+}
+
+/* Half the pool, by play count. "Good rating" has to be relative: a Kannada
+   song that does well is counted in millions where a Hindi one is counted in
+   hundreds of millions, so a fixed floor would quietly leave some languages
+   with no station at all. The median of what came back adapts on its own. */
+function betterHalf(songs) {
+  if (songs.length < 4) return songs;
+  const mid = [...songs].sort((a, b) => (a.plays || 0) - (b.plays || 0))[Math.floor(songs.length / 2)];
+  const floor = mid.plays || 0;
+  const kept = songs.filter((s) => (s.plays || 0) >= floor);
+  return kept.length ? kept : songs;
+}
 
 /**
  * What to play after a song finishes, so listening does not stop at the end of
  * whatever was clicked.
  *
- * Songs in the same language, best first. "Best" is not ours to judge, so it
- * is JioSaavn's chart for that language — already ranked, already current —
- * rather than a rating we would have to invent. `exclude` carries the ids
- * already heard this session so the radio moves forward instead of circling.
+ * Songs in the same language, well listened-to, in a different order every
+ * time. "Good" is not ours to judge, so it is JioSaavn's own play counts and
+ * its charts for that language rather than a rating we would have to invent.
+ * `exclude` carries the ids already heard this session so the radio moves on
+ * instead of circling.
  *
  * Returns [] only when there is genuinely nothing left; the caller decides
  * whether that ends the session or starts it round again.
  */
 export async function fetchRadio(language, exclude = []) {
   const key = String(language || '').trim().toLowerCase();
-  const chart = LANGUAGE_CHARTS[key] || FALLBACK_CHART;
+  const charts = LANGUAGE_CHARTS[key] || FALLBACK_CHARTS;
   const skip = new Set(exclude);
 
-  const pick = async (id) => (await fetchPlaylist(id, 50)).filter(s => s.id && !skip.has(s.id));
+  const pool = async (ids) => {
+    /* One slow chart should not hold up the station, and one that fails should
+       not silence it — whatever arrives is what gets played. */
+    const lists = await Promise.all(ids.map(id => fetchPlaylist(id, 50).catch(() => [])));
+    const seen = new Set();
+    const songs = [];
+    for (const list of lists) {
+      for (const song of list) {
+        if (!song.id || skip.has(song.id) || seen.has(song.id)) continue;
+        seen.add(song.id);
+        songs.push(song);
+      }
+    }
+    return weightedShuffle(betterHalf(songs));
+  };
 
-  const sameLanguage = await pick(chart);
+  const sameLanguage = await pool(charts);
   if (sameLanguage.length) return sameLanguage;
 
-  /* Heard the whole of one chart. Rather than stop, widen to what is trending
-     across languages — and only if that is exhausted too is there nothing. */
-  return chart === FALLBACK_CHART ? [] : pick(FALLBACK_CHART);
+  /* Heard everything we hold for that language. Rather than stop, widen to what
+     is trending across all of them — and only if that is spent too is there
+     genuinely nothing. */
+  return charts === FALLBACK_CHARTS ? [] : pool(FALLBACK_CHARTS);
 }
 
 /** A song object from the API, shaped into the card the rows and lists render. */
@@ -90,6 +140,8 @@ export function toCard(song) {
     label: album && album !== title ? album : (artist || 'Single'),
     poster: song.image || '',
     artist: artist || 'Unknown Artist',
+    // How well listened-to it is. The radio picks by this.
+    plays: Number(song.play_count) || 0,
   };
 }
 
@@ -221,6 +273,37 @@ export async function fetchLyrics(songId) {
     lines: data.lyrics.split(/<br\s*\/?>/i).map(l => l.trim()),
     copyright: data.copyright || '',
   };
+}
+
+/**
+ * Save one track at one bitrate.
+ *
+ * The bytes are read first and handed over as a blob so the file is named
+ * here — a plain link would save whatever the CDN's path happens to say. If
+ * that read fails the URL is opened instead, which still downloads: the proxy
+ * sets a Content-Disposition when the name rides along in ?download=.
+ *
+ * .m4a, not .mp3 — JioSaavn serves AAC in an MP4 container, and some players
+ * refuse the file outright when the extension disagrees with what is inside.
+ */
+export async function downloadTrack(url, title, bitrate) {
+  if (!url) return;
+  const clean = String(title || 'Song').replace(/[^a-zA-Z0-9\s\-_()]/g, '').replace(/\s+/g, ' ').trim() || 'Song';
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${clean} (${bitrate}).m4a`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Freed on the next tick: revoking straight away can beat the save in some
+    // browsers and hand the user an empty file.
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
 }
 
 /**

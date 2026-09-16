@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMusicPlayer } from '../context/MusicPlayerContext';
 import {
   Play, Pause, Download, ArrowLeft,
-  Volume2, VolumeX, Loader2, RotateCcw, RotateCw, User,
+  Volume2, VolumeX, Loader2, SkipForward, User,
   Minus, MoreHorizontal, X, ChevronDown, ChevronUp, Mic2, Radio
 } from 'lucide-react';
 import { musicApi } from '../utils/api';
-import { fetchTrack, playableUrl, fetchLyrics } from '../utils/saavn';
+import { fetchTrack, playableUrl, fetchLyrics, downloadTrack } from '../utils/saavn';
 import AddToPlaylist from "../components/AddToPlaylist";
 
 // Whether the lyrics panel is open is a preference, not per-track state — it
@@ -81,12 +81,6 @@ export default function TrackDetailPage() {
   const navigate = useNavigate();
   const player   = useMusicPlayer();
 
-  const SEEK_STEP = 10;   // seconds
-  const nudge = (delta) => {
-    const target = Math.min(Math.max((currentTime || 0) + delta, 0), duration || 0);
-    player?.seekTo(target);
-    if (player?.audioRef?.current) player.audioRef.current.currentTime = target;
-  };
 
   // ── Seed from global cache (survives minimize/maximize) ──────────
   const cachedEntry = player?.trackCache?.[id] || {};
@@ -473,17 +467,7 @@ export default function TrackDetailPage() {
   const triggerDownload = async (url, bitrate) => {
     if (!url) return;
     setDownloading(true); setDlBitrate(bitrate); setShowDlMenu(false);
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      const clean = (metadata.title||'Song').replace(/[^a-zA-Z0-9\s\-_()]/g,'').replace(/\s+/g,' ').trim();
-      // JioSaavn serves AAC in an MP4 container, not MP3 — naming it .mp3 gives
-      // the player the wrong codec hint and some just refuse the file.
-      a.download = `${clean} (${bitrate}).m4a`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    } catch (_) { window.open(url,'_blank'); }
+    try { await downloadTrack(url, metadata.title, bitrate); }
     finally { setDownloading(false); setDlBitrate(''); }
   };
 
@@ -794,15 +778,18 @@ export default function TrackDetailPage() {
                         style={{ width:'100%' }} />
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-                      <button onClick={() => nudge(-SEEK_STEP)} aria-label="Back 10 seconds" title="Back 10 seconds"
-                        style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCcw size={20}/></button>
+                      {/* Nothing on the left of play: the seek bar above is
+                          draggable, which is the better way to move ten seconds
+                          and every other distance besides. */}
                       <button onClick={player?.togglePlay}
                         style={{ width:58, height:58, borderRadius:'50%', border:'none', cursor:'pointer', background:`rgb(${lightRgb})`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 8px 30px rgba(${lightRgb},0.5)`, transition:'transform 0.15s' }}
                         onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
                         {isPlaying ? <Pause size={24} style={{fill:'#000',color:'#000'}}/> : <Play size={24} style={{fill:'#000',color:'#000',marginLeft:3}}/>}
                       </button>
-                      <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds" title="Forward 10 seconds"
-                        style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}><RotateCw size={20}/></button>
+                      <button onClick={() => player?.next?.()} aria-label="Next song" title="Next song"
+                        style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.55)', display:'flex' }}
+                        onMouseEnter={e=>e.currentTarget.style.color='white'}
+                        onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.55)'}><SkipForward size={20}/></button>
                     </div>
                     {/* Desktop download button — hidden when nothing is downloadable;
                         keep a spacer so the play button stays centered. */}
@@ -986,23 +973,20 @@ export default function TrackDetailPage() {
                   </div>
                 </div>
 
-                {/* Controls row. Was SkipBack, SkipBack, Play, SkipForward —
-                    four buttons with no handler between them, one of them a
-                    duplicate of another. Now: seek back, play, seek forward. */}
+                {/* Controls row: play, and what comes after it. The ten-second
+                    jumps that used to flank the play button are gone — the seek
+                    bar above is draggable, which does their job and every other
+                    distance too, and a station that plays on needs a way past a
+                    song far more than it needs a nudge inside one. */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24, padding:'0 8px' }}>
-                  <button onClick={() => nudge(-SEEK_STEP)} aria-label="Back 10 seconds"
-                    style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
-                    <RotateCcw size={24}/>
-                  </button>
-
                   <button onClick={player?.togglePlay} aria-label={isPlaying ? "Pause" : "Play"}
                     style={{ width:60, height:60, borderRadius:'50%', border:'none', cursor:'pointer', background:'white', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', transition:'transform 0.15s' }}>
                     {isPlaying ? <Pause size={24} style={{fill:'#000',color:'#000'}}/> : <Play size={24} style={{fill:'#000',color:'#000',marginLeft:3}}/>}
                   </button>
 
-                  <button onClick={() => nudge(SEEK_STEP)} aria-label="Forward 10 seconds"
+                  <button onClick={() => player?.next?.()} aria-label="Next song"
                     style={{ background:'none', border:'none', color:'white', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
-                    <RotateCw size={24}/>
+                    <SkipForward size={24}/>
                   </button>
                   {/* Download replaces repeat/shuffle — hidden when nothing is downloadable */}
                   {hasDownloads ? (
