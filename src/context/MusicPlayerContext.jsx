@@ -216,6 +216,16 @@ export function MusicPlayerProvider({ children }) {
      radio at once, and two answers would queue the same songs twice. */
   const radioBusyRef = useRef(false);
 
+  /* A stream URL, once resolved, kept for the rest of the session. The next
+     song is resolved into here while the current one is still playing, so when
+     it ends the switch is a plain `audio.play()` with no fetch in front of it —
+     which is the only kind of continuation a phone allows once its screen is
+     off. Tokens last hours, far longer than one song, so a value cached a few
+     minutes ago is still good. */
+  const resolvedRef = useRef({});
+  const prefetchRef = useRef(null);
+  const prefetchedForRef = useRef(null);
+
 
   // Ref mirrors currentTrack so event handlers never have stale closures
   const currentTrackRef = useRef(null);
@@ -245,24 +255,50 @@ export function MusicPlayerProvider({ children }) {
   useEffect(() => {
     const audio = audioRef.current;
 
-    const onTimeUpdate = () => {
-      const t = audio.currentTime;
-      setCurrentTime(t);
-      // Persist session so page reload can resume
+    let lastUiTick = 0, lastPersist = 0;
+    const persist = (t) => {
       try {
         if (audio.src && currentTrackRef.current) {
           localStorage.setItem('music_session', JSON.stringify({
-            ...currentTrackRef.current,
-            currentTime: t,
-            volume: audio.volume,
+            ...currentTrackRef.current, currentTime: t, volume: audio.volume,
           }));
         }
       } catch (_) {}
     };
+    const onTimeUpdate = () => {
+      const t = audio.currentTime;
+      const now = Date.now();
+      /* timeupdate fires four times a second. Backgrounded there is no progress
+         bar to move, so re-rendering the whole player each time is pure heat for
+         nothing seen — the phone is in a pocket. Skip it there, bar an
+         occasional tick to keep the lock-screen scrubber roughly honest;
+         onscreen, keep it smooth. */
+      if (!document.hidden) {
+        setCurrentTime(t);
+      } else if (now - lastUiTick > 2000) {
+        lastUiTick = now;
+        setCurrentTime(t);
+      }
+      /* Persisting is for surviving a reload, which does not need four
+         JSON.stringify-and-write passes a second — every few seconds loses at
+         most that much position and saves the rest of the work. */
+      if (now - lastPersist > 4000) { lastPersist = now; persist(t); }
+    };
     const onLoadedMeta    = () => setDuration(audio.duration || 0);
-    // Playing makes a restored session live again (mini player everywhere)
-    const onPlay          = () => { setIsPlaying(true); setIsRestoredSession(false); };
-    const onPause         = () => setIsPlaying(false);
+    // Playing makes a restored session live again (mini player everywhere).
+    // It is also where the next song is lined up — see prefetchNext — once per
+    // track, not on every resume.
+    const onPlay          = () => {
+      setIsPlaying(true); setIsRestoredSession(false);
+      const id = currentTrackRef.current?.id;
+      if (id && prefetchedForRef.current !== id) {
+        prefetchedForRef.current = id;
+        prefetchRef.current?.();
+      }
+    };
+    // Keep the last position on pause, so a reload after pausing resumes there
+    // rather than up to four seconds back.
+    const onPause         = () => { setIsPlaying(false); persist(audio.currentTime); };
     /* Held in a ref because these listeners are wired once and would
        otherwise keep calling the first version of next() forever. */
     const onEnded         = () => {
@@ -328,12 +364,19 @@ export function MusicPlayerProvider({ children }) {
     if (trackInfo?.id) playedRef.current.add(trackInfo.id);
 
     let src = trackInfo.streamUrl;
+    if (!src && trackInfo.id && resolvedRef.current[trackInfo.id]) {
+      // Prefetched while the previous song played — no fetch, so playback
+      // continues the instant the last one ended, screen on or off.
+      src = resolvedRef.current[trackInfo.id];
+      setCurrentTrack((t) => (t && t.id === trackInfo.id ? { ...t, streamUrl: src } : t));
+    }
     if (!src && trackInfo.id) {
       const wanted = trackInfo.id;
       try {
         const { streamUrl, metadata } = await resolveStream(wanted);
         // Another song may have been chosen while this was in flight.
         if (currentTrackRef.current?.id !== wanted) return;
+        resolvedRef.current[wanted] = streamUrl;
         src = streamUrl;
         setCurrentTrack((t) => (t && t.id === wanted
           ? { ...t, streamUrl,
@@ -446,6 +489,41 @@ export function MusicPlayerProvider({ children }) {
       radioBusyRef.current = false;
     }
   }, []);
+
+  /* Get the next song ready before this one ends.
+   *
+   * Two things stand between a song ending and the next being heard: the radio
+   * may need refilling (a fetch), and the next track's stream has to be
+   * resolved (another fetch). Done at the moment of ending, that pair of round
+   * trips is a gap — and a backgrounded phone treats a gap in playback as the
+   * end of it, and will not let script start audio again. Done here, while the
+   * current song still has minutes to run, the gap is gone: when it ends the
+   * next stream is already in hand and playing it is a single synchronous call.
+   *
+   * Cheap to call often — it does nothing once the next song is resolved. */
+  const prefetchNext = useCallback(async () => {
+    if (repeatRef.current === "one") return;
+
+    // Make sure there is a next song at all; extend the station if not.
+    if (posRef.current + 1 >= orderRef.current.length) {
+      await extendRadio();
+    }
+    const order = orderRef.current, tracks = queueRef.current;
+    const nextPos = posRef.current + 1;
+    if (nextPos >= order.length) return;
+
+    const nextTrack = tracks[order[nextPos]];
+    const id = nextTrack?.id;
+    if (!id || nextTrack.streamUrl || resolvedRef.current[id]) return;
+
+    try {
+      const { streamUrl } = await resolveStream(id);
+      resolvedRef.current[id] = streamUrl;
+    } catch {
+      // It will be tried again the ordinary way when it reaches the front.
+    }
+  }, [extendRadio]);
+  useEffect(() => { prefetchRef.current = prefetchNext; }, [prefetchNext]);
 
   /* step(+1) at the end of the queue stops unless repeat says otherwise;
      step(-1) within the first few seconds of a song goes back, otherwise it
