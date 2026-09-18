@@ -24,6 +24,13 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   const current = list[idx] || list[0];
   const link = current?.src || "";
 
+  /* A language picked in the player. Each commentary is a separate stream
+     with its own id, so choosing one means resolving and loading that one.
+     Held against the link it was chosen on, so moving to another source or
+     another match does not carry Tamil across to something without it. */
+  const [pick, setPick] = useState(null);     // { link, id }
+  const pickedId = pick && pick.link === link ? pick.id : null;
+
   // A new fixture starts at its first source.
   useEffect(() => { setIdx(0); }, [src, open]);
 
@@ -38,14 +45,14 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
       try {
         const ref = parseSourceLink(link);
         if (!ref) throw new Error("This link does not say what to play.");
-        const source = await resolveSource(ref);
+        const source = await resolveSource(pickedId ? { ...ref, id: pickedId } : ref);
         if (!dead) setResolved({ source, title: source.title, poster: source.poster });
       } catch (e) {
         if (!dead) setErr(e.message || "Could not start this stream.");
       }
     })();
     return () => { dead = true; };
-  }, [open, link]);
+  }, [open, link, pickedId]);
 
   /* onClose is written inline by every caller, so it is a new function on
      each of their renders. Held in a ref so the listener below reads the
@@ -128,10 +135,13 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
             </div>
           ) : resolved ? (
             <AnchorPlayer
-              key={link}
+              key={link + (pickedId || "")}
               source={resolved.source}
               title={title || resolved.title}
               poster={poster || resolved.poster}
+              languages={resolved.source.languages}
+              lang={resolved.source.lang}
+              onLanguage={(id) => setPick({ link, id })}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-3">

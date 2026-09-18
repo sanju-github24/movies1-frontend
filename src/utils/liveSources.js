@@ -14,6 +14,8 @@
  *     jioCookie? }                          // appended to Jio CDN requests
  */
 
+import { langCode, baseId, langName } from "./langs";
+
 const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 
 /* The Mumbai function. SonyLiv and Hotstar refuse any address outside India
@@ -111,12 +113,30 @@ async function jioSource(id) {
    keys for a paid service's DRM, which this site does not unwrap. */
 /* A fixture named only by its id — which is all a saved link carries — is
    looked up in its feed first, so a link and a card in hand end up the same. */
-async function findFixture(tabKey, id) {
+async function liveFixtures(tabKey) {
   const body = await feed(tabKey === "fc" ? "?feed=fancode" : "?feed=sonyliv");
-  const live = Array.isArray(body) ? body : (body.live || []);
-  const hit = live.find((m) => String(m.id) === String(id));
+  return Array.isArray(body) ? body : (body.live || []);
+}
+
+async function findFixture(tabKey, id) {
+  const hit = (await liveFixtures(tabKey)).find((m) => String(m.id) === String(id));
   if (!hit) throw new Error("That match is not live any more");
   return hit;
+}
+
+/* The other commentaries of the same match. Each language is its own stream
+   with its own id, the id differing only in its suffix, so siblings are the
+   live fixtures that share everything before it. Worked out here rather than
+   by whoever opened the player, so a hero slide, a card and a saved link all
+   offer the same choice without any of them knowing there was one. */
+async function siblingLanguages(tabKey, id) {
+  if (!langCode(id)) return [];
+  const base = baseId(id);
+  const seen = new Set();
+  return (await liveFixtures(tabKey))
+    .filter((m) => baseId(m.id) === base && langCode(m.id))
+    .map((m) => ({ code: langCode(m.id), label: langName(langCode(m.id)), id: m.id }))
+    .filter((l) => (seen.has(l.code) ? false : (seen.add(l.code), true)));
 }
 
 /* The links the site already builds point at the player page with the tab
@@ -134,8 +154,13 @@ export function parseSourceLink(link) {
 export async function resolveSource({ tabKey, id, item }) {
   switch (tabKey) {
     case "sony":
-    case "fc":
-      return fixtureSource(tabKey, item?.url ? item : await findFixture(tabKey, id));
+    case "fc": {
+      const fx = item?.url ? item : await findFixture(tabKey, id);
+      const src = fixtureSource(tabKey, fx);
+      const languages = await siblingLanguages(tabKey, fx.id).catch(() => []);
+      // One language is no choice at all; the player shows nothing for it.
+      return languages.length > 1 ? { ...src, lang: langCode(fx.id), languages } : src;
+    }
     case "bb":
       return hotstarSource(id || item?.id);
     case "live":

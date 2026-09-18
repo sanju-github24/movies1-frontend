@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Radio, Settings, Check } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Radio, Settings, Check, Languages } from "lucide-react";
 
 /* AnchorHD's own live player.
  *
@@ -45,7 +45,7 @@ const fmtBehind = (s) => {
   return `${m}m ${String(r).padStart(2, "0")}s`;
 };
 
-export default function AnchorPlayer({ source, title, poster, onPlaying, onError }) {
+export default function AnchorPlayer({ source, title, poster, onPlaying, onError, languages, lang, onLanguage }) {
   const wrap = useRef(null);
   const vid = useRef(null);
   const engine = useRef(null);            // { kind, inst }
@@ -60,6 +60,7 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
   const [choice, setChoice] = useState("auto");  // "auto" or a height
   const [playingH, setPlayingH] = useState(0);   // what Auto has actually picked
   const [qOpen, setQOpen] = useState(false);
+  const [lOpen, setLOpen] = useState(false);
   const hideTimer = useRef(null);
 
   const fail = useCallback((msg) => {
@@ -406,11 +407,49 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
             {title}
           </span>
 
+          {/* Commentary language. Each is a separate stream, so choosing one
+              loads it afresh — a live stream has no place to resume from, and
+              the new one starts at its own live edge. Shown only when the
+              match really is available in more than one. */}
+          {languages?.length > 1 && (
+            <div className="relative">
+              <button type="button" onClick={() => { setQOpen(false); setLOpen((o) => !o); }}
+                aria-haspopup="menu" aria-expanded={lOpen} aria-label="Commentary language"
+                className="inline-flex items-center gap-1.5 p-2 rounded-full text-white hover:bg-white/15
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <Languages className="w-5 h-5" aria-hidden="true" />
+                <span className="text-[11px] font-black">{lang}</span>
+              </button>
+
+              {lOpen && (
+                <div role="menu"
+                  className="absolute bottom-full right-0 mb-2 w-44 rounded-xl bg-gray-900/95
+                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur">
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    Commentary
+                  </p>
+                  {languages.map((l) => (
+                    <button key={l.code} type="button" role="menuitemradio" aria-checked={l.code === lang}
+                      onClick={() => { setLOpen(false); if (l.code !== lang && onLanguage) onLanguage(l.id); }}
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white
+                                 hover:bg-white/10">
+                      <span className="w-4 shrink-0">
+                        {l.code === lang && <Check className="w-4 h-4" aria-hidden="true" />}
+                      </span>
+                      <span className="flex-1">{l.label}</span>
+                      <span className="text-[10px] text-gray-500">{l.code}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Only when there is a choice to make — a single-rung stream would
               offer a menu with one entry in it. */}
           {levels.length > 1 && (
             <div className="relative">
-              <button type="button" onClick={() => setQOpen((o) => !o)}
+              <button type="button" onClick={() => { setLOpen(false); setQOpen((o) => !o); }}
                 aria-haspopup="menu" aria-expanded={qOpen} aria-label="Quality"
                 className="inline-flex items-center gap-1.5 p-2 rounded-full text-white hover:bg-white/15
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-white">

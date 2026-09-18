@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Radio, Clock3, Play, ExternalLink, AlertCircle } from "lucide-react";
 import LiveViewer from "./LiveViewer";
+import { oneperMatch } from "../utils/langs";
 import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel, fixtureKey, isIndiaFixture } from "../utils/liveTabs";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
 
@@ -172,7 +173,12 @@ const LiveTabsSection = ({ rows, heading }) => {
       const f = feeds[p.key];
       if (!f) { pending = true; return; }
 
-      (f.live || []).forEach((m) => {
+      /* Each commentary arrives as its own stream, and they share a name once
+         the worker strips "[Hindi]" — so the merge below, which keeps one
+         stream per publisher, kept whichever language was listed first and
+         dropped the rest. Collapsed first instead, keeping the viewer's own
+         language where the match has it; the player offers the others. */
+      oneperMatch(f.live || []).forEach((m) => {
         const k = fixtureKey(m);
         const at = liveBy.get(k) || { item: m, poster: posterFor(m, r.thumbnail), sources: [] };
         if (!at.sources.some((x) => x.key === p.key)) {
@@ -181,7 +187,7 @@ const LiveTabsSection = ({ rows, heading }) => {
         liveBy.set(k, at);
       });
 
-      (f.upcoming || []).forEach((m) => {
+      oneperMatch(f.upcoming || []).forEach((m) => {
         const k = fixtureKey(m);
         if (liveBy.has(k)) return;           // already on: not "coming up"
         if (!soonBy.has(k)) {
@@ -239,7 +245,11 @@ const LiveTabsSection = ({ rows, heading }) => {
                 live
                 href={e.sources[0].src}
                 fallbackPoster={e.poster}
-                badge={e.sources.length > 1 ? `${e.sources.length} sources` : e.sources[0].label}
+                badge={e.sources.length > 1
+                  ? `${e.sources.length} sources`
+                  : e.item.langCount > 1
+                    ? `${e.sources[0].label} · ${e.item.langCount} languages`
+                    : e.sources[0].label}
                 onPlay={(item) => setPlaying({
                   title: item.name,
                   sources: e.sources.map(({ label, src }) => ({ label, src })),

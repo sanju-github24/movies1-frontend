@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { oneperMatch } from "./langs";
 
 /* The player's tabs, as the site sees them.
  *
@@ -132,12 +133,14 @@ export async function fetchHeroFixtures({ upcomingPerSource = 2 } = {}) {
     const key = keys[i];
     const tag = (m) => ({ ...m, tabKey: key, source: TAB_DEFS[key].label });
 
-    live.push(...(r.value.live || []).map(tag));
+    /* One slide per match. Every commentary is its own stream, so without
+       this a match in five languages took all of the hero's slides. */
+    live.push(...oneperMatch(r.value.live || []).map(tag));
 
     /* India first, then the feed's own order — which is roughly by start time.
        Two per source rather than two overall, so one busy publisher cannot
        crowd the other out of the hero entirely. */
-    const soon = (r.value.upcoming || []).map(tag);
+    const soon = oneperMatch(r.value.upcoming || []).map(tag);
     soon.sort((a, b) => Number(isIndiaFixture(b)) - Number(isIndiaFixture(a)));
     upcoming.push(...soon.slice(0, upcomingPerSource));
   });
