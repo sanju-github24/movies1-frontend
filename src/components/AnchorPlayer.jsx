@@ -37,6 +37,11 @@ function rungs(items) {
   return [...byH.values()].sort((a, b) => b.height - a.height);
 }
 
+/* A menu opens upward from the control bar, and on a phone the whole player
+   is about two hundred pixels tall — a list of five languages would run off
+   its top and be cut by the frame. Held to the room there is, and scrolled. */
+const MENU_MAX = "min(18rem, calc(56.25vw - 4.5rem), calc(100dvh - 9rem))";
+
 const qLabel = (h) => (h >= 2160 ? "4K" : `${h}p`);
 
 const fmtBehind = (s) => {
@@ -81,6 +86,11 @@ export default function AnchorPlayer({
   const [qOpen, setQOpen] = useState(false);
   const [lOpen, setLOpen] = useState(false);
   const hideTimer = useRef(null);
+  const menuOpen = useRef(false);
+  useEffect(() => {
+    menuOpen.current = qOpen || lOpen;
+    if (qOpen || lOpen) setChrome(true);
+  }, [qOpen, lOpen]);
 
   const fail = useCallback((msg) => {
     setErr(msg); setState("error");
@@ -403,7 +413,11 @@ export default function AnchorPlayer({
   const wake = () => {
     setChrome(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => { if (!vid.current?.paused) setChrome(false); }, 3000);
+    hideTimer.current = setTimeout(() => {
+      // Not while a menu is open: it lives in the bar, and fading the bar
+      // took the menu away under a finger that was still scrolling it.
+      if (!vid.current?.paused && !menuOpen.current) setChrome(false);
+    }, 3000);
   };
   useEffect(() => () => clearTimeout(hideTimer.current), []);
 
@@ -444,25 +458,25 @@ export default function AnchorPlayer({
       {/* ── controls ── */}
       <div
         className={`absolute inset-x-0 bottom-0 transition-opacity duration-300
-                    ${chrome || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                    ${chrome || paused || qOpen || lOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
-        <div className="relative flex items-center gap-2 sm:gap-3 px-3 sm:px-5 pt-10">
+        <div className="relative flex flex-nowrap items-center gap-1 sm:gap-3 px-2 sm:px-5 pt-6 sm:pt-10">
           <button type="button" onClick={toggle} aria-label={paused ? "Play" : "Pause"}
-            className="p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             {paused ? <Play className="w-6 h-6 fill-white" /> : <Pause className="w-6 h-6 fill-white" />}
           </button>
 
           <button type="button" onClick={mute} aria-label={muted ? "Unmute" : "Mute"}
-            className="p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
 
           {/* Live, or how far behind — and a way back when it is not. */}
           <button type="button" onClick={goLive} disabled={atLive}
             title={atLive ? "Watching live" : "Jump to live"}
-            className={`ml-1 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-black
+            className={`shrink-0 ml-1 inline-flex items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-black
                         uppercase tracking-widest transition-colors
                         ${atLive ? "bg-red-600 text-white cursor-default"
                                  : "bg-white/15 text-white hover:bg-white/25"}`}>
@@ -470,24 +484,27 @@ export default function AnchorPlayer({
             {atLive ? "Live" : "Go live"}
           </button>
           {!atLive && (
-            <span className="text-[11px] font-bold text-gray-300 tabular-nums">
+            <span className="min-w-0 truncate text-[10px] sm:text-[11px] font-bold text-gray-300 tabular-nums">
               {fmtBehind(behind)} behind
             </span>
           )}
 
-          <span className="ml-auto hidden sm:block text-xs font-semibold text-white/80 truncate max-w-[40%]">
+          {/* Pushes the rest to the right edge. The title shares it only where
+              there is room; on a phone the buttons need every pixel. */}
+          <span className="flex-1 min-w-0 hidden sm:block text-right text-xs font-semibold text-white/80 truncate">
             {title}
           </span>
+          <span className="flex-1 sm:hidden" aria-hidden="true" />
 
           {/* Commentary language. Each is a separate stream, so choosing one
               loads it afresh — a live stream has no place to resume from, and
               the new one starts at its own live edge. Shown only when the
               match really is available in more than one. */}
           {languages?.length > 1 && (
-            <div className="relative">
+            <div className="relative shrink-0">
               <button type="button" onClick={() => { setQOpen(false); setLOpen((o) => !o); }}
                 aria-haspopup="menu" aria-expanded={lOpen} aria-label="Commentary language"
-                className="inline-flex items-center gap-1.5 p-2 rounded-full text-white hover:bg-white/15
+                className="inline-flex items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <Languages className="w-5 h-5" aria-hidden="true" />
                 <span className="text-[11px] font-black">{lang}</span>
@@ -495,15 +512,17 @@ export default function AnchorPlayer({
 
               {lOpen && (
                 <div role="menu"
-                  className="absolute bottom-full right-0 mb-2 w-44 rounded-xl bg-gray-900/95
-                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur">
+                  className="absolute bottom-full right-0 mb-2 w-40 sm:w-44 rounded-xl bg-gray-900/95
+                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur overflow-y-auto overscroll-contain"
+                  style={{ maxHeight: MENU_MAX, touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
+                  onTouchMove={(e) => e.stopPropagation()}>
                   <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
                     Commentary
                   </p>
                   {languages.map((l) => (
                     <button key={l.code} type="button" role="menuitemradio" aria-checked={l.code === lang}
                       onClick={() => { setLOpen(false); if (l.code !== lang && onLanguage) onLanguage(l.id); }}
-                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-1.5 sm:py-2 text-left text-sm text-white
                                  hover:bg-white/10">
                       <span className="w-4 shrink-0">
                         {l.code === lang && <Check className="w-4 h-4" aria-hidden="true" />}
@@ -520,10 +539,10 @@ export default function AnchorPlayer({
           {/* Only when there is a choice to make — a single-rung stream would
               offer a menu with one entry in it. */}
           {levels.length > 1 && (
-            <div className="relative">
+            <div className="relative shrink-0">
               <button type="button" onClick={() => { setLOpen(false); setQOpen((o) => !o); }}
                 aria-haspopup="menu" aria-expanded={qOpen} aria-label="Quality"
-                className="inline-flex items-center gap-1.5 p-2 rounded-full text-white hover:bg-white/15
+                className="inline-flex items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <Settings className="w-5 h-5" aria-hidden="true" />
                 <span className="hidden sm:inline text-[11px] font-black tabular-nums">
@@ -536,13 +555,15 @@ export default function AnchorPlayer({
                   open where nobody can see it. */}
               {qOpen && (
                 <div role="menu"
-                  className="absolute bottom-full right-0 mb-2 w-44 rounded-xl bg-gray-900/95
-                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur">
+                  className="absolute bottom-full right-0 mb-2 w-40 sm:w-44 rounded-xl bg-gray-900/95
+                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur overflow-y-auto overscroll-contain"
+                  style={{ maxHeight: MENU_MAX, touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
+                  onTouchMove={(e) => e.stopPropagation()}>
                   <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Quality</p>
                   {[{ key: "auto" }, ...levels.map((l) => ({ key: l.height, l }))].map(({ key, l }) => (
                     <button key={key} type="button" role="menuitemradio" aria-checked={choice === key}
                       onClick={() => pickQuality(key)}
-                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-1.5 sm:py-2 text-left text-sm text-white
                                  hover:bg-white/10">
                       <span className="w-4 shrink-0">
                         {choice === key && <Check className="w-4 h-4" aria-hidden="true" />}
@@ -566,7 +587,7 @@ export default function AnchorPlayer({
           )}
 
           <button type="button" onClick={fullscreen} aria-label={full ? "Exit full screen" : "Full screen"}
-            className="p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
             {full ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
           </button>
         </div>

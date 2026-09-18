@@ -139,11 +139,12 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   return createPortal((
     <div
       className="fixed inset-0 z-[2147483000] bg-black flex flex-col"
+      style={{ paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 shrink-0 bg-black">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 landscape:max-lg:py-1 shrink-0 bg-black">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5
                          text-[10px] font-black uppercase tracking-widest text-white shrink-0">
           <Radio className="w-3 h-3" aria-hidden="true" /> Live
@@ -183,10 +184,15 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
       )}
 
       {/* The frame takes the space left over and keeps a 16:9 picture centred
-          in it — letterboxed on a tall phone, pillarboxed on a wide screen —
-          rather than stretching the video to whatever shape the window is. */}
-      <div className="flex-1 min-h-0 flex items-center justify-center bg-black">
-        <div className="w-full max-h-full aspect-video">
+          in it — pillarboxed on a wide screen — rather than stretching the
+          video to whatever shape the window is. On an upright phone it sits
+          at the top, under the title, the way every phone player does,
+          instead of floating in the middle of the screen. */}
+      <div className="flex-1 min-h-0 flex items-center portrait:max-lg:items-start justify-center bg-black">
+        {/* A phone on its side is short: a 16:9 box as wide as the screen is
+            taller than the space, and would be squeezed out of shape. There
+            the player fills the frame and the video letterboxes inside it. */}
+        <div className="w-full max-h-full aspect-video landscape:max-lg:aspect-auto landscape:max-lg:h-full">
           {err ? (
             <div className="w-full h-full flex items-center justify-center p-6">
               <p className="max-w-md text-center text-sm text-gray-200 leading-relaxed">{err}</p>
