@@ -98,14 +98,28 @@ const buildCatalog = async () => {
 
   const bySlug = new Map();
   const byTitle = new Map();
+  const byClean = new Map();
   watch.forEach((w) => {
     bySlug.set(w.slug, w);
     const t = norm(w.title);
     if (t && !byTitle.has(t)) byTitle.set(t, w);   // first (newest) wins
+    const c = norm(cleanTitle(w.title || ""));
+    if (c && !byClean.has(c)) byClean.set(c, w);
   });
 
-  return movies.map((m) => {
-    const w = bySlug.get(m.slug) || byTitle.get(norm(m.title)) || null;
+  /* Slug, then the stored title, then the name with the release furniture
+     stripped. The last is what pairs a movie filed as "Irumudi (2026) Tamil
+     TRUE WEB-DL - [4K…]" with the streaming row the ingest wrote as plain
+     "Irumudi" — without it that title showed torrents only, and none of the
+     copies on our own drive. */
+  const pairOf = (m) =>
+    bySlug.get(m.slug) || byTitle.get(norm(m.title)) ||
+    byClean.get(norm(cleanTitle(m.title || ""))) || null;
+  const claimed = new Set();
+
+  const entries = movies.map((m) => {
+    const w = pairOf(m);
+    if (w) claimed.add(w.slug);
     const createdAt = new Date(m.created_at || w?.created_at || 0);
     const streamable = !!(w && (w.hls_url || w.video_url || w.html_code ||
       (Array.isArray(w.episodes) && w.episodes.length)));
@@ -140,7 +154,46 @@ const buildCatalog = async () => {
       createdAt,
       createdAtMs: createdAt.getTime(),
     };
-  }).sort((a, b) => b.createdAtMs - a.createdAtMs);
+  });
+
+  /* A title the ingest put on our drive but that has no `movies` row at all.
+     It has nothing to offer but our own copies — which is exactly what the
+     torrent page should find first — so it is listed on its own. */
+  watch.forEach((w) => {
+    if (claimed.has(w.slug)) return;
+    const driveLinks = normDrive(w.download_links);
+    if (!driveLinks.length) return;
+    const createdAt = new Date(w.created_at || 0);
+    const streamable = !!(w.hls_url || w.video_url || w.html_code ||
+      (Array.isArray(w.episodes) && w.episodes.length));
+    entries.push({
+      key: `watch-${w.slug}`,
+      title: w.title || w.slug,
+      cleanTitle: cleanTitle(w.title || w.slug),
+      displayTitle: displayTitle(w.title || w.slug),
+      watchSlug: streamable ? w.slug : null,
+      movieSlug: null,
+      streamable,
+      downloads: [],
+      driveLinks,
+      downloadPageUrl: null,
+      downloadable: true,
+      poster: w.poster || "/default-poster.jpg",
+      cover: w.cover_poster || w.poster || "/default-cover.jpg",
+      titleLogo: w.title_logo || null,
+      language: [],
+      categories: [],
+      subCategory: [],
+      genres: asArray(w.genres),
+      imdbRating: w.imdb_rating != null ? Number(w.imdb_rating).toFixed(1) : null,
+      contentType: w.content_type || "movie",
+      description: "",
+      createdAt,
+      createdAtMs: createdAt.getTime(),
+    });
+  });
+
+  return entries.sort((a, b) => b.createdAtMs - a.createdAtMs);
 };
 
 /* One in-flight fetch shared by every page that asks, so moving between

@@ -89,6 +89,9 @@ const wordMatches = (q, hay) =>
 export function matchScore(query, entry) {
   const q = norm(query);
   if (!q) return 0;
+  // The exact name, even one that is only a number — "2018" is a film, and
+  // the digit rule below would otherwise send it to the web instead.
+  if (norm(entry.cleanTitle || "") === q) return 1100;
   const hayRaw = `${entry.title || ""} ${entry.cleanTitle || ""} ${entry.displayTitle || ""}`;
   const hayNorm = norm(hayRaw);
   const hay = foldNumbers(hayNorm.split(" ").filter(Boolean));

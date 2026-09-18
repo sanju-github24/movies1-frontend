@@ -113,7 +113,9 @@ const CategoryPage = () => {
               "@type": "ListItem",
               position: i + 1,
               name: e.displayTitle || e.cleanTitle || e.title,
-              url: absUrl(e.streamable ? `/watch/${e.watchSlug}` : `/movie/${e.movieSlug}`),
+              url: absUrl(e.streamable ? `/watch/${e.watchSlug}`
+                : e.movieSlug ? `/movie/${e.movieSlug}`
+                : `/search-torrent?q=${encodeURIComponent(e.cleanTitle || e.title)}`),
             })),
           },
         })}</script>
