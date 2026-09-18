@@ -2,6 +2,7 @@
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { Link, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
+import { MobileBackButton } from "./BackBar";
 import { supabase } from "../utils/supabaseClient";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
 import { X, ChevronDown, LogOut, Settings } from "lucide-react";
@@ -376,16 +377,23 @@ const Navbar = () => {
       </div>
 
       {/* ── Mobile Top Bar ── */}
-      <div className="sm:hidden sticky top-0 z-50 bg-blue-700 shadow-lg flex items-center justify-between px-4 h-14 border-b border-white/10">
-        <button onClick={() => setMobileOpen(true)} className="p-2" aria-label="Open menu">
-          <MdMenu size={26} />
-        </button>
-        <Link to="/">
+      {/* Three columns so the logo stays centred whether or not the back
+          button is showing beside the menu. */}
+      <div className="sm:hidden sticky top-0 z-50 bg-blue-700 shadow-lg grid grid-cols-[1fr_auto_1fr] items-center px-3 h-14 border-b border-white/10">
+        <div className="flex items-center gap-0.5">
+          <MobileBackButton />
+          <button onClick={() => setMobileOpen(true)} className="p-2" aria-label="Open menu">
+            <MdMenu size={26} />
+          </button>
+        </div>
+        <Link to="/" aria-label="Home">
           <img src="/logo_39.png" alt="logo" className="h-8" />
         </Link>
-        <button onClick={() => setMobileSearchOpen(true)} className="p-2" aria-label="Search">
-          <MdSearch size={26} />
-        </button>
+        <div className="flex justify-end">
+          <button onClick={() => setMobileSearchOpen(true)} className="p-2" aria-label="Search">
+            <MdSearch size={26} />
+          </button>
+        </div>
       </div>
 
       {/* ── Mobile Search Overlay ── */}

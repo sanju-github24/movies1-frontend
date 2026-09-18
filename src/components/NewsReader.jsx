@@ -13,9 +13,10 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
+import { useGoBack } from "./BackBar";
 
 const API = import.meta.env.VITE_BACKEND_URL;
 
@@ -75,7 +76,7 @@ const NewsViewer = () => {
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-  const navigate = useNavigate();
+  const goBack = useGoBack();
 
   // Read ?url= from query string
   const params     = new URLSearchParams(window.location.search);
@@ -134,7 +135,7 @@ const NewsViewer = () => {
         <div className="border-b border-white/5 bg-black/40">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => goBack()}
               className="text-xs font-semibold text-[#c5c107] uppercase tracking-widest hover:text-white transition flex items-center gap-1"
             >
               ← Back

@@ -9,6 +9,7 @@ import {
 import { musicApi } from '../utils/api';
 import { fetchTrack, playableUrl, fetchLyrics, downloadTrack } from '../utils/saavn';
 import AddToPlaylist from "../components/AddToPlaylist";
+import { useGoBack } from "../components/BackBar";
 
 // Whether the lyrics panel is open is a preference, not per-track state — it
 // should hold as you move from song to song.
@@ -79,6 +80,7 @@ function RecommendCard({ track, baseRgb, lightRgb, navigate }) {
 export default function TrackDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const player   = useMusicPlayer();
 
 
@@ -473,7 +475,7 @@ export default function TrackDetailPage() {
 
   const handleMinimize = () => {
     player?.minimize();
-    navigate(-1);
+    goBack();
   };
 
   // ── Download Menu component (shared) ──────────────────────────────
@@ -520,7 +522,7 @@ export default function TrackDetailPage() {
     <div style={{ textAlign:'center', maxWidth:420, padding:40, borderRadius:24, background:`rgba(${baseRgb},0.25)`, border:`1px solid rgba(${lightRgb},0.2)`, marginTop:40 }}>
       <p style={{ fontSize:16, fontWeight:900, color:'#f87171', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.06em' }}>Stream Error</p>
       <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:24 }}>{error}</p>
-      <button onClick={() => navigate(-1)} style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.5)', background:'none', border:'none', cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.1em' }}>← Go Back</button>
+      <button onClick={() => goBack()} style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.5)', background:'none', border:'none', cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.1em' }}>← Go Back</button>
     </div>
   );
 
@@ -712,7 +714,7 @@ export default function TrackDetailPage() {
       {!isMobile && (
         <>
           <div style={{ position:'relative', zIndex:10, padding:'20px 28px 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <button onClick={() => navigate(-1)}
+            <button onClick={() => goBack()}
               style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.45)', background:'none', border:'none', cursor:'pointer' }}
               onMouseEnter={e=>e.currentTarget.style.color='white'} onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.45)'}>
               <ArrowLeft size={13} /> Back

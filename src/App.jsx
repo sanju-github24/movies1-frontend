@@ -8,6 +8,7 @@ import { supabase } from "./utils/supabaseClient";
 import Navbar from './components/Navbar';
 import CategoryBar from './components/CategoryBar';
 import SiteFooter from './components/SiteFooter';
+import BackBar from './components/BackBar';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -215,6 +216,7 @@ const AppContent = () => {
           <div className="hidden sm:block">
             <CategoryBar onNavigate={handleNavigate} />
           </div>
+          <BackBar />
         </>
       )}
 

@@ -4,6 +4,7 @@ import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
 import { fetchSearch, fetchListing } from '../utils/saavn';
+import { useGoBack } from "../components/BackBar";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from any string — no CORS, instant, unique per slug
@@ -42,6 +43,7 @@ const scrollKey = q => `music_search_scroll_${q}`;
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate       = useNavigate();
+  const goBack = useGoBack();
   const query          = searchParams.get('find') || '';
 
   const [results,    setResults]    = useState({ songs: [], albums: [], artists: [], metadata: {} });
@@ -126,7 +128,7 @@ export default function SearchResultsPage() {
         }}>
           {/* Back */}
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => goBack()}
             style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.45)', background:'none', border:'none', cursor:'pointer', marginBottom:24 }}
             onMouseEnter={e => e.currentTarget.style.color='white'}
             onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.45)'}

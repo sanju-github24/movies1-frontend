@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
-import { useNavigate } from "react-router-dom";
 import LiveTabsSection from "../components/LiveTabsSection";
+import { useGoBack } from "../components/BackBar";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const tokens = {
@@ -365,7 +365,7 @@ const SkeletonGrid = () => (
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 const LiveChannelsPage = () => {
-  const navigate = useNavigate();
+  const goBack = useGoBack();
 
   const [bundles, setBundles]               = useState([]);
   // resolvedBundles: Map<row.id, { ...parsedBundle, channels: [...] }>
@@ -512,7 +512,7 @@ const LiveChannelsPage = () => {
         display: "flex", alignItems: "center", gap: 14,
       }}>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => goBack()}
           aria-label="Go back"
           style={{
             background: "none", border: `1px solid ${tokens.border.subtle}`,
