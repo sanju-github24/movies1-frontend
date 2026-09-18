@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Radio } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Radio, Settings, Check } from "lucide-react";
 
 /* AnchorHD's own live player.
  *
@@ -24,6 +24,21 @@ const viaProxy = (p, url) => p.base + "?url=" + encodeURIComponent(url) + PROXY_
    doing nothing wrong. */
 const LIVE_THRESH = 15;
 
+/* One rung per picture height. A stream often offers the same height at two
+   bitrates, and a menu listing "720p" twice asks the viewer to choose between
+   things they cannot tell apart — so the better of each is kept. */
+function rungs(items) {
+  const byH = new Map();
+  items.forEach((it) => {
+    if (!it.height) return;
+    const had = byH.get(it.height);
+    if (!had || it.bitrate > had.bitrate) byH.set(it.height, it);
+  });
+  return [...byH.values()].sort((a, b) => b.height - a.height);
+}
+
+const qLabel = (h) => (h >= 2160 ? "4K" : `${h}p`);
+
 const fmtBehind = (s) => {
   if (s < 60) return `${Math.round(s)}s`;
   const m = Math.floor(s / 60), r = Math.round(s % 60);
@@ -41,6 +56,10 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
   const [full, setFull] = useState(false);
   const [behind, setBehind] = useState(0);
   const [chrome, setChrome] = useState(true);
+  const [levels, setLevels] = useState([]);      // [{ ref, height, bitrate }]
+  const [choice, setChoice] = useState("auto");  // "auto" or a height
+  const [playingH, setPlayingH] = useState(0);   // what Auto has actually picked
+  const [qOpen, setQOpen] = useState(false);
   const hideTimer = useRef(null);
 
   const fail = useCallback((msg) => {
@@ -54,6 +73,7 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
     let dead = false;
     const v = vid.current;
     setState("loading"); setErr(""); setBehind(0);
+    setLevels([]); setChoice("auto"); setPlayingH(0); setQOpen(false);
 
     const teardown = () => {
       const e = engine.current;
@@ -95,6 +115,12 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
               } else {
                 fail("This stream could not be played.");
               }
+            });
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              setLevels(rungs(hls.levels.map((l, i) => ({ ref: i, height: l.height, bitrate: l.bitrate }))));
+            });
+            hls.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => {
+              setPlayingH(hls.levels[d.level]?.height || 0);
             });
             hls.loadSource(url);
             hls.attachMedia(v);
@@ -174,6 +200,20 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
           await player.load(source.url);
           if (dead) return;
 
+          /* Variants for the audio already playing only. A channel carrying
+             several languages lists each height once per language, and
+             picking a height must not quietly swap the commentary. */
+          const readLadder = () => {
+            const all = player.getVariantTracks();
+            const active = all.find((t) => t.active);
+            const same = active ? all.filter((t) => t.language === active.language) : all;
+            setLevels(rungs(same.map((t) => ({ ref: t.id, height: t.height, bitrate: t.bandwidth }))));
+            if (active?.height) setPlayingH(active.height);
+          };
+          readLadder();
+          player.addEventListener("adaptation", readLadder);
+          player.addEventListener("variantchanged", readLadder);
+
           /* Far enough back to have something buffered, near enough to be
              live. Two seconds left nothing in hand and stalled on the first
              slow segment. */
@@ -239,6 +279,33 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
       : sk.end(sk.length - 1) - 3;
     v.currentTime = target;
     v.play().catch(() => {});
+  };
+
+  /* Auto hands the choice back to the engine. A fixed height turns the
+     engine's own switching off, or it would move off the choice on the next
+     change in bandwidth and the menu would be lying. */
+  const pickQuality = (h) => {
+    const e = engine.current;
+    setChoice(h); setQOpen(false);
+    if (!e) return;
+
+    if (e.kind === "hls") {
+      if (h === "auto") { e.inst.currentLevel = -1; return; }
+      const lvl = levels.find((l) => l.height === h);
+      if (lvl) e.inst.currentLevel = lvl.ref;   // switches now, not at the next segment
+      return;
+    }
+
+    if (e.kind === "dash") {
+      if (h === "auto") { e.inst.configure({ abr: { enabled: true } }); return; }
+      const lvl = levels.find((l) => l.height === h);
+      const track = e.inst.getVariantTracks().find((t) => t.id === lvl?.ref);
+      if (!track) return;
+      e.inst.configure({ abr: { enabled: false } });
+      // Clearing the buffer makes the change visible at once instead of after
+      // the dozen seconds already downloaded at the old height.
+      e.inst.selectVariantTrack(track, true);
+    }
   };
 
   const toggle = () => { const v = vid.current; if (v.paused) v.play().catch(() => {}); else v.pause(); };
@@ -338,6 +405,54 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
           <span className="ml-auto hidden sm:block text-xs font-semibold text-white/80 truncate max-w-[40%]">
             {title}
           </span>
+
+          {/* Only when there is a choice to make — a single-rung stream would
+              offer a menu with one entry in it. */}
+          {levels.length > 1 && (
+            <div className="relative">
+              <button type="button" onClick={() => setQOpen((o) => !o)}
+                aria-haspopup="menu" aria-expanded={qOpen} aria-label="Quality"
+                className="inline-flex items-center gap-1.5 p-2 rounded-full text-white hover:bg-white/15
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <Settings className="w-5 h-5" aria-hidden="true" />
+                <span className="hidden sm:inline text-[11px] font-black tabular-nums">
+                  {choice === "auto" ? (playingH ? `Auto · ${qLabel(playingH)}` : "Auto") : qLabel(choice)}
+                </span>
+              </button>
+
+              {/* Inside the player rather than on the body: in fullscreen only
+                  the player is on screen, and a menu drawn anywhere else would
+                  open where nobody can see it. */}
+              {qOpen && (
+                <div role="menu"
+                  className="absolute bottom-full right-0 mb-2 w-44 rounded-xl bg-gray-900/95
+                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur">
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Quality</p>
+                  {[{ key: "auto" }, ...levels.map((l) => ({ key: l.height, l }))].map(({ key, l }) => (
+                    <button key={key} type="button" role="menuitemradio" aria-checked={choice === key}
+                      onClick={() => pickQuality(key)}
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white
+                                 hover:bg-white/10">
+                      <span className="w-4 shrink-0">
+                        {choice === key && <Check className="w-4 h-4" aria-hidden="true" />}
+                      </span>
+                      <span className="flex-1">
+                        {key === "auto" ? "Auto" : qLabel(key)}
+                        {key === "auto" && playingH ? (
+                          <span className="ml-1.5 text-[11px] text-gray-400">({qLabel(playingH)})</span>
+                        ) : null}
+                      </span>
+                      {l?.bitrate ? (
+                        <span className="text-[10px] text-gray-500 tabular-nums">
+                          {(l.bitrate / 1e6).toFixed(1)} Mb/s
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <button type="button" onClick={fullscreen} aria-label={full ? "Exit full screen" : "Full screen"}
             className="p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
