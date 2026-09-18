@@ -1,95 +1,95 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Radio, X, Loader2 } from "lucide-react";
+import AnchorPlayer from "./AnchorPlayer";
+import { parseSourceLink, resolveSource } from "../utils/liveSources";
 
-/* Plays without leaving the site.
+/* Plays without leaving the site, in AnchorHD's own player.
  *
- * The stream itself is the player's problem, not this page's: these CDNs want
- * headers a browser will not set, a token that rotates hourly, and for two of
- * them an Indian address — all of which the player and its proxy already
- * handle. Reimplementing that here would mean maintaining it twice and having
- * it break in two places. So the player runs in a frame, addressed by the tab
- * link, and the viewer stays on AnchorHD.
+ * This used to frame player.html. It now resolves the stream itself and plays
+ * it natively — see utils/liveSources for the rules and AnchorPlayer for the
+ * engines. Its props are unchanged, so every page that opens it works as it
+ * did: the links they pass still name a tab and an item, and that is all this
+ * needs.
  *
- * `sources` is how the same fixture reaches us from more than one place. Two
- * publishers often carry one match, and when one stalls the other usually
- * does not, so the viewer offers the swap rather than making someone go back
- * and hunt for the other card. A single source renders no switcher at all. */
+ * `sources` is how one fixture reaches us from more than one publisher. When
+ * one stalls the other usually does not, so the viewer offers the swap rather
+ * than sending anyone back to hunt for the other card. */
 const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   const list = (sources && sources.length ? sources : (src ? [{ label: "Live", src }] : []));
   const [idx, setIdx] = useState(0);
-  const [ready, setReady] = useState(false);
+  const [resolved, setResolved] = useState(null);   // { source, title, poster }
+  const [err, setErr] = useState("");
 
   const current = list[idx] || list[0];
-  const currentSrc = current?.src || "";
+  const link = current?.src || "";
 
-  // A new fixture starts at its first source, and covered again.
+  // A new fixture starts at its first source.
   useEffect(() => { setIdx(0); }, [src, open]);
 
-  /* Covered again for each source, but never indefinitely.
-     The cover lifts when the player says the picture is up, when it says it
-     failed, or after this long regardless — a signal that never arrives must
-     not leave someone watching a spinner over a frame that has either started
-     or given a reason, both of which are worth seeing. */
+  /* Worked out afresh for each source. Tokens in these feeds expire in hours,
+     so a stream is always looked up at the moment it is asked for, never
+     remembered from an earlier open. */
   useEffect(() => {
-    setReady(false);
-    if (!currentSrc) return;
-    const t = setTimeout(() => setReady(true), 12000);
-    return () => clearTimeout(t);
-  }, [currentSrc]);
+    if (!open || !link) return;
+    let dead = false;
+    setResolved(null); setErr("");
+    (async () => {
+      try {
+        const ref = parseSourceLink(link);
+        if (!ref) throw new Error("This link does not say what to play.");
+        const source = await resolveSource(ref);
+        if (!dead) setResolved({ source, title: source.title, poster: source.poster });
+      } catch (e) {
+        if (!dead) setErr(e.message || "Could not start this stream.");
+      }
+    })();
+    return () => { dead = true; };
+  }, [open, link]);
 
-  /* Escape closes it, the page behind must not scroll while it is up, and the
-     player talks back: it says when the picture is actually up, and — in solo
-     mode — when anything would have dropped the viewer onto its own launcher,
-     which closes this instead of showing someone else's page. */
+  /* onClose is written inline by every caller, so it is a new function on
+     each of their renders. Held in a ref so the listener below reads the
+     current one without being rebuilt for it. */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // The lock, tied to nothing but whether this is open.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    const onMsg = (e) => {
-      const t = e.data && e.data.type;
-      if (t === "anchor:close") onClose();
-      // Uncover on either outcome: the reason it failed is behind this.
-      if (t === "anchor:playing" || t === "anchor:error") setReady(true);
-    };
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onCloseRef.current(); };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("message", onMsg);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("message", onMsg);
-    };
-  }, [open, onClose]);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
-  if (!open || !currentSrc) return null;
+  if (!open || !link) return null;
 
-  /* Rendered on the body, not where it is written.
-   *
-   * z-index only ranks siblings within a stacking context, and this sits
-   * inside pages that make their own — the hero's parallax alone uses both a
-   * transform and will-change, either of which is enough. A fixed child of one
-   * is trapped in it, so a z-index of two billion still lost to the phone's
-   * bottom bar at z-100, which drew over the player's controls.
-   *
-   * A portal puts it at the top level, where the number finally means what it
-   * says. Nothing else needs changing, and no page has to know. */
+  /* On the body, not where it is written. z-index only ranks siblings inside a
+     stacking context, and this opens from pages that make their own — a fixed
+     child of one is trapped in it, which is how a z-index of two billion lost
+     to the phone's bottom bar at z-100. */
   return createPortal((
     <div
-      className="fixed inset-0 z-[2147483000] bg-black/95 backdrop-blur-sm flex flex-col"
+      className="fixed inset-0 z-[2147483000] bg-black flex flex-col"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 shrink-0 bg-black">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5
                          text-[10px] font-black uppercase tracking-widest text-white shrink-0">
           <Radio className="w-3 h-3" aria-hidden="true" /> Live
         </span>
-        <p className="text-xs sm:text-sm font-bold text-white truncate">{title}</p>
+        <p className="text-xs sm:text-sm font-bold text-white truncate">{title || resolved?.title}</p>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => onCloseRef.current()}
           aria-label="Close player"
           className="ml-auto shrink-0 rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white
                      focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -99,7 +99,7 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
       </div>
 
       {list.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto px-3 sm:px-6 pb-2 shrink-0">
+        <div className="flex gap-2 overflow-x-auto px-3 sm:px-6 pb-2 shrink-0 bg-black">
           {list.map((s, i) => (
             <button
               key={s.src}
@@ -117,35 +117,26 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 px-2 sm:px-6 pb-3 sm:pb-6"
-           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-        <div className="relative w-full h-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10">
-          <iframe
-            key={currentSrc}
-            src={currentSrc}
-            title={title}
-            className="w-full h-full"
-            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-
-          {/* Covers the frame until the picture is up. The player behind it is
-              another site, and however briefly its chrome shows while a feed
-              resolves, it reads as someone else's page inside this one. */}
-          {!ready && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
-              {poster && (
-                <img
-                  src={poster}
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 w-full h-full object-cover opacity-25"
-                />
-              )}
-              <Loader2 className="relative w-8 h-8 animate-spin text-white/80" aria-hidden="true" />
-              <p className="relative text-[11px] font-black uppercase tracking-[0.2em] text-white/60">
-                Starting live stream
-              </p>
+      {/* The frame takes the space left over and keeps a 16:9 picture centred
+          in it — letterboxed on a tall phone, pillarboxed on a wide screen —
+          rather than stretching the video to whatever shape the window is. */}
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-black">
+        <div className="w-full max-h-full aspect-video">
+          {err ? (
+            <div className="w-full h-full flex items-center justify-center p-6">
+              <p className="max-w-md text-center text-sm text-gray-200 leading-relaxed">{err}</p>
+            </div>
+          ) : resolved ? (
+            <AnchorPlayer
+              key={link}
+              source={resolved.source}
+              title={title || resolved.title}
+              poster={poster || resolved.poster}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Finding the stream</p>
             </div>
           )}
         </div>

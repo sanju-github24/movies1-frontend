@@ -16,7 +16,10 @@ export const BCCI_EXCLUDE_COMP_IDS = new Set([238, 357, 358, 389, 390, 393]);
 
 /* Women's, Under-19 and A-team sides carry it in the team name — "India Women",
  * "India A", "India U19" — so the same check covers both teams and the title. */
-const NOT_SENIOR_MEN = /\b(women|wom\b|\bw\d{2}\b|u-?19|under[- ]?19|emerging|legends)\b/i;
+/* The trailing s matters: "India Under-19s" ended the alternative at "19",
+   where \b then failed against the "s", so an Under-19 fixture read as India's
+   senior side and reached the home page strip. */
+const NOT_SENIOR_MEN = /\b(women|wom\b|\bw\d{2}\b|u-?19s?|under[- ]?19s?|emerging|legends)\b/i;
 const A_TEAM = /\bindia\s+a\b/i;
 
 const isIndiaSide = (name = "", code = "") => {
