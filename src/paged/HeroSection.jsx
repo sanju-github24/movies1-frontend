@@ -7,6 +7,7 @@ import { teamCrest, flagImg } from "../utils/teamCrest";
 import { fetchTabFeed, fetchHeroFixtures, splitTeams, heroPlayUrl } from "../utils/liveTabs";
 import LiveViewer from "../components/LiveViewer";
 import { codeForTeam } from "../utils/teamCrest";
+import { langName } from "../utils/langs";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -377,6 +378,33 @@ function CricketSlide({slide, onPlay}){
       <CricketHeroBg/>
 
       <div className="relative z-10 flex flex-col justify-end h-full px-4 sm:px-8 pb-5 sm:pb-7 pt-4 sm:pt-5">
+
+        {/* ── Commentary languages ──
+            Above the badges rather than among them: the badges say what the
+            match is, this says how it can be heard, and mixing the two made
+            "Hindi" look like the name of a competition. Named, not counted —
+            it is the name that decides whether someone presses play — and the
+            one the player will open in comes first and is marked. Absent for a
+            single language, which offers nothing to choose. */}
+        {Array.isArray(slide.languages) && slide.languages.length > 1 && (
+          <div className="flex items-center gap-1 sm:gap-1.5 mb-1.5 sm:mb-2 flex-wrap"
+               aria-label={`Commentary in ${slide.languages.map(langName).join(", ")}`}>
+            <span className="font-black uppercase tracking-widest text-white/50 mr-0.5"
+              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
+              🎙
+            </span>
+            {slide.languages.map((c, i) => (
+              <span key={c}
+                className={`px-1.5 sm:px-2 py-0.5 rounded-full font-bold border
+                            ${i === 0
+                              ? "bg-white text-black border-white"
+                              : "bg-black/40 text-white/85 border-white/20"}`}
+                style={{fontSize:"clamp(7px,1.8vw,10px)"}}>
+                {langName(c)}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* ── Badges row ── */}
         <div className="flex items-center gap-1 sm:gap-1.5 mb-2 sm:mb-3 flex-wrap">
@@ -1074,6 +1102,8 @@ export default function HeroSection(){
           dateLabel:"", timeLabel: m.start || "",
           countdown:"",
           watchOn: m.source,
+          // Which commentaries it has, the one it opens in first.
+          languages: m.langs || [],
         };
       };
 

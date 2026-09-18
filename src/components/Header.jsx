@@ -16,6 +16,7 @@ import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
+import { langName } from "../utils/langs";
 import LiveViewer from "./LiveViewer";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
@@ -141,6 +142,8 @@ function useLiveSports() {
              second — a fixture that set only one showed a blank backdrop. */
           poster: m.poster || m.logo || null,
           cover_poster: m.poster || m.logo || null,
+          // Which commentaries it has, the one it opens in first.
+          languages: m.langs || [],
           // Not a scorecard link: this one plays.
           playSrc: heroPlayUrl(m),
           playTitle: m.name,
@@ -347,6 +350,16 @@ function LiveShowBanner() {
    text. Year, certification and the season count come from the same
    tmdb-details endpoint the detail overlay uses; the episode list on the
    watch_html row is the fallback for seasons when TMDB has no count. */
+/* The commentaries on offer, as one piece of the meta line. Named rather than
+   counted — "Hindi" tells someone whether to press play, "5 languages" does
+   not — but only the first few, or the line runs past the edge of a phone.
+   Nothing at all for a single language: that is not an offer of anything. */
+function languageBit(codes) {
+  if (!Array.isArray(codes) || codes.length < 2) return null;
+  const names = codes.map(langName);
+  return names.length <= 3 ? names.join(", ") : `${names.slice(0, 3).join(", ")} +${names.length - 3}`;
+}
+
 function heroMeta(movie, art = {}, extra = {}) {
   /* A live match has none of the fields below — no year, no certification, no
      season count — but it does have the two things worth knowing at a glance:
@@ -362,7 +375,7 @@ function heroMeta(movie, art = {}, extra = {}) {
       const sport = m.badge ? m.badge[0] + m.badge.slice(1).toLowerCase() : "Live";
       // The competition, unless it only repeats the sport back.
       const series = m.series && m.series.toLowerCase() !== sport.toLowerCase() ? m.series : null;
-      return [sport, series].filter(Boolean);
+      return [sport, series, languageBit(m.languages)].filter(Boolean);
     }
 
     return ["Cricket", m.badge, m.matchOrder].filter(Boolean);

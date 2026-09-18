@@ -60,5 +60,13 @@ export function oneperMatch(items, getId = (x) => x.id) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(it);
   });
-  return [...groups.values()].map((g) => ({ ...pickPreferred(g, getId), langCount: g.length }));
+  return [...groups.values()].map((g) => {
+    const chosen = pickPreferred(g, getId);
+    /* Which ones, not just how many — a hero can show the names. The one
+       being opened first leads, the rest follow in the feed's order. */
+    const codes = [...new Set(g.map((i) => langCode(getId(i))).filter(Boolean))];
+    const first = langCode(getId(chosen));
+    const langs = first ? [first, ...codes.filter((c) => c !== first)] : codes;
+    return { ...chosen, langCount: g.length, langs };
+  });
 }
