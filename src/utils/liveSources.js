@@ -26,17 +26,36 @@ export const PROXY = "https://m3u8-player-ashen.vercel.app/api/live-proxy";
 
 const isDash = (u) => /\.mpd(\?|$)/i.test(String(u || ""));
 
-/* Feeds are cached for the life of the page. Every source in them carries a
-   token that expires in hours, so a page left open all day will go stale —
-   but a page reload reads them fresh, and the worker never caches them. */
-const cache = new Map();
+/* Feeds are cached for ten minutes. Every source in them carries a token that
+   expires in hours, and the worker never caches them, so a page left open all
+   day still reads a token that works. A stream that dies anyway calls
+   forgetFeeds() and is looked up again from scratch. */
+const FEED_TTL = 10 * 60_000;
+const cache = new Map();          // q -> { p, at }
 async function feed(q) {
-  if (cache.has(q)) return cache.get(q);
+  const hit = cache.get(q);
+  if (hit && Date.now() - hit.at < FEED_TTL) return hit.p;
   const p = fetch(`${WORKER}${q}${q.includes("?") ? "&" : "?"}_=${Date.now()}`)
     .then((r) => { if (!r.ok) throw new Error(`feed ${r.status}`); return r.json(); })
     .catch((e) => { cache.delete(q); throw e; });
-  cache.set(q, p);
+  cache.set(q, { p, at: Date.now() });
   return p;
+}
+
+export function forgetFeeds() { cache.clear(); }
+
+/* The proxy is a different origin, and its DNS, TCP and TLS are most of the
+   first request's time. Opened as soon as anything asks to play, it is ready
+   by the time the feed has said what to play. */
+let warmed = false;
+function warmProxy() {
+  if (warmed || typeof document === "undefined") return;
+  warmed = true;
+  const l = document.createElement("link");
+  l.rel = "preconnect";
+  l.href = new URL(PROXY).origin;
+  l.crossOrigin = "anonymous";
+  document.head.appendChild(l);
 }
 
 /* ── fixtures: SonyLiv, FanCode ─────────────────────────────────────────── */
@@ -152,6 +171,7 @@ export function parseSourceLink(link) {
 }
 
 export async function resolveSource({ tabKey, id, item }) {
+  warmProxy();
   switch (tabKey) {
     case "sony":
     case "fc": {

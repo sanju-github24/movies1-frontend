@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Radio, X, Loader2 } from "lucide-react";
 import AnchorPlayer from "./AnchorPlayer";
-import { parseSourceLink, resolveSource } from "../utils/liveSources";
+import { parseSourceLink, resolveSource, forgetFeeds } from "../utils/liveSources";
 
 /* Plays without leaving the site, in AnchorHD's own player.
  *
@@ -18,8 +18,8 @@ import { parseSourceLink, resolveSource } from "../utils/liveSources";
 const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   const list = (sources && sources.length ? sources : (src ? [{ label: "Live", src }] : []));
   const [idx, setIdx] = useState(0);
-  const [resolved, setResolved] = useState(null);   // { source, title, poster }
   const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
 
   const current = list[idx] || list[0];
   const link = current?.src || "";
@@ -34,25 +34,80 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   // A new fixture starts at its first source.
   useEffect(() => { setIdx(0); }, [src, open]);
 
+  /* Players, by key. Normally one. Switching language, or recovering a
+     stream that died, adds a second that loads silently behind the one on
+     screen and takes its place once it is actually playing — so a switch
+     never drops to a black spinner, and a failed one leaves the old
+     commentary running. */
+  const [slots, setSlots] = useState([]);   // [{ key, source }]
+  const [live, setLive] = useState(null);   // key of the one on screen
+  const liveRef = useRef(null);
+  useEffect(() => { liveRef.current = live; }, [live]);
+  const slotsLink = useRef("");
+
+  /* A stream that stops answering is looked up again from the feed — a new
+     token, a new proxy — up to twice in a row. Any successful start resets
+     that, so a long match can recover as often as it needs to. */
+  const [gen, setGen] = useState(0);
+  const revived = useRef(0);
+
   /* Worked out afresh for each source. Tokens in these feeds expire in hours,
-     so a stream is always looked up at the moment it is asked for, never
-     remembered from an earlier open. */
+     so a stream is looked up at the moment it is asked for. */
   useEffect(() => {
     if (!open || !link) return;
     let dead = false;
-    setResolved(null); setErr("");
+    setErr(""); setNote("");
+
+    // Another source or another match starts clean; a language or a revival
+    // of the same one keeps the current picture up while it loads.
+    if (slotsLink.current !== link) {
+      slotsLink.current = link;
+      revived.current = 0;
+      setSlots([]); setLive(null); liveRef.current = null;
+    } else if (liveRef.current) {
+      setNote(pickedId ? "Switching language…" : "Reconnecting…");
+    }
+
+    const key = `${link}|${pickedId || ""}|${gen}`;
     (async () => {
       try {
         const ref = parseSourceLink(link);
         if (!ref) throw new Error("This link does not say what to play.");
         const source = await resolveSource(pickedId ? { ...ref, id: pickedId } : ref);
-        if (!dead) setResolved({ source, title: source.title, poster: source.poster });
+        if (dead) return;
+        setSlots((prev) => [...prev.filter((x) => x.key === liveRef.current), { key, source }]);
+        if (!liveRef.current) { liveRef.current = key; setLive(key); }
       } catch (e) {
-        if (!dead) setErr(e.message || "Could not start this stream.");
+        if (dead) return;
+        if (liveRef.current) setNote(e.message || "Could not switch.");
+        else setErr(e.message || "Could not start this stream.");
       }
     })();
     return () => { dead = true; };
-  }, [open, link, pickedId]);
+  }, [open, link, pickedId, gen]);
+
+  const promote = (key) => {
+    revived.current = 0;
+    if (liveRef.current === key) return;
+    liveRef.current = key;
+    setLive(key); setNote("");
+    setSlots((prev) => prev.filter((x) => x.key === key));
+  };
+
+  const stalled = (key, msg) => {
+    // A standby that dies is simply dropped; the picture on screen is fine.
+    if (key !== liveRef.current) {
+      setSlots((prev) => prev.filter((x) => x.key !== key));
+      setNote("");
+      return;
+    }
+    if (revived.current >= 2) { setErr(msg); return; }
+    revived.current += 1;
+    forgetFeeds();
+    setGen((g) => g + 1);
+  };
+
+  const shown = slots.find((x) => x.key === live)?.source;
 
   /* onClose is written inline by every caller, so it is a new function on
      each of their renders. Held in a ref so the listener below reads the
@@ -93,7 +148,10 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
                          text-[10px] font-black uppercase tracking-widest text-white shrink-0">
           <Radio className="w-3 h-3" aria-hidden="true" /> Live
         </span>
-        <p className="text-xs sm:text-sm font-bold text-white truncate">{title || resolved?.title}</p>
+        <p className="text-xs sm:text-sm font-bold text-white truncate">{title || shown?.title}</p>
+        {note && (
+          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-white/60">{note}</span>
+        )}
         <button
           type="button"
           onClick={() => onCloseRef.current()}
@@ -133,16 +191,28 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
             <div className="w-full h-full flex items-center justify-center p-6">
               <p className="max-w-md text-center text-sm text-gray-200 leading-relaxed">{err}</p>
             </div>
-          ) : resolved ? (
-            <AnchorPlayer
-              key={link + (pickedId || "")}
-              source={resolved.source}
-              title={title || resolved.title}
-              poster={poster || resolved.poster}
-              languages={resolved.source.languages}
-              lang={resolved.source.lang}
-              onLanguage={(id) => setPick({ link, id })}
-            />
+          ) : slots.length ? (
+            <div className="relative w-full h-full">
+              {slots.map((x) => (
+                <div
+                  key={x.key}
+                  className={`absolute inset-0 ${x.key === live ? "" : "opacity-0 pointer-events-none"}`}
+                  aria-hidden={x.key === live ? undefined : true}
+                >
+                  <AnchorPlayer
+                    source={x.source}
+                    title={title || x.source.title}
+                    poster={poster || x.source.poster}
+                    languages={x.source.languages}
+                    lang={x.source.lang}
+                    standby={x.key !== live}
+                    onPlaying={() => promote(x.key)}
+                    onStall={(msg) => stalled(x.key, msg)}
+                    onLanguage={(id) => setPick({ link, id })}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-3">
               <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />

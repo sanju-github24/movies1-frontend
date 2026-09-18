@@ -45,11 +45,30 @@ const fmtBehind = (s) => {
   return `${m}m ${String(r).padStart(2, "0")}s`;
 };
 
-export default function AnchorPlayer({ source, title, poster, onPlaying, onError, languages, lang, onLanguage }) {
+/* Every load gets this long and this many tries. The proxy, when the public
+   address it was using dies, searches the pool for another before it answers,
+   and that search takes seconds — a timeout tuned for a CDN would give up on
+   a segment that was about to arrive. */
+const LOAD_POLICY = (maxLoadTimeMs) => ({
+  default: {
+    maxTimeToFirstByteMs: maxLoadTimeMs,
+    maxLoadTimeMs,
+    timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
+    errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+  },
+});
+
+/* After hls.js has spent its own retries, the stream is kicked this many more
+   times, further apart each time, before the viewer is told it has stopped. */
+const REVIVES = 5;
+
+export default function AnchorPlayer({
+  source, title, poster, onPlaying, onError, onStall, languages, lang, onLanguage, standby = false,
+}) {
   const wrap = useRef(null);
   const vid = useRef(null);
   const engine = useRef(null);            // { kind, inst }
-  const [state, setState] = useState("loading");   // loading | playing | error
+  const [state, setState] = useState("loading");   // loading | playing | reconnecting | error
   const [err, setErr] = useState("");
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -67,6 +86,23 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
     setErr(msg); setState("error");
     if (onError) onError(msg);
   }, [onError]);
+
+  /* Given up on this copy of the stream. A caller that can look it up again
+     — with a fresh token, through a fresh proxy — is asked to; only one that
+     cannot shows the error. */
+  const onStallRef = useRef(onStall);
+  useEffect(() => { onStallRef.current = onStall; }, [onStall]);
+  const giveUp = useCallback((msg) => {
+    if (onStallRef.current) onStallRef.current(msg);
+    else fail(msg);
+  }, [fail]);
+
+  /* A standby player is loading a stream the viewer has not switched to yet,
+     behind the one they are watching. It stays silent until it takes over. */
+  useEffect(() => {
+    const v = vid.current;
+    if (v) v.muted = standby;
+  }, [standby]);
 
   /* ── attach ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -105,12 +141,38 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
               liveMaxLatencyDurationCount: 6,
               maxBufferLength: 30,
               backBufferLength: 60,
+              fragLoadPolicy: LOAD_POLICY(25000),
+              playlistLoadPolicy: LOAD_POLICY(20000),
+              manifestLoadPolicy: LOAD_POLICY(25000),
             });
             engine.current = { kind: "hls", inst: hls };
+
+            /* A fatal network error on a live stream is usually one dead
+               proxy or one slow segment, not the end of it: loading is
+               restarted with a growing pause, and every segment that does
+               arrive resets the count. */
+            let revives = 0, reviveTimer = null;
+            hls.on(Hls.Events.FRAG_LOADED, () => {
+              if (revives) { revives = 0; setState((s) => (s === "reconnecting" ? "playing" : s)); }
+            });
+            hls.on(Hls.Events.DESTROYING, () => clearTimeout(reviveTimer));
             hls.on(Hls.Events.ERROR, (_e, data) => {
               if (!data.fatal) return;
               if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                fail("The stream stopped answering — its token may have expired, or the proxy could not reach it.");
+                if (revives >= REVIVES) {
+                  giveUp("The stream stopped answering — its token may have expired, or the proxy could not reach it.");
+                  return;
+                }
+                revives += 1;
+                setState("reconnecting");
+                clearTimeout(reviveTimer);
+                reviveTimer = setTimeout(() => {
+                  if (dead) return;
+                  // Before anything has loaded there is no level to resume, so
+                  // the playlist is asked for again from the top.
+                  if (!hls.levels?.length) hls.loadSource(url);
+                  else hls.startLoad();
+                }, Math.min(1000 * 2 ** (revives - 1), 8000));
               } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                 try { hls.recoverMediaError(); } catch { fail("This stream could not be decoded."); }
               } else {
@@ -192,7 +254,14 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
           }
 
           player.addEventListener("error", (ev) => {
+            // Shaka reports what it is already retrying; only a critical
+            // error has stopped playback.
+            if (ev.detail?.severity !== shaka.util.Error.Severity.CRITICAL) return;
             const code = ev.detail?.code;
+            if (code >= 1000 && code < 2000) {       // network: look it up again
+              giveUp(`The stream stopped answering (Shaka ${code}).`);
+              return;
+            }
             fail(code >= 6000 && code < 7000
               ? `Could not decrypt this stream (Shaka ${code}) — its key may be wrong or out of date.`
               : `This stream could not be played (Shaka ${code}).`);
@@ -233,7 +302,7 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
     })();
 
     return () => { dead = true; teardown(); };
-  }, [source, fail]);
+  }, [source, fail, giveUp]);
 
   /* ── element events ─────────────────────────────────────────────────── */
   useEffect(() => {
@@ -356,10 +425,13 @@ export default function AnchorPlayer({ source, title, poster, onPlaying, onError
         className="absolute inset-0 w-full h-full object-contain bg-black"
       />
 
-      {state === "loading" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
+      {(state === "loading" || state === "reconnecting") && (
+        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3
+                         ${state === "loading" ? "bg-black/60" : "bg-black/30"}`}>
           <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Starting live stream</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">
+            {state === "loading" ? "Starting live stream" : "Reconnecting"}
+          </p>
         </div>
       )}
 
