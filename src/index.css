@@ -243,3 +243,27 @@ input[type="range"]::-moz-range-track {
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
 }
 
+
+/* ── Subtitles ────────────────────────────────────────────────────────────────
+   The browser's default cue is a large white block on flat black that scales
+   with the video box, so on a full-screen film it lands enormous and on a small
+   inline player it lands tiny. Fixed, readable sizing with a soft plate behind
+   it instead — and a shadow, because a plate alone still loses thin strokes on
+   a bright frame.
+
+   Position is not set here: ::cue cannot move a cue. The player sets each
+   cue's `line` in JS so the text clears the control bar and the letterbox. */
+video::cue {
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+@media (min-width: 768px) {
+  video::cue { font-size: 1.35rem; }
+}
+@media (min-width: 1280px) {
+  video::cue { font-size: 1.6rem; }
+}

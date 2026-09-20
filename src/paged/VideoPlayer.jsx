@@ -750,6 +750,57 @@ const VideoPlayer = ({
   };
   const seekTo = (clientX) => { if (duration && videoRef.current) videoRef.current.currentTime = pctFromEvent(clientX) * duration; };
 
+  /* ── Where the subtitles sit ─────────────────────────────────────────────
+     The browser puts cues at the very bottom of the VIDEO ELEMENT, which is
+     wrong here twice over. The element is object-contain, so on a wide film
+     its bottom edge is the letterbox bar, not the picture — subtitles land in
+     the black. And our controls are custom, so the browser does not know to
+     lift the cues clear of them the way it does for its own.
+
+     ::cue cannot move a cue; only its `line` can. With snapToLines off, line
+     is a percentage down the box, so this parks the text inside the picture
+     and above the control bar.
+
+     Re-applied on every cuechange because HLS streams add cues as segments
+     arrive — positioning only what exists when a track is switched on would
+     leave everything after the first few seconds back at the bottom. */
+  const positionCues = useCallback((track) => {
+    if (!track || !track.cues) return;
+    for (const cue of track.cues) {
+      cue.snapToLines = false;
+      cue.line = 86;          // % from the top — clear of the bottom bar
+      cue.align = "center";
+      cue.position = 50;
+    }
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const tracks = v.textTracks;
+    if (!tracks) return;
+
+    const onCueChange = (e) => positionCues(e.target);
+    const attach = () => {
+      for (let i = 0; i < tracks.length; i++) {
+        const t = tracks[i];
+        if (t.mode !== "showing") continue;
+        positionCues(t);
+        t.removeEventListener("cuechange", onCueChange);
+        t.addEventListener("cuechange", onCueChange);
+      }
+    };
+    attach();
+    tracks.addEventListener?.("change", attach);
+    /* Cues can also be parsed slightly after the track is switched on. */
+    const t = setTimeout(attach, 400);
+    return () => {
+      clearTimeout(t);
+      tracks.removeEventListener?.("change", attach);
+      for (let i = 0; i < tracks.length; i++) tracks[i].removeEventListener("cuechange", onCueChange);
+    };
+  }, [currentSubtitleId, positionCues, externalSubUrl]);
+
   const changeSubtitles = (id) => {
     if (hlsRef.current) {
       hlsRef.current.subtitleTrack = id;
@@ -985,7 +1036,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: TOP --- */}
-      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
           <button onClick={onBackClick} className="p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
           <div className="flex flex-col text-left min-w-0">
@@ -1026,7 +1077,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
-      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="relative mb-2 sm:mb-4">
             {/* Scrub thumbnail preview (like Netflix/Hotstar) */}
             <div className="absolute bottom-7 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-100" style={{ left: `${hoverPct}%`, opacity: hoverTime != null ? 1 : 0 }}>
