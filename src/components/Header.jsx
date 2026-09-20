@@ -403,6 +403,19 @@ function shortDescription(text, words = 28) {
   return parts.length <= words ? clean : parts.slice(0, words).join(" ") + "…";
 }
 
+/* How fast the hero's copy travels over its artwork as you scroll.
+
+   Reads --hero-p, the 0→1 scroll progress published on the document element
+   each frame. The
+   text clears the frame well before the scroll completes (hence the 1.6) so it
+   is gone by the time the catalogue reaches it, rather than fading out under
+   the first row of posters. */
+const heroCopyParallax = {
+  transform: "translate3d(0, calc(var(--hero-p, 0) * -120px), 0)",
+  opacity: "calc(1 - var(--hero-p, 0) * 1.6)",
+  willChange: "transform, opacity",
+};
+
 /* ── Live slides in the hero ─────────────────────────────────────────────────
 
    The home page already knew about two kinds of live thing and showed neither
@@ -944,6 +957,66 @@ function HeroSpotlight({ movies = [], onOpen }) {
     });
   }, [slides, art, ratio]);
 
+  /* Scroll-linked parallax, the way the big streaming apps do it.
+
+     The scroll position is published once, as a 0→1 custom property on the
+     shell, and the layers inside read it at their own rate: the artwork holds
+     still while the title logo, the metadata and the buttons rise up across it
+     and fade out, so the copy travels over the poster instead of the whole
+     hero sliding away as one slab. One listener, one write per frame, and the
+     rates live in the markup next to the thing they move.
+
+     Driven by transform and opacity only — animating those stays off the
+     layout path, so the grid below never reflows while you scroll.
+
+     Desktop only: on a phone the hero is most of the screen and moving it
+     while you scroll past it just makes the top of the page look broken. */
+  const frameRef = useRef(0);
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    /* Published on the document element, not on the hero, because the
+       catalogue band below is the hero's sibling and CSS variables inherit
+       down rather than across. The band needs this value to fade its own
+       leading edge in as the hero starts to move. */
+    const root = document.documentElement;
+    const apply = () => {
+      frameRef.current = 0;
+      if (window.innerWidth < 640) {
+        el.style.cssText = "";
+        root.style.removeProperty("--hero-p");
+        return;
+      }
+      const h = el.offsetHeight || 1;
+      const p = Math.min(1, Math.max(0, window.scrollY / (h * 0.85)));
+      root.style.setProperty("--hero-p", String(p));
+      /* The artwork holds at full strength while the copy travels over it, then
+         fades the last of the way out so there is no hard cut when it is taken
+         out of rendering below. No blur: it lives on the same element as the
+         copy, so blurring the poster would smear the title logo along with it. */
+      el.style.opacity = String(Math.min(1, (1 - p) / 0.3));
+      // Once it is gone it should stop catching clicks meant for the grid, and
+      // stop being painted at all — it is pinned, so it never leaves the DOM.
+      el.style.pointerEvents = p > 0.95 ? "none" : "";
+      el.style.visibility = p > 0.99 ? "hidden" : "";
+    };
+    const onScroll = () => {
+      if (frameRef.current) return;
+      frameRef.current = requestAnimationFrame(apply);
+    };
+    apply();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      root.style.removeProperty("--hero-p");
+    };
+  }, [slides.length]);
+
   if (!slides.length) return null;
 
   return (
@@ -955,7 +1028,8 @@ function HeroSpotlight({ movies = [], onOpen }) {
        slide across it. The phone deck stays in normal flow, where a pinned
        hero would eat most of the screen. */
     <section
-      className="relative w-full sm:-ml-[72px] sm:w-[calc(100%+72px)]"
+      className="relative w-full sm:sticky sm:top-0 sm:z-0
+                 sm:-ml-[72px] sm:w-[calc(100%+72px)]"
       /* Focus still pauses everywhere — it only ever lands on the buttons or
          the indicators. Hover does not: see pauseOnHover below. */
       onFocusCapture={() => setPaused(true)}
@@ -1160,11 +1234,11 @@ function HeroSpotlight({ movies = [], onOpen }) {
 
                 {(deskWide || useCover) ? (
                   <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 2xl:p-14 pb-16 sm:ml-[72px]"
-                    {...pauseOnHover}>{copy}</div>
+                    style={heroCopyParallax} {...pauseOnHover}>{copy}</div>
                 ) : (
                   <div className="absolute inset-0 flex flex-row items-center justify-start
                                   gap-8 lg:gap-12 px-8 lg:px-10 2xl:px-14 pb-12 sm:ml-[72px]"
-                    {...pauseOnHover}>
+                    style={heroCopyParallax} {...pauseOnHover}>
                     {desktopSrc && (
                       <img src={desktopSrc} alt=""
                         className={`h-[70%] max-h-[400px] w-auto aspect-[2/3] object-cover shrink-0
@@ -1429,10 +1503,35 @@ const Header = () => {
         <LiveShowBanner />
       </div>
 
-      {/* ── HERO SPOTLIGHT ──────────────────────────────────────────────── */}
+      {/* ── HERO SPOTLIGHT — full bleed, pinned behind everything below ─── */}
       <HeroSpotlight movies={heroSlides} onOpen={openMobileSheet} />
 
+      {/* Everything from here rides over the pinned hero — z-10 against the
+          hero's z-0, so as the page scrolls the catalogue travels across it.
+
+          It starts exactly at the hero's bottom edge and not a pixel higher.
+          An earlier version pulled this band up 96px for a soft cross-fade,
+          which looked right and broke the hero: a div hit-tests over its whole
+          box whether or not anything is painted there, so that strip sat on
+          top of Watch now, Download and the five progress bars and swallowed
+          every click. The hero's own bottom scrim already fades to gray-950,
+          so the seam needs no help. */}
       <div className="relative z-10">
+        {/* The band's leading edge, softened. Pinned behind the hero, this band
+            slides up across the artwork as you scroll and its top was cutting
+            a hard horizontal line through the picture.
+
+            Absolutely positioned and pointer-events-none, so unlike the earlier
+            negative-margin version it paints over the hero without taking its
+            clicks. Its opacity rides --hero-p: at rest there is no fade at all,
+            which keeps the hero's own buttons and progress bars at full
+            strength, and it ramps in (x3, so it is fully on early) the moment
+            the page starts to move and the edge would otherwise show. */}
+        <div aria-hidden="true"
+          className="hidden sm:block absolute inset-x-0 -top-28 h-28 pointer-events-none
+                     sm:-ml-[72px] bg-gradient-to-b from-transparent to-gray-950"
+          style={{ opacity: "calc(var(--hero-p, 0) * 3)" }} />
+
         {/* The ground runs the full width of the window while the content on it
             stays clear of the rail. Without the break-out the band covered only
             the padded area, and since the hero now passes under the rail, a
