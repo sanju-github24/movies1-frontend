@@ -1222,51 +1222,6 @@ if (!alive) return;
     return () => { alive = false; };
   }, [movieMeta?.title, movieMeta?.content_type, movieMeta?.mx_web_url, movieMeta?.mx_id, episodes.length]);
 
-  /* ── Hero parallax — the catalogue scrolls up over a pinned hero ──────────
-     The same move Header uses on the home page: the hero is pinned behind the
-     content (sticky, z-0), the content below rides over it (z-10, opaque), and
-     one scroll listener publishes --hero-p (0→1) so the poster/title/buttons
-     travel up and fade while the artwork holds, then the whole hero fades out
-     and stops taking clicks once it is covered.
-
-     Desktop only: on a phone the hero is most of the screen, and moving it
-     while you scroll past it just makes the top look broken. */
-  const heroRef = useRef(null);
-  const heroFrame = useRef(0);
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const root = document.documentElement;
-    const apply = () => {
-      heroFrame.current = 0;
-      if (window.innerWidth < 640) {         // phone: no pinning, no parallax
-        el.style.opacity = ""; el.style.pointerEvents = ""; el.style.visibility = "";
-        root.style.removeProperty("--hero-p");
-        return;
-      }
-      const h = el.offsetHeight || 1;
-      const p = Math.min(1, Math.max(0, window.scrollY / (h * 0.85)));
-      root.style.setProperty("--hero-p", String(p));
-      el.style.opacity = String(Math.min(1, (1 - p) / 0.3));
-      el.style.pointerEvents = p > 0.95 ? "none" : "";
-      el.style.visibility = p > 0.99 ? "hidden" : "";
-    };
-    const onScroll = () => {
-      if (heroFrame.current) return;
-      heroFrame.current = requestAnimationFrame(apply);
-    };
-    apply();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (heroFrame.current) cancelAnimationFrame(heroFrame.current);
-      root.style.removeProperty("--hero-p");
-    };
-  }, [movieMeta?.slug]);
-
   /* ── Loading ── */
   if (loading) return (
     <div className="min-h-screen bg-[#070709] flex flex-col items-center justify-center gap-6">
@@ -1332,9 +1287,9 @@ if (!alive) return;
   const canonical = absUrl(`/watch/${movieMeta.slug || routeSlug}`);
 
   /* ══════════════════════════════════════════════════════════════════ */
-  // overflow-x is CLIP, not hidden: `hidden` turns this into a scroll container,
-  // which stops the sticky hero below from pinning to the viewport; `clip` trims
-  // the same horizontal overflow without that.
+  // overflow-x is CLIP, not hidden: `hidden` would turn this into a scroll
+  // container, which changes how fixed children behave; `clip` trims the same
+  // horizontal overflow without that.
   return (
     <div className="min-h-screen bg-[#070709] text-white pb-24 font-sans [overflow-x:clip]">
       <Helmet>
@@ -1596,14 +1551,10 @@ if (!alive) return;
 
       {/* ── NAVBAR ── */}
       <header className="fixed top-0 inset-x-0 z-[110] h-16 flex items-center px-4">
-        {/* Fully transparent over the hero, like the home page: the fill and its
-            hairline ride --hero-p, so there is nothing at rest and a blurred bar
-            fades in only once the catalogue has scrolled up under it. A soft top
-            scrim is always on so the back arrow and logo stay legible on bright
-            artwork. */}
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 bg-[#070709]/80 backdrop-blur-xl border-b border-white/[0.04]"
-             style={{ opacity: "var(--hero-p, 0)" }} />
+        {/* The fill used to fade in on scroll. With the hero no longer pinned
+            there is nothing to fade against, so it stays on — a fixed bar over
+            the catalogue needs its own ground to be readable. */}
+        <div className="absolute inset-0 bg-[#070709]/80 backdrop-blur-xl border-b border-white/[0.04]" />
         <div className="relative max-w-[1800px] mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)}
@@ -1620,9 +1571,8 @@ if (!alive) return;
         </div>
       </header>
 
-      {/* ── HERO — pinned behind the content from sm up, so the catalogue
-              scrolls up over it (see the hero-parallax effect above). ── */}
-      <div ref={heroRef} className="relative sm:sticky sm:top-0 sm:z-0 pt-16 w-full min-h-[560px] overflow-hidden">
+      {/* ── HERO ── */}
+      <div className="relative pt-16 w-full min-h-[560px] overflow-hidden">
         {movieMeta.background && (
           <div className="absolute inset-0 z-0">
             <img src={movieMeta.background} alt=""
@@ -1634,8 +1584,7 @@ if (!alive) return;
           </div>
         )}
 
-        <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full"
-          style={{ transform: "translate3d(0, calc(var(--hero-p, 0) * -80px), 0)", opacity: "calc(1 - var(--hero-p, 0) * 1.4)" }}>
+        <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
 
           {/* Poster */}
           <div className="shrink-0 mx-auto lg:mx-0">
