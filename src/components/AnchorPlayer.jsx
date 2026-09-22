@@ -67,6 +67,54 @@ const LOAD_POLICY = (maxLoadTimeMs) => ({
    times, further apart each time, before the viewer is told it has stopped. */
 const REVIVES = 5;
 
+/* A stream read through the proxy is not the same stream read from its CDN,
+   and tuning for the CDN is what makes the proxied ones late and stuttery.
+   Measured against the Mumbai function: a quarter to half a second added to
+   every single request, and an exit whose throughput sits around what a
+   1080p live feed needs — so the defaults, which chase the live edge two
+   segments back and let ABR climb to the top rung, leave it with nothing in
+   hand and it spends the match rebuffering.
+ *
+ * Proxied, it is told to do the opposite: start on the lowest rung so the
+ * picture appears at once, climb only when the bandwidth is really there, and
+ * keep a deeper buffer further from the edge. The cost is a few more seconds
+ * behind live. The gain is that it plays.  */
+const TUNING = {
+  direct: {
+    lowLatencyMode: true,
+    liveSyncDurationCount: 2,
+    liveMaxLatencyDurationCount: 6,
+    maxBufferLength: 30,
+    backBufferLength: 60,
+    startLevel: -1,
+  },
+  proxied: {
+    /* Four segments back, pulled forward at twelve: at a four second target
+       that is sixteen seconds of cushion, which is about what one slow
+       segment through a public exit costs. */
+    lowLatencyMode: false,
+    liveSyncDurationCount: 4,
+    liveMaxLatencyDurationCount: 12,
+    maxBufferLength: 60,
+    maxMaxBufferLength: 120,
+    backBufferLength: 30,
+    /* The lowest rung first. Auto still climbs within seconds if the line can
+       take it, but the first picture arrives in one small segment rather than
+       after a 1080p one has crawled through the proxy. */
+    startLevel: 0,
+    /* hls.js otherwise assumes 500kbps and steps up on a single fast segment.
+       Through a proxy that is how you get a rung that cannot be sustained and
+       a stall ten seconds later — so it starts from what the path actually
+       gives and needs real headroom before it climbs. */
+    abrEwmaDefaultEstimate: 2_000_000,
+    abrBandWidthFactor: 0.8,
+    abrBandWidthUpFactor: 0.6,
+    /* A gap through a proxy is jitter, not a hole in the stream: nudge harder
+       before giving up on it. */
+    nudgeMaxRetry: 8,
+  },
+};
+
 export default function AnchorPlayer({
   source, title, poster, onPlaying, onError, onStall, languages, lang, onLanguage, standby = false,
 }) {
@@ -143,14 +191,7 @@ export default function AnchorPlayer({
           if (Hls.isSupported()) {
             const hls = new Hls({
               enableWorker: true,
-              lowLatencyMode: true,
-              /* Two segments back, pulled forward at six. At a four second
-                 target that is eight behind rather than twelve, corrected at
-                 twenty-four rather than forty. */
-              liveSyncDurationCount: 2,
-              liveMaxLatencyDurationCount: 6,
-              maxBufferLength: 30,
-              backBufferLength: 60,
+              ...(source.proxy ? TUNING.proxied : TUNING.direct),
               fragLoadPolicy: LOAD_POLICY(25000),
               playlistLoadPolicy: LOAD_POLICY(20000),
               manifestLoadPolicy: LOAD_POLICY(25000),

@@ -44,6 +44,22 @@ async function feed(q) {
 
 export function forgetFeeds() { cache.clear(); }
 
+/* hls.js is half a megabyte, and it is fetched when someone presses play —
+   so the first thing every viewer waits for is a download that could have
+   happened while they were reading the fixture list. Started when the browser
+   is idle, it is in cache before it is wanted, and a visitor who never presses
+   play has paid for it out of spare time rather than out of their first frame.
+   Called by the live pages; safe to call as often as you like. */
+let warmedPlayer = false;
+export function warmPlayer() {
+  if (warmedPlayer || typeof window === "undefined") return;
+  warmedPlayer = true;
+  warmProxy();
+  const go = () => import("hls.js").catch(() => { warmedPlayer = false; });
+  if ("requestIdleCallback" in window) window.requestIdleCallback(go, { timeout: 4000 });
+  else setTimeout(go, 1500);
+}
+
 /* The proxy is a different origin, and its DNS, TCP and TLS are most of the
    first request's time. Opened as soon as anything asks to play, it is ready
    by the time the feed has said what to play. */

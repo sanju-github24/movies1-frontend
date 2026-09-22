@@ -4,6 +4,7 @@ import { Radio, Clock3, Play, ExternalLink, AlertCircle } from "lucide-react";
 import LiveViewer from "./LiveViewer";
 import { oneperMatch } from "../utils/langs";
 import { fetchTabFeed, parseTabUrl, tabItemUrl, posterFor, startLabel, fixtureKey, isIndiaFixture } from "../utils/liveTabs";
+import { warmPlayer } from "../utils/liveSources";
 import { LANDSCAPE_GRID } from "../utils/posterGrid";
 
 /* Fixtures behind the player's tabs, on the live page.
@@ -143,6 +144,11 @@ const LiveTabsSection = ({ rows, heading }) => {
   const source = given ? rows : fetched;
   const tabRows = (source || []).filter((r) => parseTabUrl(r.bundle_url));
   const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url).key))).join(",");
+
+  /* Somebody looking at a list of live fixtures is about to press play on
+     one, so the player and the proxy connection are made ready while they
+     read — out of idle time, not out of the first frame. */
+  useEffect(() => { if (keys) warmPlayer(); }, [keys]);
 
   /* One fetch per tab. Two saved rows can point at the same one, and matching
      a fixture across publishers needs every feed in the same place anyway. */
