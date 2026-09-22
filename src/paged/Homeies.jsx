@@ -228,8 +228,11 @@ function PulsingDot({ color="#ef4444", size=7 }) {
 // Tracks image-load failure in state and falls back to the flag/globe glyph,
 // instead of hiding a broken <img> and leaving an empty box (the previous bug).
 function TeamBadge({ team, sport, size = 44 }) {
+  /* A feed can describe an event rather than a fixture, leaving one side
+     undefined. A missing crest is a placeholder; a crash here takes the whole
+     page down with it. */
   const [imgFailed, setImgFailed] = useState(false);
-  const hasLogo = !!team.logo && !imgFailed;
+  const hasLogo = !!team?.logo && !imgFailed;
 
   if (sport === "football") {
     return hasLogo ? (
@@ -243,7 +246,7 @@ function TeamBadge({ team, sport, size = 44 }) {
     );
   }
 
-  const flag = ICC_FLAGS[team.code] || "🏏";
+  const flag = ICC_FLAGS[team?.code] || "🏏";
   return hasLogo ? (
     <div className="rounded-full overflow-hidden border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width:size, height:size }}>
       <img src={team.logo} alt="" className="w-full h-full object-contain" style={{padding:"12%"}} onError={()=>setImgFailed(true)}/>

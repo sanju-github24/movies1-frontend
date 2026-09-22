@@ -53,8 +53,8 @@ const IND_VS_IRE_IMG = "https://images.slivcdn.com/videoasset_images/manage_file
    is at least about this fixture, and there is one for every country. */
 function resolveThumbnail(slide) {
   if (slide.sport === "football") return "/fifa_2026.webp";
-  const codes = [(slide.home.code || "").toUpperCase(), (slide.away.code || "").toUpperCase()];
-  const names = [(slide.home.name || "").toUpperCase(), (slide.away.name || "").toUpperCase()];
+  const codes = [(slide.home?.code || "").toUpperCase(), (slide.away?.code || "").toUpperCase()];
+  const names = [(slide.home?.name || "").toUpperCase(), (slide.away?.name || "").toUpperCase()];
   const has = (c, full) => codes.some((x) => x === c) || names.some((n) => n.includes(full));
   const hasIND = has("IND", "INDIA");
   if (hasIND && has("IRE", "IRELAND")) return IND_VS_IRE_IMG;
@@ -228,9 +228,12 @@ function PulsingDot({color="#ef4444",size=8}){
 // Tracks image-load failure in state and falls back to the flag glyph,
 // instead of hiding a broken <img> and leaving an empty/invisible box.
 function TeamBadge({ team, size = "clamp(20px,4.5vw,40px)" }) {
+  /* A feed can describe an event rather than a fixture, leaving one side
+     undefined. A missing crest is a placeholder; a crash here takes the whole
+     page down with it. */
   const [imgFailed, setImgFailed] = useState(false);
-  const hasLogo = !!team.logo && !imgFailed;
-  const flag = ICC_FLAGS[team.code] || "🏏";
+  const hasLogo = !!team?.logo && !imgFailed;
+  const flag = ICC_FLAGS[team?.code] || "🏏";
   return hasLogo ? (
     <div
       className="rounded-full overflow-hidden bg-white/5 border border-white/15 shrink-0 flex items-center justify-center"
@@ -252,8 +255,11 @@ function TeamBadge({ team, size = "clamp(20px,4.5vw,40px)" }) {
 }
 
 function FootballTeamBadge({ team, size = "clamp(28px,5vw,48px)" }) {
+  /* A feed can describe an event rather than a fixture, leaving one side
+     undefined. A missing crest is a placeholder; a crash here takes the whole
+     page down with it. */
   const [imgFailed, setImgFailed] = useState(false);
-  const hasLogo = !!team.logo && !imgFailed;
+  const hasLogo = !!team?.logo && !imgFailed;
   return hasLogo ? (
     <div className="rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/5" style={{ width: size, height: size }}>
       <img src={team.logo} alt="" className="w-full h-full object-cover" onError={() => setImgFailed(true)}/>
@@ -781,9 +787,9 @@ function ThumbnailStrip({slides,activeIdx,onSelect}){
         const isCricket=slide.sport==="cricket";
         const accent=isCricket?"rgba(139,92,246,0.7)":"rgba(30,213,150,0.7)";
         const { home, away } = slide;
-        const hCrest=home.logo, aCrest=away.logo;
-        const hFlag=isCricket?(ICC_FLAGS[home.code]||"🏏"):"⚽";
-        const aFlag=isCricket?(ICC_FLAGS[away.code]||"🏏"):"🌍";
+        const hCrest=home?.logo, aCrest=away?.logo;
+        const hFlag=isCricket?(ICC_FLAGS[home?.code]||"🏏"):"⚽";
+        const aFlag=isCricket?(ICC_FLAGS[away?.code]||"🏏"):"🌍";
         const stripBg=resolveThumbnail(slide);
         return(
           <button key={slide.id} onClick={()=>onSelect(i)}
@@ -806,7 +812,7 @@ function ThumbnailStrip({slides,activeIdx,onSelect}){
                 {hCrest
                   ? <img src={hCrest} alt="" className="w-4 h-4 object-contain shrink-0"/>
                   : <span style={{fontSize:16,lineHeight:1}}>{hFlag}</span>}
-                <span className="text-[7px] font-black text-white/50 uppercase">{home.code} v {away.code}</span>
+                <span className="text-[7px] font-black text-white/50 uppercase">{home?.code} v {away?.code}</span>
                 {aCrest
                   ? <img src={aCrest} alt="" className="w-4 h-4 object-contain shrink-0"/>
                   : <span style={{fontSize:16,lineHeight:1}}>{aFlag}</span>}
@@ -1084,11 +1090,18 @@ export default function HeroSection(){
 
       const toSlide=(m,status)=>{
         const sides = splitTeams(m.name);
+        /* The publisher feeds carry events as well as fixtures — "20th Asian
+           Games Aichi-Nagoya 2026" names no two sides — and this used to build
+           a slide for one anyway with away:null. The hero is built around two
+           teams throughout: their crests, their codes, the thumbnail chosen
+           from the pair. A slide with one side crashed the whole sports page
+           the moment such an event appeared in the feed. It is not a fixture,
+           so it is not a slide. */
+        if (!sides) return null;
         /* Same as the home hero: the code comes from the name, or the flag
            has nothing to look up. */
-        const home = buildSide({ code: codeForTeam(sides ? sides.home : m.name),
-                                 name: sides ? sides.home : (m.name||"") });
-        const away = sides ? buildSide({ code: codeForTeam(sides.away), name: sides.away }) : null;
+        const home = buildSide({ code: codeForTeam(sides.home), name: sides.home });
+        const away = buildSide({ code: codeForTeam(sides.away), name: sides.away });
         return {
           id:`fx-${m.tabKey}-${m.id}`, sport:"cricket", status,
           // Plays in place — see playSrc below; no link to follow off the page.
@@ -1109,8 +1122,8 @@ export default function HeroSection(){
 
       /* Two live at most. The hero holds four slides and BCCI's own live and
          finished matches want a place in it too. */
-      fxLive.slice(0,2).forEach(m=>playC.push(toSlide(m,"live")));
-      fxSoon.forEach(m=>playUpC.push(toSlide(m,"upcoming")));
+      fxLive.map(m=>toSlide(m,"live")).filter(Boolean).slice(0,2).forEach(x=>playC.push(x));
+      fxSoon.map(m=>toSlide(m,"upcoming")).filter(Boolean).forEach(x=>playUpC.push(x));
     }catch{ /* the feeds are optional; BCCI still fills the hero */ }
 
     /* Order: what can be watched now, then BCCI's live, then just-finished,
