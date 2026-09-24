@@ -74,7 +74,15 @@ function warmProxy() {
   document.head.appendChild(l);
 }
 
-/* ── fixtures: SonyLiv, FanCode, Willow ─────────────────────────────────── */
+const DIRECT_HOSTS = ["bia-cf.live.pv-cdn.net"];
+function isDirectHost(url) {
+  try {
+    const h = new URL(url).hostname;
+    return DIRECT_HOSTS.some((d) => h === d || h.endsWith("." + d));
+  } catch {
+    return false;
+  }
+}
 
 /* A fixture from the feeds already carries its URL. It is HLS, and it goes
    through the proxy because neither CDN sends CORS headers and both refuse
@@ -86,11 +94,31 @@ function fixtureSource(tabKey, item) {
              proxy: { base: PROXY, ref: "https://fancode.com/", ua: item.ua || "" } };
   }
   if (tabKey === "willow") {
-    /* Willow streams go through the proxy with no special referrer.
-       The feed may carry a ClearKey pair in keyId/key. */
-    const drm = (item.keyId && item.key) ? { keyId: item.keyId, key: item.key } : undefined;
-    return { kind: isDash(item.url) ? "dash" : "hls", url: item.url, drm,
-             proxy: { base: PROXY } };
+    /* Prefer direct CORS-enabled CDN (ss-ott.bia-cf.live.pv-cdn.net).
+       If an item has servers, pick the direct Cloudfront server first. */
+    let url = item.url;
+    if (item.servers && item.servers.length) {
+      const direct = item.servers.find((s) => isDirectHost(s.url));
+      if (direct) url = direct.url;
+    }
+    const drm = (item.keyId && item.key)
+      ? {
+          keyId: String(item.keyId).replace(/-/g, "").toLowerCase().trim(),
+          key: String(item.key).replace(/-/g, "").toLowerCase().trim(),
+        }
+      : undefined;
+
+    const direct = isDirectHost(url);
+    /* Direct hosts (Cloudfront bia-cf.live.pv-cdn.net) serve cross-origin CORS
+       headers natively and need no proxy. The Mumbai Vercel proxy refuses them
+       with 403 "Host not allowed". If not direct, fall back to the Cloudflare
+       worker proxy rather than Vercel. */
+    return {
+      kind: isDash(url) ? "dash" : "hls",
+      url,
+      drm,
+      ...(direct ? {} : { proxy: { base: WORKER } }),
+    };
   }
   return { kind: isDash(item.url) ? "dash" : "hls", url: item.url, proxy: { base: PROXY } };
 }

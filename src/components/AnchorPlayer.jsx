@@ -269,7 +269,14 @@ export default function AnchorPlayer({
               dash: { ignoreSuggestedPresentationDelay: true },
             },
             ...(source.drm
-              ? { drm: { clearKeys: { [source.drm.keyId.toLowerCase()]: source.drm.key.toLowerCase() } } }
+              ? {
+                  drm: {
+                    clearKeys: {
+                      [String(source.drm.keyId).replace(/-/g, "").toLowerCase().trim()]:
+                        String(source.drm.key).replace(/-/g, "").toLowerCase().trim(),
+                    },
+                  },
+                }
               : {}),
           });
 
@@ -282,7 +289,9 @@ export default function AnchorPlayer({
              and is wrapped here on its way out. */
           if (source.proxy) {
             const P = source.proxy;
-            net.registerRequestFilter((_type, req) => {
+            net.registerRequestFilter((type, req) => {
+              const LICENSE = window.shaka?.net?.NetworkingEngine?.RequestType?.LICENSE;
+              if (type === LICENSE) return;
               req.uris = req.uris.map((u) => {
                 if (u.startsWith(P.base)) return u;
                 if (!/^https?:/i.test(u)) return u;
