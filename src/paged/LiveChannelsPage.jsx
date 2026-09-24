@@ -6,43 +6,43 @@ import { useGoBack } from "../components/BackBar";
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const tokens = {
   bg: {
-    base:    "#07070f",
+    base: "#07070f",
     surface: "rgba(255,255,255,0.03)",
-    glass:   "rgba(255,255,255,0.055)",
+    glass: "rgba(255,255,255,0.055)",
     overlay: "rgba(7,7,15,0.96)",
   },
   border: {
-    subtle:  "rgba(255,255,255,0.06)",
+    subtle: "rgba(255,255,255,0.06)",
     default: "rgba(255,255,255,0.10)",
-    strong:  "rgba(255,255,255,0.18)",
+    strong: "rgba(255,255,255,0.18)",
   },
   text: {
-    primary:   "#f4f4f6",
+    primary: "#f4f4f6",
     secondary: "rgba(244,244,246,0.55)",
-    muted:     "rgba(244,244,246,0.28)",
+    muted: "rgba(244,244,246,0.28)",
   },
   accent: {
-    red:        "#f03e3e",
-    redDim:     "rgba(240,62,62,0.14)",
-    redBorder:  "rgba(240,62,62,0.32)",
+    red: "#f03e3e",
+    redDim: "rgba(240,62,62,0.14)",
+    redBorder: "rgba(240,62,62,0.32)",
   },
   radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 },
   shadow: {
-    card:  "0 4px 24px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
-    glow:  "0 0 0 2px rgba(240,62,62,0.2), 0 4px 24px rgba(240,62,62,0.12)",
+    card: "0 4px 24px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    glow: "0 0 0 2px rgba(240,62,62,0.2), 0 4px 24px rgba(240,62,62,0.12)",
     modal: "0 24px 80px rgba(0,0,0,0.7)",
   },
 };
 
 // ─── Category Palette ─────────────────────────────────────────────────────────
 const CAT_CONFIG = {
-  Sports:        { color: "#3b82f6", bg: "rgba(59,130,246,0.12)",  border: "rgba(59,130,246,0.28)" },
-  News:          { color: "#ef4444", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.28)" },
-  Entertainment: { color: "#a855f7", bg: "rgba(168,85,247,0.12)",  border: "rgba(168,85,247,0.28)" },
-  Movies:        { color: "#f59e0b", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.28)" },
-  Kids:          { color: "#ec4899", bg: "rgba(236,72,153,0.12)",  border: "rgba(236,72,153,0.28)" },
-  Music:         { color: "#10b981", bg: "rgba(16,185,129,0.12)",  border: "rgba(16,185,129,0.28)" },
-  Other:         { color: "#6b7280", bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.28)" },
+  Sports: { color: "#3b82f6", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.28)" },
+  News: { color: "#ef4444", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.28)" },
+  Entertainment: { color: "#a855f7", bg: "rgba(168,85,247,0.12)", border: "rgba(168,85,247,0.28)" },
+  Movies: { color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.28)" },
+  Kids: { color: "#ec4899", bg: "rgba(236,72,153,0.12)", border: "rgba(236,72,153,0.28)" },
+  Music: { color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.28)" },
+  Other: { color: "#6b7280", bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.28)" },
 };
 function getCat(cat) { return CAT_CONFIG[cat] || CAT_CONFIG.Other; }
 
@@ -50,73 +50,73 @@ function getCat(cat) { return CAT_CONFIG[cat] || CAT_CONFIG.Other; }
 const Icon = {
   Back: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5M12 19l-7-7 7-7"/>
+      <path d="M19 12H5M12 19l-7-7 7-7" />
     </svg>
   ),
   Search: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
     </svg>
   ),
   X: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <path d="M18 6 6 18M6 6l12 12"/>
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   ),
   Tv: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/>
+      <rect x="2" y="7" width="20" height="15" rx="2" /><path d="M17 2l-5 5-5-5" />
     </svg>
   ),
   Play: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5v14l11-7z"/>
+      <path d="M8 5v14l11-7z" />
     </svg>
   ),
   Channels: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+      <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
     </svg>
   ),
   ChevronDown: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m6 9 6 6 6-6"/>
+      <path d="m6 9 6 6 6-6" />
     </svg>
   ),
   Signal: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 20h.01M7 20v-4M12 20V10M17 20V4M22 20v-8"/>
+      <path d="M2 20h.01M7 20v-4M12 20V10M17 20V4M22 20v-8" />
     </svg>
   ),
   Sports: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/>
+      <circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /><path d="M2 12h20" />
     </svg>
   ),
   News: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
-      <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+      <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" />
     </svg>
   ),
   Film: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>
+      <rect x="2" y="2" width="20" height="20" rx="2.18" /><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
     </svg>
   ),
   Music: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+      <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
     </svg>
   ),
   Kids: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM4 22c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+      <path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" />
     </svg>
   ),
   AlertCircle: (p) => (
     <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
     </svg>
   ),
 };
@@ -170,11 +170,11 @@ function parseBundleUrl(bundleUrl) {
 function buildChannelUrl(basePlayerUrl, channel) {
   const params = new URLSearchParams();
   params.set("src", obf(channel.url));
-  params.set("t",   obf(channel.name || ""));
-  if (channel.keyId)  params.set("k1", obf(channel.keyId));
-  if (channel.key)    params.set("k2", obf(channel.key));
+  params.set("t", obf(channel.name || ""));
+  if (channel.keyId) params.set("k1", obf(channel.keyId));
+  if (channel.key) params.set("k2", obf(channel.key));
   if (channel.cookie) params.set("k3", obf(channel.cookie));
-  if (channel.logo)   params.set("lg", obf(channel.logo));
+  if (channel.logo) params.set("lg", obf(channel.logo));
   return `${basePlayerUrl}?${params}`;
 }
 
@@ -185,51 +185,51 @@ function extractBaseUrl(bundleUrl) {
 
 // ─── Live feed fetchers ───────────────────────────────────────────────────────
 const OLD_JSON = "https://binge-giotv.pages.dev/data/id.json";
-const NEW_JSON  = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
+const NEW_JSON = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
+
+function normalizeFeedChannel(ch) {
+  const clean = (v) => v == null || String(v).toLowerCase() === "null" ? "" : String(v);
+  return {
+    id: clean(ch.channel_id || ch.id),
+    name: ch.channel_name || ch.name || "Channel",
+    url: ch.channel_url || ch.stream_url || ch.url || "",
+    keyId: clean(ch.keyId || ch.key_id),
+    key: clean(ch.key), cookie: clean(ch.cookie),
+    logo: ch.channel_logo || ch.logo || "",
+  };
+}
 
 let _chMapCache = null;
 let _chMapPromise = null;
+let _chMapFetchedAt = 0;
 
-/**
- * Returns a map of { [channelId]: channelObject }
- * Shared across all callers so the feed is only fetched once per session.
- */
-async function getChMap() {
-  if (_chMapCache) return _chMapCache;
+async function getChMap(force = false) {
+  if (!force && _chMapCache && Date.now() - _chMapFetchedAt < 60_000) return _chMapCache;
   if (_chMapPromise) return _chMapPromise;
   _chMapPromise = (async () => {
+    const results = await Promise.allSettled([OLD_JSON, NEW_JSON].map(async (url) => {
+      const response = await fetch(url + "?_=" + Date.now(), {
+        cache: "no-store", signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
+      const data = await response.json();
+      const rows = Array.isArray(data) ? data : data.channels;
+      if (!Array.isArray(rows)) throw new Error("Invalid channel feed");
+      return rows.map(normalizeFeedChannel).filter(ch => ch.id && ch.url);
+    }));
     const map = {};
-    const [r1, r2] = await Promise.allSettled([
-      fetch(OLD_JSON + "?_=" + Date.now()).then((r) => (r.ok ? r.json() : null)),
-      fetch(NEW_JSON  + "?_=" + Date.now()).then((r) => (r.ok ? r.json() : null)),
-    ]);
-    if (r1.status === "fulfilled" && r1.value) {
-      const raw = Array.isArray(r1.value) ? r1.value : (r1.value.channels || []);
-      raw.forEach((ch) => {
-        if (ch.id) map[ch.id] = {
-          id: ch.id, name: ch.name || "Channel",
-          url: ch.url || "", keyId: ch.keyId || "",
-          key: ch.key || "", cookie: ch.cookie || "",
-          logo: ch.logo || "",
-        };
-      });
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        for (const ch of result.value) map[ch.id] = ch;
+      }
     }
-    if (r2.status === "fulfilled" && r2.value) {
-      const raw = Array.isArray(r2.value) ? r2.value : (r2.value.channels || []);
-      raw.forEach((ch) => {
-        let url = ch.channel_url || "";
-        if (url.includes("?")) url = url.split("?")[0];
-        if (ch.channel_id) map[ch.channel_id] = {
-          id: ch.channel_id, name: ch.channel_name || "Channel",
-          url, keyId: ch.keyId || "", key: ch.key || "",
-          cookie: ch.cookie || "", logo: ch.channel_logo || "",
-        };
-      });
-    }
+    if (!Object.keys(map).length) throw new Error("Unable to fetch channel feed. Please retry.");
     _chMapCache = map;
+    _chMapFetchedAt = Date.now();
     return map;
   })();
-  return _chMapPromise;
+  try { return await _chMapPromise; }
+  finally { _chMapPromise = null; }
 }
 
 /**
@@ -264,7 +264,7 @@ async function resolveBundle(parsed, logoMap) {
     try {
       const chMap = await getChMap();
       Object.values(chMap).forEach((ch) => { nameMap[ch.name] = ch; });
-    } catch {}
+    } catch { }
     const refreshed = parsed.channels.map((ch) => {
       const live = nameMap[ch.name];
       return live ? { ...live, logo: live.logo || ch.logo } : ch;
@@ -367,27 +367,28 @@ const SkeletonGrid = () => (
 const LiveChannelsPage = () => {
   const goBack = useGoBack();
 
-  const [bundles, setBundles]               = useState([]);
+  const [bundles, setBundles] = useState([]);
   // resolvedBundles: Map<row.id, { ...parsedBundle, channels: [...] }>
   const [resolvedBundles, setResolvedBundles] = useState({});
-  const [allChannels, setAllChannels]       = useState([]);
-  const [loading, setLoading]               = useState(true);
-  const [feedError, setFeedError]           = useState(false);
-  const [logoMap, setLogoMap]               = useState({});
+  const [allChannels, setAllChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [feedError, setFeedError] = useState(false);
+  const [logoMap, setLogoMap] = useState({});
 
-  const [activeBundle, setActiveBundle]         = useState(null);
+  const [activeBundle, setActiveBundle] = useState(null);
   const [activeBundleMeta, setActiveBundleMeta] = useState(null);
-  const [activeChannel, setActiveChannel]       = useState(null);
-  const [playerUrl, setPlayerUrl]               = useState("");
-  const [iframeLoading, setIframeLoading]       = useState(false);
-  const [channelListOpen, setChannelListOpen]   = useState(false);
+  const [activeChannel, setActiveChannel] = useState(null);
+  const [playerUrl, setPlayerUrl] = useState("");
+  const [iframeLoading, setIframeLoading] = useState(false);
+  const [channelListOpen, setChannelListOpen] = useState(false);
 
-  const [searchTerm, setSearchTerm]         = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
 
-  const iframeRef  = useRef(null);
-  const playerRef  = useRef(null);
-  const searchRef  = useRef(null);
+  const iframeRef = useRef(null);
+  const playRequestRef = useRef(0);
+  const playerRef = useRef(null);
+  const searchRef = useRef(null);
 
   // ── Boot: fetch feed + bundles in parallel ──────────────────────────────────
   useEffect(() => {
@@ -443,19 +444,30 @@ const LiveChannelsPage = () => {
   const categories = ["All", ...Array.from(new Set(bundles.map((b) => b.category).filter(Boolean)))];
 
   const filteredBundles = bundles.filter((b) => {
-    const matchCat    = activeCategory === "All" || b.category === activeCategory;
+    const matchCat = activeCategory === "All" || b.category === activeCategory;
     const matchSearch = !searchTerm || b.name.toLowerCase().includes(searchTerm.toLowerCase());
     // Only show bundles that resolved successfully
     return matchCat && matchSearch && !!resolvedBundles[b.id];
   });
 
   const filteredChannels = allChannels.filter((ch) => {
-    const matchCat    = activeCategory === "All" || ch._bundleMeta?.category === activeCategory;
+    const matchCat = activeCategory === "All" || ch._bundleMeta?.category === activeCategory;
     const matchSearch = !searchTerm || ch.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchCat && matchSearch;
   });
 
-  const playChannel = useCallback((ch, bundleMeta, parsedBundle) => {
+  const playChannel = useCallback(async (ch, bundleMeta, parsedBundle) => {
+    const requestId = ++playRequestRef.current;
+    try {
+      const map = await getChMap(true);
+      if (requestId !== playRequestRef.current) return;
+      const fresh = map[ch.id] || Object.values(map).find(item => item.name === ch.name);
+      if (fresh) ch = { ...ch, ...fresh };
+    } catch (error) {
+      if (requestId !== playRequestRef.current) return;
+      window.alert(error.message || "Unable to refresh the channel. Please retry.");
+      return;
+    }
     const base = extractBaseUrl(bundleMeta.bundle_url);
     const url = buildChannelUrl(base, ch);
     setActiveBundle(parsedBundle);
@@ -907,9 +919,9 @@ const EmptyState = () => (
 // ─────────────────────────────────────────────────────────────────────────────
 const BundleSection = ({ row, parsed, activeChannel, onPlayChannel, onPlayBundle }) => {
   const [expanded, setExpanded] = useState(true);
-  const channels  = parsed.channels || [];
-  const cfg       = getCat(row.category);
-  const CatIcon   = getCatIcon(row.category);
+  const channels = parsed.channels || [];
+  const cfg = getCat(row.category);
+  const CatIcon = getCatIcon(row.category);
   const hasActive = channels.some((ch) => ch.name === activeChannel?.name);
 
   return (
