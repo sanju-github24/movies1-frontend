@@ -14,11 +14,9 @@ import { LANDSCAPE_GRID } from "../utils/posterGrid";
  * and what is next. Nothing is stored about the fixtures themselves — they
  * change hourly, and a copy would be wrong by the time anyone looked. */
 
-const Card = ({ item, href, live, fallbackPoster, badge, onPlay }) => {
-  /* Some fixtures have nowhere to play but somewhere to watch — the Willow
-     schedule is all of these. An outward link is the honest action there:
-     better than a dead card, and it does not pretend the site can play it. */
-  const external = !href && item.link ? item.link : null;
+const Card = ({ item, href, live, fallbackPoster, badge, onPlay, allowExternal = true }) => {
+  // Willow fixtures remain in the app even when no stream is available.
+  const external = allowExternal && !href && item.link ? item.link : null;
   const poster = posterFor(item, fallbackPoster);
   const when = startLabel(item);
 
@@ -57,7 +55,7 @@ const Card = ({ item, href, live, fallbackPoster, badge, onPlay }) => {
                       ${live ? "bg-red-600 text-white" : "bg-black/70 text-gray-200 ring-1 ring-white/15"}`}
         >
           {live ? <Radio className="w-3 h-3" aria-hidden="true" />
-                : <Clock3 className="w-3 h-3" aria-hidden="true" />}
+            : <Clock3 className="w-3 h-3" aria-hidden="true" />}
           {live ? "Live" : "Upcoming"}
         </span>
 
@@ -105,18 +103,18 @@ const Group = (props) => {
   const Icon = props.icon;
   const { title, tone, count, children } = props;
   return (
-  <section className="mb-8 sm:mb-10">
-    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-      <h2 className={`text-base sm:text-xl font-black uppercase tracking-tight italic ${tone}`}>
-        <Icon className="inline w-4 h-4 sm:w-5 sm:h-5 mr-2 -mt-0.5" aria-hidden="true" />
-        {title}
-      </h2>
-      {count > 0 && (
-        <span className="text-[11px] font-bold text-gray-500 shrink-0">{count}</span>
-      )}
-    </div>
-    {children}
-  </section>
+    <section className="mb-8 sm:mb-10">
+      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <h2 className={`text-base sm:text-xl font-black uppercase tracking-tight italic ${tone}`}>
+          <Icon className="inline w-4 h-4 sm:w-5 sm:h-5 mr-2 -mt-0.5" aria-hidden="true" />
+          {title}
+        </h2>
+        {count > 0 && (
+          <span className="text-[11px] font-bold text-gray-500 shrink-0">{count}</span>
+        )}
+      </div>
+      {children}
+    </section>
   );
 };
 
@@ -142,7 +140,7 @@ const LiveTabsSection = ({ rows, heading }) => {
   }, [given]);
 
   const source = given ? rows : fetched;
-  const tabRows = (source || []).filter((r) => parseTabUrl(r.bundle_url));
+  const tabRows = useMemo(() => (source || []).filter((r) => parseTabUrl(r.bundle_url)), [source]);
   const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url).key))).join(",");
 
   /* Somebody looking at a list of live fixtures is about to press play on
@@ -184,7 +182,12 @@ const LiveTabsSection = ({ rows, heading }) => {
          stream per publisher, kept whichever language was listed first and
          dropped the rest. Collapsed first instead, keeping the viewer's own
          language where the match has it; the player offers the others. */
-      oneperMatch(f.live || []).forEach((m) => {
+      // The Willow worker returns live fixtures even before a stream is available.
+      // A match page URL is not a media stream.
+      const playableLive = p.key === "willow"
+        ? (f.live || []).filter((m) => typeof m.url === "string" && /^https?:\/\//i.test(m.url.trim()))
+        : (f.live || []);
+      oneperMatch(playableLive).forEach((m) => {
         const k = fixtureKey(m);
         const at = liveBy.get(k) || { item: m, poster: posterFor(m, r.thumbnail), sources: [] };
         if (!at.sources.some((x) => x.key === p.key)) {
@@ -197,7 +200,7 @@ const LiveTabsSection = ({ rows, heading }) => {
         const k = fixtureKey(m);
         if (liveBy.has(k)) return;           // already on: not "coming up"
         if (!soonBy.has(k)) {
-          soonBy.set(k, { item: m, poster: posterFor(m, r.thumbnail), label: p.def.label });
+          soonBy.set(k, { item: m, poster: posterFor(m, r.thumbnail), label: p.def.label, key: p.key });
         }
       });
     });
@@ -207,10 +210,10 @@ const LiveTabsSection = ({ rows, heading }) => {
     const byIndia = (a, b) => Number(isIndiaFixture(b.item)) - Number(isIndiaFixture(a.item));
     return {
       live: [...liveBy.values()].sort(byIndia),
-      soon: [...soonBy.values()].sort(byIndia),
+      soon: [...soonBy.entries()].filter(([key]) => !liveBy.has(key)).map(([, entry]) => entry).sort(byIndia),
       loading: pending,
     };
-  }, [feeds, keys]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [feeds, tabRows]);
 
   if (!source || !tabRows.length) return null;
 
@@ -272,7 +275,8 @@ const LiveTabsSection = ({ rows, heading }) => {
           <div className={LANDSCAPE_GRID}>
             {shownSoon.map((e, i) => (
               <Card key={`u-${e.item.id || i}`} item={e.item} live={false}
-                    href={null} fallbackPoster={e.poster} badge={e.label} />
+                href={null} fallbackPoster={e.poster} badge={e.label}
+                allowExternal={e.key !== "willow"} />
             ))}
           </div>
 
