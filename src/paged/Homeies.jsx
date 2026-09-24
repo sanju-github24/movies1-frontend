@@ -8,22 +8,31 @@ import { absUrl, jsonLd } from "../utils/seo";
 import LiveTabsSection from "../components/LiveTabsSection";
 
 function encodeMatchHash(payload) {
-  return btoa(JSON.stringify(payload))
+  // Escape Unicode as ASCII JSON before Base64 encoding.
+  // JSON.parse restores the original characters when decoded.
+  const safeJson = JSON.stringify(payload).replace(
+    /[\u007f-\uffff]/g,
+    (character) =>
+      "\\u" +
+      character.charCodeAt(0).toString(16).padStart(4, "0")
+  );
+
+  return btoa(safeJson)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=/g, "");
 }
 
 
-const API_BASE      = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
 const FIFA_API_BASE = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
-const FIFA_SEASON      = "285023";
-const FIFA_STAGE       = "289273";
-const WT20_SERIES_ID   = "12672";
+const FIFA_SEASON = "285023";
+const FIFA_STAGE = "289273";
+const WT20_SERIES_ID = "12672";
 
 
- 
+
 // ─── BCCI HELPERS ─────────────────────────────────────────────────────────────
 // Known non-senior-men's competition IDs:
 // 238 = Women's internationals
@@ -32,11 +41,11 @@ const WT20_SERIES_ID   = "12672";
 // 393 = India A / A-tour (not senior men's)
 
 function bcciFmt(type) {
-  const MAP = { "One Day D/N":"ODI","One Day":"ODI","T20":"T20I","Test":"Test","Test D/N":"Test" };
+  const MAP = { "One Day D/N": "ODI", "One Day": "ODI", "T20": "T20I", "Test": "Test", "Test D/N": "Test" };
   return MAP[type] || type || "MATCH";
 }
 function bcciFmtDate(s) {
-  try { return new Date(s).toLocaleDateString("en-IN", { day:"numeric", month:"short", timeZone:"Asia/Kolkata" }); }
+  try { return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }); }
   catch { return s; }
 }
 // BCCI-style countdown badge: "4 HOURS TO GO" / "2 DAYS TO GO"
@@ -45,11 +54,11 @@ function countdownLabel(dateStr) {
   const diffMs = new Date(dateStr) - new Date();
   if (diffMs <= 0) return "Starting soon";
   const mins = Math.round(diffMs / 60000);
-  if (mins < 60) return `${mins} MIN${mins!==1?"S":""} TO GO`;
+  if (mins < 60) return `${mins} MIN${mins !== 1 ? "S" : ""} TO GO`;
   const hrs = Math.round(diffMs / 3600000);
-  if (hrs < 24) return `${hrs} HOUR${hrs!==1?"S":""} TO GO`;
+  if (hrs < 24) return `${hrs} HOUR${hrs !== 1 ? "S" : ""} TO GO`;
   const days = Math.round(hrs / 24);
-  return `${days} DAY${days!==1?"S":""} TO GO`;
+  return `${days} DAY${days !== 1 ? "S" : ""} TO GO`;
 }
 
 // ─── INDIA HIGHLIGHTS ─────────────────────────────────────────────────────────
@@ -79,12 +88,12 @@ async function fetchIndiaHighlights(smMatchId) {
 
     // Map every video — preserve short_code for stream extraction
     const mapped = videos.map(v => ({
-      id:        v._id || v.id,
-      title:     v.title || "Untitled",
+      id: v._id || v.id,
+      title: v.title || "Untitled",
       thumbnail: v.thumbnail_image || v.imageUrl || v.imageBackup || null,
-      duration:  v.duration || 0,
-      views:     v.views_count || v.views || 0,
-      shortCode:  v.short_code || null,       // ← bccilink stream key
+      duration: v.duration || 0,
+      views: v.views_count || v.views || 0,
+      shortCode: v.short_code || null,       // ← bccilink stream key
       urlSegment: v.titleUrlSegment || null,  // ← fallback
     }));
 
@@ -141,13 +150,13 @@ async function fetchIplMatchHighlights(smMatchId) {
     const vids = json.videos || [];
     if (!vids.length) { setCache(k, null); return null; }
     const mapped = vids.map(v => ({
-      id:             v.id,
-      title:          v.title || "Untitled",
-      thumbnail:      v.thumbnail || null,
-      duration:       v.duration || 0,
-      mediaId:        v.mediaId || null,
+      id: v.id,
+      title: v.title || "Untitled",
+      thumbnail: v.thumbnail || null,
+      duration: v.duration || 0,
+      mediaId: v.mediaId || null,
       titleUrlSegment: v.titleUrlSegment || null,
-      shortCode:      v.shortCode || null,
+      shortCode: v.shortCode || null,
     }));
     setCache(k, mapped);
     return mapped;
@@ -161,13 +170,13 @@ async function fetchIplMatchHighlights(smMatchId) {
 
 // ─── FIFA / MISC HELPERS ──────────────────────────────────────────────────────
 const ICC_FLAGS = {
-  ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", SL:"🇱🇰", AUS:"🇦🇺", IND:"🇮🇳", AFG:"🇦🇫", SA:"🇿🇦",
-  PAK:"🇵🇰", NZ:"🇳🇿", WI:"🏴", SCO:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", IRE:"🇮🇪", BAN:"🇧🇩", NED:"🇳🇱",
+  ENG: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", SL: "🇱🇰", AUS: "🇦🇺", IND: "🇮🇳", AFG: "🇦🇫", SA: "🇿🇦",
+  PAK: "🇵🇰", NZ: "🇳🇿", WI: "🏴", SCO: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", IRE: "🇮🇪", BAN: "🇧🇩", NED: "🇳🇱",
 };
 function getFifaFlag(code) { return `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`; }
-function fifaAbbr(t) { return t?.Abbreviation || t?.TeamName?.find(x=>x.Locale==="en-GB")?.Description || ""; }
+function fifaAbbr(t) { return t?.Abbreviation || t?.TeamName?.find(x => x.Locale === "en-GB")?.Description || ""; }
 function fmtIST(d) {
-  try { return new Date(d).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kolkata"}); }
+  try { return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }); }
   catch { return ""; }
 }
 function getFifaStatus(m) {
@@ -193,11 +202,11 @@ function buildSide({ code, name, logo, score, overs }) {
 // NEVER defaults to "IND" — for away tours (e.g. India in Zimbabwe) the home
 // team is Zimbabwe, so a hardcoded IND fallback mismatches the logo.
 const TEAM_NAME_TO_CODE = {
-  "india":"IND","zimbabwe":"ZIM","australia":"AUS","england":"ENG","pakistan":"PAK",
-  "sri lanka":"SL","south africa":"SA","new zealand":"NZ","west indies":"WI",
-  "bangladesh":"BAN","afghanistan":"AFG","ireland":"IRE","netherlands":"NED",
-  "nepal":"NEP","scotland":"SCO","namibia":"NAM","oman":"OMA","united states":"USA",
-  "united states of america":"USA","uae":"UAE","canada":"CAN","malaysia":"MAS",
+  "india": "IND", "zimbabwe": "ZIM", "australia": "AUS", "england": "ENG", "pakistan": "PAK",
+  "sri lanka": "SL", "south africa": "SA", "new zealand": "NZ", "west indies": "WI",
+  "bangladesh": "BAN", "afghanistan": "AFG", "ireland": "IRE", "netherlands": "NED",
+  "nepal": "NEP", "scotland": "SCO", "namibia": "NAM", "oman": "OMA", "united states": "USA",
+  "united states of america": "USA", "uae": "UAE", "canada": "CAN", "malaysia": "MAS",
 };
 function teamCode(code, name) {
   if (code) return code;
@@ -208,15 +217,15 @@ function teamCode(code, name) {
 
 // ─── CACHE ────────────────────────────────────────────────────────────────────
 const _cache = {};
-function getCached(k) { const e=_cache[k]; return (e&&Date.now()-e.ts<600000)?e.data:null; }
-function setCache(k,d) { _cache[k]={data:d,ts:Date.now()}; }
+function getCached(k) { const e = _cache[k]; return (e && Date.now() - e.ts < 600000) ? e.data : null; }
+function setCache(k, d) { _cache[k] = { data: d, ts: Date.now() }; }
 
 // ─── SHARED ───────────────────────────────────────────────────────────────────
-function PulsingDot({ color="#ef4444", size=7 }) {
+function PulsingDot({ color = "#ef4444", size = 7 }) {
   return (
-    <span className="relative flex shrink-0" style={{width:size,height:size}}>
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{background:color}}/>
-      <span className="relative inline-flex rounded-full h-full w-full" style={{background:color}}/>
+    <span className="relative flex shrink-0" style={{ width: size, height: size }}>
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: color }} />
+      <span className="relative inline-flex rounded-full h-full w-full" style={{ background: color }} />
     </span>
   );
 }
@@ -236,33 +245,33 @@ function TeamBadge({ team, sport, size = 44 }) {
 
   if (sport === "football") {
     return hasLogo ? (
-      <div className="rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width:size, height:size }}>
-        <img src={team.logo} alt="" className="w-full h-full object-cover" onError={()=>setImgFailed(true)}/>
+      <div className="rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width: size, height: size }}>
+        <img src={team.logo} alt="" className="w-full h-full object-cover" onError={() => setImgFailed(true)} />
       </div>
     ) : (
-      <div className="rounded-lg border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width:size, height:size }}>
-        <span style={{ fontSize:size*0.55, lineHeight:1 }}>🌍</span>
+      <div className="rounded-lg border border-white/10 shrink-0 bg-white/5 flex items-center justify-center" style={{ width: size, height: size }}>
+        <span style={{ fontSize: size * 0.55, lineHeight: 1 }}>🌍</span>
       </div>
     );
   }
 
   const flag = ICC_FLAGS[team?.code] || "🏏";
   return hasLogo ? (
-    <div className="rounded-full overflow-hidden border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width:size, height:size }}>
-      <img src={team.logo} alt="" className="w-full h-full object-contain" style={{padding:"12%"}} onError={()=>setImgFailed(true)}/>
+    <div className="rounded-full overflow-hidden border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width: size, height: size }}>
+      <img src={team.logo} alt="" className="w-full h-full object-contain" style={{ padding: "12%" }} onError={() => setImgFailed(true)} />
     </div>
   ) : (
-    <div className="rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width:size, height:size }}>
-      <span style={{ fontSize:size*0.55, lineHeight:1 }}>{flag}</span>
+    <div className="rounded-full border border-white/10 bg-white/5 shrink-0 flex items-center justify-center" style={{ width: size, height: size }}>
+      <span style={{ fontSize: size * 0.55, lineHeight: 1 }}>{flag}</span>
     </div>
   );
 }
 
 // ─── BCCI-STYLE MATCH CARD (shared: live / scheduled / finished, cricket + football) ──
 function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, away, venue, link, result, tossText, highlight }) {
-  const isLive     = status === "live";
+  const isLive = status === "live";
   const isFinished = status === "finished";
-  const accent     = sport === "cricket" ? "#8b5cf6" : "#1ed596";
+  const accent = sport === "cricket" ? "#8b5cf6" : "#1ed596";
   const hWon = isFinished && typeof home.score === "number" && typeof away.score === "number" && home.score > away.score;
   const aWon = isFinished && typeof home.score === "number" && typeof away.score === "number" && away.score > home.score;
   const showCricketScores = sport === "cricket" && (isLive || isFinished) && (home.score || away.score);
@@ -280,10 +289,10 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
     const watchUrl = sport === "football"
       ? (vid.watchPath ? `https://www.fifa.com${vid.watchPath}` : null)
       : vid.shortCode
-      ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
-      : vid.urlSegment
-      ? `https://www.bcci.tv/videos/${vid.urlSegment}`
-      : null;
+        ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
+        : vid.urlSegment
+          ? `https://www.bcci.tv/videos/${vid.urlSegment}`
+          : null;
 
     if (!watchUrl || streamLoading) return;
     setStreamLoading(true);
@@ -298,7 +307,7 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
         setStreamLoading(false);
         return;
       }
-    } catch {}
+    } catch { }
     setStreamLoading(false);
     // Stream extraction failed — do NOT open external browser.
     // The user stays in-app; the button resets so they can retry.
@@ -314,163 +323,163 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
   const fmtDur = d => {
     if (!d) return "";
     const m = Math.floor(d / 60), s = d % 60;
-    return `${m}:${String(s).padStart(2,"0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
   };
 
- return (
-  <>
-    {/* Fullscreen player modal */}
-    {playerModal && (
-      <div
-        style={{
-          position: "fixed", inset: 0, zIndex: 9999,
-          background: "rgba(0,0,0,0.96)",
-          display: "flex", flexDirection: "column",
-        }}
-      >
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0,
-        }}>
-          <span style={{ color: accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-            ▶ {playerModal.title || "Watch"}
-          </span>
-          <button
-            onClick={() => setPlayerModal(null)}
-            style={{
-              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
-              color: "#fff", borderRadius: 8, width: 32, height: 32,
-              cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >×</button>
-        </div>
-        <iframe
-          src={playerModal.src}
-          style={{ flex: 1, width: "100%", border: "none" }}
-          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    )}
-
-  <Link to={link || "/live-cricket-tv"}
-    className="group/card flex rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 hover:border-white/25"
-    style={{
-      borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
-      boxShadow: isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)",
-    }}
-    onMouseEnter={e=>{ e.currentTarget.style.boxShadow = isLive ? `0 8px 28px ${accent}33` : "0 8px 24px rgba(0,0,0,0.45)"; }}
-    onMouseLeave={e=>{ e.currentTarget.style.boxShadow = isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)"; }}>
-    {/* side accent bar */}
-    <div className="w-1.5 shrink-0" style={{ background: accent }} />
-
-    <div className="flex-1 bg-white/[0.02]">
-      {/* header strip */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] gap-2">
-        <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider truncate">
-          {matchLabel ? `${matchLabel} · ` : ""}{leagueLabel}
-        </span>
-        {isLive ? (
-          <span className="flex items-center gap-1 shrink-0">
-            <PulsingDot color="#ef4444" size={5}/>
-            <span className="text-[8px] font-black text-red-400 uppercase">Live</span>
-          </span>
-        ) : isFinished ? (
-          <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
-        ) : (
-          <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>{statusLabel}</span>
-        )}
-      </div>
-
-      {/* teams: badge-over-name, BCCI style */}
-      <div className="flex items-center justify-between px-3 py-3 gap-2">
-        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <TeamBadge team={home} sport={sport} size={36}/>
-          <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: hWon ? "#4ade80" : "white" }}>
-            {home.code}
-          </span>
-          {showCricketScores && home.score && (
-            <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
-              {home.score}{home.overs ? ` (${home.overs})` : ""}
-            </span>
-          )}
-          {showFootballScores && (
-            <span className="text-[12px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{home.score}</span>
-          )}
-        </div>
-
-        <div className="shrink-0 text-center px-1">
-          {showFootballScores
-            ? <span className="text-[12px] font-black text-white/40">:</span>
-            : <span className="text-[10px] font-black text-gray-600">vs</span>}
-        </div>
-
-        <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <TeamBadge team={away} sport={sport} size={36}/>
-          <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
-            {away.code}
-          </span>
-          {showCricketScores && away.score && (
-            <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
-              {away.score}{away.overs ? ` (${away.overs})` : ""}
-            </span>
-          )}
-          {showFootballScores && (
-            <span className="text-[12px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{away.score}</span>
-          )}
-        </div>
-      </div>
-
-      {/* footer: highlight clip OR venue/result/toss */}
-      {bestClip ? (
-        <button
-          onClick={e => openHighlight(e, bestClip)}
-          disabled={streamLoading}
-          className="w-full flex items-center gap-2.5 px-3 py-2 border-t border-white/[0.06] text-left hover:bg-white/[0.03] transition-colors disabled:opacity-70"
+  return (
+    <>
+      {/* Fullscreen player modal */}
+      {playerModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.96)",
+            display: "flex", flexDirection: "column",
+          }}
         >
-          <div className="relative w-12 h-8 rounded-md overflow-hidden shrink-0 bg-white/5 border border-white/10">
-            {bestClip.thumbnail && (
-              <img src={bestClip.thumbnail} alt="" className="w-full h-full object-cover" />
-            )}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-              {streamLoading
-                ? <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${accent}40`, borderTopColor: accent }} />
-                : <PlayCircle size={14} className="text-white" />
-              }
-            </div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0,
+          }}>
+            <span style={{ color: accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              ▶ {playerModal.title || "Watch"}
+            </span>
+            <button
+              onClick={() => setPlayerModal(null)}
+              style={{
+                background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+                color: "#fff", borderRadius: 8, width: 32, height: 32,
+                cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >×</button>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[8px] font-black uppercase tracking-wider" style={{ color: accent }}>
-              {streamLoading ? "Extracting stream…" : "Watch Highlights"}
-            </p>
-            <p className="text-[8px] text-gray-500 truncate">
-              {bestClip.title}
-              {Array.isArray(highlight) && highlight.length > 1 ? ` +${highlight.length - 1} more` : ""}
-            </p>
-          </div>
-        </button>
-      ) : (
-        <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06] gap-2">
-          <span className="text-[8px] text-gray-600 font-bold truncate">
-            {result ? result : tossText ? `🪙 ${tossText}` : venue ? `📍 ${venue}` : ""}
-          </span>
-          <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>Match Info →</span>
+          <iframe
+            src={playerModal.src}
+            style={{ flex: 1, width: "100%", border: "none" }}
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
         </div>
       )}
-    </div>
-  </Link>
-  </>
-);
+
+      <Link to={link || "/live-cricket-tv"}
+        className="group/card flex rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 hover:border-white/25"
+        style={{
+          borderColor: isLive ? `${accent}55` : "rgba(255,255,255,0.08)",
+          boxShadow: isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.boxShadow = isLive ? `0 8px 28px ${accent}33` : "0 8px 24px rgba(0,0,0,0.45)"; }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = isLive ? `0 0 18px ${accent}22` : "0 1px 2px rgba(0,0,0,0.3)"; }}>
+        {/* side accent bar */}
+        <div className="w-1.5 shrink-0" style={{ background: accent }} />
+
+        <div className="flex-1 bg-white/[0.02]">
+          {/* header strip */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] gap-2">
+            <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider truncate">
+              {matchLabel ? `${matchLabel} · ` : ""}{leagueLabel}
+            </span>
+            {isLive ? (
+              <span className="flex items-center gap-1 shrink-0">
+                <PulsingDot color="#ef4444" size={5} />
+                <span className="text-[8px] font-black text-red-400 uppercase">Live</span>
+              </span>
+            ) : isFinished ? (
+              <span className="text-[8px] font-black text-emerald-500 uppercase shrink-0">FT</span>
+            ) : (
+              <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>{statusLabel}</span>
+            )}
+          </div>
+
+          {/* teams: badge-over-name, BCCI style */}
+          <div className="flex items-center justify-between px-3 py-3 gap-2">
+            <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+              <TeamBadge team={home} sport={sport} size={36} />
+              <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: hWon ? "#4ade80" : "white" }}>
+                {home.code}
+              </span>
+              {showCricketScores && home.score && (
+                <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+                  {home.score}{home.overs ? ` (${home.overs})` : ""}
+                </span>
+              )}
+              {showFootballScores && (
+                <span className="text-[12px] font-black" style={{ color: hWon ? "#4ade80" : "white" }}>{home.score}</span>
+              )}
+            </div>
+
+            <div className="shrink-0 text-center px-1">
+              {showFootballScores
+                ? <span className="text-[12px] font-black text-white/40">:</span>
+                : <span className="text-[10px] font-black text-gray-600">vs</span>}
+            </div>
+
+            <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+              <TeamBadge team={away} sport={sport} size={36} />
+              <span className="text-[11px] font-black uppercase truncate max-w-full" style={{ color: aWon ? "#4ade80" : "rgba(255,255,255,0.85)" }}>
+                {away.code}
+              </span>
+              {showCricketScores && away.score && (
+                <span className="text-[9px] font-black" style={{ color: isFinished ? "rgba(255,255,255,0.65)" : accent }}>
+                  {away.score}{away.overs ? ` (${away.overs})` : ""}
+                </span>
+              )}
+              {showFootballScores && (
+                <span className="text-[12px] font-black" style={{ color: aWon ? "#4ade80" : "white" }}>{away.score}</span>
+              )}
+            </div>
+          </div>
+
+          {/* footer: highlight clip OR venue/result/toss */}
+          {bestClip ? (
+            <button
+              onClick={e => openHighlight(e, bestClip)}
+              disabled={streamLoading}
+              className="w-full flex items-center gap-2.5 px-3 py-2 border-t border-white/[0.06] text-left hover:bg-white/[0.03] transition-colors disabled:opacity-70"
+            >
+              <div className="relative w-12 h-8 rounded-md overflow-hidden shrink-0 bg-white/5 border border-white/10">
+                {bestClip.thumbnail && (
+                  <img src={bestClip.thumbnail} alt="" className="w-full h-full object-cover" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  {streamLoading
+                    ? <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${accent}40`, borderTopColor: accent }} />
+                    : <PlayCircle size={14} className="text-white" />
+                  }
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[8px] font-black uppercase tracking-wider" style={{ color: accent }}>
+                  {streamLoading ? "Extracting stream…" : "Watch Highlights"}
+                </p>
+                <p className="text-[8px] text-gray-500 truncate">
+                  {bestClip.title}
+                  {Array.isArray(highlight) && highlight.length > 1 ? ` +${highlight.length - 1} more` : ""}
+                </p>
+              </div>
+            </button>
+          ) : (
+            <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.06] gap-2">
+              <span className="text-[8px] text-gray-600 font-bold truncate">
+                {result ? result : tossText ? `🪙 ${tossText}` : venue ? `📍 ${venue}` : ""}
+              </span>
+              <span className="text-[8px] font-black uppercase shrink-0" style={{ color: accent }}>Match Info →</span>
+            </div>
+          )}
+        </div>
+      </Link>
+    </>
+  );
 }
 
 
 // ─── LIVE NOW STRIP ───────────────────────────────────────────────────────────
 function LiveNowStrip() {
-  const [wt20All,        setWt20All]        = useState([]);
-  const [fifaAll,        setFifaAll]        = useState([]);
-  const [indiaLive,      setIndiaLive]      = useState([]);
-  const [indiaUpcoming,  setIndiaUpcoming]  = useState([]);
-  const [indiaRecent,    setIndiaRecent]    = useState([]);
+  const [wt20All, setWt20All] = useState([]);
+  const [fifaAll, setFifaAll] = useState([]);
+  const [indiaLive, setIndiaLive] = useState([]);
+  const [indiaUpcoming, setIndiaUpcoming] = useState([]);
+  const [indiaRecent, setIndiaRecent] = useState([]);
   const [indiaHighlights, setIndiaHighlights] = useState({});
   const [fifaHighlights, setFifaHighlights] = useState({});
 
@@ -485,7 +494,7 @@ function LiveNowStrip() {
       const json = await res.json();
       const m = json.data?.matches || [];
       setCache(k, m); setWt20All(m);
-    } catch {}
+    } catch { }
   }, []);
 
   // ── Load FIFA ──────────────────────────────────────────────────────────────
@@ -499,7 +508,7 @@ function LiveNowStrip() {
       if (!res.ok) return;
       const json = await res.json();
       setCache(k, json.Results || []); setFifaAll(json.Results || []);
-    } catch {}
+    } catch { }
   }, []);
 
   // ── Load India BCCI ────────────────────────────────────────────────────────
@@ -518,19 +527,19 @@ function LiveNowStrip() {
         fetch(`${API_BASE}/api/bcci/upcoming`),
         fetch(`${API_BASE}/api/bcci/recent`),
       ]);
-      const live     = liveR.status==="fulfilled" && liveR.value.ok ? (await liveR.value.json()).liveMatches || [] : [];
-      const upcoming = upR.status==="fulfilled" && upR.value.ok ? (await upR.value.json()).upcomingMatches || [] : [];
-      const recent   = recentR.status==="fulfilled" && recentR.value.ok
+      const live = liveR.status === "fulfilled" && liveR.value.ok ? (await liveR.value.json()).liveMatches || [] : [];
+      const upcoming = upR.status === "fulfilled" && upR.value.ok ? (await upR.value.json()).upcomingMatches || [] : [];
+      const recent = recentR.status === "fulfilled" && recentR.value.ok
         ? ((await recentR.value.json()).recentMatches || (await recentR.value.json()).postMatches || []) : [];
 
       const payload = {
-        live:     live.filter(isIndiaMensMatch),
+        live: live.filter(isIndiaMensMatch),
         upcoming: upcoming.filter(isIndiaMensMatch),
-        recent:   recent.filter(isIndiaMensMatch),
+        recent: recent.filter(isIndiaMensMatch),
       };
       setCache(k, payload);
       setIndiaLive(payload.live); setIndiaUpcoming(payload.upcoming); setIndiaRecent(payload.recent);
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -540,57 +549,57 @@ function LiveNowStrip() {
   }, []);
 
 
-useEffect(() => {
-  if (!indiaRecent.length) return;
-  let cancelled = false;
-  (async () => {
-    const targets = indiaRecent.slice(0, 2);
-    console.log("[highlight] indiaRecent sample:", targets[0]);
-    const results = await Promise.allSettled(
-      targets.map(m => fetchIndiaHighlights(m.SmMatchID || m.MatchID))
-    );
-    if (cancelled) return;
-    const next = {};
-    targets.forEach((m, i) => {
-      const r = results[i];
-      // Store the full array (or null) keyed by MatchID
-      if (r.status === "fulfilled" && r.value) next[m.MatchID] = r.value;
-    });
-    setIndiaHighlights(prev => ({ ...prev, ...next }));
-  })();
-  return () => { cancelled = true; };
-}, [indiaRecent]);
+  useEffect(() => {
+    if (!indiaRecent.length) return;
+    let cancelled = false;
+    (async () => {
+      const targets = indiaRecent.slice(0, 2);
+      console.log("[highlight] indiaRecent sample:", targets[0]);
+      const results = await Promise.allSettled(
+        targets.map(m => fetchIndiaHighlights(m.SmMatchID || m.MatchID))
+      );
+      if (cancelled) return;
+      const next = {};
+      targets.forEach((m, i) => {
+        const r = results[i];
+        // Store the full array (or null) keyed by MatchID
+        if (r.status === "fulfilled" && r.value) next[m.MatchID] = r.value;
+      });
+      setIndiaHighlights(prev => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [indiaRecent]);
 
   // ── Classify FIFA ──────────────────────────────────────────────────────────
-  const todayStr      = new Date().toISOString().slice(0, 10);
-  const fifaLive      = fifaAll.filter(m => getFifaStatus(m) === "live");
-  const fifaToday     = fifaAll.filter(m => new Date(m.Date).toISOString().slice(0,10) === todayStr && getFifaStatus(m) !== "live");
-  const fifaUpcoming  = fifaAll.filter(m => getFifaStatus(m) === "upcoming").sort((a,b)=>new Date(a.Date)-new Date(b.Date));
-  const fifaRecent    = fifaAll.filter(m => getFifaStatus(m) === "finished").sort((a,b)=>new Date(b.Date)-new Date(a.Date));
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const fifaLive = fifaAll.filter(m => getFifaStatus(m) === "live");
+  const fifaToday = fifaAll.filter(m => new Date(m.Date).toISOString().slice(0, 10) === todayStr && getFifaStatus(m) !== "live");
+  const fifaUpcoming = fifaAll.filter(m => getFifaStatus(m) === "upcoming").sort((a, b) => new Date(a.Date) - new Date(b.Date));
+  const fifaRecent = fifaAll.filter(m => getFifaStatus(m) === "finished").sort((a, b) => new Date(b.Date) - new Date(a.Date));
 
-useEffect(() => {
-  if (!fifaRecent.length) return;
-  let cancelled = false;
-  (async () => {
-    const targets = fifaRecent.slice(0, 4);
-    const results = await Promise.allSettled(
-      targets.map(m => fetchFifaHighlight(m.IdMatch, m.IdStage || FIFA_STAGE))
-    );
-    if (cancelled) return;
-    const next = {};
-    targets.forEach((m, i) => {
-      const r = results[i];
-      if (r.status === "fulfilled" && r.value) next[m.IdMatch] = r.value;
-    });
-    setFifaHighlights(prev => ({ ...prev, ...next }));
-  })();
-  return () => { cancelled = true; };
-}, [fifaRecent]);
+  useEffect(() => {
+    if (!fifaRecent.length) return;
+    let cancelled = false;
+    (async () => {
+      const targets = fifaRecent.slice(0, 4);
+      const results = await Promise.allSettled(
+        targets.map(m => fetchFifaHighlight(m.IdMatch, m.IdStage || FIFA_STAGE))
+      );
+      if (cancelled) return;
+      const next = {};
+      targets.forEach((m, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled" && r.value) next[m.IdMatch] = r.value;
+      });
+      setFifaHighlights(prev => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [fifaRecent]);
 
   // ── Classify WT20 ──────────────────────────────────────────────────────────
-  const wt20Live      = wt20All.filter(m => m.live);
-  const wt20Recent    = wt20All.filter(m => m.recent && !m.live);
-  const wt20Upcoming  = wt20All.filter(m => m.upcoming);
+  const wt20Live = wt20All.filter(m => m.live);
+  const wt20Recent = wt20All.filter(m => m.recent && !m.live);
+  const wt20Upcoming = wt20All.filter(m => m.upcoming);
 
   // ── Live count for badge ───────────────────────────────────────────────────
   const liveCount = indiaLive.length + fifaLive.length + wt20Live.length;
@@ -619,30 +628,30 @@ useEffect(() => {
         status: "live",
         home, away,
         leagueLabel: m.CompetitionName || "India Cricket",
-        venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
-link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "bcci",
-  homeCode: teamCode(m.HomeTeamCode || m.FirstBattingTeamCode, m.HomeTeamName),
-  awayCode: teamCode(m.AwayTeamCode || m.SecondBattingTeamCode, m.AwayTeamName),
-  leagueLabel: m.CompetitionName || "India Cricket",
-  matchData: {
-    MatchID: m.MatchID,
-    CompetitionID: m.CompetitionID,
-    MatchOrder: m.MatchOrder,
-    CompetitionName: m.CompetitionName,
-    HomeTeamName: m.HomeTeamName,
-    AwayTeamName: m.AwayTeamName,
-    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
-    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
-    HomeTeamCode: m.HomeTeamCode,
-    AwayTeamCode: m.AwayTeamCode,
-    MatchDate: m.MatchDate,
-    MatchTime: m.MatchTime,
-    GroundName: m.GroundName,
-    MatchType: m.MatchType,
-  },
-})}`,
+        venue: m.GroundName ? `${m.GroundName}${m.city ? `, ${m.city}` : ""}` : "",
+        link: `/match-center/${encodeMatchHash({
+          sport: "cricket",
+          type: "bcci",
+          homeCode: teamCode(m.HomeTeamCode || m.FirstBattingTeamCode, m.HomeTeamName),
+          awayCode: teamCode(m.AwayTeamCode || m.SecondBattingTeamCode, m.AwayTeamName),
+          leagueLabel: m.CompetitionName || "India Cricket",
+          matchData: {
+            MatchID: m.MatchID,
+            CompetitionID: m.CompetitionID,
+            MatchOrder: m.MatchOrder,
+            CompetitionName: m.CompetitionName,
+            HomeTeamName: m.HomeTeamName,
+            AwayTeamName: m.AwayTeamName,
+            MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+            MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+            HomeTeamCode: m.HomeTeamCode,
+            AwayTeamCode: m.AwayTeamCode,
+            MatchDate: m.MatchDate,
+            MatchTime: m.MatchTime,
+            GroundName: m.GroundName,
+            MatchType: m.MatchType,
+          },
+        })}`,
       };
     }),
     // WT20 live
@@ -657,14 +666,14 @@ link: `/match-center/${encodeMatchHash({
         home, away,
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
-link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "wt20",
-  matchId: m.match_id,
-  homeCode: m.teama_short || "",
-  awayCode: m.teamb_short || "",
-  leagueLabel: "ICC WT20 WC 2026",
-})}`,
+        link: `/match-center/${encodeMatchHash({
+          sport: "cricket",
+          type: "wt20",
+          matchId: m.match_id,
+          homeCode: m.teama_short || "",
+          awayCode: m.teamb_short || "",
+          leagueLabel: "ICC WT20 WC 2026",
+        })}`,
       };
     }),
     // FIFA live
@@ -677,15 +686,15 @@ link: `/match-center/${encodeMatchHash({
         status: "live",
         home, away,
         leagueLabel: "FIFA WC 2026",
-        venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
-link: `/match-center/${encodeMatchHash({
-  sport: "football",
-  type: "fifa",
-  matchId: m.IdMatch,
-  homeCode: fifaAbbr(m.Home) || "—",
-  awayCode: fifaAbbr(m.Away) || "—",
-  leagueLabel: "FIFA WC 2026",
-})}`,
+        venue: m.Stadium?.CityName?.find(x => x.Locale === "en-GB")?.Description || "",
+        link: `/match-center/${encodeMatchHash({
+          sport: "football",
+          type: "fifa",
+          matchId: m.IdMatch,
+          homeCode: fifaAbbr(m.Home) || "—",
+          awayCode: fifaAbbr(m.Away) || "—",
+          leagueLabel: "FIFA WC 2026",
+        })}`,
       };
     }),
   ];
@@ -702,31 +711,31 @@ link: `/match-center/${encodeMatchHash({
         status: "upcoming",
         home, away,
         leagueLabel: m.CompetitionName || "India Cricket",
-        venue: m.GroundName ? `${m.GroundName}${m.city?`, ${m.city}`:""}` : "",
+        venue: m.GroundName ? `${m.GroundName}${m.city ? `, ${m.city}` : ""}` : "",
         statusLabel: countdownLabel(m.MatchDate) || `${bcciFmtDate(m.MatchDate)} IST`,
         link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "bcci",
-  homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
-  awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
-  leagueLabel: m.CompetitionName || "India Cricket",
-  matchData: {
-    MatchID: m.MatchID,
-    CompetitionID: m.CompetitionID,
-    MatchOrder: m.MatchOrder,
-    CompetitionName: m.CompetitionName,
-    HomeTeamName: m.HomeTeamName,
-    AwayTeamName: m.AwayTeamName,
-    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
-    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
-    HomeTeamCode: m.HomeTeamCode,
-    AwayTeamCode: m.AwayTeamCode,
-    MatchDate: m.MatchDate,
-    MatchTime: m.MatchTime,
-    GroundName: m.GroundName,
-    MatchType: m.MatchType,
-  },
-})}`,
+          sport: "cricket",
+          type: "bcci",
+          homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
+          awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
+          leagueLabel: m.CompetitionName || "India Cricket",
+          matchData: {
+            MatchID: m.MatchID,
+            CompetitionID: m.CompetitionID,
+            MatchOrder: m.MatchOrder,
+            CompetitionName: m.CompetitionName,
+            HomeTeamName: m.HomeTeamName,
+            AwayTeamName: m.AwayTeamName,
+            MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+            MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+            HomeTeamCode: m.HomeTeamCode,
+            AwayTeamCode: m.AwayTeamCode,
+            MatchDate: m.MatchDate,
+            MatchTime: m.MatchTime,
+            GroundName: m.GroundName,
+            MatchType: m.MatchType,
+          },
+        })}`,
       };
     }),
     // WT20 upcoming (next 2)
@@ -742,13 +751,13 @@ link: `/match-center/${encodeMatchHash({
         venue: m.venue || "",
         statusLabel: (m.start_date && countdownLabel(m.start_date)) || (m.match_time_ist ? `${m.match_time_ist} IST` : ""),
         link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "wt20",
-  matchId: m.match_id,
-  homeCode: m.teama_short || "",
-  awayCode: m.teamb_short || "",
-  leagueLabel: "ICC WT20 WC 2026",
-})}`,
+          sport: "cricket",
+          type: "wt20",
+          matchId: m.match_id,
+          homeCode: m.teama_short || "",
+          awayCode: m.teamb_short || "",
+          leagueLabel: "ICC WT20 WC 2026",
+        })}`,
       };
     }),
     // FIFA today (not live) + next upcoming
@@ -761,16 +770,16 @@ link: `/match-center/${encodeMatchHash({
         status: "upcoming",
         home, away,
         leagueLabel: "FIFA WC 2026",
-        venue: m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "",
+        venue: m.Stadium?.CityName?.find(x => x.Locale === "en-GB")?.Description || "",
         statusLabel: countdownLabel(m.Date) || (fmtIST(m.Date) ? `${fmtIST(m.Date)} IST` : ""),
         link: `/match-center/${encodeMatchHash({
-  sport: "football",
-  type: "fifa",
-  matchId: m.IdMatch,
-  homeCode: fifaAbbr(m.Home) || "—",
-  awayCode: fifaAbbr(m.Away) || "—",
-  leagueLabel: "FIFA WC 2026",
-})}`,
+          sport: "football",
+          type: "fifa",
+          matchId: m.IdMatch,
+          homeCode: fifaAbbr(m.Home) || "—",
+          awayCode: fifaAbbr(m.Away) || "—",
+          leagueLabel: "FIFA WC 2026",
+        })}`,
       };
     }),
   ];
@@ -792,29 +801,29 @@ link: `/match-center/${encodeMatchHash({
         venue: m.GroundName || "",
         highlight: indiaHighlights[m.MatchID] || null,
         // AFTER
-link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "bcci",
-  homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
-  awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
-  leagueLabel: m.CompetitionName || "India Cricket",
-  matchData: {
-    MatchID: m.MatchID,
-    CompetitionID: m.CompetitionID,
-    MatchOrder: m.MatchOrder,
-    CompetitionName: m.CompetitionName,
-    HomeTeamName: m.HomeTeamName,
-    AwayTeamName: m.AwayTeamName,
-    MatchHomeTeamLogo: m.MatchHomeTeamLogo,
-    MatchAwayTeamLogo: m.MatchAwayTeamLogo,
-    HomeTeamCode: m.HomeTeamCode,
-    AwayTeamCode: m.AwayTeamCode,
-    MatchDate: m.MatchDate,
-    MatchTime: m.MatchTime,
-    GroundName: m.GroundName,
-    MatchType: m.MatchType,
-  },
-})}`,
+        link: `/match-center/${encodeMatchHash({
+          sport: "cricket",
+          type: "bcci",
+          homeCode: teamCode(m.HomeTeamCode, m.HomeTeamName),
+          awayCode: teamCode(m.AwayTeamCode, m.AwayTeamName),
+          leagueLabel: m.CompetitionName || "India Cricket",
+          matchData: {
+            MatchID: m.MatchID,
+            CompetitionID: m.CompetitionID,
+            MatchOrder: m.MatchOrder,
+            CompetitionName: m.CompetitionName,
+            HomeTeamName: m.HomeTeamName,
+            AwayTeamName: m.AwayTeamName,
+            MatchHomeTeamLogo: m.MatchHomeTeamLogo,
+            MatchAwayTeamLogo: m.MatchAwayTeamLogo,
+            HomeTeamCode: m.HomeTeamCode,
+            AwayTeamCode: m.AwayTeamCode,
+            MatchDate: m.MatchDate,
+            MatchTime: m.MatchTime,
+            GroundName: m.GroundName,
+            MatchType: m.MatchType,
+          },
+        })}`,
       };
     }),
     // WT20 recent (last 2)
@@ -829,21 +838,21 @@ link: `/match-center/${encodeMatchHash({
         leagueLabel: "ICC WT20 WC 2026",
         venue: m.venue || "",
         link: `/match-center/${encodeMatchHash({
-  sport: "cricket",
-  type: "wt20",
-  matchId: m.match_id,
-  homeCode: m.teama_short || "",
-  awayCode: m.teamb_short || "",
-  leagueLabel: "ICC WT20 WC 2026",
-})}`,
+          sport: "cricket",
+          type: "wt20",
+          matchId: m.match_id,
+          homeCode: m.teama_short || "",
+          awayCode: m.teamb_short || "",
+          leagueLabel: "ICC WT20 WC 2026",
+        })}`,
       };
     }),
     // FIFA recent results (last 4)
     ...fifaRecent.slice(0, 4).map(m => {
-      const group = m.GroupName?.find(x=>x.Locale==="en-GB")?.Description || "";
-      const city  = m.Stadium?.CityName?.find(x=>x.Locale==="en-GB")?.Description || "";
-      const hWon  = m.HomeTeamScore > m.AwayTeamScore;
-      const aWon  = m.AwayTeamScore > m.HomeTeamScore;
+      const group = m.GroupName?.find(x => x.Locale === "en-GB")?.Description || "";
+      const city = m.Stadium?.CityName?.find(x => x.Locale === "en-GB")?.Description || "";
+      const hWon = m.HomeTeamScore > m.AwayTeamScore;
+      const aWon = m.AwayTeamScore > m.HomeTeamScore;
       const home = buildSide({ code: fifaAbbr(m.Home) || "—", logo: m.Home?.IdCountry ? getFifaFlag(m.Home.IdCountry) : null, score: m.HomeTeamScore });
       const away = buildSide({ code: fifaAbbr(m.Away) || "—", logo: m.Away?.IdCountry ? getFifaFlag(m.Away.IdCountry) : null, score: m.AwayTeamScore });
       return {
@@ -853,20 +862,20 @@ link: `/match-center/${encodeMatchHash({
         leagueLabel: "FIFA WC 2026", matchLabel: group, venue: city,
         highlight: fifaHighlights[m.IdMatch] || null,
         link: `/match-center/${encodeMatchHash({
-  sport: "football",
-  type: "fifa",
-  matchId: m.IdMatch,
-  homeCode: fifaAbbr(m.Home) || "—",
-  awayCode: fifaAbbr(m.Away) || "—",
-  leagueLabel: "FIFA WC 2026",
-})}`,
+          sport: "football",
+          type: "fifa",
+          matchId: m.IdMatch,
+          homeCode: fifaAbbr(m.Home) || "—",
+          awayCode: fifaAbbr(m.Away) || "—",
+          leagueLabel: "FIFA WC 2026",
+        })}`,
       };
     }),
   ];
 
-  const showLive      = liveCards.length > 0;
+  const showLive = liveCards.length > 0;
   const showScheduled = scheduledCards.length > 0;
-  const showResults   = recentResults.length > 0;
+  const showResults = recentResults.length > 0;
 
   if (!showLive && !showScheduled && !showResults) return null;
 
@@ -878,18 +887,18 @@ link: `/match-center/${encodeMatchHash({
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Activity size={13} className="text-red-500"/>
+              <Activity size={13} className="text-red-500" />
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Live Now</span>
               <span className="flex items-center gap-1 bg-red-500/15 border border-red-500/20 text-red-400 text-[8px] font-black uppercase px-2 py-0.5 rounded-full">
-                <PulsingDot color="#ef4444" size={5}/>{liveCount} Live
+                <PulsingDot color="#ef4444" size={5} />{liveCount} Live
               </span>
             </div>
             <Link to="/live-cricket-tv" className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors font-bold">
-              All <ChevronRight size={12}/>
+              All <ChevronRight size={12} />
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {liveCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c}/>)}
+            {liveCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c} />)}
           </div>
         </div>
       )}
@@ -899,17 +908,17 @@ link: `/match-center/${encodeMatchHash({
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <CalendarDays size={13} className="text-violet-400"/>
+              <CalendarDays size={13} className="text-violet-400" />
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
                 {showLive ? "Next Up" : "Today & Upcoming"}
               </span>
             </div>
             <Link to="/live-cricket-tv" className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors font-bold">
-              Schedule <ChevronRight size={12}/>
+              Schedule <ChevronRight size={12} />
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {scheduledCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c}/>)}
+            {scheduledCards.slice(0, 6).map(c => <MatchCard key={c.id} {...c} />)}
           </div>
         </div>
       )}
@@ -919,12 +928,12 @@ link: `/match-center/${encodeMatchHash({
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Trophy size={13} className="text-amber-400"/>
+              <Trophy size={13} className="text-amber-400" />
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Results</span>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recentResults.slice(0, 6).map(r => <MatchCard key={r.id} {...r}/>)}
+            {recentResults.slice(0, 6).map(r => <MatchCard key={r.id} {...r} />)}
           </div>
         </div>
       )}
@@ -975,7 +984,7 @@ function FifaHighlightCard2026({ match, highlight, onPlay, loading }) {
             : (
               <div className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{ background: "rgba(0,0,0,0.6)", border: `2px solid ${FIFA_GREEN}`, transition: "transform 0.15s" }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill={FIFA_GREEN}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={FIFA_GREEN}><path d="M4 2.5l10 5.5-10 5.5z" /></svg>
               </div>
             )
           }
@@ -1042,14 +1051,14 @@ function FifaHighlightsRow() {
         const all = json.Results || [];
         setCache(k, all);
         setFifaAll(all);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
-// Finished matches sorted newest → oldest (most recent first)
-const finished = fifaAll
-  .filter(m => getFifaStatus(m) === "finished")
-  .sort((a, b) => new Date(b.Date) - new Date(a.Date));
+  // Finished matches sorted newest → oldest (most recent first)
+  const finished = fifaAll
+    .filter(m => getFifaStatus(m) === "finished")
+    .sort((a, b) => new Date(b.Date) - new Date(a.Date));
 
   // Fetch highlights for ALL finished matches (batched)
   useEffect(() => {
@@ -1088,7 +1097,7 @@ const finished = fifaAll
         setLoadingId(null);
         return;
       }
-    } catch {}
+    } catch { }
     setLoadingId(null);
     // Stream extraction failed — stay in-app, do NOT open external browser.
   };
@@ -1218,11 +1227,11 @@ function IndiaHighlightCard({ match, videos, onPlay, loadingId }) {
           style={{ background: "rgba(0,0,0,0.35)" }}>
           {isLoading
             ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: `${INDIA_ACCENT}40`, borderTopColor: INDIA_ACCENT }} />
+              style={{ borderColor: `${INDIA_ACCENT}40`, borderTopColor: INDIA_ACCENT }} />
             : bestClip && (
               <div className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{ background: "rgba(0,0,0,0.6)", border: `2px solid ${INDIA_ACCENT}` }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill={INDIA_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={INDIA_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z" /></svg>
               </div>
             )
           }
@@ -1236,7 +1245,7 @@ function IndiaHighlightCard({ match, videos, onPlay, loadingId }) {
             style={{ background: "rgba(0,0,0,0.7)", color: "rgba(255,255,255,0.6)" }}>
             {match.MatchType === "One Day D/N" || match.MatchType === "One Day" ? "ODI"
               : match.MatchType === "T20" ? "T20I"
-              : match.MatchType?.replace(" D/N", "") || match.MatchType}
+                : match.MatchType?.replace(" D/N", "") || match.MatchType}
           </div>
         )}
       </div>
@@ -1297,7 +1306,7 @@ function IndiaHighlightsRow() {
         const all = (json.recentMatches || json.postMatches || []).filter(isIndiaMensMatch).slice(0, 15);
         setCache(k, all);
         setRecentMatches(all);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -1326,8 +1335,8 @@ function IndiaHighlightsRow() {
     const watchUrl = vid.shortCode
       ? `https://www.bcci.tv/bccilink/videos/${vid.shortCode}`
       : vid.urlSegment
-      ? `https://www.bcci.tv/videos/${vid.urlSegment}`
-      : null;
+        ? `https://www.bcci.tv/videos/${vid.urlSegment}`
+        : null;
     if (!watchUrl) return;
     const title = vid.title || `${teamCode(match.HomeTeamCode, match.HomeTeamName)} vs ${teamCode(match.AwayTeamCode, match.AwayTeamName)} Highlights`;
     setLoadingId(match.MatchID);
@@ -1340,7 +1349,7 @@ function IndiaHighlightsRow() {
         setLoadingId(null);
         return;
       }
-    } catch {}
+    } catch { }
     setLoadingId(null);
     // Stay in-app — do NOT open an external browser tab
   };
@@ -1485,11 +1494,11 @@ function IplHighlightCard2026({ match, videos, loadingId }) {
           style={{ background: "rgba(0,0,0,0.35)" }}>
           {isLoading
             ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: `${IPL_ACCENT}40`, borderTopColor: IPL_ACCENT }} />
+              style={{ borderColor: `${IPL_ACCENT}40`, borderTopColor: IPL_ACCENT }} />
             : bestClip && (
               <div className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{ background: "rgba(0,0,0,0.65)", border: `2px solid ${IPL_ACCENT}` }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill={IPL_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z"/></svg>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill={IPL_ACCENT}><path d="M4 2.5l10 5.5-10 5.5z" /></svg>
               </div>
             )
           }
@@ -1536,10 +1545,10 @@ function IplHighlightCard2026({ match, videos, loadingId }) {
         {bestClip?.title
           ? <p className="text-[8px] text-gray-600 mt-1.5 truncate">{bestClip.title}</p>
           : isCompleted && match.result
-          ? <p className="text-[8px] text-gray-600 mt-1.5 truncate">{match.result}</p>
-          : isCompleted
-          ? <p className="text-[8px] text-gray-700 mt-1.5">Highlights loading…</p>
-          : <p className="text-[8px] mt-1.5" style={{ color: `${IPL_ACCENT}70` }}>{match.matchDate}</p>
+            ? <p className="text-[8px] text-gray-600 mt-1.5 truncate">{match.result}</p>
+            : isCompleted
+              ? <p className="text-[8px] text-gray-700 mt-1.5">Highlights loading…</p>
+              : <p className="text-[8px] mt-1.5" style={{ color: `${IPL_ACCENT}70` }}>{match.matchDate}</p>
         }
       </div>
     </Link>
@@ -1549,7 +1558,7 @@ function IplHighlightCard2026({ match, videos, loadingId }) {
 // ─── IPL 2026 HIGHLIGHTS ROW ──────────────────────────────────────────────────
 function IplHighlightsRow() {
   const IPL_ACCENT = "#f97316";
-  const [matches, setMatches]   = useState([]);  // all IPL 2026 matches
+  const [matches, setMatches] = useState([]);  // all IPL 2026 matches
   const [highlights, setHighlights] = useState({}); // smMatchId → videos[]
 
   // Fetch all IPL 2026 matches
@@ -1565,7 +1574,7 @@ function IplHighlightsRow() {
         const all = json.matches || [];
         setCache(k, all);
         setMatches(all);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -1641,7 +1650,7 @@ function SportsHeading(props) {
   const { children } = props;
   return (
     <div className="flex items-center gap-2.5 mt-10 mb-4">
-      <Icon className="w-4 h-4 text-gray-400" aria-hidden="true"/>
+      <Icon className="w-4 h-4 text-gray-400" aria-hidden="true" />
       <h2 className="text-sm font-black text-white uppercase tracking-[0.18em]">{children}</h2>
     </div>
   );
@@ -1660,13 +1669,13 @@ function ChannelShortcut(props) {
                  hover:bg-white/[0.06] hover:ring-white/20 transition-colors active:scale-[0.99]
                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
       <span className="w-11 h-11 rounded-xl bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center shrink-0">
-        <Icon className="w-5 h-5 text-gray-200" aria-hidden="true"/>
+        <Icon className="w-5 h-5 text-gray-200" aria-hidden="true" />
       </span>
       <span className="flex-1 min-w-0">
         <span className="block text-[13px] font-black text-white">{label}</span>
         <span className="block text-[11px] text-gray-500 truncate">{desc}</span>
       </span>
-      <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors shrink-0" aria-hidden="true"/>
+      <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors shrink-0" aria-hidden="true" />
     </Link>
   );
 }
@@ -1679,8 +1688,8 @@ function TournamentBadge({ logo, name, subtitle, to }) {
                  hover:bg-white/[0.06] hover:ring-white/20 transition-colors active:scale-[0.99]
                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
       <span className="flex items-center justify-between">
-        <img src={logo} alt={name} className="h-9 w-auto max-w-[96px] object-contain object-left"/>
-        <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" aria-hidden="true"/>
+        <img src={logo} alt={name} className="h-9 w-auto max-w-[96px] object-contain object-left" />
+        <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors" aria-hidden="true" />
       </span>
       <span className="block">
         <span className="block text-[12px] font-black text-white uppercase tracking-tight leading-tight">{name}</span>
@@ -1694,11 +1703,11 @@ function TournamentBadge({ logo, name, subtitle, to }) {
 // ─── ICC HIGHLIGHTS ROW (backend mints Akamai token + proxies; plays via Shaka) ──
 function IccHighlightsRow() {
   const PAGE = 8;
-  const [videos, setVideos]   = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [modal, setModal]     = useState(null);   // { src, title }
+  const [modal, setModal] = useState(null);   // { src, title }
   const [loadingId, setLoadingId] = useState(null);
 
   useEffect(() => {
@@ -1706,7 +1715,7 @@ function IccHighlightsRow() {
     fetch(`${API_BASE}/api/icc/highlights?offset=0&limit=${PAGE}`)
       .then(r => r.json())
       .then(j => { if (alive && j.success) { setVideos(j.videos || []); setHasMore(!!j.hasMore); } })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
@@ -1720,7 +1729,7 @@ function IccHighlightsRow() {
         setVideos(prev => [...prev, ...(j.videos || []).filter(v => !prev.some(p => p.uuid === v.uuid))]);
         setHasMore(!!j.hasMore);
       }
-    } catch {}
+    } catch { }
     setLoadingMore(false);
   };
 
@@ -1733,7 +1742,7 @@ function IccHighlightsRow() {
         const params = new URLSearchParams({ url: j.manifestUrl, title: v.title || "ICC Highlights" });
         setModal({ src: `/player.html?${params}`, title: v.title || "ICC Highlights" });
       }
-    } catch {}
+    } catch { }
     setLoadingId(null);
   };
 
@@ -1743,52 +1752,52 @@ function IccHighlightsRow() {
   return (
     <div className="mt-8">
       {modal && (
-        <div style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.96)", display:"flex", flexDirection:"column" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:"rgba(0,0,0,0.7)", flexShrink:0 }}>
-            <span style={{ color:ACCENT, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.15em" }}>▶ {modal.title}</span>
-            <button onClick={() => setModal(null)} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"#fff", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16 }}>×</button>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
+            <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
+            <button onClick={() => setModal(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
-          <iframe src={modal.src} style={{ flex:1, width:"100%", border:"none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
         </div>
       )}
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Trophy size={13} style={{ color: ACCENT }}/>
+          <Trophy size={13} style={{ color: ACCENT }} />
           <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">ICC Highlights</span>
           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
-            style={{ background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.25)", color:ACCENT }}>World Cup</span>
+            style={{ background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: ACCENT }}>World Cup</span>
         </div>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth:"thin" }}>
-        {(loading ? Array.from({length:5}) : videos).map((v, i) => v ? (
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+        {(loading ? Array.from({ length: 5 }) : videos).map((v, i) => v ? (
           <button key={v.uuid} onClick={() => play(v)}
             className="group/icc shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25"
-            style={{ width:240, background:"rgba(255,255,255,0.02)" }}>
-            <div className="relative" style={{ width:240, height:135, background:"#0a0a15" }}>
-              <img src={v.image} alt="" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.opacity=0; }}/>
-              <div className="absolute inset-0 flex items-center justify-center" style={{ background:"rgba(0,0,0,0.25)" }}>
+            style={{ width: 240, background: "rgba(255,255,255,0.02)" }}>
+            <div className="relative" style={{ width: 240, height: 135, background: "#0a0a15" }}>
+              <img src={v.image} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.opacity = 0; }} />
+              <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
                 {loadingId === v.uuid
-                  ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
-                  : <PlayCircle size={34} className="text-white/90 group-hover/icc:scale-110 transition-transform"/>}
+                  ? <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${ACCENT}55`, borderTopColor: ACCENT }} />
+                  : <PlayCircle size={34} className="text-white/90 group-hover/icc:scale-110 transition-transform" />}
               </div>
             </div>
             <div className="p-2.5">
-              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{v.title}</p>
+              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.title}</p>
             </div>
           </button>
         ) : (
-          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width:240, height:135+52 }}/>
+          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width: 240, height: 135 + 52 }} />
         ))}
 
         {!loading && hasMore && (
           <button onClick={loadMore} disabled={loadingMore}
             className="shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed transition-all duration-200 hover:bg-white/[0.04] active:scale-95"
-            style={{ width:150, height:135+52, borderColor:"rgba(34,211,238,0.35)", background:"rgba(34,211,238,0.04)" }}>
+            style={{ width: 150, height: 135 + 52, borderColor: "rgba(34,211,238,0.35)", background: "rgba(34,211,238,0.04)" }}>
             {loadingMore
-              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
-              : <ChevronRight size={22} style={{ color: ACCENT }}/>}
+              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${ACCENT}55`, borderTopColor: ACCENT }} />
+              : <ChevronRight size={22} style={{ color: ACCENT }} />}
             <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: ACCENT }}>
               {loadingMore ? "Loading…" : "Load more"}
             </span>
@@ -1806,19 +1815,19 @@ function IccHighlightsRow() {
 // + persists each page (Supabase) exactly like the ICC row. Clips are plain
 // .mp4 (data-video-url), so playback is instant — no resolve step.
 function BcciHighlightsRow() {
-  const [videos, setVideos]   = useState([]);
-  const [page, setPage]       = useState(1);
+  const [videos, setVideos] = useState([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [modal, setModal]     = useState(null);   // { src, title }
+  const [modal, setModal] = useState(null);   // { src, title }
 
   useEffect(() => {
     let alive = true;
     fetch(`${API_BASE}/api/bcci/highlights?page=1`)
       .then(r => r.json())
       .then(j => { if (alive && j.success) { setVideos(j.videos || []); setHasMore(!!j.hasMore); setPage(1); } })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
@@ -1834,7 +1843,7 @@ function BcciHighlightsRow() {
         setHasMore(!!j.hasMore);
         setPage(next);
       }
-    } catch {}
+    } catch { }
     setLoadingMore(false);
   };
 
@@ -1850,55 +1859,55 @@ function BcciHighlightsRow() {
   return (
     <div className="mt-8">
       {modal && (
-        <div style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.96)", display:"flex", flexDirection:"column" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:"rgba(0,0,0,0.7)", flexShrink:0 }}>
-            <span style={{ color:ACCENT, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.15em" }}>▶ {modal.title}</span>
-            <button onClick={() => setModal(null)} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"#fff", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16 }}>×</button>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
+            <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
+            <button onClick={() => setModal(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
-          <iframe src={modal.src} style={{ flex:1, width:"100%", border:"none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
         </div>
       )}
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Trophy size={13} style={{ color: ACCENT }}/>
+          <Trophy size={13} style={{ color: ACCENT }} />
           <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">BCCI Match Highlights</span>
           <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider"
-            style={{ background:"rgba(56,189,248,0.12)", border:"1px solid rgba(56,189,248,0.25)", color:ACCENT }}>Team India</span>
+            style={{ background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.25)", color: ACCENT }}>Team India</span>
         </div>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth:"thin" }}>
-        {(loading ? Array.from({length:5}) : videos).map((v, i) => v ? (
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+        {(loading ? Array.from({ length: 5 }) : videos).map((v, i) => v ? (
           <button key={v.id || i} onClick={() => play(v)}
             className="group/bcci shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25"
-            style={{ width:240, background:"rgba(255,255,255,0.02)" }}>
-            <div className="relative" style={{ width:240, height:135, background:"#0a0a15" }}>
-              <img src={v.image} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.opacity=0; }}/>
-              <div className="absolute inset-0 flex items-center justify-center" style={{ background:"rgba(0,0,0,0.25)" }}>
-                <PlayCircle size={34} className="text-white/90 group-hover/bcci:scale-110 transition-transform"/>
+            style={{ width: 240, background: "rgba(255,255,255,0.02)" }}>
+            <div className="relative" style={{ width: 240, height: 135, background: "#0a0a15" }}>
+              <img src={v.image} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.opacity = 0; }} />
+              <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+                <PlayCircle size={34} className="text-white/90 group-hover/bcci:scale-110 transition-transform" />
               </div>
               {v.duration && (
                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
-                  style={{ background:"rgba(0,0,0,0.75)" }}>{v.duration.replace(/\s*mins?$/i,"")}</span>
+                  style={{ background: "rgba(0,0,0,0.75)" }}>{v.duration.replace(/\s*mins?$/i, "")}</span>
               )}
             </div>
             <div className="p-2.5">
-              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{v.title}</p>
+              <p className="text-[11px] font-bold text-white leading-tight line-clamp-2" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.title}</p>
               {v.date && <p className="text-[9px] text-white/40 mt-1 font-semibold uppercase tracking-wider">{v.date}</p>}
             </div>
           </button>
         ) : (
-          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width:240, height:135+64 }}/>
+          <div key={i} className="shrink-0 rounded-xl bg-white/[0.03] animate-pulse" style={{ width: 240, height: 135 + 64 }} />
         ))}
 
         {!loading && hasMore && (
           <button onClick={loadMore} disabled={loadingMore}
             className="shrink-0 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed transition-all duration-200 hover:bg-white/[0.04] active:scale-95"
-            style={{ width:150, height:135+64, borderColor:"rgba(56,189,248,0.35)", background:"rgba(56,189,248,0.04)" }}>
+            style={{ width: 150, height: 135 + 64, borderColor: "rgba(56,189,248,0.35)", background: "rgba(56,189,248,0.04)" }}>
             {loadingMore
-              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor:`${ACCENT}55`, borderTopColor:ACCENT }}/>
-              : <ChevronRight size={22} style={{ color: ACCENT }}/>}
+              ? <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${ACCENT}55`, borderTopColor: ACCENT }} />
+              : <ChevronRight size={22} style={{ color: ACCENT }} />}
             <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: ACCENT }}>
               {loadingMore ? "Loading…" : "Load more"}
             </span>
@@ -1957,8 +1966,8 @@ async function fetchIplHi() {
 
 const TOURNAMENTS = {
   bcci: { name: "BCCI", full: "Team India · Men's International", tag: "Every match highlight, straight from bcci.tv", accent: "#38bdf8", logo: "/logos/bcci.png", fetchHi: fetchBcciHi, Row: BcciHighlightsRow, scorecards: true },
-  icc:  { name: "ICC",  full: "ICC World Cup", tag: "Tournament match highlights", accent: "#22d3ee", logo: "/logos/icc.png", fetchHi: fetchIccHi, Row: IccHighlightsRow },
-  ipl:  { name: "IPL",  full: "Indian Premier League 2026", tag: "Every game's highlights", accent: "#f59e0b", logo: "/logos/ipl.png", fetchHi: fetchIplHi, Row: IplHighlightsRow },
+  icc: { name: "ICC", full: "ICC World Cup", tag: "Tournament match highlights", accent: "#22d3ee", logo: "/logos/icc.png", fetchHi: fetchIccHi, Row: IccHighlightsRow },
+  ipl: { name: "IPL", full: "Indian Premier League 2026", tag: "Every game's highlights", accent: "#f59e0b", logo: "/logos/ipl.png", fetchHi: fetchIplHi, Row: IplHighlightsRow },
 };
 
 function HighlightThumb({ item, accent, big, onPlay }) {
@@ -1966,10 +1975,10 @@ function HighlightThumb({ item, accent, big, onPlay }) {
     <button onClick={() => onPlay(item)}
       className="group/th relative shrink-0 rounded-xl overflow-hidden border border-white/[0.08] text-left cursor-pointer transition-all duration-200 hover:border-white/25"
       style={{ width: "100%", height: "100%", background: "#0a0a15" }}>
-      <img src={item.image} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover/th:scale-105" onError={(e) => { e.currentTarget.style.opacity = 0; }}/>
-      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.85) 100%)" }}/>
+      <img src={item.image} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover/th:scale-105" onError={(e) => { e.currentTarget.style.opacity = 0; }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.85) 100%)" }} />
       <div className="absolute inset-0 flex items-center justify-center">
-        <PlayCircle size={big ? 52 : 30} className="text-white/90 group-hover/th:scale-110 transition-transform"/>
+        <PlayCircle size={big ? 52 : 30} className="text-white/90 group-hover/th:scale-110 transition-transform" />
       </div>
       <div className="absolute left-0 right-0 bottom-0 p-3">
         {item.duration && <span className="inline-block mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold text-white" style={{ background: `${accent}cc` }}>{item.duration.replace(/\s*mins?$/i, "")}</span>}
@@ -2024,8 +2033,8 @@ function ScoreCard({ sc, style }) {
         <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider" style={{ color: fc, background: `${fc}1f`, border: `1px solid ${fc}44` }}>{fmt || "MATCH"}</span>
         <span className="text-[9px] text-white/35 font-bold uppercase tracking-wider">{sc.date}</span>
       </div>
-      <TeamRow t={sc.a} win={aWin}/>
-      <TeamRow t={sc.b} win={bWin}/>
+      <TeamRow t={sc.a} win={aWin} />
+      <TeamRow t={sc.b} win={bWin} />
       {sc.result && <p className="text-[10px] font-bold mt-2 pt-2 border-t border-white/[0.06]" style={{ color: "#4ade80" }}>{sc.result}</p>}
       {sc.mom && <p className="text-[9px] text-white/40 mt-1 font-semibold">🏅 {sc.mom}</p>}
     </div>
@@ -2039,11 +2048,11 @@ function BcciScorecardSection({ accent }) {
 
   useEffect(() => {
     let alive = true;
-    fetchBcciScorecards().then(c => { if (alive) setCards(c); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    fetchBcciScorecards().then(c => { if (alive) setCards(c); }).catch(() => { }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
-  if (loading) return <div className="mt-8 h-24 rounded-2xl bg-white/[0.03] animate-pulse"/>;
+  if (loading) return <div className="mt-8 h-24 rounded-2xl bg-white/[0.03] animate-pulse" />;
   if (!cards.length) return null;
 
   // Group by series (skip un-named); keep insertion (recency) order.
@@ -2070,7 +2079,7 @@ function BcciScorecardSection({ accent }) {
               <button onClick={() => setOpenSeries(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 34, height: 34, cursor: "pointer", fontSize: 18 }}>×</button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-8">
-              {openGroup.matches.map(sc => <ScoreCard key={sc.id} sc={sc}/>)}
+              {openGroup.matches.map(sc => <ScoreCard key={sc.id} sc={sc} />)}
             </div>
           </div>
         </div>
@@ -2080,7 +2089,7 @@ function BcciScorecardSection({ accent }) {
       {groups.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center gap-2 mb-3">
-            <Trophy size={13} style={{ color: accent }}/>
+            <Trophy size={13} style={{ color: accent }} />
             <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Series & Tours</span>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
@@ -2110,11 +2119,11 @@ function BcciScorecardSection({ accent }) {
       {/* ── ROW 2: Top 5 recent India matches (scorecards) ── */}
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-3">
-          <CalendarDays size={13} style={{ color: accent }}/>
+          <CalendarDays size={13} style={{ color: accent }} />
           <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Matches</span>
         </div>
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
-          {cards.slice(0, 5).map(sc => <ScoreCard key={sc.id} sc={sc} style={{ width: 290, flexShrink: 0 }}/>)}
+          {cards.slice(0, 5).map(sc => <ScoreCard key={sc.id} sc={sc} style={{ width: 290, flexShrink: 0 }} />)}
         </div>
       </div>
     </>
@@ -2124,16 +2133,16 @@ function BcciScorecardSection({ accent }) {
 export function TournamentPage() {
   const { slug } = useParams();
   const cfg = TOURNAMENTS[slug] || TOURNAMENTS.bcci;
-  const [items, setItems]   = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal]   = useState(null);   // { src, title }
-  const [busy, setBusy]     = useState(false);
+  const [modal, setModal] = useState(null);   // { src, title }
+  const [busy, setBusy] = useState(false);
   const Row = cfg.Row;
 
   useEffect(() => {
     let alive = true;
     setLoading(true); setItems([]);
-    cfg.fetchHi().then(list => { if (alive) setItems(list || []); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    cfg.fetchHi().then(list => { if (alive) setItems(list || []); }).catch(() => { }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [slug]);
 
@@ -2141,25 +2150,25 @@ export function TournamentPage() {
     if (busy) return;
     setBusy(true);
     try { const src = await it.resolve(); if (src) setModal({ src, title: it.title }); }
-    catch {} finally { setBusy(false); }
+    catch { } finally { setBusy(false); }
   };
 
   const featured = items.slice(0, 4);   // hero: 1 big + 3 thumbs
-  const recent   = items.slice(0, 5);   // recent matches strip
+  const recent = items.slice(0, 5);   // recent matches strip
 
   return (
     <div className="min-h-dvh bg-gray-950 text-white font-sans overflow-x-hidden">
       <Helmet prioritizeSeoTags>
         <title>{`${cfg.name} Match Highlights — ${cfg.full}`}</title>
-        <meta name="description" content={`Watch the latest ${cfg.name} match highlights. ${cfg.tag}.`}/>
-        <link rel="canonical" href={absUrl(`/tournament/${slug}`)}/>
+        <meta name="description" content={`Watch the latest ${cfg.name} match highlights. ${cfg.tag}.`} />
+        <link rel="canonical" href={absUrl(`/tournament/${slug}`)} />
       </Helmet>
 
-      <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 70% 30% at 50% 0%, ${cfg.accent}22 0%, transparent 55%)` }}/>
+      <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 70% 30% at 50% 0%, ${cfg.accent}22 0%, transparent 55%)` }} />
 
       {busy && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${cfg.accent}55`, borderTopColor: cfg.accent }}/>
+          <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${cfg.accent}55`, borderTopColor: cfg.accent }} />
         </div>
       )}
       {modal && (
@@ -2168,14 +2177,14 @@ export function TournamentPage() {
             <span style={{ color: cfg.accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
             <button onClick={() => setModal(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
-          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen/>
+          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
         </div>
       )}
 
       <main className="relative z-10 pb-24 max-w-5xl mx-auto px-4 sm:px-6">
         {/* ── Title ── */}
         <div className="pt-6 pb-1 flex items-center gap-3">
-          <img src={cfg.logo} alt={cfg.name} style={{ height: 48, width: "auto", maxWidth: 120, objectFit: "contain" }}/>
+          <img src={cfg.logo} alt={cfg.name} style={{ height: 48, width: "auto", maxWidth: 120, objectFit: "contain" }} />
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-white leading-none">{cfg.name} <span className="text-white/40 font-bold">Highlights</span></h1>
             <p className="text-[11px] font-semibold mt-1" style={{ color: cfg.accent }}>{cfg.full}</p>
@@ -2185,16 +2194,16 @@ export function TournamentPage() {
         {/* ── HERO: 4 recent highlights (1 featured + 3) ── */}
         {loading ? (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ height: 320 }}>
-            <div className="sm:col-span-2 rounded-2xl bg-white/[0.03] animate-pulse"/>
-            <div className="hidden sm:grid grid-rows-3 gap-3">{[0,1,2].map(i => <div key={i} className="rounded-xl bg-white/[0.03] animate-pulse"/>)}</div>
+            <div className="sm:col-span-2 rounded-2xl bg-white/[0.03] animate-pulse" />
+            <div className="hidden sm:grid grid-rows-3 gap-3">{[0, 1, 2].map(i => <div key={i} className="rounded-xl bg-white/[0.03] animate-pulse" />)}</div>
           </div>
         ) : featured.length ? (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ minHeight: 320 }}>
             <div className="sm:col-span-2" style={{ height: 320 }}>
-              <HighlightThumb item={featured[0]} accent={cfg.accent} big onPlay={onPlay}/>
+              <HighlightThumb item={featured[0]} accent={cfg.accent} big onPlay={onPlay} />
             </div>
             <div className="grid grid-rows-3 gap-3" style={{ height: 320 }}>
-              {featured.slice(1, 4).map(it => <HighlightThumb key={it.id} item={it} accent={cfg.accent} onPlay={onPlay}/>)}
+              {featured.slice(1, 4).map(it => <HighlightThumb key={it.id} item={it} accent={cfg.accent} onPlay={onPlay} />)}
             </div>
           </div>
         ) : (
@@ -2205,17 +2214,17 @@ export function TournamentPage() {
 
         {/* ── SCORECARDS: series/tours (grouped) + recent-match scorecards ── */}
         {cfg.scorecards ? (
-          <BcciScorecardSection accent={cfg.accent}/>
+          <BcciScorecardSection accent={cfg.accent} />
         ) : (!loading && recent.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-3">
-              <CalendarDays size={13} style={{ color: cfg.accent }}/>
+              <CalendarDays size={13} style={{ color: cfg.accent }} />
               <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Matches</span>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
               {recent.map(it => (
                 <div key={`r-${it.id}`} className="shrink-0" style={{ width: 220, height: 150 }}>
-                  <HighlightThumb item={it} accent={cfg.accent} onPlay={onPlay}/>
+                  <HighlightThumb item={it} accent={cfg.accent} onPlay={onPlay} />
                 </div>
               ))}
             </div>
@@ -2223,7 +2232,7 @@ export function TournamentPage() {
         ))}
 
         {/* ── FULL FEED (Load More) ── */}
-        <Row/>
+        <Row />
 
         <div className="mt-10 pb-4">
           <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-4 py-3 flex items-center gap-3">
@@ -2271,13 +2280,13 @@ export default function Homeies({ searchTerm }) {
       </Helmet>
 
       <div className="fixed inset-0 pointer-events-none z-0"
-        style={{background:"radial-gradient(ellipse 70% 28% at 50% 0%, rgba(80,40,160,0.12) 0%, transparent 55%)"}}/>
+        style={{ background: "radial-gradient(ellipse 70% 28% at 50% 0%, rgba(80,40,160,0.12) 0%, transparent 55%)" }} />
 
       {/* ── TOP NAV ── */}
 
       <main className="relative z-10 pb-24">
         {/* ── HERO ── */}
-        <HeroSection/>
+        <HeroSection />
 
         <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12">
 
@@ -2293,44 +2302,44 @@ export default function Homeies({ searchTerm }) {
 
           {/* ── LIVE / SCHEDULED / RECENT ── */}
           <div className="mt-6">
-            <LiveNowStrip/>
+            <LiveNowStrip />
           </div>
 
           {/* ── ICC HIGHLIGHTS (World Cup match highlights) ── */}
-          <IccHighlightsRow/>
+          <IccHighlightsRow />
 
           {/* ── BCCI MATCH HIGHLIGHTS (full feed, Load More) ── */}
-          <BcciHighlightsRow/>
+          <BcciHighlightsRow />
 
           {/* ── IPL 2026 ALL MATCHES HIGHLIGHTS ── */}
-          <IplHighlightsRow/>
+          <IplHighlightsRow />
 
           {/* ── WATCH LIVE SHORTCUTS ── */}
           <SportsHeading icon={Tv2}>Watch live</SportsHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ChannelShortcut label="Cricket Live TV" Icon={MonitorPlay}
               desc="Star Sports 1 · English & Hindi · Live matches"
-              to="/live-cricket-tv"/>
+              to="/live-cricket-tv" />
             {/* Was pointing at /live-cricket-tv, the same place as the card
                 beside it — two different promises, one destination. Scores and
                 scorecards live on /live-cricket. */}
             <ChannelShortcut label="Match Centre" Icon={BarChart3}
               desc="Live scores, scorecards & schedules"
-              to="/live-cricket"/>
+              to="/live-cricket" />
           </div>
 
           {/* ── TOURNAMENTS ── */}
           <SportsHeading icon={Trophy}>Tournaments</SportsHeading>
           <div className="grid grid-cols-3 gap-3">
-            <TournamentBadge logo="/logos/bcci.png" name="BCCI" subtitle="Team India · Highlights" to="/tournament/bcci"/>
-            <TournamentBadge logo="/logos/icc.png"  name="ICC"  subtitle="World Cup · Highlights"  to="/tournament/icc"/>
-            <TournamentBadge logo="/logos/ipl.png"  name="IPL"  subtitle="2026 · Match Highlights" to="/tournament/ipl"/>
+            <TournamentBadge logo="/logos/bcci.png" name="BCCI" subtitle="Team India · Highlights" to="/tournament/bcci" />
+            <TournamentBadge logo="/logos/icc.png" name="ICC" subtitle="World Cup · Highlights" to="/tournament/icc" />
+            <TournamentBadge logo="/logos/ipl.png" name="IPL" subtitle="2026 · Match Highlights" to="/tournament/ipl" />
           </div>
 
           {/* ── FOOTER NOTE ── */}
           <div className="mt-12 pb-4">
             <div className="rounded-2xl ring-1 ring-white/[0.06] bg-white/[0.02] px-4 py-3.5 flex items-start gap-3">
-              <Radio className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" aria-hidden="true"/>
+              <Radio className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" aria-hidden="true" />
               <p className="text-[11px] text-gray-500 leading-relaxed">
                 Streams are third-party embeds — if one does not load, try Chrome with the ad-blocker off.
                 Scores refresh every 10 minutes.
