@@ -74,7 +74,7 @@ function warmProxy() {
   document.head.appendChild(l);
 }
 
-/* ── fixtures: SonyLiv, FanCode ─────────────────────────────────────────── */
+/* ── fixtures: SonyLiv, FanCode, Willow ─────────────────────────────────── */
 
 /* A fixture from the feeds already carries its URL. It is HLS, and it goes
    through the proxy because neither CDN sends CORS headers and both refuse
@@ -84,6 +84,13 @@ function fixtureSource(tabKey, item) {
   if (tabKey === "fc") {
     return { kind: "hls", url: item.url,
              proxy: { base: PROXY, ref: "https://fancode.com/", ua: item.ua || "" } };
+  }
+  if (tabKey === "willow") {
+    /* Willow streams go through the proxy with no special referrer.
+       The feed may carry a ClearKey pair in keyId/key. */
+    const drm = (item.keyId && item.key) ? { keyId: item.keyId, key: item.key } : undefined;
+    return { kind: isDash(item.url) ? "dash" : "hls", url: item.url, drm,
+             proxy: { base: PROXY } };
   }
   return { kind: isDash(item.url) ? "dash" : "hls", url: item.url, proxy: { base: PROXY } };
 }
@@ -149,7 +156,11 @@ async function jioSource(id) {
 /* A fixture named only by its id — which is all a saved link carries — is
    looked up in its feed first, so a link and a card in hand end up the same. */
 async function liveFixtures(tabKey) {
-  const body = await feed(tabKey === "fc" ? "?feed=fancode" : "?feed=sonyliv");
+  let q;
+  if (tabKey === "fc")     q = "?feed=fancode";
+  else if (tabKey === "willow") q = "?feed=willow";
+  else                     q = "?feed=sonyliv";
+  const body = await feed(q);
   return Array.isArray(body) ? body : (body.live || []);
 }
 
@@ -190,19 +201,23 @@ export async function resolveSource({ tabKey, id, item }) {
   warmProxy();
   switch (tabKey) {
     case "sony":
-    case "fc": {
+    case "fc":
+    case "willow": {
+      /* Willow fixtures now carry real stream URLs when the match is live.
+         Upcoming ones have no URL; the proxy will still be warmed up. */
       const fx = item?.url ? item : await findFixture(tabKey, id);
       const src = fixtureSource(tabKey, fx);
-      const languages = await siblingLanguages(tabKey, fx.id).catch(() => []);
-      // One language is no choice at all; the player shows nothing for it.
-      return languages.length > 1 ? { ...src, lang: langCode(fx.id), languages } : src;
+      /* Language siblings only apply to Sony/FanCode feeds. */
+      if (tabKey !== "willow") {
+        const languages = await siblingLanguages(tabKey, fx.id).catch(() => []);
+        return languages.length > 1 ? { ...src, lang: langCode(fx.id), languages } : src;
+      }
+      return src;
     }
     case "bb":
       return hotstarSource(id || item?.id);
     case "live":
       return jioSource(id || item?.id);
-    case "willow":
-      throw new Error("Willow lists fixtures without streams — open it where it is shown");
     default:
       throw new Error(`Nothing plays from "${tabKey}" here`);
   }

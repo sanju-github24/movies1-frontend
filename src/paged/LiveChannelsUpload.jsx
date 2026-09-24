@@ -59,7 +59,7 @@ const MODE_TAB    = "tab";
 const PLAYER_TABS = [
   { key: "sony",   label: "SonyLiv",        hint: "Live cricket, football and more from SonyLiv" },
   { key: "fc",     label: "FanCode",        hint: "FanCode's live fixtures" },
-  { key: "willow", label: "Willow Cricket", hint: "Upcoming cricket — schedule and artwork, no streams" },
+  { key: "willow", label: "Willow Cricket", hint: "Cricket schedule — live fixtures play directly when a stream is available" },
   { key: "live",   label: "Live TV",        hint: "The JioTV channel list" },
   { key: "bb",     label: "Hotstar",        hint: "Bigg Boss, Star Sports and the Star/Colors channels" },
 ];
