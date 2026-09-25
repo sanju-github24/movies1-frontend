@@ -46,6 +46,8 @@ const Home = () => {
         })}</script>
       </Helmet>
 
+      <h1 className="sr-only">1AnchorMovies — Watch &amp; Download Latest HD Movies and Web Series</h1>
+
       <Header />
     </div>
   );
