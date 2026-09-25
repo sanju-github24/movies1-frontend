@@ -18,9 +18,8 @@ const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 export const TAB_DEFS = {
   sony:   { key: "sony",   label: "SonyLiv",       feed: `${WORKER}?feed=sonyliv` },
   fc:     { key: "fc",     label: "FanCode",       feed: `${WORKER}?feed=fancode` },
-  /* Schedule only — the feed behind it carries no streams, so its cards link
-     to where a fixture can be watched instead of playing one. */
   willow: { key: "willow", label: "Willow Cricket", feed: `${WORKER}?feed=willow` },
+  prime:  { key: "prime",  label: "Prime Video",   feed: `${WORKER}?feed=prime` },
   live:   { key: "live",   label: "Live TV",       feed: null },
   bb:     { key: "bb",     label: "Hotstar",       feed: null },
 };

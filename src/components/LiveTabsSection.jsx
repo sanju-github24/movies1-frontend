@@ -182,9 +182,9 @@ const LiveTabsSection = ({ rows, heading }) => {
          stream per publisher, kept whichever language was listed first and
          dropped the rest. Collapsed first instead, keeping the viewer's own
          language where the match has it; the player offers the others. */
-      // The Willow worker returns live fixtures even before a stream is available.
+      // The Willow/Prime worker returns live fixtures even before a stream is available.
       // A match page URL is not a media stream.
-      const playableLive = p.key === "willow"
+      const playableLive = (p.key === "willow" || p.key === "prime")
         ? (f.live || []).filter((m) => typeof m.url === "string" && /^https?:\/\//i.test(m.url.trim()))
         : (f.live || []);
       oneperMatch(playableLive).forEach((m) => {
@@ -276,7 +276,7 @@ const LiveTabsSection = ({ rows, heading }) => {
             {shownSoon.map((e, i) => (
               <Card key={`u-${e.item.id || i}`} item={e.item} live={false}
                 href={null} fallbackPoster={e.poster} badge={e.label}
-                allowExternal={e.key !== "willow"} />
+                allowExternal={e.key !== "willow" && e.key !== "prime"} />
             ))}
           </div>
 

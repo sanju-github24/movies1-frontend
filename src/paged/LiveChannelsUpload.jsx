@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import { supabase } from "../utils/supabaseClient";
 import AdminLayout from "../components/AdminLayout";
 import { AppContext } from "../context/AppContext";
+import { parseTabUrl } from "../utils/liveTabs";
 
 const ADMIN_EMAIL = "sanjusanjay0444@gmail.com";
 
@@ -60,6 +61,7 @@ const PLAYER_TABS = [
   { key: "sony",   label: "SonyLiv",        hint: "Live cricket, football and more from SonyLiv" },
   { key: "fc",     label: "FanCode",        hint: "FanCode's live fixtures" },
   { key: "willow", label: "Willow Cricket", hint: "Cricket schedule — live fixtures play directly when a stream is available" },
+  { key: "prime",  label: "Prime Video",    hint: "Amazon Prime Video live sports & events" },
   { key: "live",   label: "Live TV",        hint: "The JioTV channel list" },
   { key: "bb",     label: "Hotstar",        hint: "Bigg Boss, Star Sports and the Star/Colors channels" },
 ];
@@ -115,6 +117,15 @@ const LiveChannelsUpload = () => {
   // ── decode single bundle URL ───────────────────────────────────────────────
   useEffect(() => {
     if (bundleUrl.trim()) {
+      const tabInfo = parseTabUrl(bundleUrl.trim());
+      if (tabInfo) {
+        setMode(MODE_TAB);
+        setTabPlayerUrl(bundleUrl.trim());
+        setTabKey(tabInfo.key);
+        if (!tabName) setTabName(tabInfo.def?.label || "");
+        toast.info(`Identified ${tabInfo.def?.label || tabInfo.key} tab URL — switched to Player Tab mode ✅`);
+        return;
+      }
       const p = parseBundleUrl(bundleUrl.trim());
       setPreviewBundle(p);
       if (p?.title && !bundleName) setBundleName(p.title);
@@ -369,7 +380,19 @@ const LiveChannelsUpload = () => {
               <label className="text-xs text-gray-400 mb-1 block uppercase tracking-widest">Player URL *</label>
               <input
                 value={tabPlayerUrl}
-                onChange={(e) => setTabPlayerUrl(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTabPlayerUrl(val);
+                  try {
+                    const u = new URL(val);
+                    const t = u.searchParams.get("tab");
+                    if (t && PLAYER_TABS.some((tab) => tab.key === t)) {
+                      setTabKey(t);
+                      const def = PLAYER_TABS.find((tab) => tab.key === t);
+                      if (def && !tabName) setTabName(def.label);
+                    }
+                  } catch {}
+                }}
                 placeholder="https://m3u8-player-ashen.vercel.app/"
                 className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
               />
@@ -708,6 +731,7 @@ const LiveChannelsUpload = () => {
             <div className="flex flex-col gap-4">
               {bundles.map((b) => {
                 const parsed    = parseBundleUrl(b.bundle_url);
+                const tabInfo   = parseTabUrl(b.bundle_url);
                 const isExpanded = expandedId === b.id;
                 return (
                   <div
@@ -734,7 +758,7 @@ const LiveChannelsUpload = () => {
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {b.channel_count} channels · {new Date(b.created_at).toLocaleDateString()}
+                          {tabInfo ? `🗂 ${tabInfo.def?.label || "Player Tab"} · Live feed` : `${b.channel_count} channels`} · {new Date(b.created_at).toLocaleDateString()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">

@@ -93,8 +93,8 @@ function fixtureSource(tabKey, item) {
     return { kind: "hls", url: item.url,
              proxy: { base: PROXY, ref: "https://fancode.com/", ua: item.ua || "" } };
   }
-  if (tabKey === "willow") {
-    /* Prefer direct CORS-enabled CDN (ss-ott.bia-cf.live.pv-cdn.net).
+  if (tabKey === "willow" || tabKey === "prime") {
+    /* Prefer direct CORS-enabled CDN (ss-ott.bia-cf.live.pv-cdn.net / dash-ott.bia-cf.live.pv-cdn.net).
        If an item has servers, pick the direct Cloudfront server first. */
     let url = item.url;
     if (item.servers && item.servers.length) {
@@ -185,9 +185,10 @@ async function jioSource(id) {
    looked up in its feed first, so a link and a card in hand end up the same. */
 async function liveFixtures(tabKey) {
   let q;
-  if (tabKey === "fc")     q = "?feed=fancode";
+  if (tabKey === "fc")          q = "?feed=fancode";
   else if (tabKey === "willow") q = "?feed=willow";
-  else                     q = "?feed=sonyliv";
+  else if (tabKey === "prime")  q = "?feed=prime";
+  else                          q = "?feed=sonyliv";
   const body = await feed(q);
   return Array.isArray(body) ? body : (body.live || []);
 }
@@ -230,13 +231,14 @@ export async function resolveSource({ tabKey, id, item }) {
   switch (tabKey) {
     case "sony":
     case "fc":
-    case "willow": {
-      /* Willow fixtures now carry real stream URLs when the match is live.
+    case "willow":
+    case "prime": {
+      /* Willow and Prime fixtures now carry real stream URLs when the match is live.
          Upcoming ones have no URL; the proxy will still be warmed up. */
       const fx = item?.url ? item : await findFixture(tabKey, id);
       const src = fixtureSource(tabKey, fx);
       /* Language siblings only apply to Sony/FanCode feeds. */
-      if (tabKey !== "willow") {
+      if (tabKey !== "willow" && tabKey !== "prime") {
         const languages = await siblingLanguages(tabKey, fx.id).catch(() => []);
         return languages.length > 1 ? { ...src, lang: langCode(fx.id), languages } : src;
       }
