@@ -1808,10 +1808,22 @@ if (!alive) return;
                 <div key={i} className="relative">
                   <div onClick={() => {
                     if (openDropdown === i) { setOpenDropdown(null); return; }
-                    // Single-tap plays via the SELECTED server (AnchorHD → our stream);
-                    // only open the server menu if this episode has no playable source.
-                    if (ep.hasDirect || ep.hasEmbed) { handlePlayAction(ep); return; }
-                    setOpenDropdown(i);
+                    // Priority: AnchorHD (our own HLS) → Multi Audio (embed) → Mirchi → Omega
+                    // Play immediately without showing the server list whenever possible.
+                    if (ep.hasDirect) {
+                      // Our own HLS/direct stream — best quality, play straight away.
+                      handlePlayAction(ep, "ourhls"); return;
+                    }
+                    if (ep.hasEmbed) {
+                      // Our uploaded embed mirror (Multi Audio).
+                      handlePlayAction(ep, "embed"); return;
+                    }
+                    // No AnchorHD/Multi Audio — try the preferred third-party servers
+                    // in order. mirchi needs tmdb_id, so check; omega always works.
+                    if (movieMeta?.tmdb_id) {
+                      handlePlayAction(ep, "mirchi"); return;
+                    }
+                    handlePlayAction(ep, "imdb_reader"); // Omega
                   }}
                     className={`group flex gap-4 p-4 rounded-2xl border transition-all cursor-pointer touch-manipulation active:scale-[0.99]
                       ${openDropdown === i ? "bg-blue-600/5 border-blue-500/20" : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04] hover:border-white/10"}`}>

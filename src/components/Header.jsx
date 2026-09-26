@@ -385,7 +385,10 @@ function heroMeta(movie, art = {}, extra = {}) {
   const seasons = Number(extra.number_of_seasons) || (eps.length ? new Set(eps.map(seasonNo)).size : 0);
 
   const bits = [];
-  const year = extra.year || String(movie.title || "").match(/\((\d{4})\)/)?.[1];
+  const year = extra.year
+    || extra.first_air_date?.slice(0, 4)   // TV series: TMDB returns first_air_date
+    || extra.release_date?.slice(0, 4)     // Movies: TMDB returns release_date
+    || String(movie.title || "").match(/\((\d{4})\)/)?.[1];
   if (year) bits.push(String(year));
   if (extra.certification) bits.push(extra.certification);
   if (seasons) bits.push(seasons > 1 ? `${seasons} Seasons` : "1 Season");
