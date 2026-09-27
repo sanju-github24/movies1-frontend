@@ -957,21 +957,119 @@ function ResultPopup({ result, mom, momRuns, momWickets, momImg, sport }) {
   );
 }
 
+// ── Hotstar stream resolver for MatchCenter ──────────────────────────────────
+const _SK_MC = "sx2025xjio";
+function _xorMC(str, k) {
+  let r = "";
+  for (let i = 0; i < str.length; i++)
+    r += String.fromCharCode(str.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+  return r;
+}
+function obfMC(s) {
+  if (!s) return "";
+  try { return btoa(_xorMC(unescape(encodeURIComponent(s)), _SK_MC)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); }
+  catch { return btoa(s); }
+}
+
+function buildChannelUrlMC(basePlayerUrl, channel) {
+  const params = new URLSearchParams();
+  params.set("src", obfMC(channel.url));
+  params.set("t", obfMC(channel.name || ""));
+  if (channel.keyId) params.set("k1", obfMC(channel.keyId));
+  if (channel.key) params.set("k2", obfMC(channel.key));
+  if (channel.cookie) params.set("k3", obfMC(channel.cookie));
+  if (channel.logo) params.set("lg", obfMC(channel.logo));
+  return `${basePlayerUrl}?${params}`;
+}
+
+const HOTSTAR_FEED_MC = "https://jtv-proxy.sanjusanjay0444.workers.dev/?feed=hotstar";
+let _hsCacheMC = null, _hsCachedAtMC = 0;
+async function fetchHotstarChannelMC(hotstarId) {
+  if (!_hsCacheMC || Date.now() - _hsCachedAtMC > 600_000) {
+    try {
+      const r = await fetch(`${HOTSTAR_FEED_MC}&_=${Date.now()}`, { cache: "no-store", signal: AbortSignal.timeout(12000) });
+      const body = await r.json();
+      const list = body.channels || (Array.isArray(body) ? body : []);
+      _hsCacheMC = {};
+      for (const ch of list) {
+        const id = ch.id || ch.channel_id || "";
+        if (id) _hsCacheMC[id] = ch;
+      }
+      _hsCachedAtMC = Date.now();
+    } catch { _hsCacheMC = {}; }
+  }
+  if (!hotstarId) return null;
+  const cleanId = hotstarId.trim().toLowerCase();
+  return _hsCacheMC[cleanId]
+      || _hsCacheMC[`${cleanId}-digital`]
+      || _hsCacheMC[cleanId.replace(/-digital$/, "")]
+      || Object.values(_hsCacheMC).find(c => {
+          const cid = (c.id || "").toLowerCase();
+          return cid === cleanId || cid === `${cleanId}-digital` || cid.includes(cleanId) || cleanId.includes(cid);
+        })
+      || null;
+}
+
 function LivePlayer({ sport, fancodeChannel }) {
+  // Only Willow and Hotstar Digital Star Sports channels for cricket
+  const cricketBase = CRICKET_CHANNELS.filter(
+    (c) => c.group === "Willow" || (c.group === "Star Sports" && (c.id.includes("digital") || c.url?.includes("tab=bb")))
+  );
   const base = sport === "football"
     ? FOOTBALL_CHANNELS
-    : CRICKET_CHANNELS;
+    : cricketBase;
   const channels = fancodeChannel ? [fancodeChannel, ...base] : base;
   const [active, setActive] = useState(channels[0]);
+  const [activeUrl, setActiveUrl] = useState(channels[0]?.url || "");
   const [switching, setSwitching] = useState(false);
   const playerRef = useRef(null);
 
-  useEffect(() => { if (fancodeChannel) setActive(fancodeChannel); }, [fancodeChannel]);
+  const resolveStream = useCallback(async (ch) => {
+    if (!ch?.url) return ch?.url || "";
+    if (ch.url.includes("tab=bb")) {
+      try {
+        const hsId = new URL(ch.url).searchParams.get("id");
+        if (hsId) {
+          const live = await fetchHotstarChannelMC(hsId);
+          if (live && (live.url || live.channel_url || live.stream_url)) {
+            const streamUrl = live.url || live.channel_url || live.stream_url;
+            return buildChannelUrlMC("https://m3u8-player-ashen.vercel.app/", {
+              url: streamUrl,
+              name: ch.name,
+              keyId: live.keyId || live.key_id || "",
+              key: live.key || "",
+              cookie: live.cookie || "",
+              logo: ch.logo || "",
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to resolve Hotstar channel in MatchCenter:", e);
+      }
+    }
+    return ch.url;
+  }, []);
 
-  const switchTo = (ch) => {
+  useEffect(() => {
+    let activeFlag = true;
+    (async () => {
+      const initialCh = fancodeChannel || channels[0];
+      if (initialCh) {
+        setActive(initialCh);
+        const resolved = await resolveStream(initialCh);
+        if (activeFlag) setActiveUrl(resolved);
+      }
+    })();
+    return () => { activeFlag = false; };
+  }, [fancodeChannel, resolveStream]);
+
+  const switchTo = async (ch) => {
     if (ch.id === active.id) return;
     setSwitching(true);
-    setTimeout(() => { setActive(ch); setSwitching(false); }, 300);
+    setActive(ch);
+    const resolved = await resolveStream(ch);
+    setActiveUrl(resolved);
+    setTimeout(() => setSwitching(false), 300);
   };
 
   const goFullscreen = () => {
@@ -993,7 +1091,7 @@ function LivePlayer({ sport, fancodeChannel }) {
           ) : (
             <iframe
               key={active.id}
-              src={active.url}
+              src={activeUrl || active.url}
               className="absolute inset-0 w-full h-full border-none"
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
               allowFullScreen
