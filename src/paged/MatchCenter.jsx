@@ -958,16 +958,6 @@ function ResultPopup({ result, mom, momRuns, momWickets, momImg, sport }) {
 }
 
 function LivePlayer({ sport, fancodeChannel }) {
-  /* The match centre plays FanCode and nothing else.
-
-     A match page is about one match, so the full provider list — Star Sports,
-     Willow, Sony, each with its own dropdown — was offering a dozen channels
-     that mostly are not showing this fixture. FanCode's permanent live channel
-     always resolves to whatever match is on, which is the one thing here that
-     is reliably about the game you are looking at.
-
-     The per-match FanCode stream still wins when it resolves: same provider,
-     but pinned to this fixture rather than to whatever is live. */
   const base = sport === "football"
     ? FOOTBALL_CHANNELS
     : CRICKET_CHANNELS;
@@ -975,55 +965,126 @@ function LivePlayer({ sport, fancodeChannel }) {
   const [active, setActive] = useState(channels[0]);
   const [switching, setSwitching] = useState(false);
   const playerRef = useRef(null);
-  // When the FanCode stream for this match resolves (async), auto-select it.
+
   useEffect(() => { if (fancodeChannel) setActive(fancodeChannel); }, [fancodeChannel]);
+
   const switchTo = (ch) => {
     if (ch.id === active.id) return;
     setSwitching(true);
     setTimeout(() => { setActive(ch); setSwitching(false); }, 300);
   };
+
   const goFullscreen = () => {
     if (!document.fullscreenElement) playerRef.current?.requestFullscreen?.();
     else document.exitFullscreen?.();
   };
+
   return (
-    <div className="rounded-2xl overflow-hidden border border-white/[0.08]" style={{ background: "#000" }}>
-      <div className="flex" style={{ minHeight: 220 }}>
-        <div className="flex-1 relative" ref={playerRef}>
+    <div className="rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl bg-black">
+      {/* Container: Stack vertically on mobile, horizontal row on desktop */}
+      <div className="flex flex-col sm:flex-row max-h-[85vh]">
+        {/* Widescreen 16:9 Player Viewport */}
+        <div className="flex-1 relative aspect-video bg-black" ref={playerRef}>
           {switching ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-              <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin mb-2" style={{ borderColor: `${active.color}30`, borderTopColor: active.color }} />
-              <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: active.color }}>Switching…</p>
+              <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mb-2" style={{ borderColor: `${active.color || '#3b82f6'}30`, borderTopColor: active.color || '#3b82f6' }} />
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Switching channel…</p>
             </div>
           ) : (
-            <iframe key={active.id} src={active.url} className="absolute inset-0 w-full h-full border-none" style={{ minHeight: 220 }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen scrolling="no" />
+            <iframe
+              key={active.id}
+              src={active.url}
+              className="absolute inset-0 w-full h-full border-none"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+              scrolling="no"
+            />
           )}
-          <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}>
-            <PulsingDot color={active.color} size={6} />
-            <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: active.color }}>Live</span>
+
+          {/* Badges & Overlay Controls */}
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md border border-white/10">
+            <PulsingDot color={active.color || '#ef4444'} size={7} />
+            <span className="text-[9px] font-black uppercase tracking-wider text-white truncate max-w-[150px]">
+              {active.name || "Live"} {active.sub ? `(${active.sub})` : ""}
+            </span>
           </div>
-          <button onClick={goFullscreen} className="absolute top-2 right-2 z-20 p-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ background: "rgba(0,0,0,0.5)" }}>
-            <Maximize2 size={11} className="text-gray-400 hover:text-white" />
+
+          <button
+            onClick={goFullscreen}
+            className="absolute top-3 right-3 z-20 p-2 rounded-lg bg-black/75 hover:bg-white/20 transition-all backdrop-blur-md border border-white/10"
+            title="Fullscreen"
+          >
+            <Maximize2 size={13} className="text-gray-300 hover:text-white" />
           </button>
-          <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-1 px-2 py-1.5" style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
-            <AlertCircle size={8} className="text-gray-600 shrink-0" />
-            <p className="text-[7px] text-gray-600 font-bold uppercase tracking-wider truncate">Third-party · Use Chrome · Disable ad-blocker if needed</p>
+
+          <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+            <AlertCircle size={10} className="text-gray-400 shrink-0" />
+            <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider truncate">
+              AnchorHD Live Player · Third-party stream
+            </p>
           </div>
         </div>
-        <div className="flex flex-col border-l border-white/[0.07] overflow-y-auto shrink-0" style={{ width: 96, background: "rgba(255,255,255,0.02)" }}>
-          <div className="px-2 pt-2 pb-1.5 border-b border-white/[0.06]">
-            <p className="text-[7px] font-black text-gray-700 uppercase tracking-widest text-center">Channels</p>
+
+        {/* Channels Sidebar (Desktop: Right column / Mobile: Scrollable section) */}
+        <div className="flex flex-col border-t sm:border-t-0 sm:border-l border-white/[0.08] bg-white/[0.02] sm:w-48 md:w-56 shrink-0 max-h-[160px] sm:max-h-none overflow-y-auto">
+          <div className="px-3 py-2 border-b border-white/[0.06] bg-black/40 sticky top-0 z-10 flex items-center justify-between">
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Live Channels</p>
+            <span className="text-[9px] font-bold text-gray-500">{channels.length} available</span>
           </div>
-          <div className="flex flex-col gap-0.5 p-1.5 flex-1">
+
+          <div className="grid grid-cols-2 sm:grid-cols-1 gap-1.5 p-2 flex-1 overflow-y-auto">
             {channels.map((ch) => {
               const isActive = active.id === ch.id;
               return (
-                <button key={ch.id} onClick={() => switchTo(ch)} className="flex flex-col items-center gap-1.5 px-1.5 py-2 rounded-xl border transition-all duration-200 active:scale-95 w-full" style={{ background: isActive ? ch.bg : "transparent", borderColor: isActive ? ch.border : "transparent", boxShadow: isActive ? `0 0 10px ${ch.glow}` : "none" }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden shrink-0" style={{ background: isActive ? `${ch.color}15` : "rgba(255,255,255,0.05)", border: `1px solid ${isActive ? ch.border : "rgba(255,255,255,0.07)"}` }}>
-                    {ch.useIcon ? <Tv2 size={14} style={{ color: isActive ? ch.color : "#4b5563" }} /> : <img src={ch.logo} alt="" className="w-full h-full object-contain p-0.5" style={{ filter: isActive ? "none" : "grayscale(100%) brightness(0.35)" }} />}
+                <button
+                  key={ch.id}
+                  onClick={() => switchTo(ch)}
+                  className="flex items-center gap-2 px-2.5 py-2 rounded-xl border transition-all duration-200 active:scale-95 text-left w-full"
+                  style={{
+                    background: isActive ? (ch.bg || "rgba(255,255,255,0.1)") : "rgba(255,255,255,0.02)",
+                    borderColor: isActive ? (ch.border || "rgba(255,255,255,0.3)") : "rgba(255,255,255,0.06)",
+                    boxShadow: isActive ? `0 0 12px ${ch.glow || 'rgba(255,255,255,0.1)'}` : "none",
+                  }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+                    style={{
+                      background: isActive ? `${ch.color || '#fff'}20` : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${isActive ? (ch.border || 'rgba(255,255,255,0.3)') : "rgba(255,255,255,0.08)"}`,
+                    }}
+                  >
+                    {ch.useIcon ? (
+                      <Tv2 size={13} style={{ color: isActive ? (ch.color || "#fff") : "#6b7280" }} />
+                    ) : (
+                      <img
+                        src={ch.logo}
+                        alt=""
+                        className="w-full h-full object-contain p-0.5"
+                        style={{ filter: isActive ? "none" : "grayscale(100%) brightness(0.6)" }}
+                      />
+                    )}
                   </div>
-                  <span className="text-[8px] font-black uppercase leading-tight text-center" style={{ color: isActive ? ch.color : "#4b5563" }}>{ch.sub}</span>
-                  {isActive && <div className="w-4 h-0.5 rounded-full" style={{ background: ch.color }} />}
+
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span
+                      className="text-[10px] font-black tracking-tight truncate leading-snug"
+                      style={{ color: isActive ? "#ffffff" : "#d1d5db" }}
+                    >
+                      {ch.name}
+                    </span>
+                    {ch.sub && (
+                      <span
+                        className="text-[8px] font-bold uppercase tracking-wider truncate"
+                        style={{ color: isActive ? (ch.color || "#60a5fa") : "#6b7280" }}
+                      >
+                        {ch.sub}
+                      </span>
+                    )}
+                  </div>
+
+                  {isActive && (
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ background: ch.color || "#3b82f6" }} />
+                  )}
                 </button>
               );
             })}
@@ -2891,22 +2952,20 @@ export default function MatchCenter() {
         </div>
 
         {/* Live stream / result popup */}
-        {(matchState.isLive || matchState.isFinished) && (
-          <div className="mb-6">
-            <LiveChannelSwitcher
-              sport={payload.sport}
-              isLive={matchState.isLive}
-              isFinished={matchState.isFinished}
-              result={matchState.result}
-              mom={matchState.mom}
-              momRuns={matchState.momRuns}
-              momWickets={matchState.momWickets}
-              momImg={matchState.momImg}
-              homeName={payload.matchData?.HomeTeamName || payload.homeCode}
-              awayName={payload.matchData?.AwayTeamName || payload.awayCode}
-            />
-          </div>
-        )}
+        <div className="mb-6">
+          <LiveChannelSwitcher
+            sport={payload.sport}
+            isLive={!matchState.isFinished || matchState.isLive}
+            isFinished={matchState.isFinished}
+            result={matchState.result}
+            mom={matchState.mom}
+            momRuns={matchState.momRuns}
+            momWickets={matchState.momWickets}
+            momImg={matchState.momImg}
+            homeName={payload.matchData?.HomeTeamName || payload.homeCode}
+            awayName={payload.matchData?.AwayTeamName || payload.awayCode}
+          />
+        </div>
 
         {/* Match centers */}
         {payload.sport === "cricket" && payload.type === "bcci" && payload.matchData && (
