@@ -101,7 +101,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "ENG HD", useIcon: false,
     logo: "/star-sports-1.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-digital",
     desc: "Star Sports 1 Digital — Live sports via Hotstar",
   },
   {
@@ -110,7 +110,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "ENG HD", useIcon: false,
     logo: "/star-sports-2.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-digital",
     desc: "Star Sports 2 Digital — Live sports via Hotstar",
   },
   {
@@ -119,7 +119,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "HINDI HD", useIcon: false,
     logo: "/star-sports-1-hindi.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-hindi",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-hindi-digital",
     desc: "Star Sports 1 Hindi Digital — Live sports in Hindi",
   },
   {
@@ -128,7 +128,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "HINDI HD", useIcon: false,
     logo: "/star-sports-2-hindi.png",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-hindi",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-hindi-digital",
     desc: "Star Sports 2 Hindi Digital — Live sports in Hindi",
   },
   {
@@ -137,7 +137,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TAMIL HD", useIcon: false,
     logo: "/star-sports-1-tamil.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-tamil",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-tamil-digital",
     desc: "Star Sports 1 Tamil Digital — Live sports in Tamil",
   },
   {
@@ -146,7 +146,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TAMIL HD", useIcon: false,
     logo: "/star-sports-2-tamil.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-tamil",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-tamil-digital",
     desc: "Star Sports 2 Tamil Digital — Live sports in Tamil",
   },
   {
@@ -155,7 +155,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TELUGU HD", useIcon: false,
     logo: "/star-sports-1-telugu.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-telugu",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-telugu-digital",
     desc: "Star Sports 1 Telugu Digital — Live sports in Telugu",
   },
   {
@@ -164,7 +164,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "TELUGU HD", useIcon: false,
     logo: "/star-sports-2-telugu.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-telugu",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-telugu-digital",
     desc: "Star Sports 2 Telugu Digital — Live sports in Telugu",
   },
   {
@@ -173,7 +173,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "KANNADA", useIcon: false,
     logo: "/star-sports-1-kannada.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-kannada",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-1-kannada-digital",
     desc: "Star Sports 1 Kannada Digital — Live sports in Kannada",
   },
   {
@@ -182,7 +182,7 @@ export const CRICKET_CHANNELS = [
     color: "#f97316", glow: "rgba(249,115,22,0.3)", border: "rgba(249,115,22,0.25)",
     bg: "rgba(249,115,22,0.06)", tag: "KANNADA", useIcon: false,
     logo: "/star-sports-2-kannada.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-kannada",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-2-kannada-digital",
     desc: "Star Sports 2 Kannada Digital — Live sports in Kannada",
   },
   {
@@ -191,7 +191,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "ENG HD", useIcon: false,
     logo: "/star-sports-1.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-3",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-3-digital",
     desc: "Star Sports 3 Digital — Live sports via Hotstar",
   },
   {
@@ -200,7 +200,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "SELECT HD", useIcon: false,
     logo: "/star-sports-select-1.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-select-1",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-select-1-digital",
     desc: "Star Sports Select 1 Digital — Premium sports via Hotstar",
   },
   {
@@ -209,7 +209,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "SELECT HD", useIcon: false,
     logo: "/star-sports-2-select.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-select-2",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-select-2-digital",
     desc: "Star Sports Select 2 Digital — Premium sports via Hotstar",
   },
   {
@@ -218,7 +218,7 @@ export const CRICKET_CHANNELS = [
     color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
     bg: "rgba(0,168,225,0.06)", tag: "KHEL", useIcon: false,
     logo: "/star-sports-1.jpg",
-    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-khel",
+    url: "https://m3u8-player-ashen.vercel.app/?tab=bb&id=star-sports-khel-digital",
     desc: "Star Sports Khel Digital — Live sports via Hotstar",
   },
 ];

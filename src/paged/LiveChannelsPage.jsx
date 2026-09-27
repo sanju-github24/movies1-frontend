@@ -189,8 +189,6 @@ const OLD_JSON = "https://binge-giotv.pages.dev/data/id.json";
 const NEW_JSON = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 const HOTSTAR_FEED = "https://jtv-proxy.sanjusanjay0444.workers.dev/?feed=hotstar";
 
-// Hotstar channel map cache (10 min TTL)
-let _hsCache = null, _hsCachedAt = 0;
 async function fetchHotstarChannel(hotstarId) {
   if (!_hsCache || Date.now() - _hsCachedAt > 600_000) {
     try {
@@ -205,7 +203,16 @@ async function fetchHotstarChannel(hotstarId) {
       _hsCachedAt = Date.now();
     } catch { _hsCache = {}; }
   }
-  return _hsCache[hotstarId] || null;
+  if (!hotstarId) return null;
+  const cleanId = hotstarId.trim().toLowerCase();
+  return _hsCache[cleanId]
+      || _hsCache[`${cleanId}-digital`]
+      || _hsCache[cleanId.replace(/-digital$/, "")]
+      || Object.values(_hsCache).find(c => {
+          const cid = (c.id || "").toLowerCase();
+          return cid === cleanId || cid === `${cleanId}-digital` || cid.includes(cleanId) || cleanId.includes(cid);
+        })
+      || null;
 }
 
 function normalizeFeedChannel(ch) {
