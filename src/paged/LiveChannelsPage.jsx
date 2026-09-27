@@ -187,6 +187,26 @@ function extractBaseUrl(bundleUrl) {
 // ─── Live feed fetchers ───────────────────────────────────────────────────────
 const OLD_JSON = "https://binge-giotv.pages.dev/data/id.json";
 const NEW_JSON = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
+const HOTSTAR_FEED = "https://jtv-proxy.sanjusanjay0444.workers.dev/?feed=hotstar";
+
+// Hotstar channel map cache (10 min TTL)
+let _hsCache = null, _hsCachedAt = 0;
+async function fetchHotstarChannel(hotstarId) {
+  if (!_hsCache || Date.now() - _hsCachedAt > 600_000) {
+    try {
+      const r = await fetch(`${HOTSTAR_FEED}&_=${Date.now()}`, { cache: "no-store", signal: AbortSignal.timeout(12000) });
+      const body = await r.json();
+      const list = body.channels || (Array.isArray(body) ? body : []);
+      _hsCache = {};
+      for (const ch of list) {
+        const id = ch.id || ch.channel_id || "";
+        if (id) _hsCache[id] = ch;
+      }
+      _hsCachedAt = Date.now();
+    } catch { _hsCache = {}; }
+  }
+  return _hsCache[hotstarId] || null;
+}
 
 function normalizeFeedChannel(ch) {
   const clean = (v) => v == null || String(v).toLowerCase() === "null" ? "" : String(v);
@@ -364,16 +384,58 @@ const SkeletonGrid = () => (
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STAR SPORTS SECTION  (built-in — no Supabase bundle needed)
+// Resolves the real Hotstar MPD URL + DRM keys from the worker, then plays
+// inline using buildChannelUrl — same path as every other live bundle.
 // ─────────────────────────────────────────────────────────────────────────────
 const STAR_SPORTS_CHANNELS = CRICKET_CHANNELS.filter(
   (ch) => ch.group === "Star Sports" && ch.url?.includes("tab=bb")
 );
 
+// Extract the `id=` param from a tab=bb channel URL.
+function hotstarIdFromUrl(url) {
+  try { return new URL(url).searchParams.get("id") || null; }
+  catch { return null; }
+}
+
+const STAR_PLAYER_BASE = "https://m3u8-player-ashen.vercel.app/";
+
 const StarSportsSection = ({ activeChannel, onPlay }) => {
   const [expanded, setExpanded] = useState(true);
+  const [resolving, setResolving] = useState(null); // id of channel being resolved
   const cfg = CAT_CONFIG.Sports;
 
   if (!STAR_SPORTS_CHANNELS.length) return null;
+
+  const handlePlay = async (ch) => {
+    const hsId = hotstarIdFromUrl(ch.url);
+    if (!hsId) {
+      // Fallback: no id param, just open tab=bb url directly in iframe
+      onPlay(ch, ch.url);
+      return;
+    }
+    setResolving(ch.id);
+    try {
+      const live = await fetchHotstarChannel(hsId);
+      if (live && (live.url || live.channel_url || live.stream_url)) {
+        const streamUrl = live.url || live.channel_url || live.stream_url;
+        const keyId = live.keyId || live.key_id || "";
+        const key   = live.key || "";
+        const cookie = live.cookie || "";
+        const playerUrl = buildChannelUrl(STAR_PLAYER_BASE, {
+          url: streamUrl, name: ch.name,
+          keyId, key, cookie, logo: ch.logo || "",
+        });
+        onPlay(ch, playerUrl);
+      } else {
+        // Feed didn't have this channel — fall back to the tab=bb URL
+        onPlay(ch, ch.url);
+      }
+    } catch {
+      onPlay(ch, ch.url);
+    } finally {
+      setResolving(null);
+    }
+  };
 
   return (
     <div style={{ marginBottom: 40, animation: "fade-up 0.22s ease" }}>
@@ -423,23 +485,41 @@ const StarSportsSection = ({ activeChannel, onPlay }) => {
         }}>
           {STAR_SPORTS_CHANNELS.map((ch) => {
             const isActive = activeChannel?.id === ch.id;
+            const isLoading = resolving === ch.id;
             return (
               <button
                 key={ch.id}
                 className="ch-card"
-                onClick={() => onPlay(ch)}
+                onClick={() => !isLoading && handlePlay(ch)}
                 title={ch.desc || ch.name}
+                disabled={isLoading}
                 style={{
                   background: isActive ? cfg.bg : tokens.bg.surface,
                   border: `1px solid ${isActive ? cfg.border : tokens.border.subtle}`,
                   borderRadius: tokens.radius.lg,
                   padding: "12px 8px 10px",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-                  cursor: "pointer", textAlign: "center",
+                  cursor: isLoading ? "wait" : "pointer", textAlign: "center",
                   boxShadow: isActive ? `0 0 0 2px ${cfg.color}33` : "none",
-                  outline: "none",
+                  outline: "none", opacity: isLoading ? 0.7 : 1,
+                  position: "relative",
                 }}
               >
+                {/* Spinner overlay while resolving */}
+                {isLoading && (
+                  <div style={{
+                    position: "absolute", inset: 0, borderRadius: tokens.radius.lg,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "rgba(0,0,0,0.55)", zIndex: 2,
+                  }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      border: `2px solid ${cfg.color}40`,
+                      borderTopColor: cfg.color,
+                      animation: "spin 0.7s linear infinite",
+                    }} />
+                  </div>
+                )}
                 {/* Logo / fallback */}
                 {ch.logo ? (
                   <img
@@ -466,8 +546,7 @@ const StarSportsSection = ({ activeChannel, onPlay }) => {
                 {/* Sub-label tag */}
                 <span style={{
                   fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                  color: cfg.color,
-                  background: cfg.bg,
+                  color: cfg.color, background: cfg.bg,
                   border: `1px solid ${cfg.border}`,
                   borderRadius: 4, padding: "1px 5px",
                   textTransform: "uppercase",
@@ -985,9 +1064,9 @@ const LiveChannelsPage = () => {
         {!searchTerm && (
           <StarSportsSection
             activeChannel={activeChannel}
-            onPlay={(ch) => {
+            onPlay={(ch, customUrl) => {
               setActiveChannel(ch);
-              setPlayerUrl(ch.url);
+              setPlayerUrl(customUrl || ch.url);
               setIframeLoading(true);
               setChannelListOpen(false);
               setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
