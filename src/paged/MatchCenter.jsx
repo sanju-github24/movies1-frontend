@@ -970,7 +970,7 @@ function LivePlayer({ sport, fancodeChannel }) {
      but pinned to this fixture rather than to whatever is live. */
   const base = sport === "football"
     ? FOOTBALL_CHANNELS
-    : CRICKET_CHANNELS.filter((c) => c.id === "fancode-cricbuzz");
+    : CRICKET_CHANNELS;
   const channels = fancodeChannel ? [fancodeChannel, ...base] : base;
   const [active, setActive] = useState(channels[0]);
   const [switching, setSwitching] = useState(false);
