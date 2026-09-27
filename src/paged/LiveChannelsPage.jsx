@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import LiveTabsSection from "../components/LiveTabsSection";
+import { CRICKET_CHANNELS } from "./channels";
 import { useGoBack } from "../components/BackBar";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
@@ -360,6 +361,127 @@ const SkeletonGrid = () => (
     ))}
   </div>
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAR SPORTS SECTION  (built-in — no Supabase bundle needed)
+// ─────────────────────────────────────────────────────────────────────────────
+const STAR_SPORTS_CHANNELS = CRICKET_CHANNELS.filter(
+  (ch) => ch.group === "Star Sports" && ch.url?.includes("tab=bb")
+);
+
+const StarSportsSection = ({ activeChannel, onPlay }) => {
+  const [expanded, setExpanded] = useState(true);
+  const cfg = CAT_CONFIG.Sports;
+
+  if (!STAR_SPORTS_CHANNELS.length) return null;
+
+  return (
+    <div style={{ marginBottom: 40, animation: "fade-up 0.22s ease" }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap",
+        padding: "14px 18px",
+        background: tokens.bg.surface,
+        border: `1px solid ${tokens.border.subtle}`,
+        borderRadius: tokens.radius.lg,
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: tokens.radius.md,
+          background: cfg.bg, border: `1px solid ${cfg.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <Icon.Sports width={18} height={18} style={{ color: cfg.color }} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: tokens.text.primary, margin: 0 }}>Star Sports Digital</p>
+          <p style={{ fontSize: 11, color: tokens.text.muted, margin: 0 }}>
+            {STAR_SPORTS_CHANNELS.length} channels · Hotstar
+          </p>
+        </div>
+
+        <button
+          className="collapse-btn"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            background: "none", border: `1px solid ${tokens.border.subtle}`,
+            color: tokens.text.muted, cursor: "pointer",
+            borderRadius: tokens.radius.md, padding: "5px 12px",
+            fontSize: 11, fontWeight: 600,
+          }}
+        >
+          {expanded ? "Collapse" : "Expand"}
+        </button>
+      </div>
+
+      {/* Channel grid */}
+      {expanded && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
+          gap: 10,
+        }}>
+          {STAR_SPORTS_CHANNELS.map((ch) => {
+            const isActive = activeChannel?.id === ch.id;
+            return (
+              <button
+                key={ch.id}
+                className="ch-card"
+                onClick={() => onPlay(ch)}
+                title={ch.desc || ch.name}
+                style={{
+                  background: isActive ? cfg.bg : tokens.bg.surface,
+                  border: `1px solid ${isActive ? cfg.border : tokens.border.subtle}`,
+                  borderRadius: tokens.radius.lg,
+                  padding: "12px 8px 10px",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                  cursor: "pointer", textAlign: "center",
+                  boxShadow: isActive ? `0 0 0 2px ${cfg.color}33` : "none",
+                  outline: "none",
+                }}
+              >
+                {/* Logo / fallback */}
+                {ch.logo ? (
+                  <img
+                    src={ch.logo}
+                    alt={ch.name}
+                    style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 8 }}
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 8,
+                    background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Icon.Sports width={20} height={20} style={{ color: cfg.color }} />
+                  </div>
+                )}
+                {/* Name */}
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: isActive ? cfg.color : tokens.text.secondary,
+                  lineHeight: 1.3, wordBreak: "break-word",
+                }}>
+                  {ch.name}
+                </span>
+                {/* Sub-label tag */}
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                  color: cfg.color,
+                  background: cfg.bg,
+                  border: `1px solid ${cfg.border}`,
+                  borderRadius: 4, padding: "1px 5px",
+                  textTransform: "uppercase",
+                }}>
+                  {ch.tag || ch.sub}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
@@ -858,6 +980,20 @@ const LiveChannelsPage = () => {
         )}
 
         {!searchTerm && filteredBundles.length === 0 && <EmptyState />}
+
+        {/* ── Star Sports Digital (Hotstar) — built-in, no Supabase needed ─── */}
+        {!searchTerm && (
+          <StarSportsSection
+            activeChannel={activeChannel}
+            onPlay={(ch) => {
+              setActiveChannel(ch);
+              setPlayerUrl(ch.url);
+              setIframeLoading(true);
+              setChannelListOpen(false);
+              setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+            }}
+          />
+        )}
 
         {!searchTerm && filteredBundles.map((row) => {
           const fullBundle = resolvedBundles[row.id];
