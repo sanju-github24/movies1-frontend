@@ -7,6 +7,15 @@ class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
+    // If a chunk failed to load (after a new Vercel deployment), auto-reload to fetch fresh JS bundles
+    if (error && (error.name === 'TypeError' || error.message?.includes('dynamically imported module') || error.message?.includes('Loading chunk'))) {
+      const isReloaded = sessionStorage.getItem('chunk_reload');
+      if (!isReloaded) {
+        sessionStorage.setItem('chunk_reload', 'true');
+        window.location.reload();
+        return { hasError: false, error: null };
+      }
+    }
     return { hasError: true, error };
   }
 

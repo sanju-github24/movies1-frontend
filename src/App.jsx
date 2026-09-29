@@ -4,6 +4,16 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
 
+// Helper for dynamic imports that auto-reloads if a new deployment changed the chunk hashes
+const safeLazy = (importFn) =>
+  lazy(() =>
+    importFn().catch((err) => {
+      console.warn("Dynamic import failed (likely due to new deployment hash update). Reloading page...", err);
+      window.location.reload();
+      return new Promise(() => {});
+    })
+  );
+
 // --- Components & Pages Imports ---
 import Navbar from './components/Navbar';
 import CategoryBar from './components/CategoryBar';
@@ -13,48 +23,48 @@ import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
 import ResetPassword from './paged/ResetPassword';
-const MovieDetail = lazy(() => import('./paged/MovieDetail'));
-const SearchResults = lazy(() => import('./paged/SearchResults'));
-const SearchPage = lazy(() => import('./paged/SearchPage'));
+const MovieDetail = safeLazy(() => import('./paged/MovieDetail'));
+const SearchResults = safeLazy(() => import('./paged/SearchResults'));
+const SearchPage = safeLazy(() => import('./paged/SearchPage'));
 import CategoryPage from './components/CategoryPage';
 import LatestUploads from './components/LatestUploads';
 import { AppContext } from './context/AppContext';
-const AdminUpload = lazy(() => import('./context/AdminUpload'));
-const BlogEditor = lazy(() => import('./components/BlogEditor'));
-const BlogList = lazy(() => import('./components/BlogList'));
-const BlogViewer = lazy(() => import('./components/BlogViewer'));
-const AdminDashboard = lazy(() => import('./paged/AdminDashboard'));
-const AdminStories = lazy(() => import('./paged/AdminStories'));
+const AdminUpload = safeLazy(() => import('./context/AdminUpload'));
+const BlogEditor = safeLazy(() => import('./components/BlogEditor'));
+const BlogList = safeLazy(() => import('./components/BlogList'));
+const BlogViewer = safeLazy(() => import('./components/BlogViewer'));
+const AdminDashboard = safeLazy(() => import('./paged/AdminDashboard'));
+const AdminStories = safeLazy(() => import('./paged/AdminStories'));
 import AdScriptLoader from './components/AdScriptLoader';
 import AdPopup from './components/AdPopup';
 import PopAdsScript from './components/PopAdsScript';
 import MbidadmBanner from './components/MbidadmBanner';
-const Profile = lazy(() => import('./paged/Profile'));
-const UploadWatchHtml = lazy(() => import('./paged/UploadWatchHtml'));
-const WatchPage = lazy(() => import('./paged/WatchPage'));
-const AdminMembers = lazy(() => import('./paged/AdminMembers'));
-const WatchListPage = lazy(() => import('./paged/WatchListPage'));
-const MXWatch = lazy(() => import('./paged/MXWatch'));
-const HlsWatch = lazy(() => import('./paged/HlsWatch'));
-const AdminUp4streamFiles = lazy(() => import('./components/AdminUp4streamFiles'));
-const VideoPlayerPage = lazy(() => import('./paged/VideoPlayerPage'));
-const LiveCricket = lazy(() => import('./paged/LiveCricket'));
-const AdminLiveMatchUpload = lazy(() => import('./paged/AdminLiveMatchUpload'));
-const LiveStreamPlayer = lazy(() => import('./paged/LiveStreamPlayer'));
-const SeriesView = lazy(() => import('./paged/SeriesView'));
-const AuthPage = lazy(() => import('./paged/AuthPage'));
-const UpdatePassword = lazy(() => import('./paged/UpdatePassword'));
-const TorrentSearch = lazy(() => import('./paged/Torrentsearch'));
-const LiveCricketTV = lazy(() => import('./paged/LiveCricketTV'));
+const Profile = safeLazy(() => import('./paged/Profile'));
+const UploadWatchHtml = safeLazy(() => import('./paged/UploadWatchHtml'));
+const WatchPage = safeLazy(() => import('./paged/WatchPage'));
+const AdminMembers = safeLazy(() => import('./paged/AdminMembers'));
+const WatchListPage = safeLazy(() => import('./paged/WatchListPage'));
+const MXWatch = safeLazy(() => import('./paged/MXWatch'));
+const HlsWatch = safeLazy(() => import('./paged/HlsWatch'));
+const AdminUp4streamFiles = safeLazy(() => import('./components/AdminUp4streamFiles'));
+const VideoPlayerPage = safeLazy(() => import('./paged/VideoPlayerPage'));
+const LiveCricket = safeLazy(() => import('./paged/LiveCricket'));
+const AdminLiveMatchUpload = safeLazy(() => import('./paged/AdminLiveMatchUpload'));
+const LiveStreamPlayer = safeLazy(() => import('./paged/LiveStreamPlayer'));
+const SeriesView = safeLazy(() => import('./paged/SeriesView'));
+const AuthPage = safeLazy(() => import('./paged/AuthPage'));
+const UpdatePassword = safeLazy(() => import('./paged/UpdatePassword'));
+const TorrentSearch = safeLazy(() => import('./paged/Torrentsearch'));
+const LiveCricketTV = safeLazy(() => import('./paged/LiveCricketTV'));
 import Homeies, { TournamentPage } from './paged/Homeies';
-const LiveChannelsUpload = lazy(() => import('./paged/LiveChannelsUpload'));
-const LiveChannelsPage = lazy(() => import('./paged/LiveChannelsPage'));
-const MatchCenter = lazy(() => import('./paged/MatchCenter'));
-const NewsViewer = lazy(() => import('./components/NewsReader'));
+const LiveChannelsUpload = safeLazy(() => import('./paged/LiveChannelsUpload'));
+const LiveChannelsPage = safeLazy(() => import('./paged/LiveChannelsPage'));
+const MatchCenter = safeLazy(() => import('./paged/MatchCenter'));
+const NewsViewer = safeLazy(() => import('./components/NewsReader'));
 // --- Music Feature Imports ---
-const HomeLandingPage = lazy(() => import('./paged/HomeLandingPage'));
-const SearchResultsPage = lazy(() => import('./paged/SearchResultsPage'));
-const TrackDetailPage = lazy(() => import('./paged/TrackDetailPage'));
+const HomeLandingPage = safeLazy(() => import('./paged/HomeLandingPage'));
+const SearchResultsPage = safeLazy(() => import('./paged/SearchResultsPage'));
+const TrackDetailPage = safeLazy(() => import('./paged/TrackDetailPage'));
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import PersistentMiniPlayer from './components/PersistentMiniPlayer';
 
