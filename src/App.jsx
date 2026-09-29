@@ -4,13 +4,20 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
 
-// Helper for dynamic imports that auto-reloads if a new deployment changed the chunk hashes
+// Helper for dynamic imports that auto-reloads ONCE if a new deployment changed chunk hashes
 const safeLazy = (importFn) =>
   lazy(() =>
     importFn().catch((err) => {
-      console.warn("Dynamic import failed (likely due to new deployment hash update). Reloading page...", err);
-      window.location.reload();
-      return new Promise(() => {});
+      console.warn("Dynamic import failed:", err);
+      const lastReload = sessionStorage.getItem('last_chunk_reload');
+      const now = Date.now();
+      // Only reload if we haven't reloaded in the last 10 seconds to prevent tubelight/infinite loops
+      if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+        sessionStorage.setItem('last_chunk_reload', now.toString());
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw err;
     })
   );
 
