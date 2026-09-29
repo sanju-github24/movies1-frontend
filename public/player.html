@@ -137,17 +137,23 @@
     }
 
     /* tabs */
+    /* Wraps rather than overflowing. These were six fixed buttons in a row
+       clipped by overflow:hidden, so the last tabs were cut off the edge of
+       the box and could not be clicked at all. */
     .ls-tabs {
       display: flex;
+      flex-wrap: wrap;
       border: 1px solid rgba(255, 255, 255, .12);
       border-radius: 10px;
       overflow: hidden
     }
 
     .ls-tab {
-      flex: 1;
-      padding: 10px;
-      font-size: .82rem;
+      flex: 1 1 auto;
+      min-width: 104px;
+      white-space: nowrap;
+      padding: 10px 8px;
+      font-size: .78rem;
       font-weight: 600;
       background: transparent;
       border: none;
@@ -2110,13 +2116,32 @@
       </div>
     </div>
     <div class="ls-box">
-      <div class="ls-tabs">
         <button class="ls-tab on" id="tabCustom" onclick="switchTab('custom')">🔗 Custom URL</button>
+        <button class="ls-tab" id="tabTmdb" onclick="switchTab('tmdb')">🎬 TMDB / FilmU</button>
         <button class="ls-tab" id="tabLive" onclick="switchTab('live')">📺 Live TV</button>
+        <button class="ls-tab" id="tabBB" onclick="switchTab('bb')">🎭 Hotstar</button>
+        <button class="ls-tab" id="tabSony" onclick="switchTab('sony')">🏏 SonyLiv</button>
+        <button class="ls-tab" id="tabFc" onclick="switchTab('fc')">⚽ FanCode</button>
+        <button class="ls-tab" id="tabWillow" onclick="switchTab('willow')">🗓 Willow</button>
+        <button class="ls-tab" id="tabPrime" onclick="switchTab('prime')">📦 Prime</button>
+        <button class="ls-tab" id="tabIptv" onclick="switchTab('iptv')">🌍 IPTV</button>
+      </div>
+
+      <!-- The gate. Hidden unless a tab is asked for and nothing has been
+           unlocked; the password is checked on the server, never here. -->
+      <div id="gateBox" style="display:none;flex-direction:column;gap:12px;padding:6px 2px">
+        <div style="font-size:.82rem;font-weight:700;color:rgba(255,255,255,.85)">🔒 Enter the password to browse
+          channels</div>
+        <div id="gateMsg" style="display:none;font-size:.74rem;color:#fca5a5"></div>
+        <input class="ls-in" id="gateIn" type="password" autocomplete="current-password" placeholder="Password" />
+        <button class="ls-play" id="gateBtn">Unlock</button>
+        <div style="font-size:.68rem;color:rgba(255,255,255,.35);text-align:center">
+          Stays unlocked on this device for 12 hours.
+        </div>
       </div>
 
       <div id="customTab">
-        <input class="ls-in" id="urlIn" placeholder="Paste HLS (.m3u8), DASH (.mpd), MP4, WebM URL…" />
+        <input class="ls-in" id="urlIn" placeholder="Paste HLS (.m3u8), DASH (.mpd), MP4, WebM, or FilmU URL…" />
         <input class="ls-in" id="titIn" placeholder="Title (optional)" style="padding:10px 16px;font-size:.85rem" />
         <div id="drmFields">
           <div class="drm-hdr">🔑 ClearKey DRM — required for encrypted DASH streams</div>
@@ -2141,6 +2166,34 @@
         </div>
       </div>
 
+      <!-- TMDB / FilmU Stream Tab -->
+      <div id="tmdbTab" style="display:none;flex-direction:column;gap:12px">
+        <div style="display:flex;gap:8px">
+          <button id="tmdbTypeMovie" class="ls-demo on" style="flex:1;background:rgba(255,255,255,.18);font-weight:600;padding:8px" onclick="setTmdbType('movie')">🎬 Movie</button>
+          <button id="tmdbTypeTv" class="ls-demo" style="flex:1;background:rgba(255,255,255,.06);font-weight:600;padding:8px" onclick="setTmdbType('tv')">📺 TV Show</button>
+        </div>
+        <input class="ls-in" id="tmdbIdIn" placeholder="TMDB ID, FilmU URL, or Title (e.g. 1726, 94997, Iron Man)" />
+        <div id="tmdbTvFields" style="display:none;gap:8px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:.72rem;color:rgba(255,255,255,.6);font-weight:600">SEASON</span>
+            <input class="ls-in" id="tmdbSeasonIn" type="number" min="1" value="1" placeholder="Season" style="padding:10px 14px;font-size:.85rem" />
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:.72rem;color:rgba(255,255,255,.6);font-weight:600">EPISODE</span>
+            <input class="ls-in" id="tmdbEpisodeIn" type="number" min="1" value="1" placeholder="Episode" style="padding:10px 14px;font-size:.85rem" />
+          </div>
+        </div>
+        <button class="ls-play" id="tmdbPlayBtn" onclick="submitTmdbForm()">▶ Fetch & Play M3U8</button>
+        <div class="ls-div">— Popular / Quick Play —</div>
+        <div class="ls-demos" style="flex-wrap:wrap">
+          <button class="ls-demo" onclick="quickPlayTmdb('1726','movie',1,1,'Iron Man')">🦸 Iron Man (1726)</button>
+          <button class="ls-demo" onclick="quickPlayTmdb('94997','tv',1,1,'House of the Dragon')">🐉 House of the Dragon</button>
+          <button class="ls-demo" onclick="quickPlayTmdb('155','movie',1,1,'The Dark Knight')">🦇 The Dark Knight</button>
+          <button class="ls-demo" onclick="quickPlayTmdb('1399','tv',1,1,'Game of Thrones')">⚔️ Game of Thrones</button>
+          <button class="ls-demo" onclick="quickPlayTmdb('157336','movie',1,1,'Interstellar')">⏳ Interstellar</button>
+        </div>
+      </div>
+
       <div id="liveTvTab">
         <div id="chLoading" class="ch-loading">
           <div class="mini-spin"></div>Loading channels…
@@ -2149,10 +2202,86 @@
           ⚠ Failed to load channels. <a onclick="fetchChannels();return false">Retry</a>
         </div>
         <div id="chGrid" class="ch-grid" style="display:none"></div>
+      </div>
+
+      <!-- Hotstar's channels. Separate from Live TV because they come from
+           Hotstar rather than JioTV and need a different unlock: one shared
+           hdntl token, sent as a cookie by the proxy. See HOTSTAR_CHANNELS. -->
+      <div id="bbTab" style="display:none">
+        <div id="bbGrid" class="ch-grid"></div>
+        <div id="bbNote" style="font-size:.7rem;color:rgba(255,255,255,.35);text-align:center;padding:12px 6px">
+          Bigg Boss in six languages, plus Star Sports and the Star/Colors channels.
+        </div>
+      </div>
+
+      <!-- SonyLiv's live fixtures, read through the worker. Rebuilt on every
+           visit rather than cached: the list is whatever is on air now. -->
+      <div id="sonyTab" style="display:none">
+        <div id="sonyLoading" class="ch-loading">
+          <div class="mini-spin"></div>Loading live matches…
+        </div>
+        <div id="sonyErr" class="ch-err" style="display:none">
+          ⚠ Nothing scheduled on SonyLiv right now. <a onclick="loadSony(true);return false">Retry</a>
+        </div>
+        <div id="sonyGrid" class="ch-grid" style="display:none"></div>
+        <div id="sonyNote" style="font-size:.7rem;color:rgba(255,255,255,.35);text-align:center;padding:12px 6px"></div>
+      </div>
+
+      <!-- FanCode's live fixtures, read through the worker. -->
+      <div id="fcTab" style="display:none">
+        <div id="fcLoading" class="ch-loading">
+          <div class="mini-spin"></div>Loading live matches…
+        </div>
+        <div id="fcErr" class="ch-err" style="display:none">
+          ⚠ Nothing scheduled on FanCode right now. <a onclick="loadFc(true);return false">Retry</a>
+        </div>
+        <div id="fcGrid" class="ch-grid" style="display:none"></div>
+        <div id="fcNote" style="font-size:.7rem;color:rgba(255,255,255,.35);text-align:center;padding:12px 6px"></div>
+      </div>
+
+      <!-- Willow fixtures play here when the feed supplies a stream URL. -->
+      <div id="willowTab" style="display:none">
+        <div id="willowLoading" class="ch-loading">
+          <div class="mini-spin"></div>Loading schedule…
+        </div>
+        <div id="willowErr" class="ch-err" style="display:none">
+          ⚠ Could not load the Willow schedule. <a onclick="loadWillow(true);return false">Retry</a>
+        </div>
+        <div id="willowGrid" class="ch-grid" style="display:none"></div>
+        <div id="willowNote" style="font-size:.7rem;color:rgba(255,255,255,.35);text-align:center;padding:12px 6px">
+        </div>
+      </div>
+
+      <!-- Amazon's free live sport. Unlike Willow next door, these rows carry a
+           stream and a ClearKey pair, so they play here rather than linking out. -->
+      <div id="primeTab" style="display:none">
+        <div id="primeLoading" class="ch-loading">
+          <div class="mini-spin"></div>Loading Prime sport…
+        </div>
+        <div id="primeErr" class="ch-err" style="display:none">
+          ⚠ Could not load the Prime feed. <a onclick="loadPrime(true);return false">Retry</a>
+        </div>
+        <div id="primeGrid" class="ch-grid" style="display:none"></div>
+        <div id="primeNote" style="font-size:.7rem;color:rgba(255,255,255,.35);text-align:center;padding:12px 6px">
+        </div>
+      </div>
+
+      <!-- iptv-org's public playlist. ~10,000 channels, so nothing is rendered
+           until you search: painting them all locks the browser for seconds. -->
+      <div id="iptvTab" style="display:none">
+        <input class="ls-in" id="iptvSearch"
+          placeholder="Search 10,000+ channels — try &quot;bbc&quot;, &quot;kannada&quot;, &quot;news&quot;…" />
+        <div id="iptvStatus" class="ch-loading" style="display:none">
+          <div class="mini-spin"></div><span id="iptvStatusText">Loading playlist…</span>
+        </div>
+        <div id="iptvGrid" class="ch-grid" style="display:none"></div>
+        <div id="iptvHint" style="font-size:.72rem;color:rgba(255,255,255,.35);text-align:center;padding:14px 6px">
+          Type at least two letters to search.
+        </div>
         <div id="chUpdated" class="updated-badge" style="display:none"></div>
         <button class="ls-play" id="playLiveBtn" style="display:none;opacity:.4;cursor:not-allowed"
           onclick="playSelectedLive()">
-          ▶ Select a channel first
+          ▶ Replay last channel
         </button>
       </div>
     </div>
@@ -2505,8 +2634,24 @@
      * Key fix: removed `url.includes('playlist')` — far too broad and incorrectly
      * routes many MP4 URLs (e.g. YouTube-style) into the HLS path.
      */
-    function detectUrlType(url) {
+    function detectUrlType(url, depth = 0) {
       if (!url) return 'mp4';
+
+      /* A proxied URL describes its target in ?url=, and its own path says
+         nothing — ours is /api/live-proxy for a playlist, a segment and a key
+         alike. Stripping the query, as the extension checks below do, left
+         every proxied stream looking like none of the known types, so an HLS
+         playlist went to a plain <video> element and came back "unsupported
+         format". Classify what is being fetched, not what is fetching it.
+
+         Unwrapped once: a target that is itself a proxy URL is a mistake, not
+         a case to support, and recursing on one would not end. */
+      if (depth === 0) {
+        try {
+          const inner = new URL(url, location.href).searchParams.get('url');
+          if (inner) return detectUrlType(inner, 1);
+        } catch { /* not an absolute or parseable URL — fall through */ }
+      }
 
       // Strip query string for extension checks only
       const clean = url.split('?')[0].toLowerCase();
@@ -2527,10 +2672,12 @@
         return 'dash';
       }
 
-      // 3. HLS — STRICT: only match actual .m3u8 extension or explicit /hls/ path segment
+      // 3. HLS — .m3u8, an explicit /hls/ path, OR HLS playlists served as .txt
+      //    (some CDNs obfuscate the manifest extension, e.g. cf-master.<ts>.txt).
       if (
         clean.endsWith('.m3u8') ||
         clean.includes('.m3u8?') ||
+        clean.endsWith('.txt') ||
         /\/hls\//.test(url)
       ) {
         return 'hls';
@@ -2548,15 +2695,16 @@
 
     let _chMap = null;
     let _chMapPromise = null;
+    let _chMapFetchedAt = 0;
 
     async function getChMap() {
-      if (_chMap) return _chMap;
+      if (_chMap && Date.now() - _chMapFetchedAt < 60_000) return _chMap;
       if (_chMapPromise) return _chMapPromise;
       _chMapPromise = (async () => {
         const map = {};
         const [r1, r2] = await Promise.allSettled([
-          fetch(OLD_JSON_URL + '?_=' + Date.now()).then(r => r.ok ? r.json() : null),
-          fetch(NEW_JSON_URL + '?_=' + Date.now()).then(r => r.ok ? r.json() : null)
+          fetch(OLD_JSON_URL + '?_=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(r => r.ok ? r.json() : null),
+          fetch(NEW_JSON_URL + '?_=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(r => r.ok ? r.json() : null)
         ]);
         if (r1.status === 'fulfilled' && r1.value) {
           const raw = Array.isArray(r1.value) ? r1.value : (r1.value.channels || []);
@@ -2573,7 +2721,6 @@
           const raw = Array.isArray(r2.value) ? r2.value : (r2.value.channels || []);
           raw.forEach(ch => {
             let url = ch.channel_url || '';
-            if (url.includes('?')) url = url.split('?')[0];
             if (ch.channel_id) map[ch.channel_id] = {
               id: ch.channel_id, name: ch.channel_name || 'Channel',
               url, keyId: ch.keyId || '', key: ch.key || '',
@@ -2581,10 +2728,16 @@
             };
           });
         }
+        if (!Object.keys(map).length) throw new Error('No channels received');
         _chMap = map;
+        _chMapFetchedAt = Date.now();
         return map;
       })();
-      return _chMapPromise;
+      try {
+        return await _chMapPromise;
+      } finally {
+        _chMapPromise = null;
+      }
     }
 
     // ── FanCode live-matches feed ──────────────────────────────
@@ -2704,7 +2857,12 @@
     let hideT = null, drag = false, toastT = null;
     let isLiveStream = false;
     let _edgeCache = 0, _edgeTS = 0, _jumping = false;
-    const LIVE_THRESH = 12, DELAY_SHOW = 6;
+    /* Measured against the true edge, a stream sitting exactly where its
+       engine wants it is still several seconds back — about eight for HLS,
+       a little less for DASH. Calling that "behind" would light GO LIVE on a
+       stream doing nothing wrong, so the mark sits above it. Anything past
+       DELAY_SHOW is worth printing, because by then it is a real gap. */
+    const LIVE_THRESH = 15, DELAY_SHOW = 10;
     let _lastUrl = null, _lastTitle = null, _lastDrm = null;
     // Show / episode metadata (drives the pause overlay + episodes panel)
     let META = { title: '', rating: '', year: '', dur: '', desc: '', poster: '', showTitle: '', eps: [], epIndex: 0 };
@@ -2722,19 +2880,1226 @@
     // ══════════════════════════════════════════════════════════
     // TABS
     // ══════════════════════════════════════════════════════════
-    function switchTab(t) {
+    async function switchTab(t) {
       $('tabCustom').classList.toggle('on', t === 'custom');
+      $('tabTmdb').classList.toggle('on', t === 'tmdb');
       $('tabLive').classList.toggle('on', t === 'live');
+      $('tabBB').classList.toggle('on', t === 'bb');
+      $('tabSony').classList.toggle('on', t === 'sony');
+      $('tabFc').classList.toggle('on', t === 'fc');
+      $('tabWillow').classList.toggle('on', t === 'willow');
+      $('tabPrime').classList.toggle('on', t === 'prime');
+      $('tabIptv').classList.toggle('on', t === 'iptv');
       $('customTab').style.display = t === 'custom' ? 'flex' : 'none';
+      $('tmdbTab').style.display = t === 'tmdb' ? 'flex' : 'none';
       $('liveTvTab').style.display = t === 'live' ? 'flex' : 'none';
+      $('bbTab').style.display = t === 'bb' ? 'flex' : 'none';
+      $('sonyTab').style.display = t === 'sony' ? 'flex' : 'none';
+      $('fcTab').style.display = t === 'fc' ? 'flex' : 'none';
+      $('willowTab').style.display = t === 'willow' ? 'flex' : 'none';
+      $('primeTab').style.display = t === 'prime' ? 'flex' : 'none';
+      $('iptvTab').style.display = t === 'iptv' ? 'flex' : 'none';
+
+      /* The tab is highlighted either way — the gate is the panel underneath,
+         not a refusal to acknowledge the click. Nothing is fetched until it
+         passes, so a locked player never pulls a channel list at all. */
+      if (!(await gatePasses(t))) return;
+      showGate(false);
+      if (t === 'custom') $('customTab').style.display = 'flex';
+      if (t === 'tmdb') $('tmdbTab').style.display = 'flex';
+
       if (t === 'live' && !channelsLoaded) fetchChannels();
+      if (t === 'bb') renderBiggBoss();
+      if (t === 'sony') loadSony();
+      if (t === 'fc') loadFc();
+      if (t === 'willow') loadWillow();
+      if (t === 'prime') loadPrime();
+      if (t === 'iptv') loadIptv();
     }
+
+    document.getElementById('iptvSearch').addEventListener('input', (e) => {
+      clearTimeout(_iptvTimer);
+      const v = e.target.value;
+      _iptvTimer = setTimeout(() => iptvSearch(v), 180);   // debounce: 10k scans per keystroke is wasteful
+    });
 
     urlIn.addEventListener('input', () => {
       const v = urlIn.value;
       const type = detectUrlType(v);
       drmFields.style.display = type === 'dash' ? 'flex' : 'none';
     });
+
+    // ══════════════════════════════════════════════════════════
+    // IPTV — iptv-org's public playlist
+    // ══════════════════════════════════════════════════════════
+    /* One 2.8MB text file holding ~10,000 channels. It is fetched once and
+       parsed into memory; nothing is drawn until you type, because painting ten
+       thousand cards freezes the tab for several seconds and no one scrolls a
+       list that long anyway. */
+    const IPTV_URL = 'https://iptv-org.github.io/iptv/index.m3u';
+
+    /* A second, much smaller list: live sport, mostly FanCode, with the
+       current fixtures in it. Worth having alongside iptv-org because that one
+       carries almost no live sport, and these are the streams anyone opening
+       this player during a match is actually looking for.
+
+       Its URLs are signed and expire within hours, which is why it is fetched
+       fresh on every load rather than cached anywhere. */
+    const SPORTS_URL = 'https://raw.githubusercontent.com/sportlive18/All-Playlist/refs/heads/main/combined.m3u';
+
+    let iptvChannels = null, iptvLoading = false;
+
+    /* #EXTINF:-1 tvg-id="X" tvg-logo="…" group-title="News",Channel Name
+       https://…/stream.m3u8
+       Attributes are optional and their order varies, so each is read by name
+       rather than by position, and the display name is whatever follows the
+       last comma on the line. */
+    function parseM3U(text) {
+      const out = [];
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.startsWith('#EXTINF')) continue;
+        const attr = (k) => (new RegExp(k + '="([^"]*)"').exec(line) || [, ''])[1];
+        /* The name is everything after the first comma that follows the
+           attribute list — not after the LAST comma, which is what this used
+           to do. Plenty of channel names contain commas of their own
+           ("Sher-E-Punjab T20, 2026 [Hindi]"), and splitting on the last one
+           named that channel "2026 [Hindi]". Attributes are quoted, so the
+           last quote marks where they end; without quotes, fall back to the
+           comma after the duration. */
+        const lastQuote = line.lastIndexOf('"');
+        const nameComma = line.indexOf(',', lastQuote > -1 ? lastQuote : line.indexOf(':'));
+        const name = (nameComma > -1 ? line.slice(nameComma + 1) : '').trim();
+        // the URL is the next line that is neither blank nor a directive
+        let url = '';
+        for (let j = i + 1; j < lines.length; j++) {
+          const n = lines[j].trim();
+          if (!n) continue;
+          if (n.startsWith('#')) continue;
+          url = n; i = j; break;
+        }
+        // a handful of entries carry something that is not a web URL
+        if (!name || !/^https?:\/\//i.test(url)) continue;
+        /* tvg-id is "BBCAmerica.us@SD" — the country is the part after the dot,
+           and the @SD/@HD suffix is a stream-quality marker, not part of it. */
+        const cc = (attr('tvg-country') || attr('tvg-id').split('.').pop() || '')
+          .split('@')[0].trim().toUpperCase();
+        out.push({ name, url, logo: attr('tvg-logo'), group: attr('group-title'), country: cc });
+      }
+      return out;
+    }
+
+    async function loadIptv() {
+      if (iptvChannels || iptvLoading) return;
+      iptvLoading = true;
+      $('iptvStatus').style.display = 'flex';
+      $('iptvHint').style.display = 'none';
+      $('iptvStatusText').textContent = 'Loading playlists…';
+      try {
+        /* Both at once, and neither is allowed to sink the other: if sport is
+           unreachable you still get iptv-org, and vice versa. */
+        const grab = async (url) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return parseM3U(await res.text());
+        };
+        const [sport, world] = await Promise.allSettled([grab(SPORTS_URL), grab(IPTV_URL)]);
+
+        const sportList = sport.status === 'fulfilled'
+          ? sport.value.map(c => ({ ...c, live: true }))
+          : [];
+        const worldList = world.status === 'fulfilled' ? world.value : [];
+
+        // Sport first, so a search for "india" surfaces today's match before a
+        // general-entertainment channel with the same word in its name.
+        iptvChannels = [...sportList, ...worldList];
+        if (!iptvChannels.length) throw new Error(world.reason?.message || 'both playlists failed');
+
+        $('iptvStatus').style.display = 'none';
+        $('iptvHint').style.display = 'block';
+        $('iptvHint').textContent = sportList.length
+          ? `${sportList.length.toLocaleString()} live sport + ${worldList.length.toLocaleString()} channels — type at least two letters to search.`
+          : `${worldList.length.toLocaleString()} channels loaded — type at least two letters to search.`;
+      } catch (e) {
+        $('iptvStatusText').textContent = 'Could not load the playlist: ' + e.message;
+      } finally {
+        iptvLoading = false;
+      }
+    }
+
+    let _iptvTimer = null;
+    function iptvSearch(q) {
+      const grid = $('iptvGrid'), hint = $('iptvHint');
+      q = q.trim().toLowerCase();
+      if (!iptvChannels) return;
+      if (q.length < 2) {
+        grid.style.display = 'none'; hint.style.display = 'block';
+        hint.textContent = `${iptvChannels.length.toLocaleString()} channels loaded — type at least two letters to search.`;
+        return;
+      }
+      // capped: a broad word like "tv" matches thousands, and drawing them all
+      // is exactly the freeze this design avoids
+      const hits = [];
+      for (const c of iptvChannels) {
+        if (c.name.toLowerCase().includes(q) || (c.group || '').toLowerCase().includes(q)) hits.push(c);
+        if (hits.length >= 120) break;
+      }
+      hint.style.display = hits.length ? 'none' : 'block';
+      if (!hits.length) { grid.style.display = 'none'; hint.textContent = `Nothing matches “${q}”.`; return; }
+
+      grid.innerHTML = '';
+      for (const c of hits) {
+        const card = document.createElement('div');
+        card.className = 'ch-card';
+        card.title = `${c.name}${c.group ? ' · ' + c.group : ''}`;
+        card.innerHTML =
+          (c.logo ? `<img class="ch-logo" src="${c.logo}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+            : `<div class="ch-logo"></div>`) +
+          `<div class="ch-name">${c.name.replace(/[<>&]/g, '')}</div>` +
+          (c.country ? `<div class="ch-tag">${c.country}</div>` : '');
+        card.onclick = () => playIptv(c);
+        grid.appendChild(card);
+      }
+      grid.style.display = 'grid';
+    }
+
+    /* A public list is full of streams that are dead, geo-locked, or served
+       without CORS headers. That last one is the common case and the confusing
+       one: hls.js fetches segments with XHR, so a server that sends no
+       Access-Control-Allow-Origin blocks playback in Chrome outright, while
+       Safari plays the same URL natively because native HLS does not need CORS.
+       Left alone this is a black rectangle; probing first turns it into a
+       sentence that says what to do. */
+    async function playIptv(ch) {
+      _playingChannelId = null;
+      _playingChannelLogo = ch.logo || null;
+
+      const nativeHls = document.createElement('video')
+        .canPlayType('application/vnd.apple.mpegurl') !== '';
+      // Safari can play a CORS-less stream natively, so do not stand in its way.
+      if (nativeHls) return loadVideo(ch.url, ch.name);
+
+      try {
+        // A CORS refusal throws here; a dead stream answers with a status.
+        const r = await fetch(ch.url, {
+          method: 'GET', headers: { Range: 'bytes=0-64' },
+          signal: AbortSignal.timeout(9000)
+        });
+        if (!r.ok) {
+          errMsg.textContent = `“${ch.name}” answered ${r.status}. Public IPTV entries go offline often — try another.`;
+          err.style.display = 'flex';
+          return;
+        }
+        if (!r.headers.get('access-control-allow-origin')) {
+          errMsg.textContent = `“${ch.name}” is up, but its server sends no CORS headers, `
+            + `so this browser cannot fetch the segments. Safari plays these natively — or pick another channel.`;
+          err.style.display = 'flex';
+          return;
+        }
+      } catch (e) {
+        errMsg.textContent = e.name === 'TimeoutError'
+          ? `“${ch.name}” did not respond. It is probably offline or geo-blocked.`
+          : `“${ch.name}” refused this browser (no CORS, offline, or geo-blocked). `
+          + `Safari can often play these natively.`;
+        err.style.display = 'flex';
+        return;
+      }
+      loadVideo(ch.url, ch.name);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // BIGG BOSS 24/7 (own tab)
+    // ══════════════════════════════════════════════════════════
+    /* Six language feeds of the same house, straight off Hotstar rather than
+       JioTV, which is why they sit apart from Live TV.
+
+       They will not play the way a Live TV channel does. Hotstar's live09p
+       edge answers 403 unless Cookie, Referer and Origin all arrive together
+       — measured: any one or two of the three is still a 403. All three are
+       forbidden header names, meaning a browser refuses to set them on a
+       cross-origin request no matter what you ask hls.js to do. So every
+       request goes through the worker, which is under no such rule and puts
+       the trio on the playlist and on each segment.
+
+       The hdntl token is shared by all six (acl=/*, so it signs any path) and
+       lasts hours, not the minutes a FanCode one does. When it dies every
+       feed here dies at once and the fix is a new token — see BB_TOKEN. */
+    let BB_TOKEN = 'hdntl=exp=1789530127~acl=%2f*~id=127456ecedb15a2f7264b7bc601de86e~data=hdntl~hmac=d0a0bdabfe9393f8ef61e84fe9b2918a7648b8e51cdc79518f0ab03993fe21dc';
+    const BB_REFERER = 'https://www.hotstar.com/';
+    const BB_UA = 'Virat Kohli';
+    const BB_LOGO = 'https://img10.hotstar.com/image/upload/sources/r1/cms/prod/2305/1788708712305-h.jpg';
+
+    /* Everything Hotstar, in one list.
+     *
+     * Three kinds live here and they play differently. The Bigg Boss feeds and
+     * the two 24/7 channels are plain HLS. The rest are DASH under ClearKey,
+     * so they carry a keyId and key and go to Shaka instead of hls.js.
+     *
+     * All of them share one hdntl token and all of them expire together —
+     * about a day. When every channel here dies at once, that is why: replace
+     * BB_TOKEN and nothing else. */
+    let HOTSTAR_CHANNELS = [
+      {
+        id: "bb-hindi", name: "Bigg Boss 24/7 — Hindi", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp2/incagbsgallow-biggboss-hin-2026/93e0d4ee03b34575bbf8f8a55824de63/index_6.m3u8"
+      },
+      {
+        id: "bb-bangla", name: "Bigg Boss 24/7 — Bangla", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp1/incagbsgallow-biggboss-ben-2026/d8b1f4b4b6ad493d845fb9669712ee6e/index_6.m3u8"
+      },
+      {
+        id: "bb-kannada", name: "Bigg Boss 24/7 — Kannada", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp1/incagbsgallow-biggboss-kan-2026/511768cd9dab414aa551e9d15da2202b/index_6.m3u8"
+      },
+      {
+        id: "bb-malayalam", name: "Bigg Boss 24/7 — Malayalam", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp2/incagbsgallow-biggboss-mal-2026/28fdd2300bf04a60ac3c3318ff009886/index_6.m3u8"
+      },
+      {
+        id: "bb-telugu", name: "Bigg Boss 24/7 — Telugu", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp2/incagbsgallow-biggboss-tel-2026/f129670ca03b4bb988c841f9bbdce777/index_6.m3u8"
+      },
+      {
+        id: "bb-tamil", name: "Bigg Boss 24/7 — Tamil", group: "Bigg Boss", logo: BB_LOGO,
+        url: "https://live09p.hotstar.com/mp2/incagbsgallow-biggboss-tam-2026/0e8f0050df134b708ab297477fbf0e86/index_6.m3u8"
+      },
+      {
+        id: "tata-ipl-live-tv", name: "TATA IPL Live TV", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/out/v1/llg-tv-mum/1540072843_hindi_5e0a66fc/gec-india_hls_unencrypted/master-ap-1080-4.m3u8"
+      },
+      {
+        id: "savdhaan-india-crime-24-7", name: "Savdhaan India: Crime 24/7", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/out/v1/llg-tv-mum/1540077800_hindi_7537fdaa/gec-india_hls_unencrypted/master-ap-1080-4.m3u8"
+      },
+      {
+        id: "star-sports-khel", name: "Star Sports Khel Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540073624/4a56d383d1074f3d908a7f9b7a3321f1/index.mpd", keyId: "c57bd6cb156c47c1bf86a6c4171d0000", key: "e75d26242c9944aeb91e055d0f29ee4b"
+      },
+      {
+        id: "star-sports-1", name: "Star Sports 1 Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068247/9a6e7c30f9194cc1a6a6250cedb115fb/index.mpd", keyId: "e85897bf6e594d698b7c82646c8e0000", key: "d2dda31234ae40538843e871cd4dcc2a"
+      },
+      {
+        id: "star-sports-2", name: "Star Sports 2 Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068250/1d0752e2f605404886fec4ab49cc3350/index.mpd", keyId: "14d0c8ee09944c32bafea44a987d0000", key: "74d35f4034b14854bd3ca83dd3aa2fb1"
+      },
+      {
+        id: "star-sports-1-hindi", name: "Star Sports 1 Hindi Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068295/5a4eb3ac6e424eef8a30962d2232f80f/index.mpd", keyId: "b9f1cb8a1361457bbd8097f8c2590000", key: "1960274b7ba344cb899eba2e80916774"
+      },
+      {
+        id: "star-sports-2-hindi", name: "Star Sports 2 Hindi Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068298/9f99e1af0bdc465b8a3015e3a1a689d8/index.mpd", keyId: "effcadcbcc634296a6cf65e231f10000", key: "569c794c69ea496e9ad1887f557ea4dc"
+      },
+      {
+        id: "star-sports-1-tamil", name: "Star Sports 1 Tamil Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068334/3468fd902b12418598cabe63585e7efe/index.mpd", keyId: "01cc63d414394296bb3e6cfaffee0000", key: "c1fba587fc8b4218ade5ace1e62e5aaf"
+      },
+      {
+        id: "star-sports-2-tamil", name: "Star Sports 2 Tamil Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068337/9e957d4aa8054fdfa75a02de6c38e8d0/index.mpd", keyId: "8cecd7ec1ee04eecb49ddbdc8c420000", key: "499ea72b59f14337a0acb057cd9dffc0"
+      },
+      {
+        id: "star-sports-1-telugu", name: "Star Sports 1 Telugu Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068280/e8c0ed405e544793a1f827c477839581/index.mpd", keyId: "4634b32328f242e3be51c3e06cde0000", key: "42e90ab215bf4a438b55851b5e0f50dc"
+      },
+      {
+        id: "star-sports-2-telugu", name: "Star Sports 2 Telugu Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068283/9fdb797729344658957bd7382590c557/index.mpd", keyId: "4de245d511444b37a263c1d86ce70000", key: "b326780ffb3d4dcf8d30fbc0f3008a22"
+      },
+      {
+        id: "star-sports-1-kannada", name: "Star Sports 1 Kannada Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068322/6409ab04235d4a0886656913f360c0a7/index.mpd", keyId: "eb2f9710abf44bb1bcf51400ccc00000", key: "5f29f372823346e78934431f2a924065"
+      },
+      {
+        id: "star-sports-2-kannada", name: "Star Sports 2 Kannada Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068325/822fe9161d924f25a8f14d9a4e6f1b34/index.mpd", keyId: "ae315fa52d544372a525f8b947a50000", key: "8224183f754244c09664e825535aea4e"
+      },
+      {
+        id: "star-sports-3", name: "Star Sports 3 Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068301/c776132a964441e1b929b2c0451222af/index.mpd", keyId: "f718ac1c70414b7ead6ebffa05fa0000", key: "7b3a3cb3eda946de88aa44bbaaa179bb"
+      },
+      {
+        id: "star-sports-select-1", name: "Star Sports Select 1 Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068723/bf078703201f419b89e87fedda08b8f1/index.mpd", keyId: "ae3b1efc6eee47fa90e0360b16ad0000", key: "3c8be3ec7a4e4ab6994725420d95f971"
+      },
+      {
+        id: "star-sports-select-2", name: "Star Sports Select 2 Digital", group: "Sports", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068726/07582d46912e46cbb5f802923a0257d1/index.mpd", keyId: "9bced3f4d794419e99012ad6c1090000", key: "c4c7f22fc71445c28ea15cb3fdb1b3be"
+      },
+      {
+        id: "star-plus", name: "Star Plus Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068289/6479fde4af2c441087fba8aa8a6b7b65/index.mpd", keyId: "f7bbfeaf9f7f4cada833072e21ed0000", key: "d67f3522fb5a4b1d96daba62990a214e"
+      },
+      {
+        id: "star-jalsha", name: "Star Jalsha Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068265/c4602383aada4e3fb92f0f0740187c66/index.mpd", keyId: "2042ab988f5e4d95b03f9a01933c0000", key: "3873b7044900428cb019fee9d14fd14a"
+      },
+      {
+        id: "star-maa", name: "Star Maa Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068277/f9eb70f10233442f82a6e3c4e8b2df70/index.mpd", keyId: "3a6865c2eb484c57806a76e2719b0000", key: "97c95a3bbfd344d9a16d96bad4f42ad7"
+      },
+      {
+        id: "star-pravah", name: "Star Pravah Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068310/f72c707651fa4b55a913511378ee7d09/index.mpd", keyId: "f7efc99766e643e687b1a228ae000000", key: "6d45b6ab1b2840be943c8a99e8a0a0e5"
+      },
+      {
+        id: "star-vijay", name: "Star Vijay Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068331/e2defeea709d42799aee76fe0d59bbe8/index.mpd", keyId: "3d16a12b7fe0423d87e00c231d710000", key: "f6aeb5898e5c4d8bab629a9de8befa12"
+      },
+      {
+        id: "vijay-super", name: "Vijay Super Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068340/fcf299d934c2434b812dbf26d16355e8/index.mpd", keyId: "08e4a1c2f55d4ed4878110a640920000", key: "23dc3107bf284a0dbd93b1dc9f142459"
+      },
+      {
+        id: "star-suvarna", name: "Star Suvarna Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068319/ae448c47ad3e4f2c9059f6fcfe4fbdc9/index.mpd", keyId: "d33b34f86a214120a3850f04a11e0000", key: "36245c3005ce4f94a6d927d435508019"
+      },
+      {
+        id: "asianet", name: "Asianet Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068259/16bbee01f356442bb4ec4d6b021c20e2/index.mpd", keyId: "31a5c9e538e0462b9424921dd21d0000", key: "117c7548f5574b638411c138fd3e2ed6"
+      },
+      {
+        id: "asianet-plus", name: "Asianet Plus Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068714/d1405aea010f40739f1521c6c5b48fc0/index.mpd", keyId: "bfe3e4a7670e416d85261d002c3a0000", key: "25955bb289a94ef5978ffa689eea066d"
+      },
+      {
+        id: "colors", name: "Colors Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp2/gec-india-1540068292/51e8ee3bc81a4d4cbd1cfde7f4748fc2/index.mpd", keyId: "f762f7bf6bf04c999f861cc3dafe0000", key: "25ec2364467f40b09fc1e9a7c1e72058"
+      },
+      {
+        id: "colors-kannada", name: "Colors Kannada Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068316/2933e227fb43430cad08b7778ec85e41/index.mpd", keyId: "2427721df70c4992b6e2cf7d2abf0000", key: "fb1d4dc6142344278550d82972ae003b"
+      },
+      {
+        id: "colors-bangla", name: "Colors Bangla Digital", group: "Entertainment", logo: "",
+        url: "https://livetv.hotstar.com/mp1/gec-india-1540068268/f1fd9ca8ce4f41ddb1e53cf019864c0f/index.mpd", keyId: "4221bf5c8de94ff792982ee906a20000", key: "d53a4b3ab73f454c8b7a4e7b7454fd97"
+      },
+    ];
+
+    /* The worker doubles as the HLS proxy — same endpoint as the channel feed,
+       told apart by the ?url= parameter. */
+    function viaWorker(url, { cookie = '', ref = '', ua = '' } = {}) {
+      return NEW_JSON_URL + '?url=' + encodeURIComponent(url)
+        + (cookie ? '&cookie=' + encodeURIComponent(cookie) : '')
+        + (ref ? '&ref=' + encodeURIComponent(ref) : '')
+        + (ua ? '&ua=' + encodeURIComponent(ua) : '');
+    }
+
+    let _bbRendered = false, _bbLoaded = false;
+
+    /* The list and its token, from the playlist that is re-scraped with a
+       fresh one every run.
+     *
+     * Both used to be written into this file, and because every channel is
+     * signed by the same token, the whole tab went dark each time it expired
+     * and stayed dark until somebody pasted a new playlist in. Read here, a
+     * page load is the whole of it. The built-in list stays as a fallback,
+     * so an unreachable feed costs the newer channels rather than all of
+     * them. */
+    async function loadHotstar() {
+      if (_bbLoaded) return;
+      try {
+        const r = await fetch(NEW_JSON_URL + '?feed=hotstar&_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const body = await r.json();
+        if (body.token && Array.isArray(body.channels) && body.channels.length) {
+          BB_TOKEN = body.token;
+          HOTSTAR_CHANNELS = body.channels;
+        }
+      } catch (e) {
+        console.warn('hotstar feed unavailable, using the built-in list:', e.message);
+      }
+      _bbLoaded = true;
+    }
+
+    /* The playlist has no ids, so they are made from channel names — which
+       means the six this site links to directly by a short name of their own
+       would stop resolving. Matched by what they are instead. */
+    const HOTSTAR_ALIASES = {
+      // "Bigboss" in the playlist, "Bigg Boss" everywhere else — hence bigg?.
+      'bb-hindi': /bigg?boss.*hindi/i, 'bb-bangla': /bigg?boss.*bangla/i,
+      'bb-kannada': /bigg?boss.*kannada/i, 'bb-malayalam': /bigg?boss.*malayalam/i,
+      'bb-telugu': /bigg?boss.*telugu/i, 'bb-tamil': /bigg?boss.*tamil/i,
+    };
+
+    function findHotstarChannel(id) {
+      const exact = HOTSTAR_CHANNELS.find(c => c.id === id);
+      if (exact) return exact;
+      const pat = HOTSTAR_ALIASES[id];
+      return pat ? HOTSTAR_CHANNELS.find(c => pat.test(c.name.replace(/\s+/g, ''))) : null;
+    }
+
+    async function renderBiggBoss() {
+      if (_bbRendered) return;
+      await loadHotstar();
+      const grid = $('bbGrid');
+      grid.innerHTML = '';
+
+      /* Grouped, because one flat list of thirty-odd channels buries the six
+         anyone came for. */
+      const groups = [];
+      HOTSTAR_CHANNELS.forEach(ch => {
+        let g = groups.find(x => x.name === ch.group);
+        if (!g) { g = { name: ch.group, items: [] }; groups.push(g); }
+        g.items.push(ch);
+      });
+
+      groups.forEach(g => {
+        const head = document.createElement('div');
+        head.textContent = g.name;
+        head.style.cssText = 'grid-column:1/-1;font-size:.68rem;font-weight:700;letter-spacing:.14em;'
+          + 'text-transform:uppercase;color:rgba(255,255,255,.35);padding:10px 2px 2px';
+        grid.appendChild(head);
+
+        g.items.forEach(ch => {
+          const card = document.createElement('div');
+          card.className = 'ch-card';
+          card.innerHTML = `
+      <img class="ch-logo" src="${ch.logo || ''}" alt="${ch.name}"
+        onerror="this.style.display='none'">
+      <span class="ch-name">${ch.name}</span>
+      <span class="ch-tag">${ch.key ? '🔑 HD' : '🔴 24/7'}</span>`;
+          card.onclick = () => playHotstar(ch.id);
+          grid.appendChild(card);
+        });
+      });
+
+      if (hotstarTokenExpired()) {
+        const warn = document.createElement('div');
+        warn.style.cssText = 'grid-column:1/-1;margin:2px 0 6px;padding:10px 12px;border-radius:10px;'
+          + 'background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);'
+          + 'color:#fbbf24;font-size:.72rem;line-height:1.5';
+        warn.innerHTML = `⚠ The shared Hotstar token expired ${hotstarExpiryNote()}, `
+          + `so none of these will start until it is replaced.`;
+        grid.prepend(warn);
+      }
+
+      _bbRendered = true;
+      linkBar('bbTab', 'bb', 'Hotstar');
+    }
+
+    /* When the shared token stops being accepted.
+     *
+     * All thirty-four channels here are signed by the one hdntl, so they do
+     * not fail one at a time — the whole tab goes at once, and every channel
+     * then answers with the same opaque CDN error. Reading the expiry out of
+     * the token turns that into something a person can act on, and does it
+     * before a request rather than after a denial. */
+    function hotstarTokenExpiry() {
+      const m = /exp=(\d+)/.exec(BB_TOKEN || '');
+      return m ? Number(m[1]) : 0;
+    }
+    function hotstarTokenExpired() {
+      const exp = hotstarTokenExpiry();
+      return exp > 0 && exp * 1000 < Date.now();
+    }
+    function hotstarExpiryNote() {
+      const exp = hotstarTokenExpiry();
+      if (!exp) return '';
+      const mins = Math.round((Date.now() - exp * 1000) / 60000);
+      const hrs = Math.floor(mins / 60);
+      return hrs >= 1 ? `${hrs}h ${mins % 60}m ago` : `${mins}m ago`;
+    }
+
+    /* The unlock, in the shape the proxy takes. */
+    function hotstarProxy() {
+      return { base: IN_PROXY, cookie: BB_TOKEN, ref: BB_REFERER, ua: BB_UA };
+    }
+
+    function hotstarVia(base, url) {
+      return base + '?url=' + encodeURIComponent(url)
+        + '&cookie=' + encodeURIComponent(BB_TOKEN)
+        + '&ref=' + encodeURIComponent(BB_REFERER)
+        + '&ua=' + encodeURIComponent(BB_UA);
+    }
+
+    /* The local proxy reads its headers off the target's own query string. */
+    function hotstarTarget(url) {
+      return url + (url.includes('?') ? '&' : '?')
+        + 'cookie=' + encodeURIComponent(BB_TOKEN)
+        + '&referer=' + encodeURIComponent(BB_REFERER)
+        + '&origin=' + encodeURIComponent('https://www.hotstar.com')
+        + '&user-agent=' + encodeURIComponent(BB_UA);
+    }
+
+    async function playHotstar(id) {
+      await loadHotstar();
+      const ch = findHotstarChannel(id);
+      if (!ch) return;
+
+      if (hotstarTokenExpired()) {
+        errMsg.innerHTML =
+          `<b>${ch.name}</b> cannot start: the Hotstar token expired `
+          + `${hotstarExpiryNote()}.<br><br>`
+          + `Every channel on this tab is signed by the same one, so they are all `
+          + `out together — this is not a fault with this channel. A fresh playlist `
+          + `carries a new token; replace <code>BB_TOKEN</code> and they all return.`;
+        err.style.display = 'flex';
+        announceError();
+        return;
+      }
+      _playingChannelId = null;
+      _playingChannelLogo = ch.logo || null;
+
+      const isDash = /\.mpd(\?|$)/i.test(ch.url);
+      const drm = ch.key ? { keyId: ch.keyId, key: ch.key } : null;
+
+      /* DASH cannot go through a playlist-rewriting proxy the way HLS does —
+         a .mpd is never rewritten — so Shaka is handed the real URL plus a
+         proxy to route each request through. See loadShaka. */
+      const base = LOCAL_PROXY || IN_PROXY;
+      if (!base) { bbBlocked(ch.name, 0); return; }
+
+      if (isDash) {
+        return loadVideo(ch.url, ch.name, false,
+          { ...(drm || {}), proxy: { base, cookie: BB_TOKEN, ref: BB_REFERER, ua: BB_UA } });
+      }
+
+      const via = LOCAL_PROXY
+        ? viaLocalProxy(hotstarTarget(ch.url))
+        : hotstarVia(IN_PROXY, ch.url);
+      try {
+        const r = await fetch(via, { signal: AbortSignal.timeout(45000) });
+        if (r.ok) return loadVideo(via, ch.name);
+        bbBlocked(ch.name, r.status);
+      } catch { bbBlocked(ch.name, 0); }
+    }
+
+    function bbBlocked(name, status) {
+      errMsg.innerHTML =
+        `Hotstar refused the proxy for <b>${name}</b>` + (status ? ` (${status})` : '')
+        + `. Hotstar wants an Indian address that is not a hosted server, so this `
+        + `went out through a public proxy and none of those answered — they come `
+        + `and go.<br><br>Try again in a moment, or run `
+        + `<code>node fancode-local-proxy.js</code> and set `
+        + `<code>localStorage.fc_local_proxy = 'http://localhost:8787/proxy'</code>.`;
+      err.style.display = 'flex';
+    }
+
+    /* 'playing' rather than 'canplay': the first says frames are going up,
+       the second only that they could. */
+    vid.addEventListener('playing', announcePlaying);
+    vid.addEventListener('error', announceError);
+
+    // ══════════════════════════════════════════════════════════
+    // GATE
+    // ══════════════════════════════════════════════════════════
+    /* A password on a static page is a sign, not a lock — whatever the page is
+       told to compare against can be read out of it. So nothing is compared
+       here: the attempt goes to /api/gate, which holds a PBKDF2 hash of the
+       password and returns a signed token if it matches. The password itself
+       never reaches this file in any form, encrypted or otherwise.
+     
+       What this stops is someone opening the player and browsing the channel
+       lists. It is not a wall around the streams: the feeds and the proxy are
+       their own endpoints and answer whoever asks. Gating those too is a
+       separate change, and a larger one, because this site's own pages embed
+       the player for every visitor. */
+    const GATE_URL = location.protocol.startsWith('http') ? location.origin + '/api/gate' : '';
+    const GATE_KEY = 'player_gate_token';
+
+    /* Tabs that show our own lists. Custom URL is not one: someone pasting a
+       link of their own is not using anything this gate is protecting. */
+    const GATED_TABS = new Set(['live', 'bb', 'sony', 'fc', 'willow', 'iptv']);
+
+    function gateToken() {
+      try {
+        const raw = localStorage.getItem(GATE_KEY);
+        if (!raw) return null;
+        const t = JSON.parse(raw);
+        // Checked here only to know when to ask again; the server decides.
+        return (t && t.exp && t.exp * 1000 > Date.now()) ? t : null;
+      } catch { return null; }
+    }
+
+    let _gateOpen = null;   // null = unknown, true = no password configured
+
+    /* Is the gate even switched on? An unconfigured deployment answers "open",
+       so shipping this file does not lock anyone out of their own player. */
+    async function gateIsOpen() {
+      if (_gateOpen !== null) return _gateOpen;
+      if (!GATE_URL) { _gateOpen = true; return true; }    // file://, nothing to ask
+      try {
+        const r = await fetch(GATE_URL + '?token=', { method: 'GET' });
+        const j = await r.json();
+        _gateOpen = !!j.open;
+      } catch { _gateOpen = false; }
+      return _gateOpen;
+    }
+
+    function showGate(show) {
+      $('gateBox').style.display = show ? 'flex' : 'none';
+      ['customTab', 'liveTvTab', 'bbTab', 'sonyTab', 'fcTab', 'willowTab', 'iptvTab'].forEach(id => {
+        if (show && $(id)) $(id).style.display = 'none';
+      });
+      if (show) setTimeout(() => $('gateIn').focus(), 50);
+    }
+
+    async function submitGate() {
+      const pw = $('gateIn').value;
+      const msg = $('gateMsg');
+      if (!pw) return;
+      $('gateBtn').disabled = true; $('gateBtn').textContent = 'Checking…';
+      msg.style.display = 'none';
+      try {
+        const r = await fetch(GATE_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+        const j = await r.json();
+        if (j.ok && j.token) {
+          localStorage.setItem(GATE_KEY, JSON.stringify({ token: j.token, exp: j.exp }));
+          $('gateIn').value = '';
+          showGate(false);
+          if (_pendingTab) { const t = _pendingTab; _pendingTab = null; switchTab(t); }
+          return;
+        }
+        msg.textContent = j.error === 'wrong password' ? 'That password is not right.' : 'Could not check that right now.';
+        msg.style.display = 'block';
+      } catch {
+        msg.textContent = 'Could not reach the server.';
+        msg.style.display = 'block';
+      } finally {
+        $('gateBtn').disabled = false; $('gateBtn').textContent = 'Unlock';
+      }
+    }
+
+    let _pendingTab = null;
+
+    /* True when the tab may be shown. Asks once whether the gate is on at all,
+       so an open deployment never pauses. */
+    async function gatePasses(tab) {
+      /* A solo window exists to play one thing that was already chosen
+         elsewhere. Asking its viewer for a password would put a prompt inside
+         someone else's page for a list they are never shown. */
+      if (SOLO) return true;
+      if (!GATED_TABS.has(tab)) return true;
+      if (gateToken()) return true;
+      if (await gateIsOpen()) return true;
+      _pendingTab = tab;
+      showGate(true);
+      return false;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // TAB LINKS
+    // ══════════════════════════════════════════════════════════
+    /* A tab is addressable: ?tab=sony opens the SonyLiv list, and &id=… plays
+       one fixture from it. Unlike a bundle URL this holds no stream details,
+       so it does not rot when the tokens behind it are rotated — it names
+       what to show and the feed is read fresh on arrival. */
+    const TAB_KEYS = { custom: 'custom', tmdb: 'tmdb', live: 'live', sony: 'sony', fc: 'fc', bb: 'bb', willow: 'willow', prime: 'prime', iptv: 'iptv' };
+
+    /* Solo: this window exists to play one thing.
+     *
+     * Embedded in a page of its own, the launcher behind the video is not a
+     * useful place to end up — a viewer who came to watch one match should not
+     * be left looking at a URL box and a channel list belonging to a different
+     * site. So in solo mode anything that would show the launcher closes the
+     * window instead, by telling whoever framed it. */
+    const SOLO = new URLSearchParams(location.search).get('solo') === '1';
+    const FRAMED = window.self !== window.top;
+
+    /* Framed to play one thing, this player should never be seen.
+     *
+     * Its top bar, launcher and share controls belong to another site, and a
+     * viewer on AnchorHD watching a match has no use for them — they only
+     * appear for a moment while the feed resolves, which is long enough to
+     * read as someone else's page flashing up inside the one you are on.
+     * Hidden outright, and the page behind the video is black. */
+    if (SOLO) {
+      const s = document.createElement('style');
+      s.textContent =
+        '#topBar{display:none!important}' +
+        '#LS{display:none!important}' +
+        '#shareBtn{display:none!important}' +
+        '#sessionBadge{display:none!important}' +
+        '#bundleToggle{display:none!important}' +
+        '#backBtn{display:none!important}' +
+        'html,body{background:#000!important}';
+      document.head.appendChild(s);
+    }
+
+    /* The host page covers this frame until the picture is actually up, so it
+       needs telling. Fired on the video itself rather than on load(), because
+       a manifest arriving is not the same as something to look at.
+
+       Not gated on solo: a frame is covered whoever framed it, and gating this
+       left the cover up for good on any window opened without it.
+
+       Failure is announced too. A cover that only lifts on success hides the
+       reason when there is none, which is the one moment the message behind it
+       is worth reading. */
+    function announce(type) {
+      if (!FRAMED) return;
+      try { window.parent.postMessage({ type }, '*'); } catch { /* cross-origin */ }
+    }
+    function announcePlaying() { announce('anchor:playing'); }
+    function announceError() { announce('anchor:error'); }
+
+    function showLauncher() {
+      if (SOLO) {
+        destroyPlayers();
+        if (FRAMED) { try { window.parent.postMessage({ type: 'anchor:close' }, '*'); } catch { /* cross-origin */ } }
+        return;
+      }
+      LS.style.display = 'flex';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('gateBtn');
+      const inp = document.getElementById('gateIn');
+      if (btn) btn.addEventListener('click', submitGate);
+      if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitGate(); });
+    });
+
+    /* Puts a copy-link control under a tab's list. Built rather than written
+       into the markup five times, so every tab gets the same thing. */
+    function linkBar(containerId, tabKey, label) {
+      const host = $(containerId);
+      if (!host || host.querySelector('.tab-link-bar')) return;
+      const bar = document.createElement('div');
+      bar.className = 'tab-link-bar';
+      bar.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;'
+        + 'padding:8px 6px;font-size:.72rem;color:rgba(255,255,255,.4)';
+      const btn = document.createElement('button');
+      btn.textContent = '🔗 Copy link to ' + label;
+      btn.style.cssText = 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);'
+        + 'color:rgba(255,255,255,.75);border-radius:8px;padding:6px 12px;cursor:pointer;'
+        + "font-size:.72rem;font-family:'Inter',sans-serif";
+      btn.onclick = () => {
+        const url = tabLink(tabKey);
+        navigator.clipboard.writeText(url)
+          .then(() => { btn.textContent = '✅ Copied'; setTimeout(() => { btn.textContent = '🔗 Copy link to ' + label; }, 1800); })
+          .catch(() => showToast(url, 6000));
+      };
+      bar.appendChild(btn);
+      host.appendChild(bar);
+    }
+
+    /* One fixture, live or not.
+       An upcoming fixture is not signed until it starts, so it gets no click
+       — a link that can only 403 explains nothing to whoever pressed it. */
+    function fixtureCard(m, live, onPlay) {
+      const card = document.createElement('div');
+      card.className = 'ch-card';
+      const when = (m.start || '').trim();
+      card.innerHTML = `
+      <img class="ch-logo" src="${m.poster || m.logo || ''}" alt="${m.name}"
+        style="width:100%;height:74px;object-fit:cover;border-radius:6px"
+        onerror="this.style.display='none'">
+      <span class="ch-name">${m.name}</span>
+      <span class="ch-tag">${live ? '🔴' : '🕒'} ${live ? m.category : (when || 'Upcoming')}${m.lang ? ' · ' + m.lang : ''}</span>`;
+      if (onPlay) card.onclick = onPlay;
+      else { card.style.opacity = '.55'; card.style.cursor = 'default'; }
+      return card;
+    }
+
+    function fixtureNote(liveCount, soonCount, updated) {
+      const bits = [];
+      if (liveCount) bits.push(liveCount + ' live now');
+      if (soonCount) bits.push(soonCount + ' upcoming');
+      if (!bits.length) bits.push('nothing scheduled');
+      if (updated) bits.push('feed updated ' + updated);
+      return bits.join(' · ');
+    }
+
+    function tabLink(tabKey, id) {
+      const base = location.origin + location.pathname;
+      return base + '?tab=' + encodeURIComponent(tabKey)
+        + (id ? '&id=' + encodeURIComponent(id) : '');
+    }
+
+    /* Wait for the tab's list, then play the item named. Each loader is
+       idempotent, so this is safe whether or not the tab was already open. */
+    async function openTabItem(tabKey, id) {
+      if (tabKey === 'sony') {
+        await loadSony();
+        const m = (_sonyList || []).find(x => String(x.id) === String(id));
+        if (m) return playSony(m);
+      } else if (tabKey === 'fc') {
+        await loadFc();
+        const m = (_fcList || []).find(x => String(x.id) === String(id));
+        if (m) return playFc(m);
+      } else if (tabKey === 'bb') {
+        await renderBiggBoss();
+        if (findHotstarChannel(id)) return playHotstar(id);
+      } else if (tabKey === 'willow') {
+        await loadWillow();
+        const m = (_willowList || []).find(x => String(x.id) === String(id));
+        if (m) return playWillow(m.id);
+      } else if (tabKey === 'prime') {
+        await loadPrime();
+        return;   // a schedule has nothing to start
+      } else if (tabKey === 'live') {
+        const map = await getChMap();
+        const ch = map[id];
+        if (ch) {
+          _playingChannelId = ch.id; _playingChannelLogo = ch.logo || null;
+          return loadVideo(ch.url, ch.name, false, { keyId: ch.keyId, key: ch.key, cookie: ch.cookie });
+        }
+      }
+      spin.classList.remove('on');
+      announceError();
+      showToast('That item is no longer listed — showing the tab instead', 3500);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // WILLOW CRICKET (schedule)
+    // ══════════════════════════════════════════════════════════
+    let _willowLoaded = false, _willowList = null;
+
+    async function loadWillow(force) {
+      if (_willowLoaded && !force) return;
+      $('willowLoading').style.display = 'flex';
+      $('willowErr').style.display = 'none';
+      $('willowGrid').style.display = 'none';
+      try {
+        const r = await fetch(NEW_JSON_URL + '?feed=willow&_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const body = await r.json();
+        const live = body.live || [];
+        const soon = body.upcoming || [];
+        if (!live.length && !soon.length) throw new Error('nothing scheduled');
+        renderWillow(live, soon, r.headers.get('X-Feed-Updated'));
+        _willowLoaded = true;
+      } catch (e) {
+        $('willowLoading').style.display = 'none';
+        $('willowErr').style.display = 'block';
+        console.error('loadWillow:', e);
+      }
+    }
+
+    function renderWillow(live, soon, updated) {
+      _willowList = [...live, ...soon];
+      const grid = $('willowGrid');
+      grid.innerHTML = '';
+      _willowList.forEach((m) => {
+        const playable = !!m.url;
+        const card = document.createElement('div');
+        card.className = 'ch-card';
+        card.innerHTML = `
+      <img class="ch-logo" src="${m.poster || ''}" alt="${m.name}"
+        style="width:100%;height:74px;object-fit:cover;border-radius:6px"
+        onerror="this.style.display='none'">
+      <span class="ch-name">${m.name}</span>
+      <span class="ch-tag">${playable ? '🔴 ' + (m.event || 'Live now') : '🗓 ' + (m.start || 'Scheduled')}</span>`;
+        if (playable) {
+          card.onclick = () => playWillow(m.id);       // ← plays now, doesn't redirect
+        } else {
+          card.style.opacity = '.55';
+          card.style.cursor = 'default';
+        }
+        grid.appendChild(card);
+      });
+      $('willowLoading').style.display = 'none';
+      $('willowGrid').style.display = 'grid';
+      $('willowNote').textContent = fixtureNote(live.length, soon.length, updated);
+      linkBar('willowTab', 'willow', 'Willow');
+    }
+
+    async function playWillow(id) {
+      const m = (_willowList || []).find(x => String(x.id) === String(id));
+      if (!m || !m.url) {
+        spin.classList.remove('on');
+        showToast('No stream is available for this fixture yet.', 4000);
+        announceError();
+        return;
+      }
+      _playingChannelId = null;
+      _playingChannelLogo = m.poster || null;
+      const drm = (m.keyId && m.key) ? { keyId: m.keyId, key: m.key } : {};
+
+      // Prefer direct CORS-enabled CDN (e.g. Cloudfront on bia-cf.live.pv-cdn.net)
+      let streamUrl = m.url;
+      if (m.servers && m.servers.length) {
+        const direct = m.servers.find(s => primeDirect(s.url));
+        if (direct) streamUrl = direct.url;
+      }
+
+      if (primeDirect(streamUrl)) return loadVideo(streamUrl, m.name, false, drm);
+      const base = LOCAL_PROXY || IN_PROXY || NEW_JSON_URL;
+      return loadVideo(streamUrl, m.name, false, { ...drm, proxy: { base } });
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // PRIME VIDEO FREE SPORTS (own tab)
+    // ══════════════════════════════════════════════════════════
+    /* Amazon's free live sport. The worker reads the fixtures feed on every
+       request and hands back only what is on air with a stream.
+
+       Every one of these is DASH under ClearKey, so they go to Shaka with the
+       key pair the feed carries — the same road the Hotstar DASH channels take.
+
+       Whether one needs the proxy depends on the CDN. Amazon's edges answer 400
+       to any request carrying an Origin header from somewhere else, and a
+       browser puts one on every cross-origin fetch it makes — so most of these
+       hosts cannot be read from a page at all. The exception is measured, not
+       assumed: bia-cf.live.pv-cdn.net serves a page directly, so that one plays
+       without the detour and the rest go through the worker. */
+    const PRIME_DIRECT_HOSTS = ['bia-cf.live.pv-cdn.net'];
+
+    function primeDirect(url) {
+      try {
+        const h = new URL(url).hostname;
+        return PRIME_DIRECT_HOSTS.some(d => h === d || h.endsWith('.' + d));
+      } catch { return false; }
+    }
+
+    let _primeLoaded = false, _primeList = null;
+
+    async function loadPrime(force) {
+      if (_primeLoaded && !force) return;
+      $('primeLoading').style.display = 'flex';
+      $('primeErr').style.display = 'none';
+      $('primeGrid').style.display = 'none';
+      try {
+        const r = await fetch(NEW_JSON_URL + '?feed=prime&_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const body = await r.json();
+        const live = body.live || [];
+        const soon = body.upcoming || [];
+        if (!live.length && !soon.length) throw new Error('nothing on');
+        _primeList = [...live, ...soon];
+        renderPrime(live, soon, r.headers.get('X-Feed-Updated'));
+        _primeLoaded = true;
+      } catch (e) {
+        $('primeLoading').style.display = 'none';
+        $('primeErr').style.display = 'block';
+        console.error('loadPrime:', e);
+      }
+    }
+
+    function renderPrime(live, soon, updated) {
+      const grid = $('primeGrid');
+      grid.innerHTML = '';
+      [...live, ...soon].forEach((m) => {
+        const playable = !!m.url;
+        const card = document.createElement('div');
+        card.className = 'ch-card';
+        card.innerHTML = `
+      <img class="ch-logo" src="${m.poster || ''}" alt="${m.name}"
+        style="width:100%;height:74px;object-fit:cover;border-radius:6px"
+        onerror="this.style.display='none'">
+      <span class="ch-name">${m.name}</span>
+      <span class="ch-tag">${playable ? '🔴 ' + (m.event || 'Live now') : '🗓 ' + (m.start || 'Scheduled')}</span>`;
+        if (playable) {
+          card.onclick = () => playPrime(m.id);
+        } else if (m.link) {
+          card.onclick = () => window.open(m.link, '_blank', 'noopener');
+        } else {
+          card.style.opacity = '.55';
+          card.style.cursor = 'default';
+        }
+        grid.appendChild(card);
+      });
+      $('primeLoading').style.display = 'none';
+      $('primeGrid').style.display = 'grid';
+      $('primeNote').textContent = (live.length + ' live')
+        + (soon.length ? ' · ' + soon.length + ' upcoming' : '')
+        + (updated ? ' · feed updated ' + updated : '');
+      linkBar('primeTab', 'prime', 'Prime');
+    }
+
+    async function playPrime(id) {
+      const m = (_primeList || []).find(x => x.id === id);
+      if (!m || !m.url) return;
+
+      _playingChannelId = null;
+      _playingChannelLogo = m.poster || null;
+
+      const drm = (m.keyId && m.key) ? { keyId: m.keyId, key: m.key } : {};
+
+      // Prefer direct CORS-enabled CDN (e.g. Cloudfront on bia-cf.live.pv-cdn.net)
+      let streamUrl = m.url;
+      if (m.servers && m.servers.length) {
+        const direct = m.servers.find(s => primeDirect(s.url));
+        if (direct) streamUrl = direct.url;
+      }
+
+      if (primeDirect(streamUrl)) {
+        return loadVideo(streamUrl, m.name, false, drm);
+      }
+
+      /* No ref or ua on the proxy here, deliberately. The worker sends the
+         target its own origin back when it is given no referer to derive one
+         from, and that is the only Origin these CDNs accept. */
+      const base = LOCAL_PROXY || IN_PROXY || NEW_JSON_URL;
+      return loadVideo(streamUrl, m.name, false, { ...drm, proxy: { base } });
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // FANCODE LIVE (own tab)
+    // ══════════════════════════════════════════════════════════
+    /* The worker reads the fixtures feed and returns only what is on air with
+       a playable URL. FanCode's edge is the one this player's local proxy was
+       written for: no CORS, and datacenter addresses turned away. */
+    let _fcLoaded = false, _fcList = null;
+
+    async function loadFc(force) {
+      if (_fcLoaded && !force) return;
+      $('fcLoading').style.display = 'flex';
+      $('fcErr').style.display = 'none';
+      $('fcGrid').style.display = 'none';
+      try {
+        const r = await fetch(NEW_JSON_URL + '?feed=fancode&_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const body = await r.json();
+        // The feed grew an `upcoming` list; older shapes were a bare array.
+        const live = Array.isArray(body) ? body : (body.live || []);
+        const soon = Array.isArray(body) ? [] : (body.upcoming || []);
+        if (!live.length && !soon.length) throw new Error('nothing scheduled');
+        renderFc(live, soon, r.headers.get('X-Feed-Updated'));
+        _fcLoaded = true;
+      } catch (e) {
+        $('fcLoading').style.display = 'none';
+        $('fcErr').style.display = 'block';
+        console.error('loadFc:', e);
+      }
+    }
+
+    function renderFc(list, soon, updated) {
+      _fcList = list;
+      const grid = $('fcGrid');
+      grid.innerHTML = '';
+      list.forEach(m => grid.appendChild(fixtureCard(m, true, () => playFc(m))));
+      soon.forEach(m => grid.appendChild(fixtureCard(m, false, null)));
+      $('fcLoading').style.display = 'none';
+      $('fcGrid').style.display = 'grid';
+      $('fcNote').textContent = fixtureNote(list.length, soon.length, updated);
+      linkBar('fcTab', 'fc', 'FanCode');
+    }
+
+    async function playFc(m) {
+      _playingChannelId = null;
+      _playingChannelLogo = m.logo || null;
+
+      /* The feed names the user-agent its edge expects, so pass it on rather
+         than letting the proxy guess. */
+      const target = m.ua
+        ? m.url + (m.url.includes('?') ? '&' : '?') + 'user-agent=' + encodeURIComponent(m.ua)
+        : m.url;
+
+      if (LOCAL_PROXY) return loadVideo(viaLocalProxy(target), m.name);
+
+      /* Then the Mumbai function, which FanCode accepts. Then the worker, so
+         a viewer already on an Indian connection needs neither configured. */
+      const candidates = [];
+      if (IN_PROXY) {
+        candidates.push(IN_PROXY + '?url=' + encodeURIComponent(m.url)
+          + '&ref=' + encodeURIComponent('https://fancode.com/')
+          + (m.ua ? '&ua=' + encodeURIComponent(m.ua) : ''));
+      }
+      candidates.push(viaWorker(m.url, { ua: m.ua, ref: 'https://fancode.com/' }));
+
+      let last = 0;
+      for (const via of candidates) {
+        try {
+          const r = await fetch(via, { signal: AbortSignal.timeout(12000) });
+          if (r.ok) return loadVideo(via, m.name);
+          last = r.status;
+        } catch { last = 0; }
+      }
+      fcBlocked(m.name, last);
+    }
+
+    function fcBlocked(name, status) {
+      errMsg.innerHTML =
+        `FanCode refused the proxy for <b>${name}</b>` + (status ? ` (${status})` : '')
+        + `. The match is live — FanCode serves India only, and this request left `
+        + `from somewhere else.<br><br>`
+        + `This player's own <code>/api/live-proxy</code> runs in Mumbai and should `
+        + `have handled it, so either it is not deployed or its region is not `
+        + `pinned to <code>bom1</code>.<br><br>`
+        + `Failing that, run <code>node fancode-local-proxy.js</code> locally and set `
+        + `<code>localStorage.fc_local_proxy = 'http://localhost:8787/proxy'</code>.`;
+      err.style.display = 'flex';
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // SONYLIV LIVE (own tab)
+    // ══════════════════════════════════════════════════════════
+    /* Live sport on SonyLiv. The worker reads the fixtures feed and hands back
+       only what is on air with a playable URL.
+
+       Signed in the query (?hdnea=, acl=/*) and needing no headers at all — a
+       bare request returns 200. What it does not send is CORS, so the browser
+       cannot fetch it directly and something has to stand in the middle. */
+    let _sonyLoaded = false, _sonyList = null;
+
+    async function loadSony(force) {
+      if (_sonyLoaded && !force) return;
+      $('sonyLoading').style.display = 'flex';
+      $('sonyErr').style.display = 'none';
+      $('sonyGrid').style.display = 'none';
+      try {
+        const r = await fetch(NEW_JSON_URL + '?feed=sonyliv&_=' + Date.now());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const body = await r.json();
+        // The feed grew an `upcoming` list; older shapes were a bare array.
+        const live = Array.isArray(body) ? body : (body.live || []);
+        const soon = Array.isArray(body) ? [] : (body.upcoming || []);
+        if (!live.length && !soon.length) throw new Error('nothing scheduled');
+        renderSony(live, soon, r.headers.get('X-Feed-Updated'));
+        _sonyLoaded = true;
+      } catch (e) {
+        $('sonyLoading').style.display = 'none';
+        $('sonyErr').style.display = 'block';
+        console.error('loadSony:', e);
+      }
+    }
+
+    function renderSony(list, soon, updated) {
+      _sonyList = list;
+      const grid = $('sonyGrid');
+      grid.innerHTML = '';
+      list.forEach(m => grid.appendChild(fixtureCard(m, true, () => playSony(m))));
+      soon.forEach(m => grid.appendChild(fixtureCard(m, false, null)));
+      $('sonyLoading').style.display = 'none';
+      $('sonyGrid').style.display = 'grid';
+      $('sonyNote').textContent = fixtureNote(list.length, soon.length, updated);
+      linkBar('sonyTab', 'sony', 'SonyLiv');
+    }
+
+    async function playSony(m) {
+      _playingChannelId = null;
+      _playingChannelLogo = m.logo || null;
+
+      // Local proxy first where there is one — see the note in playHotstar.
+      if (LOCAL_PROXY) return loadVideo(viaLocalProxy(m.url), m.name);
+
+      /* Then our own function, which forwards through an Indian consumer
+         network for the hosts that insist on one. It searches a public proxy
+         list on the way, so allow it longer than a plain fetch. */
+      const tries = [];
+      if (IN_PROXY) tries.push(IN_PROXY + '?url=' + encodeURIComponent(m.url));
+      tries.push(viaWorker(m.url));
+
+      let last = 0;
+      for (const via of tries) {
+        try {
+          const r = await fetch(via, { signal: AbortSignal.timeout(45000) });
+          if (r.ok) return loadVideo(via, m.name);
+          last = r.status;
+        } catch { last = 0; }
+      }
+      sonyBlocked(m.name, last);
+    }
+
+    function sonyBlocked(name, status) {
+      errMsg.innerHTML =
+        `SonyLiv refused the proxy for <b>${name}</b>` + (status ? ` (${status})` : '')
+        + `. The match is live and the link is signed. SonyLiv wants an Indian `
+        + `address that is not a hosted server, so this went out through a public `
+        + `proxy and none of those answered either — they come and go.<br><br>`
+        + `Try again in a moment, or for something that does not depend on strangers: `
+        + `Run <code>node fancode-local-proxy.js</code> on your own machine, then set `
+        + `<code>localStorage.fc_local_proxy = 'http://localhost:8787/proxy'</code> and reload.`;
+      err.style.display = 'flex';
+    }
 
     // ══════════════════════════════════════════════════════════
     // CHANNEL LOADER (Live TV tab)
@@ -2773,6 +4138,7 @@
     }
 
     function renderChannelGrid() {
+      linkBar('liveTvTab', 'live', 'Live TV');
       const grid = $('chGrid');
       grid.innerHTML = '';
       channelsData.forEach((ch, i) => {
@@ -2783,7 +4149,11 @@
         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 44 44%22><rect width=%2244%22 height=%2244%22 fill=%22%231a1a1a%22/><text x=%2222%22 y=%2228%22 text-anchor=%22middle%22 fill=%22%23444%22 font-size=%2214%22>📺</text></svg>'">
       <span class="ch-name">${ch.name}</span>
       <span class="ch-tag">🔒 HD</span>`;
-        card.onclick = () => selectChannel(i);
+        /* One click plays, as every other tab does. It used to only select,
+           leaving the actual play on a button below a scrolling grid — so on
+           a long channel list the button was off-screen and the card looked
+           broken. Selection still happens, for the highlight. */
+        card.onclick = () => { selectChannel(i); playSelectedLive(); };
         grid.appendChild(card);
       });
       grid.style.display = 'grid';
@@ -2825,7 +4195,7 @@
 
         if (decoded.ids && decoded.ids.length > 0) {
           showToast('⏳ Loading bundle…', 3000);
-          LS.style.display = 'flex';
+          showLauncher();
           let map;
           try { map = await getChMap(); }
           catch (e) { throw new Error('Could not fetch channel feed: ' + e.message); }
@@ -2842,7 +4212,7 @@
 
         if (decoded.channels && decoded.channels.length > 0) {
           showToast('⏳ Loading bundle…', 2000);
-          LS.style.display = 'flex';
+          showLauncher();
           let map = {};
           try { map = await getChMap(); } catch { }
 
@@ -2886,7 +4256,7 @@
       $('chUpdated').innerHTML = `📦 Bundle: <b>${bundle.title || 'Channels'}</b> — ${channelsData.length} channels`;
       $('chUpdated').style.display = 'block';
       $('tabLive').textContent = `📺 ${bundle.title || 'Bundle'}`;
-      LS.style.display = 'flex';
+      showLauncher();
     }
 
     // ══════════════════════════════════════════════════════════
@@ -3017,8 +4387,8 @@
     // ══════════════════════════════════════════════════════════
     // LANGUAGE
     // ══════════════════════════════════════════════════════════
-    const LM = { hin: 'Hindi', hi: 'Hindi', tam: 'Tamil', ta: 'Tamil', tel: 'Telugu', te: 'Telugu', mal: 'Malayalam', ml: 'Malayalam', kan: 'Kannada', kn: 'Kannada', ben: 'Bengali', bn: 'Bengali', eng: 'English', en: 'English', english: 'English', ara: 'Arabic', fra: 'French', deu: 'German', spa: 'Spanish', por: 'Portuguese', rus: 'Russian', zho: 'Chinese', jpn: 'Japanese', kor: 'Korean', tur: 'Turkish', urd: 'Urdu' };
-    const LF = { Hindi: '🇮🇳', Tamil: '🇮🇳', Telugu: '🇮🇳', Malayalam: '🇮🇳', Kannada: '🇮🇳', Bengali: '🇧🇩', English: '🇬🇧', Arabic: '🇸🇦', French: '🇫🇷', German: '🇩🇪', Spanish: '🇪🇸', Portuguese: '🇵🇹', Russian: '🇷🇺', Chinese: '🇨🇳', Japanese: '🇯🇵', Korean: '🇰🇷', Turkish: '🇹🇷', Urdu: '🇵🇰' };
+    const LM = { hin: 'Hindi', hi: 'Hindi', tam: 'Tamil', ta: 'Tamil', tel: 'Telugu', te: 'Telugu', mal: 'Malayalam', ml: 'Malayalam', kan: 'Kannada', kn: 'Kannada', ben: 'Bengali', bn: 'Bengali', mar: 'Marathi', mr: 'Marathi', guj: 'Gujarati', gu: 'Gujarati', pan: 'Punjabi', pa: 'Punjabi', eng: 'English', en: 'English', english: 'English', ara: 'Arabic', fra: 'French', deu: 'German', spa: 'Spanish', por: 'Portuguese', rus: 'Russian', zho: 'Chinese', jpn: 'Japanese', kor: 'Korean', tur: 'Turkish', urd: 'Urdu' };
+    const LF = { Hindi: '🇮🇳', Tamil: '🇮🇳', Telugu: '🇮🇳', Malayalam: '🇮🇳', Kannada: '🇮🇳', Bengali: '🇧🇩', Marathi: '🇮🇳', Gujarati: '🇮🇳', Punjabi: '🇮🇳', English: '🇬🇧', Arabic: '🇸🇦', French: '🇫🇷', German: '🇩🇪', Spanish: '🇪🇸', Portuguese: '🇵🇹', Russian: '🇷🇺', Chinese: '🇨🇳', Japanese: '🇯🇵', Korean: '🇰🇷', Turkish: '🇹🇷', Urdu: '🇵🇰' };
     function normLang(r) { const k = (r || '').trim().toLowerCase().replace(/[^a-z]/g, ''); return LM[k] || r.trim() || 'Track' }
     function langFlag(n) { return LF[n] || '🔊' }
 
@@ -3029,24 +4399,44 @@
       if (hlsInst) return hlsInst.levels && hlsInst.levels.length > 0 && vid.duration === Infinity;
       return vid.duration === Infinity || vid.duration > 86400;
     }
+    /* Where live actually is.
+     
+       This used to answer with hls.js's liveSyncPosition, which is not the
+       edge — it is the spot hls.js aims to sit at, a few segments behind it.
+       Measuring the delay against that compares where we are with where we
+       meant to be, so it read about zero however far back we really were, and
+       the badge said LIVE while a minute of the match had already happened.
+       The end of the seekable range is the honest answer, and both engines
+       report it. */
     function getLiveEdge() {
-      if (shakaInst) {
-        const now = Date.now();
-        if (now - _edgeTS > 2000) { const sk = vid.seekable; if (sk && sk.length > 0) { _edgeCache = sk.end(sk.length - 1); _edgeTS = now; } }
-        return _edgeCache || 0;
+      const now = Date.now();
+      if (now - _edgeTS > 1000) {
+        const sk = vid.seekable;
+        if (sk && sk.length > 0) { _edgeCache = sk.end(sk.length - 1); _edgeTS = now; }
       }
-      if (hlsInst && hlsInst.liveSyncPosition) return hlsInst.liveSyncPosition;
+      if (_edgeCache) return _edgeCache;
       const sk = vid.seekable;
       if (sk && sk.length > 0) return sk.end(sk.length - 1);
-      return vid.duration || 0;
+      return vid.duration === Infinity ? 0 : (vid.duration || 0);
     }
+
+    /* Where to land when someone asks to go live. Not the edge itself — the
+       last segment is still being written, and seeking onto it stalls. hls.js
+       already holds a view on how much room it needs; for DASH, three seconds
+       is about one segment. */
+    function getSyncTarget() {
+      if (hlsInst && hlsInst.liveSyncPosition) return hlsInst.liveSyncPosition;
+      const e = getLiveEdge();
+      return e > 4 ? e - 3 : e;
+    }
+
     function getLiveDelay() { const e = getLiveEdge(); return e ? Math.max(0, e - vid.currentTime) : 0 }
 
     function jumpToLive() {
       if (!isLiveStream || _jumping) return;
       _jumping = true;
-      const edge = getLiveEdge();
-      if (edge > 2) vid.currentTime = edge - 1;
+      const target = getSyncTarget();
+      if (target > 1) vid.currentTime = target;
       vid.playbackRate = 1;
       if (vid.paused) vid.play().catch(() => { });
       showToast('▶ Jumped to live');
@@ -3225,10 +4615,64 @@
         abr: { enabled: true },
       };
       if (drm && drm.keyId && drm.key) {
-        cfg.drm = { clearKeys: { [drm.keyId.toLowerCase()]: drm.key.toLowerCase() } };
+        const kid = String(drm.keyId).replace(/-/g, '').toLowerCase().trim();
+        const key = String(drm.key).replace(/-/g, '').toLowerCase().trim();
+        cfg.drm = { clearKeys: { [kid]: key } };
         drmBadge.style.display = 'flex';
       }
       shakaInst.configure(cfg);
+
+      /* A DASH manifest asks to be played a fixed distance behind the edge —
+         suggestedPresentationDelay — and these set it to most of a minute.
+         Shaka honours it, so seekable.end is already that far back and the
+         seek below, which looks like it lands two seconds behind live, really
+         lands a minute behind it.
+       
+         Ignoring it moves seekable.end up to the real edge and leaves the
+         distance to us. Applied on its own so that a build of Shaka without
+         these keys logs a warning and carries on, rather than taking the whole
+         configuration down with it. */
+      try {
+        shakaInst.configure({
+          manifest: {
+            defaultPresentationDelay: 6,
+            dash: { ignoreSuggestedPresentationDelay: true },
+          },
+        });
+      } catch (e) { console.warn('live-edge config not applied:', e.message); }
+
+      /* DASH through a proxy needs every request rewritten, not just the
+         manifest. Shaka resolves a segment against the manifest's own URL, and
+         that URL is the proxy's — so left alone it asks the proxy for a path
+         the proxy knows nothing about. Mapping each URI as it goes out keeps
+         the real target in ?url= where the proxy expects it. HLS does not need
+         this: the proxy rewrites those playlists line by line on the way out,
+         and there is no equivalent pass for a .mpd. */
+      if (drm && drm.proxy) {
+        const P = drm.proxy;
+        shakaInst.getNetworkingEngine().registerRequestFilter((type, request) => {
+          /* License server requests must NOT be proxied — they need to go
+             direct (ClearKey handles them internally; Widevine/PlayReady
+             would reject a proxied request). */
+          const LICENSE = shaka.net.NetworkingEngine.RequestType.LICENSE;
+          if (type === LICENSE) return;
+
+          request.uris = request.uris.map(uri => {
+            if (uri.startsWith(P.base)) return uri;      // already ours
+            if (!/^https?:/i.test(uri)) return uri;       // blob:, data:
+            /* Anything already on our own origin is a resolution that went
+               wrong upstream, not a stream URL — wrapping it would ask the
+               proxy to fetch the proxy. The manifest's BaseURL is what stops
+               this arising; this is the guard for when it does. */
+            try { if (new URL(uri).origin === location.origin) return uri; } catch { /* not parseable */ }
+            return P.base + '?url=' + encodeURIComponent(uri)
+              + (P.cookie ? '&cookie=' + encodeURIComponent(P.cookie) : '')
+              + (P.ref ? '&ref=' + encodeURIComponent(P.ref) : '')
+              + (P.ua ? '&ua=' + encodeURIComponent(P.ua) : '');
+          });
+        });
+      }
+
       if (drm && drm.cookie) {
         const rawVal = drm.cookie.startsWith('__hdnea__=') ? drm.cookie.slice('__hdnea__='.length) : drm.cookie;
         shakaInst.getNetworkingEngine().registerRequestFilter((type, request) => {
@@ -3241,9 +4685,15 @@
       }
       shakaInst.addEventListener('error', ev => {
         const ec = ev.detail;
+        // Ignore non-critical / recoverable errors (e.g. temporary buffer operations that Shaka automatically retries)
+        if (ec && ec.severity !== shaka.util.Error.Severity.CRITICAL) {
+          console.warn('Shaka non-critical warning:', ec);
+          return;
+        }
         spin.classList.remove('on');
         const msg = `Error ${ec.code}${ec.data && ec.data[0] ? ' — ' + String(ec.data[0]).slice(0, 80) : ''}`;
         errMsg.textContent = msg; err.style.display = 'flex'; showToast('⚠ ' + msg, 3000);
+        announceError();
       });
       shakaInst.addEventListener('streaming', () => {
         if (shakaInst.isLive()) {
@@ -3260,7 +4710,13 @@
         if (live) {
           isLiveStream = true;
           const sk = vid.seekable;
-          if (sk && sk.length > 0) { const edge = sk.end(sk.length - 1); _edgeCache = edge; _edgeTS = Date.now(); vid.currentTime = Math.max(0, edge - 2); }
+          /* Far enough back to have something buffered, near enough to be
+             live. Two seconds left nothing in hand and stalled on the first
+             slow segment; the proxy in front of these adds a little. */
+          if (sk && sk.length > 0) {
+            const edge = sk.end(sk.length - 1); _edgeCache = edge; _edgeTS = Date.now();
+            vid.currentTime = Math.max(sk.start(0), edge - 4);
+          }
           updateLiveBadge(); showToast('🔴 Live — ' + title, 2000);
           const _ep = setInterval(() => {
             if (!shakaInst) { clearInterval(_ep); return }
@@ -3328,6 +4784,20 @@
     // Run that script on your machine, then set this — via ?lp=http://localhost:8787/proxy
     // (persisted), or localStorage 'fc_local_proxy'. Empty = mobile-only native path.
     let LOCAL_PROXY = '';
+
+    /* A proxy that runs in India but on a hosted network — the Vercel function
+       at /api/live-proxy, pinned to the bom1 (Mumbai) region.
+
+       It fixes FanCode and only FanCode. That block is purely geographic, so
+       any Indian address clears it. SonyLiv and Hotstar refuse datacenter
+       networks on top of the geography, and no hosted proxy gets past that —
+       measured on five providers without exception. Those two need a
+       residential address, which is what LOCAL_PROXY is for.
+
+       It ships with this player, so when the page is served over http(s) it is
+       simply next door and needs no setting. Opened as a file:// there is no
+       origin to call, and localStorage.in_proxy can name one elsewhere. */
+    let IN_PROXY = '';
     try {
       const _lp = new URLSearchParams(location.search).get('lp');
       if (_lp !== null) {
@@ -3336,6 +4806,8 @@
         else { localStorage.setItem('fc_local_proxy', _lp); }
       }
       LOCAL_PROXY = localStorage.getItem('fc_local_proxy') || '';
+      IN_PROXY = localStorage.getItem('in_proxy')
+        || (location.protocol.startsWith('http') ? location.origin + '/api/live-proxy' : '');
     } catch { }
     function viaLocalProxy(url) { return LOCAL_PROXY + '?url=' + encodeURIComponent(url); }
     function isLocalUrl(u) { return /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(u); }
@@ -3395,146 +4867,227 @@
             bufferingGoal: 10, rebufferingGoal: 2, bufferBehind: 30,
             retryParameters: { maxAttempts: 1, baseDelay: 200, backoffFactor: 1, timeout: 6000 }
           },
-          manifest: { retryParameters: { maxAttempts: 1, baseDelay: 200, backoffFactor: 1, timeout: 6000 } },
-          abr: { enabled: true },
-        });
-        shakaInst.addEventListener('error', ev => { console.warn('Shaka error', ev.detail); });
-        shakaInst.addEventListener('streaming', () => {
-          if (shakaInst && shakaInst.isLive()) { isLiveStream = true; updateLiveBadge(); timeLbl.textContent = 'LIVE'; }
-        });
-        await shakaInst.load(url);
-        spin.classList.remove('on');
-        vid.play().catch(() => { vid.muted = true; vid.play().catch(() => { }); });
-        if (shakaInst.isLive()) {
-          isLiveStream = true;
-          const sk = vid.seekable;
-          if (sk && sk.length > 0) { const edge = sk.end(sk.length - 1); _edgeCache = edge; _edgeTS = Date.now(); vid.currentTime = Math.max(0, edge - 2); }
-          updateLiveBadge(); showToast('🔴 Live', 1500);
-        }
-        buildShakaQual();
-      } catch (e) {
-        // Mirror the reference: on Shaka failure, drop to native <video src>.
-        console.warn('Shaka HLS failed, trying native:', e);
-        try { if (shakaInst) { shakaInst.destroy(); shakaInst = null; } } catch { }
-        vid.src = url;
-        vid.addEventListener('loadedmetadata', () => {
-          spin.classList.remove('on');
-          isLiveStream = detectLive();
-          if (isLiveStream) { const ed = getLiveEdge(); if (ed > 0) vid.currentTime = Math.max(0, ed - 1); updateLiveBadge(); }
-        }, { once: true });
-        vid.addEventListener('error', () => {
-          spin.classList.remove('on');
-          const canNative = vid.canPlayType('application/vnd.apple.mpegurl') || vid.canPlayType('application/x-mpegURL');
-          errMsg.innerHTML = canNative
-            ? 'Could not play this stream. The link may have expired.'
-            : 'FanCode blocks cross-origin playback in desktop browsers.<br>'
-            + 'Use a CORS-unblock browser extension, watch on your phone, '
-            + 'or run the local proxy (<code>?lp=http://localhost:8787/proxy</code>).';
-          err.style.display = 'flex';
-        }, { once: true });
-        vid.play().catch(() => { vid.muted = true; vid.play().catch(() => { }); });
+          manifest: { retryParameters: { maxAttempts: 1, baseDelay:    // ══════════════════════════════════════════════════════════
+    // TMDB & FILMU M3U8 STREAM FETCHER
+    // ══════════════════════════════════════════════════════════
+    let _currentTmdb = null;
+
+    function parseFilmuOrTmdbUrl(str) {
+      if (!str) return null;
+      const clean = str.trim();
+
+      // Match embed iframe or raw URL
+      const tvMatch = clean.match(/embed\.filmu\.in\/tv\/(\d+)(?:\/(\d+))?(?:\/(\d+))?/i);
+      if (tvMatch) {
+        return {
+          type: 'tv',
+          tmdbId: tvMatch[1],
+          season: tvMatch[2] || '1',
+          episode: tvMatch[3] || '1'
+        };
       }
+
+      const movieMatch = clean.match(/embed\.filmu\.in\/movie\/(\d+)/i);
+      if (movieMatch) {
+        return {
+          type: 'movie',
+          tmdbId: movieMatch[1],
+          season: '1',
+          episode: '1'
+        };
+      }
+
+      const tmdbSiteMatch = clean.match(/themoviedb\.org\/(movie|tv)\/(\d+)/i);
+      if (tmdbSiteMatch) {
+        return {
+          type: tmdbSiteMatch[1],
+          tmdbId: tmdbSiteMatch[2],
+          season: '1',
+          episode: '1'
+        };
+      }
+
+      return null;
     }
 
-    function loadHLS(url) {
+    let _selectedTmdbType = 'movie';
+    function setTmdbType(type) {
+      _selectedTmdbType = type;
+      $('tmdbTypeMovie').classList.toggle('on', type === 'movie');
+      $('tmdbTypeMovie').style.background = type === 'movie' ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.06)';
+      $('tmdbTypeTv').classList.toggle('on', type === 'tv');
+      $('tmdbTypeTv').style.background = type === 'tv' ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.06)';
+      $('tmdbTvFields').style.display = type === 'tv' ? 'flex' : 'none';
+    }
 
-      if (location.protocol === 'https:' && url.startsWith('http://') && !isLocalUrl(url)) {
-        url = 'https://' + url.slice(7);
+    async function submitTmdbForm() {
+      const raw = $('tmdbIdIn').value.trim();
+      if (!raw) {
+        $('tmdbIdIn').style.borderColor = '#ff4757';
+        setTimeout(() => $('tmdbIdIn').style.borderColor = '', 2000);
+        return;
+      }
+      $('tmdbIdIn').style.borderColor = '';
+
+      const parsed = parseFilmuOrTmdbUrl(raw);
+      if (parsed) {
+        await playTmdb({
+          tmdbId: parsed.tmdbId,
+          type: parsed.type,
+          season: parseInt(parsed.season || '1', 10),
+          episode: parseInt(parsed.episode || '1', 10)
+        });
+        return;
       }
 
-      // JioHotstar live: the hdnea master hands back an hdntl cookie that authorizes
-      // variants/segments, which the browser can't replay cross-origin — and Hotstar
-      // 403s datacenter IPs, so a hosted proxy won't do. Route through the local
-      // residential-IP proxy (hotstar-proxy-local.mjs), then fall through to hls.js.
+      const s = parseInt($('tmdbSeasonIn').value.trim() || '1', 10);
+      const e = parseInt($('tmdbEpisodeIn').value.trim() || '1', 10);
+      await playTmdb({
+        tmdbId: raw,
+        type: _selectedTmdbType,
+        season: s,
+        episode: e
+      });
+    }
+
+    async function quickPlayTmdb(id, type, s, e, title) {
+      $('tmdbIdIn').value = id;
+      setTmdbType(type);
+      if (type === 'tv') {
+        $('tmdbSeasonIn').value = s;
+        $('tmdbEpisodeIn').value = e;
+      }
+      await playTmdb({ tmdbId: id, type, season: s, episode: e, title });
+    }
+
+    async function playTmdb({ tmdbId, type = 'movie', season = 1, episode = 1, title = '' }) {
+      LS.style.display = 'none';
+      spin.classList.add('on');
+      showToast('⏳ Fetching M3U8 stream…', 4000);
+
+      _currentTmdb = { tmdbId, type, season, episode, title };
+
       try {
-        if (/\.hotstar\.com$/i.test(new URL(url).hostname)) {
-          if (LOCAL_PROXY) {
-            url = viaLocalProxy(url);
-          } else {
-            spin.classList.remove('on');
-            errMsg.innerHTML = 'JioHotstar needs the local proxy. Run '
-              + '<code>node hotstar-proxy-local.mjs</code> on your machine, then open '
-              + 'this page with <code>?lp=http://127.0.0.1:8787</code> once.';
-            err.style.display = 'flex';
-            return;
+        let streamUrl = null;
+        let meta = null;
+        let episodes = [];
+
+        // 1. Worker feed attempt
+        try {
+          const workerUrl = `${NEW_JSON_URL}?feed=tmdb&id=${encodeURIComponent(tmdbId)}&type=${encodeURIComponent(type)}&season=${season}&episode=${episode}&title=${encodeURIComponent(title || '')}`;
+          const r = await fetch(workerUrl, { cache: 'no-store' });
+          if (r.ok) {
+            const data = await r.json();
+            if (data && data.streamUrl) {
+              streamUrl = data.streamUrl;
+              meta = data.meta;
+              episodes = data.episodes || [];
+            }
+          }
+        } catch (we) {
+          console.warn('Worker tmdb feed error, trying fallback:', we);
+        }
+
+        // 2. Fallback: Singularity direct with proxy
+        if (!streamUrl) {
+          try {
+            const singUrl = type === 'movie'
+              ? `https://embed.filmu.in/api/singularity-movie?id=${encodeURIComponent(tmdbId)}`
+              : `https://embed.filmu.in/api/singularity-tv?tmdb=${encodeURIComponent(tmdbId)}&s=${season}&e=${episode}`;
+            
+            const proxiedSing = `${NEW_JSON_URL}?url=${encodeURIComponent(singUrl)}&ref=${encodeURIComponent('https://embed.filmu.in/')}`;
+            const r = await fetch(proxiedSing);
+            if (r.ok) {
+              const d = await r.json();
+              const base = d._base || d.i || '';
+              if (d.sources && d.sources.length) {
+                streamUrl = d.sources[0].url;
+              } else if (d.m3u8_path) {
+                streamUrl = base ? `${base}/${d.m3u8_path.replace(/^\//, '')}` : d.m3u8_path;
+              }
+            }
+          } catch (se) {
+            console.warn('Singularity direct fallback error:', se);
           }
         }
-      } catch { }
 
-      // FanCode-style hosts.
-      if (preferShakaHls(url)) {
-        // Desktop: if a local proxy is configured, route through it so hls.js can play
-        // (proxy adds CORS + rewrites variants/segments, using your residential IP).
-        if (LOCAL_PROXY) {
-          url = viaLocalProxy(url);   // fall through to the hls.js path below
+        // 3. Fallback: VidRock scraper with proxy
+        if (!streamUrl) {
+          try {
+            const scrapePath = `/scrape/VidRock/${type}/tmdb${tmdbId}?tmdbId=${tmdbId}&title=${encodeURIComponent(title || 'Stream')}&season=${season}&episode=${episode}`;
+            const vrUrl = `https://embed.filmu.in/api/proxy?path=${encodeURIComponent(scrapePath)}`;
+            const proxiedVr = `${NEW_JSON_URL}?url=${encodeURIComponent(vrUrl)}&ref=${encodeURIComponent('https://embed.filmu.in/')}`;
+            const r = await fetch(proxiedVr);
+            if (r.ok) {
+              const d = await r.json();
+              if (d.sources && d.sources.length) {
+                const m3u8 = d.sources.find(s => s.type === 'm3u8' || (s.url && s.url.includes('.m3u8'))) || d.sources[0];
+                if (m3u8 && m3u8.url) streamUrl = m3u8.url;
+              }
+            }
+          } catch (ve) {
+            console.warn('VidRock scraper fallback error:', ve);
+          }
+        }
+
+        if (!streamUrl) {
+          throw new Error('No stream found for TMDB ' + tmdbId);
+        }
+
+        // Metadata handling
+        const displayTitle = (meta && meta.title) || title || (type === 'tv' ? `TV Show (TMDB ${tmdbId})` : `Movie (TMDB ${tmdbId})`);
+        const subLabel = type === 'tv' ? `${displayTitle} · S${season} E${episode}` : displayTitle;
+
+        META.title = displayTitle;
+        if (meta) {
+          META.year = meta.year || '';
+          META.rating = meta.rating ? String(meta.rating) : '';
+          META.desc = meta.overview || '';
+          META.poster = meta.poster || '';
+          META.backdrop = meta.backdrop || '';
+          if (type === 'tv') META.showTitle = displayTitle;
+        }
+
+        if (type === 'tv') {
+          if (!episodes.length) {
+            episodes = Array.from({ length: Math.max(episode, 10) }, (_, i) => ({
+              season,
+              episode: i + 1,
+              title: `Episode ${i + 1}`
+            }));
+          }
+
+          META.eps = episodes.map((ep, idx) => ({
+            t: ep.title || `Episode ${ep.episode || (idx + 1)}`,
+            p: ep.still || META.poster || '',
+            n: `S${season} E${ep.episode || (idx + 1)}`,
+            d: ep.overview || '',
+            tmdbId,
+            type: 'tv',
+            season: ep.season || season,
+            episode: ep.episode || (idx + 1)
+          }));
+          META.epIndex = Math.max(0, episode - 1);
+          epsBtn.style.display = 'flex';
+          renderEpisodes();
         } else {
-          // No local proxy: native-first for browsers that can (iOS Safari), else MSE.
-          playFancode(url);
-          return;
+          META.eps = [];
+          epsBtn.style.display = 'none';
         }
-      }
 
-      if (Hls.isSupported()) {
-        hlsInst = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 10,
-          maxBufferLength: 30,
-          backBufferLength: 60,
+        syncPauseInfo();
+        showToast(`▶ Playing ${subLabel}`, 2500);
 
-          // ── THE CRITICAL CORS TRACKING FIXES ──
-          xhrSetup: function (xhr, url) {
-            xhr.withCredentials = false; // Prevents cookie scattering issues
-          },
-          fetchSetup: function (context, init) {
-            init.credentials = 'omit'; // Forces safe absolute cross-origin lookups
-            return new Request(context, init);
-          }
-        });
+        // Load stream into HLS / Native video player
+        loadVideo(streamUrl, subLabel, false, null);
 
-        hlsInst.loadSource(url);
-        hlsInst.attachMedia(vid);
-
-        hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
-          spin.classList.remove('on');
-          vid.play().catch(() => { });
-          buildHLSQual();
-          buildAudio();
-          setTimeout(() => {
-            isLiveStream = detectLive();
-            if (isLiveStream) { const e = getLiveEdge(); if (e > 0) vid.currentTime = Math.max(0, e - 1); updateLiveBadge(); showToast('🔴 Live stream') }
-          }, 800);
-        });
-        hlsInst.on(Hls.Events.LEVEL_LOADED, (_, d) => { if (d.details && d.details.live) { isLiveStream = true; updateLiveBadge() } });
-        hlsInst.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => buildAudio());
-        hlsInst.on(Hls.Events.ERROR, (_, d) => {
-          if (d.fatal) {
-            spin.classList.remove('on');
-            errMsg.textContent = 'HLS error: ' + d.type + (d.details ? ' (' + d.details + ')' : '');
-            err.style.display = 'flex';
-          }
-        });
-      } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari native layout fallback
-        vid.src = url;
-        vid.addEventListener('loadedmetadata', () => {
-          spin.classList.remove('on');
-          isLiveStream = detectLive();
-          if (isLiveStream) { const e = getLiveEdge(); if (e > 0) vid.currentTime = Math.max(0, e - 1); updateLiveBadge(); }
-        }, { once: true });
-        vid.addEventListener('error', () => { spin.classList.remove('on'); }, { once: true });
-        vid.play().catch(() => { });
-      } else {
+      } catch (err) {
+        console.error('playTmdb error:', err);
         spin.classList.remove('on');
-        loadNative(url, _lastTitle);
+        errMsg.textContent = 'Could not load TMDB stream. ' + (err.message || '');
+        err.style.display = 'flex';
+        showToast('⚠ Failed to fetch M3U8 stream', 3500);
       }
-    }
-
-    function tryDemo(url, title) {
-      urlIn.value = url; titIn.value = title; drmFields.style.display = 'none';
-      _playingChannelId = null; _playingChannelLogo = null;
-      loadVideo(url, title);
     }
 
     playNow.addEventListener('click', granularityPlayback);
@@ -3542,6 +5095,19 @@
       const url = urlIn.value.trim();
       if (!url) { urlIn.style.borderColor = '#ff4757'; setTimeout(() => urlIn.style.borderColor = '', 2000); return; }
       urlIn.style.borderColor = '';
+
+      const parsed = parseFilmuOrTmdbUrl(url);
+      if (parsed) {
+        playTmdb({
+          tmdbId: parsed.tmdbId,
+          type: parsed.type,
+          season: parseInt(parsed.season || '1', 10),
+          episode: parseInt(parsed.episode || '1', 10),
+          title: titIn.value.trim()
+        });
+        return;
+      }
+
       const type = detectUrlType(url);
       let drm = null;
       if (type === 'dash') {
@@ -3553,11 +5119,17 @@
     }
     urlIn.addEventListener('keydown', e => { if (e.key === 'Enter') playNow.click() });
 
+    function tryDemo(url, title) {
+      urlIn.value = url; titIn.value = title; drmFields.style.display = 'none';
+      _playingChannelId = null; _playingChannelLogo = null;
+      loadVideo(url, title);
+    }
+
     function goBack() {
       endHostSession();
       if (SROLE === 'guest') { clearInterval(_pollT); clearInterval(_guestPingT); }
       SROLE = null; SID = null;
-      LS.style.display = 'flex';
+      showLauncher();
       vid.pause();
       isLiveStream = false;
       liveBadge.style.display = 'none';
@@ -3574,8 +5146,31 @@
       const q = new URLSearchParams(location.search);
 
       parseMeta(q);
+
+      // TMDB / FilmU Direct URL Parameters (e.g. ?tmdb=1726, ?movie=1726, ?tv=94997&s=1&e=1)
+      const tmdbParam = q.get('tmdb') || q.get('movie') || q.get('tv');
+      if (tmdbParam) {
+        const type = q.get('tv') ? 'tv' : (q.get('type') || (q.get('movie') ? 'movie' : 'movie'));
+        const season = parseInt(q.get('season') || q.get('s') || '1', 10) || 1;
+        const episode = parseInt(q.get('episode') || q.get('e') || '1', 10) || 1;
+        const title = q.get('title') || q.get('t') || '';
+        await playTmdb({ tmdbId: tmdbParam, type, season, episode, title });
+        return;
+      }
+
+      // Check pathname for /movie/1726 or /tv/94997/1/1
+      const pathParsed = parseFilmuOrTmdbUrl(location.href);
+      if (pathParsed) {
+        await playTmdb({
+          tmdbId: pathParsed.tmdbId,
+          type: pathParsed.type,
+          season: parseInt(pathParsed.season || '1', 10),
+          episode: parseInt(pathParsed.episode || '1', 10)
+        });
+        return;
+      }
+
       // Auto-fetch an episode list (e.g. from the MX worker) so the switcher appears
-      // even when the show is launched with just its stream URL. Non-blocking.
       const epsrc = q.get('epsrc');
       if (epsrc && !META.eps.length) loadEpsFrom(epsrc);
       // If episodes were supplied, boot straight into the current episode.
@@ -3590,6 +5185,187 @@
 
       const bundleRaw = q.get('bundle');
       if (bundleRaw) { await handleBundleParam(bundleRaw); return; }
+
+      /* ?tab=tmdb|live|sony|fc|bb|willow|prime|iptv */
+      const tab = q.get('tab');
+      if (tab && TAB_KEYS[tab]) {
+        if (SOLO) { spin.classList.add('on'); } else { LS.style.display = 'flex'; }
+        switchTab(TAB_KEYS[tab]);
+        const wanted = q.get('id');
+        if (wanted) await openTabItem(TAB_KEYS[tab], wanted);
+        return;
+      }
+
+      const directUrl = q.get('url');
+      const directTitle = q.get('title');
+      if (directUrl) {
+        const parsedTmdb = parseFilmuOrTmdbUrl(directUrl);
+        if (parsedTmdb) {
+          await playTmdb({
+            tmdbId: parsedTmdb.tmdbId,
+            type: parsedTmdb.type,
+            season: parseInt(parsedTmdb.season || '1', 10),
+            episode: parseInt(parsedTmdb.episode || '1', 10),
+            title: directTitle || ''
+          });
+          return;
+        }
+        loadVideo(directUrl, directTitle || 'Movie', false, null);
+        return;
+      }
+
+      const sid = q.get('sid');
+      const chid = q.get('chid');
+      const srcRaw = q.get('src');
+      const tRaw = q.get('t');
+      const k1 = q.get('k1'), k2 = q.get('k2'), k3 = q.get('k3');
+
+      if (!chid && !srcRaw) return;
+
+      if (chid) {
+        const channelId = dob(chid);
+        const title = dob(tRaw || '');
+        showToast('⏳ Fetching stream…', 3000);
+        try {
+          const ch = await resolveChannelById(channelId);
+          if (!ch || !ch.url) throw new Error('Channel not found in feed');
+          _playingChannelId = channelId; _playingChannelLogo = ch.logo || null;
+          const drm = (ch.keyId && ch.key) ? { keyId: ch.keyId, key: ch.key, cookie: ch.cookie || null } : null;
+          if (sid) {
+            try { const st = JSON.parse(localStorage.getItem(sKey(sid)) || '{}'); if (st.ended) { loadVideo(ch.url, ch.name, true, drm); showToast('⚠ Session ended — playing directly', 3000); return; } } catch { }
+            loadVideo(ch.url, ch.name, true, drm);
+            setTimeout(() => joinAsGuest(sid, ch.url, ch.name, drm), 600);
+            showToast('👀 Joining shared session…', 2500);
+          } else {
+            loadVideo(ch.url, ch.name, false, drm);
+          }
+        } catch (e) {
+          console.error('chid resolve failed', e);
+          errMsg.textContent = 'Could not load channel. ' + e.message;
+          err.style.display = 'flex';
+        }
+        return;
+      }
+
+      const src = dob(srcRaw);
+      const title = dob(tRaw || '');
+      const drm = (k1 && k2) ? { keyId: dob(k1), key: dob(k2), cookie: k3 ? dob(k3) : null } : null;
+      if (src && sid) {
+        try { const st = JSON.parse(localStorage.getItem(sKey(sid)) || '{}'); if (st.ended) { loadVideo(src, title, true, drm); showToast('⚠ Session ended — playing directly', 3000); return; } } catch { }
+        loadVideo(src, title, true, drm);
+        setTimeout(() => joinAsGuest(sid, src, title, drm), 600);
+        showToast('👀 Joining shared session…', 2500);
+      } else if (src) {
+        loadVideo(src, title, false, drm);
+      }
+    })();
+
+    // ══════════════════════════════════════════════════════════
+    // SHOW METADATA · PAUSE INFO · EPISODES
+    // ══════════════════════════════════════════════════════════
+    function parseMeta(q) {
+      META.rating = q.get('rating') || '';
+      META.year = q.get('year') || '';
+      META.dur = q.get('dur') || '';
+      META.desc = q.get('desc') || '';
+      META.poster = q.get('poster') || '';
+      META.showTitle = q.get('show') || '';
+      const epsRaw = q.get('eps');
+      if (epsRaw) {
+        try { const arr = JSON.parse(epsRaw); if (Array.isArray(arr)) META.eps = arr; } catch (e) { console.warn('bad eps param', e); }
+      }
+      META.epIndex = parseInt(q.get('ep') || '0', 10) || 0;
+      if (META.eps.length) {
+        epsBtn.style.display = 'flex';
+        const cur = META.eps[META.epIndex];
+        if (cur && cur.d && !META.desc) META.desc = cur.d;
+        renderEpisodes();
+      }
+    }
+
+    async function loadEpsFrom(url) {
+      if (!url || META.eps.length) return;
+      try {
+        const r = await fetch(url);
+        const d = await r.json();
+        const list = (d && (d.eps || d.episodes)) || [];
+        if (Array.isArray(list) && list.length) {
+          META.eps = list;
+          META.epIndex = typeof d.currentIndex === 'number' ? d.currentIndex : 0;
+          if (d.show && !META.showTitle) META.showTitle = d.show;
+          const cur = META.eps[META.epIndex];
+          if (cur && cur.d && !META.desc) META.desc = cur.d;
+          epsBtn.style.display = 'flex';
+          renderEpisodes();
+          syncPauseInfo();
+        }
+      } catch (e) { console.warn('epsrc fetch failed', e); }
+    }
+
+    function renderEpisodes() {
+      $('epsShowTitle').textContent = META.showTitle || META.title || 'Episodes';
+      $('epsSub').textContent = META.eps.length + ' episode' + (META.eps.length > 1 ? 's' : '');
+      epsList.innerHTML = '';
+      META.eps.forEach((ep, i) => {
+        const card = document.createElement('div');
+        card.className = 'ep-card' + (i === META.epIndex ? ' playing' : '');
+        const num = ep.n || ('E' + (i + 1));
+        card.innerHTML = `
+      <div class="ep-thumb">
+        ${ep.p ? `<img src="${ep.p}" loading="lazy" onerror="this.style.display='none'"/>` : ''}
+        <span class="ep-num">${num}</span>
+        <div class="ep-play"><svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="ep-nowbar"></div>
+      </div>
+      <div class="ep-info">
+        <div class="ep-title">${ep.t || ('Episode ' + (i + 1))}</div>
+        ${ep.d ? `<div class="ep-desc">${ep.d}</div>` : ''}
+      </div>`;
+        card.onclick = () => switchEpisode(i);
+        epsList.appendChild(card);
+      });
+    }
+
+    function switchEpisode(i) {
+      if (i < 0 || i >= META.eps.length) return;
+      const ep = META.eps[i];
+      if (!ep) return;
+      META.epIndex = i;
+      META.title = ep.t || META.title;
+      if (ep.d) META.desc = ep.d;
+      if (ep.p) META.poster = ep.p;
+      renderEpisodes();
+      syncPauseInfo();
+      epsPanel.classList.remove('open');
+
+      if (ep.tmdbId) {
+        playTmdb({
+          tmdbId: ep.tmdbId,
+          type: 'tv',
+          season: ep.season || 1,
+          episode: ep.episode || (i + 1),
+          title: META.showTitle || META.title
+        });
+        return;
+      }
+
+      if (!ep.u) return;
+      const label = (META.showTitle ? META.showTitle + ' · ' : '') + (ep.t || ('Episode ' + (i + 1)));
+      loadVideo(ep.u, label, false, null);
+      showToast('▶ ' + (ep.n ? ep.n + ' — ' : '') + (ep.t || 'Episode ' + (i + 1)), 2400);
+    }
+
+    function toggleEpsPanel() {
+      if (epsPanel.classList.contains('open')) { epsPanel.classList.remove('open') }
+      else { epsPanel.classList.add('open'); showUI() }
+    } && TAB_KEYS[tab]) {
+        // Solo shows the spinner, not the list it would otherwise sit behind.
+        if (SOLO) { spin.classList.add('on'); } else { LS.style.display = 'flex'; }
+        switchTab(TAB_KEYS[tab]);
+        const wanted = q.get('id');
+        if (wanted) await openTabItem(TAB_KEYS[tab], wanted);
+        return;
+      }
 
       const directUrl = q.get('url');
       const directTitle = q.get('title');
