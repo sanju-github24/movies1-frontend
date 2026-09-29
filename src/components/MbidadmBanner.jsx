@@ -21,6 +21,14 @@ const MbidadmBanner = () => {
     script.src = `https://js.mbidadm.com/static/scripts.js?cb=${Date.now()}`;
     script.setAttribute('data-admpid', '452435');
 
+    script.onerror = () => {
+      // Safely catch AdBlocker (net::ERR_BLOCKED_BY_CLIENT) without crashing React
+      setLoaded(false);
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+    };
+
     // Append script to container to run it in the context of the placeholder
     containerRef.current.appendChild(script);
 
