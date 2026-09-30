@@ -406,7 +406,7 @@ function hotstarIdFromUrl(url) {
   catch { return null; }
 }
 
-const STAR_PLAYER_BASE = "https://m3u8-player-ashen.vercel.app/";
+const STAR_PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/player.html";
 
 const StarSportsSection = ({ activeChannel, onPlay }) => {
   const [expanded, setExpanded] = useState(true);
@@ -676,32 +676,17 @@ const LiveChannelsPage = () => {
       if (fresh) ch = { ...ch, ...fresh };
     } catch (error) {
       if (requestId !== playRequestRef.current) return;
-      window.alert(error.message || "Unable to refresh the channel. Please retry.");
-      return;
     }
-    const base = extractBaseUrl(bundleMeta.bundle_url);
+    const base = "https://m3u8-player-orcin.vercel.app/player.html";
     const url = buildChannelUrl(base, ch);
     setActiveBundle(parsedBundle);
     setActiveBundleMeta(bundleMeta);
     setActiveChannel(ch);
+    setPlayerUrl(url);
     setIframeLoading(true);
     setChannelListOpen(false);
 
-    try {
-      const src = await resolveChannelSource(ch, bundleMeta);
-      if (src) {
-        setActiveSource(src);
-      } else {
-        setActiveSource(null);
-        setPlayerUrl(url);
-      }
-    } catch {
-      setActiveSource(null);
-      setPlayerUrl(url);
-    } finally {
-      setIframeLoading(false);
-    }
-
+    setTimeout(() => setIframeLoading(false), 1200);
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }, []);
 
@@ -863,7 +848,7 @@ const LiveChannelsPage = () => {
       )}
 
       {/* ══ PLAYER ZONE ═════════════════════════════════════════════════════════ */}
-      {(activeSource || playerUrl) && (
+      {playerUrl && (
         <div ref={playerRef} style={{ background: "#000", borderBottom: `1px solid ${tokens.border.subtle}` }}>
           <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%" }}>
             {iframeLoading && (
@@ -881,25 +866,15 @@ const LiveChannelsPage = () => {
                 <span style={{ fontSize: 12, color: tokens.text.muted, letterSpacing: "0.02em" }}>Loading stream…</span>
               </div>
             )}
-            {activeSource ? (
-              <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-                <AnchorPlayer
-                  source={activeSource}
-                  title={activeChannel?.name || "Live TV"}
-                  poster={activeChannel?.logo}
-                />
-              </div>
-            ) : (
-              <iframe
-                ref={iframeRef}
-                src={playerUrl}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-                allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-                allowFullScreen
-                title={activeChannel?.name || "Live TV"}
-                onLoad={() => setIframeLoading(false)}
-              />
-            )}
+            <iframe
+              ref={iframeRef}
+              src={playerUrl}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+              allowFullScreen
+              title={activeChannel?.name || "Live TV"}
+              onLoad={() => setIframeLoading(false)}
+            />
           </div>
 
           {/* Now-playing bar */}
