@@ -171,14 +171,32 @@ function parseBundleUrl(bundleUrl) {
 }
 
 function buildChannelUrl(basePlayerUrl, channel) {
+  if (!channel || !channel.url) return "https://m3u8-player-orcin.vercel.app/player.html";
+
+  const rawUrl = String(channel.url);
+
+  // 1. Tab-based links (e.g. ?tab=willow&id=... or ?tab=bb&id=...)
+  if (rawUrl.includes("tab=") && rawUrl.includes("id=")) {
+    try {
+      const u = new URL(rawUrl.startsWith("http") ? rawUrl : `https://dummy.com${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`);
+      const tab = u.searchParams.get("tab");
+      const id = u.searchParams.get("id");
+      if (tab && id) {
+        return `https://m3u8-player-orcin.vercel.app/player.html?tab=${encodeURIComponent(tab)}&id=${encodeURIComponent(id)}`;
+      }
+    } catch {}
+  }
+
+  // 2. Direct stream URL (?url=...&title=...)
   const params = new URLSearchParams();
-  params.set("src", obf(channel.url));
-  params.set("t", obf(channel.name || ""));
-  if (channel.keyId) params.set("k1", obf(channel.keyId));
-  if (channel.key) params.set("k2", obf(channel.key));
-  if (channel.cookie) params.set("k3", obf(channel.cookie));
-  if (channel.logo) params.set("lg", obf(channel.logo));
-  return `${basePlayerUrl}?${params}`;
+  params.set("url", rawUrl);
+  if (channel.name) params.set("title", channel.name);
+  if (channel.keyId) params.set("keyId", channel.keyId);
+  if (channel.key) params.set("key", channel.key);
+  if (channel.cookie) params.set("cookie", channel.cookie);
+  if (channel.logo) params.set("logo", channel.logo);
+
+  return `https://m3u8-player-orcin.vercel.app/player.html?${params.toString()}`;
 }
 
 function extractBaseUrl(bundleUrl) {
