@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import LiveTabsSection from "../components/LiveTabsSection";
+import AnchorPlayer from "../components/AnchorPlayer";
+import { resolveChannelSource } from "../utils/liveSources";
 import { CRICKET_CHANNELS } from "./channels";
 import { useGoBack } from "../components/BackBar";
 
@@ -586,6 +588,7 @@ const LiveChannelsPage = () => {
   const [activeBundle, setActiveBundle] = useState(null);
   const [activeBundleMeta, setActiveBundleMeta] = useState(null);
   const [activeChannel, setActiveChannel] = useState(null);
+  const [activeSource, setActiveSource] = useState(null);
   const [playerUrl, setPlayerUrl] = useState("");
   const [iframeLoading, setIframeLoading] = useState(false);
   const [channelListOpen, setChannelListOpen] = useState(false);
@@ -681,9 +684,24 @@ const LiveChannelsPage = () => {
     setActiveBundle(parsedBundle);
     setActiveBundleMeta(bundleMeta);
     setActiveChannel(ch);
-    setPlayerUrl(url);
     setIframeLoading(true);
     setChannelListOpen(false);
+
+    try {
+      const src = await resolveChannelSource(ch, bundleMeta);
+      if (src) {
+        setActiveSource(src);
+      } else {
+        setActiveSource(null);
+        setPlayerUrl(url);
+      }
+    } catch {
+      setActiveSource(null);
+      setPlayerUrl(url);
+    } finally {
+      setIframeLoading(false);
+    }
+
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }, []);
 
@@ -845,7 +863,7 @@ const LiveChannelsPage = () => {
       )}
 
       {/* ══ PLAYER ZONE ═════════════════════════════════════════════════════════ */}
-      {playerUrl && (
+      {(activeSource || playerUrl) && (
         <div ref={playerRef} style={{ background: "#000", borderBottom: `1px solid ${tokens.border.subtle}` }}>
           <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%" }}>
             {iframeLoading && (
@@ -863,15 +881,25 @@ const LiveChannelsPage = () => {
                 <span style={{ fontSize: 12, color: tokens.text.muted, letterSpacing: "0.02em" }}>Loading stream…</span>
               </div>
             )}
-            <iframe
-              ref={iframeRef}
-              src={playerUrl}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-              title={activeChannel?.name || "Live TV"}
-              onLoad={() => setIframeLoading(false)}
-            />
+            {activeSource ? (
+              <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+                <AnchorPlayer
+                  source={activeSource}
+                  title={activeChannel?.name || "Live TV"}
+                  poster={activeChannel?.logo}
+                />
+              </div>
+            ) : (
+              <iframe
+                ref={iframeRef}
+                src={playerUrl}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                allowFullScreen
+                title={activeChannel?.name || "Live TV"}
+                onLoad={() => setIframeLoading(false)}
+              />
+            )}
           </div>
 
           {/* Now-playing bar */}

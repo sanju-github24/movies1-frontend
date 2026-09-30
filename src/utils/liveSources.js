@@ -226,6 +226,43 @@ export function parseSourceLink(link) {
   } catch { return null; }
 }
 
+export async function resolveChannelSource(ch, bundleMeta) {
+  if (!ch) return null;
+  warmProxy();
+
+  // Hotstar channel
+  if (ch.id && (bundleMeta?.name?.toLowerCase().includes("hotstar") || ch.url?.includes("hotstar") || String(ch.id).startsWith("bb-"))) {
+    return hotstarSource(ch.id);
+  }
+
+  // JioTV channel
+  if (ch.channel_id) {
+    return jioSource(ch.channel_id);
+  }
+
+  // Direct channel URL
+  const url = ch.url || ch.channel_url || ch.stream_url;
+  if (!url) throw new Error("No stream URL available for this channel");
+
+  const drm = (ch.keyId || ch.key_id) && (ch.key || ch.key_value)
+    ? {
+        keyId: String(ch.keyId || ch.key_id).replace(/-/g, "").toLowerCase().trim(),
+        key: String(ch.key || ch.key_value).replace(/-/g, "").toLowerCase().trim(),
+      }
+    : undefined;
+
+  const isDash = /\.mpd(\?|$)/i.test(String(url));
+
+  return {
+    kind: isDash ? "dash" : "hls",
+    url,
+    drm,
+    proxy: ch.proxy || { base: WORKER },
+    title: ch.name || ch.title,
+    poster: ch.logo || ch.image,
+  };
+}
+
 export async function resolveSource({ tabKey, id, item }) {
   warmProxy();
   switch (tabKey) {
