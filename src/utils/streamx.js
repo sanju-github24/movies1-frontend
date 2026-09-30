@@ -9,7 +9,7 @@
  */
 
 // Point this at wherever player.html actually lives on your site.
-const STREAMX_PLAYER_BASE = "/player.html";
+const STREAMX_PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/player.html";
 
 /**
  * Build a StreamX player URL from a video URL and a display name.

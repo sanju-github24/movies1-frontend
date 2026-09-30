@@ -39,7 +39,7 @@ function useFancodeMatch(homeName, awayName) {
         if (url) { setCh({
           id: "fancode-live", name: "FanCode", sub: "Live", useIcon: false, logo: "/fancode.svg",
           color: "#ec1c24", glow: "rgba(236,28,36,0.3)", border: "rgba(236,28,36,0.25)", bg: "rgba(236,28,36,0.06)",
-          url: `/player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(m.title)}`,
+          url: `https://m3u8-player-orcin.vercel.app/player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(m.title)}`,
         }); return; }
       }
       setCh(null);
@@ -1668,7 +1668,7 @@ function BcciMatchCenter({ matchData, onMatchState }) {
                 const json = await res.json();
                 if (res.ok && json.success && json.url) {
                   const params = new URLSearchParams({ url: json.url, title: vid.title });
-                  setPlayerModal({ src: `/player.html?${params}`, title: vid.title });
+                  setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title: vid.title });
                   setStreamLoading(false);
                   setStreamingId(null);
                   return;
@@ -2002,7 +2002,7 @@ function HighlightsStrip({ highlights, accent = ECB_RED }) {
 
     const open = url => {
       const p = new URLSearchParams({ url, title: vid.title });
-      setPlayerModal({ src: `/player.html?${p}`, title: vid.title });
+      setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${p}`, title: vid.title });
       setStreamLoading(false); setStreamingId(null);
     };
 
@@ -2816,7 +2816,7 @@ function FifaMatchCenter({ matchId, onMatchState }) {
                 const json = await res.json();
                 if (res.ok && json.success && json.url) {
                   const params = new URLSearchParams({ url: json.url, title });
-                  setPlayerModal({ src: `/player.html?${params}`, title });
+                  setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title });
                   setStreamLoading(false);
                   return;
                 }
