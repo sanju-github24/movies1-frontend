@@ -20,8 +20,8 @@ export const TAB_DEFS = {
   fc:     { key: "fc",     label: "FanCode",       feed: `${WORKER}?feed=fancode` },
   willow: { key: "willow", label: "Willow Cricket", feed: `${WORKER}?feed=willow` },
   prime:  { key: "prime",  label: "Prime Video",   feed: `${WORKER}?feed=prime` },
-  live:   { key: "live",   label: "Live TV",       feed: null },
-  bb:     { key: "bb",     label: "Hotstar",       feed: null },
+  live:   { key: "live",   label: "Live TV",       feed: WORKER },
+  bb:     { key: "bb",     label: "Hotstar",       feed: `${WORKER}?feed=hotstar` },
 };
 
 /* A tab URL looks like https://player/?tab=sony — anything else (a bundle,
@@ -47,19 +47,56 @@ export function tabItemUrl(base, key, id, solo = false) {
 
 /* Live and upcoming for one tab.
  *
- * Tabs with no feed of their own (Live TV's channel list, the fixed Bigg Boss
- * feeds) have nothing to schedule, so they report empty rather than being
- * treated as a failure. */
+ * Tabs with feeds (SonyLiv, FanCode, Willow, Prime, Live TV, Hotstar) read
+ * live channels and fixtures from the worker. */
 export async function fetchTabFeed(key) {
   const def = TAB_DEFS[key];
   if (!def || !def.feed) return { live: [], upcoming: [] };
 
-  const res = await fetch(`${def.feed}&_=${Date.now()}`);
+  const url = `${def.feed}${def.feed.includes("?") ? "&" : "?"}_=${Date.now()}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`${def.label} feed: ${res.status}`);
 
   const body = await res.json();
-  // The feed used to be a bare array of live rows before it learned about
-  // upcoming ones; read either.
+
+  // JioTV channels from root worker feed
+  if (key === "live" && Array.isArray(body)) {
+    const mapped = body.map((ch) => ({
+      id: String(ch.channel_id || ch.id || ""),
+      name: ch.channel_name || ch.name || "Live TV",
+      title: ch.channel_name || ch.name || "Live TV",
+      logo: ch.channel_logo || ch.logo || null,
+      poster: ch.channel_logo || ch.logo || null,
+      url: ch.channel_url || ch.url || "",
+      keyId: ch.keyId || null,
+      key: ch.key || null,
+      cookie: ch.cookie || null,
+      category: ch.channel_group || "Live TV",
+      live: true,
+    })).filter((ch) => ch.id && ch.url);
+    return { live: mapped, upcoming: [] };
+  }
+
+  // Hotstar channels
+  if (key === "bb") {
+    const list = body.channels || (Array.isArray(body) ? body : []);
+    const mapped = list.map((ch) => ({
+      id: String(ch.id || ch.channel_id || ""),
+      name: ch.name || ch.channel_name || "Hotstar",
+      title: ch.name || ch.channel_name || "Hotstar",
+      logo: ch.logo || ch.channel_logo || null,
+      poster: ch.logo || ch.channel_logo || null,
+      url: ch.url || ch.channel_url || "",
+      keyId: ch.keyId || null,
+      key: ch.key || null,
+      cookie: body.token || ch.cookie || null,
+      category: "Hotstar",
+      live: true,
+    })).filter((ch) => ch.id && ch.url);
+    return { live: mapped, upcoming: [] };
+  }
+
+  // Default feeds (fancode, sonyliv, willow, prime)
   if (Array.isArray(body)) return { live: body, upcoming: [] };
   return { live: body.live || [], upcoming: body.upcoming || [] };
 }
@@ -94,7 +131,7 @@ export function startLabel(item) {
 
 /* Where the heroes send a viewer to watch. The admin can save any player URL
    for the listings; a hero has no row to read one from, so it uses this. */
-export const PLAYER_BASE = "https://m3u8-player-ashen.vercel.app/";
+export const PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/";
 
 /* India, as a feed spells it — "India", "IND", "India Women", "Team India".
    Deliberately word-bounded: "Indians" is a Mumbai Indians match, not India,

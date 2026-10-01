@@ -22,7 +22,7 @@ const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
    and FanCode refuses one outside India that is not a home connection; this
    runs in India and, for the two that want more, borrows an Indian consumer
    address. Cross-origin from here is fine — it answers with CORS. */
-export const PROXY = "https://m3u8-player-ashen.vercel.app/api/live-proxy";
+export const PROXY = "https://m3u8-player-orcin.vercel.app/api/live-proxy";
 
 const isDash = (u) => /\.mpd(\?|$)/i.test(String(u || ""));
 

@@ -393,7 +393,7 @@ const LiveChannelsUpload = () => {
                     }
                   } catch {}
                 }}
-                placeholder="https://m3u8-player-ashen.vercel.app/"
+                placeholder="https://m3u8-player-orcin.vercel.app/"
                 className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
               />
             </div>

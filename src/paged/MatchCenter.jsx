@@ -1033,7 +1033,7 @@ function LivePlayer({ sport, fancodeChannel }) {
           const live = await fetchHotstarChannelMC(hsId);
           if (live && (live.url || live.channel_url || live.stream_url)) {
             const streamUrl = live.url || live.channel_url || live.stream_url;
-            return buildChannelUrlMC("https://m3u8-player-ashen.vercel.app/", {
+            return buildChannelUrlMC("https://m3u8-player-orcin.vercel.app/player.html", {
               url: streamUrl,
               name: ch.name,
               keyId: live.keyId || live.key_id || "",
