@@ -315,6 +315,7 @@ const WatchHtmlPage = () => {
 
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
+  const [showDownloads,     setShowDownloads    ] = useState(false);
   const [tmdbMeta,          setTmdbMeta         ] = useState(null);
   const [episodes,          setEpisodes         ] = useState([]);
   const [availableServers,  setAvailableServers ] = useState([]);
@@ -1576,10 +1577,10 @@ if (!alive) return;
         {movieMeta.background && (
           <div className="absolute inset-0 z-0">
             <img src={movieMeta.background} alt=""
-              className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-25 scale-100" : "opacity-0 scale-110"}`}
+              className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-110"}`}
               onLoad={() => setImgLoaded(true)} />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#070709] via-[#070709]/40 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#070709] via-[#070709]/80 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/50 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#070709] to-transparent" />
           </div>
         )}
@@ -1701,7 +1702,7 @@ if (!alive) return;
                 <span className="relative">{live && live.live ? live.cta : (isTVShow ? "Stream Now" : "Play Now")}</span>
               </button>
               {movieMeta.download_links?.length > 0 && (
-                <button onClick={() => document.getElementById("download-section")?.scrollIntoView({ behavior:"smooth" })}
+                <button onClick={() => setShowDownloads(true)}
                   className="px-8 py-4 sm:py-3.5 min-h-[48px] bg-white/5 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/20 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation">
                   <Download size={15}/> Download
                 </button>
@@ -1947,7 +1948,16 @@ if (!alive) return;
         )}
 
         {/* Downloads */}
-        {movieMeta.download_links?.length > 0 && (
+        {/* The links, as a dialog. They used to be a column below the page,
+            so a page about a film was mostly a list of links to it. */}
+        {showDownloads && movieMeta.download_links?.length > 0 && (
+          <div className="fixed inset-0 z-[700] flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setShowDownloads(false)} />
+            <div className="relative z-10 my-8 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0f0f14] p-5 sm:p-7 shadow-2xl">
+              <button onClick={() => setShowDownloads(false)} aria-label="Close"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/15 hover:text-white">
+                <X size={16} />
+              </button>
           <div id="download-section" className="space-y-5 scroll-mt-24">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-green-600/10 border border-green-500/10"><Database size={18} className="text-green-400"/></div>
@@ -2014,6 +2024,8 @@ if (!alive) return;
                 </div>
                 );
               })}
+            </div>
+          </div>
             </div>
           </div>
         )}
