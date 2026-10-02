@@ -139,6 +139,10 @@ const LiveTabsSection = ({ rows, heading }) => {
     return () => { alive = false; };
   }, [given]);
 
+  /* Rows come from the caller when it has them, and are fetched here when it
+     does not. */
+  const source = given ? rows : fetched;
+
   const tabRows = useMemo(
     () =>
       (source || []).filter((r) => {
