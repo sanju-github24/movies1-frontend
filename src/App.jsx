@@ -31,6 +31,7 @@ import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
 import ResetPassword from './paged/ResetPassword';
 const MovieDetail = safeLazy(() => import('./paged/MovieDetail'));
+const CollectionPage = safeLazy(() => import('./paged/CollectionPage'));
 const SearchResults = safeLazy(() => import('./paged/SearchResults'));
 const SearchPage = safeLazy(() => import('./paged/SearchPage'));
 import CategoryPage from './components/CategoryPage';
@@ -252,6 +253,7 @@ const AppContent = () => {
       <Routes>
         <Route path="/"                       element={<Home searchTerm={searchTerm} />} />
         <Route path="/movie/:code"            element={<MovieDetail />} />
+        <Route path="/collection/:id"         element={<CollectionPage />} />
         <Route path="/search"                 element={<SearchResults searchTerm={searchTerm} />} />
         <Route path="/category/:name"         element={<CategoryPage />} />
         <Route path="/latest"                 element={<LatestUploads />} />

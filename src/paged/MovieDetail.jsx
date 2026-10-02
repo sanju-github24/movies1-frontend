@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
-import { useParams, Link } from "react-router-dom"; 
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { absUrl, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo";
 import { displayTitle } from "../utils/cleanTitle";
 import { supabase } from "../utils/supabaseClient";
@@ -10,7 +10,9 @@ import { v4 as uuidv4 } from "uuid";
 import { toast } from "react-toastify";
 import EmojiPicker from "emoji-picker-react";
 // ✅ Import Icons for a more modern look
-import { Download, Share2, MessageSquare, Trash2, Copy, Tv } from "lucide-react"; 
+import { Download, Share2, MessageSquare, Trash2, Copy, Tv, Play, Plus, Check, X, Star, Volume2, VolumeX, Pause } from "lucide-react";
+import { useTitleEpisodes } from "../utils/titleEpisodes";
+import { inMyList, toggleMyList } from "../utils/myList";
 // Note: Film and Monitor icons removed based on request
 
 const MovieDetail = () => {
@@ -27,7 +29,29 @@ const MovieDetail = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
 
-  const { isLoggedIn, userData } = useContext(AppContext);
+  const { isLoggedIn, userData } = useContext(AppContext);
+  const navigate = useNavigate();
+
+  /* The same resolution the overlay uses, so the two cannot describe one title
+     differently: backdrop, logo, rating, certification, runtime, genres, cast —
+     and a chrome-free trailer when one exists. */
+  const { tmdbExtra, trailerMp4 } = useTitleEpisodes(movie);
+  const trailerRef = useRef(null);
+  const [muted, setMuted] = useState(true);
+  const [trailerOn, setTrailerOn] = useState(true);
+  const [showDownloads, setShowDownloads] = useState(false);
+  const [listed, setListed] = useState(false);
+  useEffect(() => { setListed(inMyList(movie?.slug)); }, [movie?.slug]);
+
+  /* Esc closes the downloads, and the page behind it stops scrolling — the
+     same as every other dialog on the site. */
+  useEffect(() => {
+    if (!showDownloads) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowDownloads(false); };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [showDownloads]);
 
   // Fetch movie & comments
   useEffect(() => {
@@ -219,9 +243,182 @@ const MovieDetail = () => {
      unreachable, which is an efficient way to not be indexed. */
   const canonicalUrl = absUrl(`/movie/${code}`);
 
+  /* What the hero shows. Our own row carries the title, the year and the
+     poster; everything else that makes a page look like a streaming service —
+     backdrop, logo, rating, certification, runtime, genres, cast — comes from
+     the TMDB detail the hook already resolved for the overlay. Nothing here is
+     required: each piece is drawn only if it arrived. */
+  const x = tmdbExtra || {};
+  const backdrop = x.cover_poster_url || movie.poster;
+  const titleLogo = x.title_logo || "";
+  const overview = x.description || "";
+  const genres = (x.genres || []).slice(0, 3);
+  const cast = (x.cast || []).filter((c) => c && c.name);
+  const runtimeLabel = x.runtime
+    ? `${Math.floor(x.runtime / 60) ? `${Math.floor(x.runtime / 60)}h ` : ""}${x.runtime % 60}m`
+    : "";
+  const heroYear = movie.year || x.year;
+  const rating = x.imdb_rating && x.imdb_rating !== "0.0" ? x.imdb_rating : "";
+  const collection = x.collection || null;
+  const playTitle = () => navigate(`/watch/${movie.slug}`, { state: { autoPlay: true } });
+  const toggleList = () => { toggleMyList(movie); setListed(inMyList(movie.slug)); };
+
+
   return (
     // Updated BG/Container for modern dark theme contrast
-    <div className="flex justify-center w-full min-h-screen bg-gray-950 py-8 px-2 sm:px-6">
+    <div className="w-full min-h-screen bg-[#0b0b0f]">
+
+      {/* ── Hero ──────────────────────────────────────────────────────────
+          The trailer plays behind the text when one resolved, muted and
+          looping, and falls back to the backdrop otherwise — so the page looks
+          the same whether or not a trailer exists. The scrims are two, not
+          one: left-to-right so the words sit on something dark, and bottom-up
+          so the hero dissolves into the page instead of ending at a line. */}
+      <section className="relative w-full h-[78vh] min-h-[520px] max-h-[860px] overflow-hidden">
+        {trailerMp4 && trailerOn ? (
+          <video
+            ref={trailerRef}
+            src={trailerMp4}
+            poster={backdrop}
+            autoPlay muted={muted} loop playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          backdrop && <img src={backdrop} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0f] via-[#0b0b0f]/20 to-black/40" />
+
+        <div className="relative z-10 h-full max-w-[1500px] mx-auto px-6 sm:px-12 flex flex-col justify-end pb-16">
+          <div className="max-w-2xl">
+            {titleLogo ? (
+              <img src={titleLogo} alt={movieTitle}
+                className="h-20 sm:h-28 w-auto max-w-[420px] object-contain object-left drop-shadow-2xl mb-6" />
+            ) : (
+              <h2 className="text-4xl sm:text-6xl font-black tracking-tight text-white drop-shadow-2xl mb-6">
+                {movieTitle}
+              </h2>
+            )}
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-200 mb-5">
+              {rating && (
+                <span className="flex items-center gap-1.5 font-bold">
+                  <Star className="w-4 h-4 text-white fill-white" />{rating}
+                </span>
+              )}
+              {heroYear && <span className="text-gray-400">•</span>}
+              {heroYear && <span>{heroYear}</span>}
+              {x.certification && <><span className="text-gray-400">•</span>
+                <span className="px-1.5 py-0.5 border border-white/30 rounded text-xs">{x.certification}</span></>}
+              {runtimeLabel && <><span className="text-gray-400">•</span><span>{runtimeLabel}</span></>}
+            </div>
+
+            {overview && (
+              <p className="text-gray-300 leading-relaxed mb-5 line-clamp-4 max-w-xl">{overview}</p>
+            )}
+
+            {genres.length > 0 && (
+              <div className="flex items-center gap-3 text-sm text-gray-400 mb-8">
+                {genres.map((g, i2) => (
+                  <React.Fragment key={g}>
+                    {i2 > 0 && <span className="text-gray-600">|</span>}
+                    <span>{g}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-4">
+              <button onClick={playTitle}
+                className="group flex items-center gap-4 pl-1.5 pr-7 py-1.5 bg-white text-black rounded-full hover:bg-gray-200 transition active:scale-[.98]">
+                <span className="w-12 h-12 rounded-full bg-black flex items-center justify-center">
+                  <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                </span>
+                <span className="text-left leading-tight">
+                  <span className="block font-bold">Watch Now</span>
+                  <span className="block text-[11px] tracking-wide text-gray-600 uppercase">
+                    {movie.subCategory?.includes("Series") ? "Series" : "Movie"}
+                  </span>
+                </span>
+              </button>
+
+              <button onClick={toggleList} title={listed ? "In My List" : "Add to My List"}
+                className="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-xl flex items-center justify-center text-white transition active:scale-95">
+                {listed ? <Check className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+              </button>
+
+              {/* The downloads are a dialog now, not a wall below the fold. */}
+              <button onClick={() => setShowDownloads(true)} title="Download links"
+                className="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-xl flex items-center justify-center text-white transition active:scale-95">
+                <Download className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Trailer controls, where a streaming service puts them. */}
+        {trailerMp4 && (
+          <div className="absolute bottom-10 right-8 z-20 flex items-center gap-3">
+            <button onClick={() => setMuted((m) => !m)} title={muted ? "Unmute" : "Mute"}
+              className="w-11 h-11 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition">
+              {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+            <button onClick={() => setTrailerOn((t) => !t)} title={trailerOn ? "Pause trailer" : "Play trailer"}
+              className="w-11 h-11 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition">
+              {trailerOn ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* ── Collection ───────────────────────────────────────────────────
+          A film that belongs to a set says so, and the set is a page of its
+          own. Shown only when TMDB names one, which is never for a TV title. */}
+      {collection && (
+        <section className="max-w-[1500px] mx-auto px-6 sm:px-12 pt-10">
+          <Link to={`/collection/${collection.id}`}
+            className="group relative flex items-center gap-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/25 hover:bg-white/[0.07]">
+            {collection.backdrop && (
+              <img src={collection.backdrop} alt="" aria-hidden="true"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 transition duration-500 group-hover:opacity-30" />
+            )}
+            {collection.poster && (
+              <img src={collection.poster} alt=""
+                className="relative z-10 h-24 w-16 shrink-0 rounded-lg object-cover shadow-lg" />
+            )}
+            <div className="relative z-10 min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Part of a collection</div>
+              <div className="truncate text-lg font-bold text-white">{collection.name}</div>
+              <div className="mt-1 text-sm text-gray-400 group-hover:text-white">View collection →</div>
+            </div>
+          </Link>
+        </section>
+      )}
+
+
+      {/* ── Actors ───────────────────────────────────────────────────────── */}
+      {cast.length > 0 && (
+        <section className="max-w-[1500px] mx-auto px-6 sm:px-12 pt-10 pb-4">
+          <h2 className="text-2xl font-bold text-white mb-5">Actors</h2>
+          <div className="flex gap-5 overflow-x-auto pb-3 -mx-1 px-1">
+            {cast.map((c) => (
+              <div key={`${c.name}-${c.character || ""}`} className="shrink-0 w-28 text-center">
+                <div className="w-28 h-28 rounded-full overflow-hidden bg-white/5 border border-white/10 mb-2">
+                  {c.profile_url
+                    ? <img src={c.profile_url} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
+                        {c.name.charAt(0)}
+                      </div>}
+                </div>
+                <div className="text-xs font-semibold text-white truncate">{c.name}</div>
+                {c.character && <div className="text-[11px] text-gray-500 truncate">{c.character}</div>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="flex justify-center w-full px-2 sm:px-6 pb-10">
       {/* SEO */}
       <Helmet>
         {/* The resolutions and languages replace the two competitors' names that
@@ -282,6 +479,19 @@ const MovieDetail = () => {
           </p>
         </div>
 
+        {/* ── Downloads ───────────────────────────────────────────────────
+            A dialog, opened from the hero. They used to sit in a column below
+            the fold, so a page about a film was mostly a list of links to it;
+            now the page is the film and the links are one click away. */}
+        {showDownloads && (
+          <div className="fixed inset-0 z-[600] flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setShowDownloads(false)} />
+            <div className="relative z-10 my-8 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#14141a] p-5 sm:p-7 shadow-2xl">
+              <button onClick={() => setShowDownloads(false)} aria-label="Close"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/15 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
         {/* Downloads Section */}
         <h2 className="text-2xl font-bold text-red-400 mb-4 border-b border-gray-700 pb-2 flex items-center gap-2">
             <Download className="w-6 h-6" /> Download Links
@@ -454,6 +664,9 @@ const MovieDetail = () => {
             );
           })}
         </div>
+        </div>
+      </div>
+    )}
 
         {/* GP Links Section (Styled for dark theme) */}
         {movie.downloads?.some((d) => d.gpLink) && (
@@ -611,6 +824,7 @@ const MovieDetail = () => {
         </div>
       </div>
     </div>
+    </div>
   );
   
 };
