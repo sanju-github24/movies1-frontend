@@ -179,8 +179,17 @@ function parseBundleUrl(bundleUrl) {
   } catch { return null; }
 }
 
+/* Every link this builds is loaded in our own iframe, so it always asks for
+   solo: the player then shows the video alone and keeps its own launcher —
+   the "paste a stream URL or pick a channel" screen — out of the frame. That
+   screen is what appeared while a channel was still loading, and again when
+   one was closed, looking like the player had dumped you on a home page. In
+   solo it tells us to close the frame instead. */
+const PLAYER = "https://m3u8-player-orcin.vercel.app/player.html";
+const solo = (qs) => `${PLAYER}?${qs}${qs ? "&" : ""}solo=1`;
+
 function buildChannelUrl(basePlayerUrl, channel) {
-  if (!channel) return "https://m3u8-player-orcin.vercel.app/player.html";
+  if (!channel) return solo("");
 
   const rawUrl = String(channel.url || "");
 
@@ -191,14 +200,14 @@ function buildChannelUrl(basePlayerUrl, channel) {
       const tab = u.searchParams.get("tab");
       const id = u.searchParams.get("id");
       if (tab && id) {
-        return `https://m3u8-player-orcin.vercel.app/player.html?tab=${encodeURIComponent(tab)}&id=${encodeURIComponent(id)}`;
+        return solo(`tab=${encodeURIComponent(tab)}&id=${encodeURIComponent(id)}`);
       }
     } catch {}
   }
 
   // Live TV channels from live feed (tab=live)
   if (channel.id && (channel._format === "tab_live" || !rawUrl)) {
-    return `https://m3u8-player-orcin.vercel.app/player.html?tab=live&id=${encodeURIComponent(channel.id)}`;
+    return solo(`tab=live&id=${encodeURIComponent(channel.id)}`);
   }
 
   // 2. Direct stream URL (?url=...&title=...)
@@ -211,14 +220,14 @@ function buildChannelUrl(basePlayerUrl, channel) {
     if (channel.cookie) params.set("cookie", channel.cookie);
     if (channel.logo) params.set("logo", channel.logo);
 
-    return `https://m3u8-player-orcin.vercel.app/player.html?${params.toString()}`;
+    return solo(params.toString());
   }
 
   if (channel.id) {
-    return `https://m3u8-player-orcin.vercel.app/player.html?tab=live&id=${encodeURIComponent(channel.id)}`;
+    return solo(`tab=live&id=${encodeURIComponent(channel.id)}`);
   }
 
-  return "https://m3u8-player-orcin.vercel.app/player.html";
+  return solo("");
 }
 
 function extractBaseUrl(bundleUrl) {
@@ -653,6 +662,27 @@ const LiveChannelsPage = () => {
   const iframeRef = useRef(null);
   const playRequestRef = useRef(0);
   const playerRef = useRef(null);
+
+  /* In solo the player has no launcher to fall back to, so when a viewer
+     closes a stream it tells us instead. Without this the frame would simply
+     go black and stay there. */
+  useEffect(() => {
+    const onMessage = (e) => {
+      /* Ad scripts post messages constantly and some carry an origin that is
+         not a URL at all ("null" for a sandboxed frame), so this must never
+         throw — an exception here would surface as a page error on every one. */
+      let host = "";
+      try { host = new URL(e.origin).host; } catch { return; }
+      if (host !== "m3u8-player-orcin.vercel.app") return;
+      if (e.data?.type === "anchor:close") {
+        setPlayerUrl(null);
+        setActiveChannel(null);
+        setIframeLoading(false);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
   const searchRef = useRef(null);
 
   // ── Boot: fetch feed + bundles in parallel ──────────────────────────────────
