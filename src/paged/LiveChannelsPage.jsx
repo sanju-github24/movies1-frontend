@@ -163,6 +163,8 @@ function parseBundleUrl(bundleUrl) {
 
     const params = new URLSearchParams(new URL(raw).search);
     const encoded = params.get("bundle");
+    /* A ?tab=sony / ?tab=fc row names a fixture feed, not a channel list —
+       LiveTabsSection renders those. Nothing for this page to decode. */
     if (!encoded) return null;
     const decoded = JSON.parse(dob(decodeURIComponent(encoded)));
     if (!decoded) return null;
@@ -671,7 +673,22 @@ const LiveChannelsPage = () => {
         if (error) throw error;
         setLogoMap(map);
 
-        const bundleRows = rows || [];
+        /* Live TV is not an admin's bundle — it is the whole channel feed, the
+           same one the player's own Live TV tab reads. It used to depend on
+           somebody remembering to publish a ?tab=live row, and there is no such
+           row in the table, so the page offered everything EXCEPT live TV while
+           being called the Live TV page. It is always present now, and costs
+           nothing extra: resolveBundle reads a feed the page already fetches. */
+        const bundleRows = [...(rows || [])];
+        if (!bundleRows.some((r) => String(r?.bundle_url || "").includes("tab=live"))) {
+          bundleRows.unshift({
+            id: "__live_tv__",
+            title: "Live TV",
+            bundle_url: "https://m3u8-player-orcin.vercel.app/?tab=live",
+            is_active: true,
+            _builtin: true,
+          });
+        }
         setBundles(bundleRows);
 
         // Resolve all bundles (ID-based and legacy) against the live feed
