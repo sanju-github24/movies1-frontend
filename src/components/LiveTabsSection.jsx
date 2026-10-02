@@ -139,9 +139,15 @@ const LiveTabsSection = ({ rows, heading }) => {
     return () => { alive = false; };
   }, [given]);
 
-  const source = given ? rows : fetched;
-  const tabRows = useMemo(() => (source || []).filter((r) => parseTabUrl(r.bundle_url)), [source]);
-  const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url).key))).join(",");
+  const tabRows = useMemo(
+    () =>
+      (source || []).filter((r) => {
+        const p = parseTabUrl(r?.bundle_url);
+        return p && p.key !== "live";
+      }),
+    [source]
+  );
+  const keys = Array.from(new Set(tabRows.map((r) => parseTabUrl(r.bundle_url)?.key).filter(Boolean))).join(",");
 
   /* Somebody looking at a list of live fixtures is about to press play on
      one, so the player and the proxy connection are made ready while they

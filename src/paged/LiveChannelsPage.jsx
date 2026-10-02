@@ -154,7 +154,14 @@ function dob(s) {
  */
 function parseBundleUrl(bundleUrl) {
   try {
-    const params = new URLSearchParams(new URL(bundleUrl).search);
+    const raw = String(bundleUrl || "").trim();
+    if (!raw) return null;
+
+    if (raw.includes("tab=live")) {
+      return { title: "Live TV", _format: "tab_live", channels: [] };
+    }
+
+    const params = new URLSearchParams(new URL(raw).search);
     const encoded = params.get("bundle");
     if (!encoded) return null;
     const decoded = JSON.parse(dob(decodeURIComponent(encoded)));
@@ -171,9 +178,9 @@ function parseBundleUrl(bundleUrl) {
 }
 
 function buildChannelUrl(basePlayerUrl, channel) {
-  if (!channel || !channel.url) return "https://m3u8-player-orcin.vercel.app/player.html";
+  if (!channel) return "https://m3u8-player-orcin.vercel.app/player.html";
 
-  const rawUrl = String(channel.url);
+  const rawUrl = String(channel.url || "");
 
   // 1. Tab-based links (e.g. ?tab=willow&id=... or ?tab=bb&id=...)
   if (rawUrl.includes("tab=") && rawUrl.includes("id=")) {
@@ -187,16 +194,29 @@ function buildChannelUrl(basePlayerUrl, channel) {
     } catch {}
   }
 
-  // 2. Direct stream URL (?url=...&title=...)
-  const params = new URLSearchParams();
-  params.set("url", rawUrl);
-  if (channel.name) params.set("title", channel.name);
-  if (channel.keyId) params.set("keyId", channel.keyId);
-  if (channel.key) params.set("key", channel.key);
-  if (channel.cookie) params.set("cookie", channel.cookie);
-  if (channel.logo) params.set("logo", channel.logo);
+  // Live TV channels from live feed (tab=live)
+  if (channel.id && (channel._format === "tab_live" || !rawUrl)) {
+    return `https://m3u8-player-orcin.vercel.app/player.html?tab=live&id=${encodeURIComponent(channel.id)}`;
+  }
 
-  return `https://m3u8-player-orcin.vercel.app/player.html?${params.toString()}`;
+  // 2. Direct stream URL (?url=...&title=...)
+  if (rawUrl) {
+    const params = new URLSearchParams();
+    params.set("url", rawUrl);
+    if (channel.name) params.set("title", channel.name);
+    if (channel.keyId) params.set("keyId", channel.keyId);
+    if (channel.key) params.set("key", channel.key);
+    if (channel.cookie) params.set("cookie", channel.cookie);
+    if (channel.logo) params.set("logo", channel.logo);
+
+    return `https://m3u8-player-orcin.vercel.app/player.html?${params.toString()}`;
+  }
+
+  if (channel.id) {
+    return `https://m3u8-player-orcin.vercel.app/player.html?tab=live&id=${encodeURIComponent(channel.id)}`;
+  }
+
+  return "https://m3u8-player-orcin.vercel.app/player.html";
 }
 
 function extractBaseUrl(bundleUrl) {
@@ -305,6 +325,20 @@ function enrichChannels(channels, logoMap) {
  */
 async function resolveBundle(parsed, logoMap) {
   if (!parsed) return null;
+
+  if (parsed._format === "tab_live") {
+    try {
+      const chMap = await getChMap();
+      const channels = Object.values(chMap || {}).map((ch) => ({
+        ...ch,
+        _format: "tab_live",
+      }));
+      return { ...parsed, channels: enrichChannels(channels, logoMap) };
+    } catch (e) {
+      console.error("Failed to resolve tab_live channels:", e);
+      return null;
+    }
+  }
 
   if (parsed._format === "legacy") {
     // Try to refresh keys from live feed by name match
@@ -1121,7 +1155,11 @@ const LiveChannelsPage = () => {
             than bundles, so they survive the hourly token rotation, and read
             live on render — a stored copy would be stale by the time anyone
             looked at it. */}
-        {!searchTerm && <LiveTabsSection rows={bundles} />}
+        {!searchTerm && (
+          <LiveTabsSection
+            rows={bundles.filter((b) => !b.bundle_url?.includes("tab=live"))}
+          />
+        )}
       </div>
     </div>
   );

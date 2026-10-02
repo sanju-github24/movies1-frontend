@@ -5265,7 +5265,11 @@
           });
           return;
         }
-        loadVideo(directUrl, directTitle || 'Movie', false, null);
+        const directKeyId = q.get('keyId');
+        const directKey = q.get('key');
+        const directCookie = q.get('cookie');
+        const drm = (directKeyId || directKey || directCookie) ? { keyId: directKeyId || '', key: directKey || '', cookie: directCookie || '' } : null;
+        loadVideo(directUrl, directTitle || 'Movie', false, drm);
         return;
       }
 

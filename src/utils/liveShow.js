@@ -34,7 +34,7 @@ export const LIVE_SHOWS = {
        params, so it goes into the overlay as an iframe rather than through
        hls.js — nothing here should try to rewrite or proxy it. */
     streamUrl:
-      "https://m3u8-player-orcin.vercel.app/?sid=lvovfjjeoqz4&src=GwxGQEEPV0UNDktOXwFBRAgHWgBDVlFcXUAcDBsAHQwcXldBV1hRX0RKAgIBGgsHAANJG11cXUcLAQgBHRlWUVpRSUQaAhoUHUBeVAEGABwHVl8DRw0&t=MBdeX0BGWCEIAR0ZVlESfTxKQV5DQAJZGw&lg=GwxGQEEPV0URHAcKV1FfVghHCBwAHUZDH1gLGkccBwpXUV9HHQsNFl0RXB9TRgsPHRxcNHtmd2EuRSUmJT1xeHN7Ni8lQD8xZHVmYycmIDk2LGRzenQ2JCwjLDt9fH1nKzUiLj02c3RzajAuRgYeGVVVQRo0JS4gLDB2H1tYGQ0MQQMWVQ",
+      "https://m3u8-player-orcin.vercel.app/?tab=bb",
     startMin: 21 * 60 + 30,          // 9:30 PM IST
     endMin:   22 * 60 + 30,          // 10:30 PM IST
     startLabel: "9:30 PM",

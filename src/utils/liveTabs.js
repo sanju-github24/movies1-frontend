@@ -222,9 +222,7 @@ export const BIGG_BOSS_KANNADA = {
   description: "The Kannada house, streaming live around the clock.",
   content_type: "tv",
   isLiveStream: true,
-  /* bb is the player's Hotstar tab and bb-kannada the channel inside it; solo
-     keeps the player's own chrome out of the way, since this opens framed. */
-  playSrc: tabItemUrl(PLAYER_BASE, "bb", "bb-kannada", true),
+  playSrc: "https://m3u8-player-orcin.vercel.app/?tab=bb",
   playTitle: "Bigg Boss Kannada 24/7",
 };
 
