@@ -5,21 +5,43 @@ import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
 
 // Helper for dynamic imports that auto-reloads ONCE if a new deployment changed chunk hashes
+/* A chunk that will not load means this tab is running a build that no longer
+   exists: the deploy replaced index.html, and the hashed file it used to point
+   at is gone. Reloading fixes it — but only if the reload actually fetches the
+   new document, and a plain reload is free to answer from cache with the same
+   stale one, which is how this ends up showing an error instead of recovering.
+   So the recovery navigates with a cache-busting parameter, which the next
+   load strips back out of the address bar. */
 const safeLazy = (importFn) =>
   lazy(() =>
     importFn().catch((err) => {
       console.warn("Dynamic import failed:", err);
       const lastReload = sessionStorage.getItem('last_chunk_reload');
       const now = Date.now();
-      // Only reload if we haven't reloaded in the last 10 seconds to prevent tubelight/infinite loops
+      // Only reload if we haven't reloaded in the last 10 seconds, to prevent loops
       if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
         sessionStorage.setItem('last_chunk_reload', now.toString());
-        window.location.reload();
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.set('_r', String(now));
+          window.location.replace(u.toString());
+        } catch {
+          window.location.reload();
+        }
         return new Promise(() => {});
       }
       throw err;
     })
   );
+
+/* The recovery parameter has done its job by the time anything here runs. */
+if (typeof window !== "undefined" && window.location.search.includes("_r=")) {
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete('_r');
+    window.history.replaceState({}, "", u.pathname + (u.search || "") + u.hash);
+  } catch { /* an address bar left slightly untidy is not worth throwing over */ }
+}
 
 // --- Components & Pages Imports ---
 import Navbar from './components/Navbar';
