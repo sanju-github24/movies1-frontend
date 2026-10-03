@@ -44,6 +44,10 @@ const AUDIO_PREF_KEY = "preferred_audio_lang";
 // the very first fragment is already the right quality.
 const BW_KEY = "hls_bw_estimate_v1";
 
+// A stream we fetch through a proxy — the StreamX worker or the backend's CORS
+// proxy — where every request costs an extra hop.
+const isProxied = (u) => /workers\.dev\/\?url=|\/api\/hls-proxy\?/.test(u || "");
+
 const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
   // both 2- and 3-letter ISO codes (our HLS uses 3-letter: kan, hin, tam…)
@@ -349,13 +353,19 @@ const VideoPlayer = ({
         : (link.downlink ? Math.max(500e3, link.downlink * 1e6 * 0.7)   // 70% of downlink
                          : (smallScreen ? 900e3 : 3e6));
 
+      /* Through a proxy (our worker, or the backend's CORS proxy) every
+         request is an extra hop, so the bandwidth probe is a whole round trip
+         spent before the first fragment — the first fragment measures it
+         anyway. */
+      const proxied = isProxied(src);
+
       const resumeAt = startTimeRef.current > 1 ? startTimeRef.current : 0;
       const cfg = {
         enableWorker: true,
         lowLatencyMode: false,             // VOD — LL-HLS part loading only adds work
         startPosition: resumeAt || -1,
         startFragPrefetch: true,           // fetch the first fragment during manifest parse
-        testBandwidth: true,
+        testBandwidth: !proxied,
 
         // Rendition selection
         startLevel: -1,
@@ -700,6 +710,9 @@ const VideoPlayer = ({
     // segment download competing with playback — the main cause of slow, stuttery
     // scrubbing on mobile (and Hotstar/Netflix don't show scrub previews there).
     if (Math.min(window.innerWidth, window.innerHeight) <= 820) return;
+    // Proxied streams: same reason. Every hover would pull full-size segments
+    // through the proxy alongside the ones playback — or a seek — is waiting on.
+    if (isProxied(src)) return;
     pv.muted = true;
     // "Prime" the decoder — a muted play→pause makes the element actually render
     // frames when we seek it (otherwise a never-played <video> can stay black).

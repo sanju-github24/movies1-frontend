@@ -13,6 +13,7 @@ import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveS
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
+import { tmdbStreams } from "../utils/anchorTmdb";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
@@ -217,7 +218,11 @@ const buildServers = (meta, eps = []) => {
   }
   const srv = [];
   // Our own R2 HLS — highest priority when present (multi-audio, our CDN).
+  // A title we do not host still gets AnchorHD when it has a TMDB id: the
+  // StreamX player resolves that id itself (our CDN first, then its own
+  // sources), so the viewer stays in our player instead of someone's embed.
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
+  else if (meta.tmdb_id) srv.push({ id:"ourhls", name:"AnchorHD", label:"Our Player", icon:<Video size={14}/> });
   // Our uploaded embed mirror — ahead of every third-party server.
   if (meta.html_code || eps.some(e => e.html))
     srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> })
@@ -643,10 +648,63 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     return true;
   }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy]);
 
+  /* ── AnchorHD by TMDB id, for a title not on our CDN. The stream is found
+     the way the StreamX player finds it (our CDN first, then FilmU's sources)
+     and played here, so the audio languages, qualities and subtitles come
+     straight from its master playlist into our own menus. The remaining
+     sources are kept: if this one is refused mid-play, the next takes over. ── */
+  const tmdbIterRef = useRef(null);
+  const tmdbBusyRef = useRef(false);
+  const nextTmdbStream = useCallback(async () => {
+    const it = tmdbIterRef.current;
+    if (!it || tmdbBusyRef.current) return null;   // the player can report a refusal more than once
+    tmdbBusyRef.current = true;
+    try {
+      const { value, done } = await it.next();
+      return done ? null : value;
+    } catch { return null; } finally { tmdbBusyRef.current = false; }
+  }, []);
+
+  const playAnchorTmdb = useCallback(async (ep) => {
+    const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
+    const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
+    if (ep) setCurrentOverlayEp(ep);
+    setMxResolving(true);
+    tmdbIterRef.current = tmdbStreams({
+      tmdbId: movieMeta.tmdb_id, type: TV ? "tv" : "movie", season: s, episode: e,
+      title: movieMeta.title || "", backendUrl,
+    });
+    const found = await nextTmdbStream();
+    setMxResolving(false);
+    if (!found) {
+      tmdbIterRef.current = null;
+      // Nobody has it — hand over to Mirchi rather than leave a dead button.
+      const next = availableServers.find(sv => sv.id === "mirchi");
+      toast.info(next ? "AnchorHD couldn't find this one — trying Mirchi" : "AnchorHD couldn't find this one");
+      if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "mirchi"); }
+      return;
+    }
+    const slug = movieMeta.slug || routeSlug;
+    const saved = readOne(slug);
+    const sameEp = !TV || (saved && String(saved.season) === String(s) && String(saved.episode) === String(e));
+    setResumeStart(TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug));
+    setFinalSource(found.url);
+    setSourceType("hls");
+    setVideoTitle(TV ? `${movieMeta.title || routeSlug} — S${s}E${e}` : (movieMeta.title || routeSlug));
+    setShowOverlay(true);
+  }, [movieMeta, episodes, availableServers, backendUrl, routeSlug, nextTmdbStream]);
+  const handlePlayActionRef = useRef(null);
+
   /* ── Re-sign an expired stream URL and carry on from the same second.
      Our R2 links are signed for 24h; if one is rejected mid-playback the
      player asks for a fresh one instead of dying. ── */
   const refreshSource = useCallback(async (atSeconds) => {
+    // AnchorHD by TMDB: a refused stream is not re-signed — the next source plays.
+    if (tmdbIterRef.current) {
+      const next = await nextTmdbStream();
+      if (next) { setResumeStart(atSeconds || 0); setFinalSource(next.url); }
+      return;
+    }
     const link = currentOverlayEp?.direct_url || currentOverlayEp?.hls_url
       || movieMeta?.hls_url || movieMeta?.video_url;
     if (!link) return;
@@ -654,7 +712,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (!url) return;
     setResumeStart(atSeconds || 0);
     setFinalSource(maybeProxy(url));
-  }, [currentOverlayEp, movieMeta, resolveStreamLink, maybeProxy]);
+  }, [currentOverlayEp, movieMeta, resolveStreamLink, maybeProxy, nextTmdbStream]);
 
   /* ── Continue Watching: throttled progress save while our HLS plays ── */
   const handleProgress = useCallback((time, duration) => {
@@ -719,6 +777,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
   /* ── handlePlayAction ── */
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
+    tmdbIterRef.current = null;   // whatever plays next, it is not the last TMDB search
     if (!movieMeta) return;
 
     /* Live telecast, WHILE IT IS ON AIR: one source, one window. The stream is a
@@ -751,7 +810,6 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (ep) {
         // Series: play the episode's own stream link in our VideoPlayer.
         if (ep.direct_url || ep.hls_url) { playEpisodeStream(ep); return; }
-        if (ep.html || ep.html_code) serverId = "embed";       // else fall to the embed mirror
       } else {
         // Movies: play OUR stream in the VideoPlayer. AnchorHD prefers the HLS
         // (m3u8) field; Direct prefers the direct URL — both handled by the same
@@ -760,8 +818,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
           ? (movieMeta.video_url || movieMeta.hls_url)
           : (movieMeta.hls_url || movieMeta.video_url);
         if (movieLink) { playOurHls(movieLink); return; }
-        if (movieMeta.html_code) serverId = "embed";
       }
+      // Not on our CDN: AnchorHD still plays it in our VideoPlayer, by TMDB id.
+      if (serverId === "ourhls" && movieMeta.tmdb_id) { playAnchorTmdb(ep); return; }
+      if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";  // else the embed mirror
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
 
@@ -820,11 +880,13 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       setVideoTitle(label);
       setShowOverlay(true);
     }
-  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream, maybeProxy]);
+  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream, playAnchorTmdb, maybeProxy]);
+  handlePlayActionRef.current = handlePlayAction;
 
   /* Closing the player: when we were opened straight from the mobile detail
      sheet, go back to it instead of revealing the watch page underneath. */
   const closeOverlay = useCallback(() => {
+    tmdbIterRef.current = null;
     setShowOverlay(false);
     setCurrentOverlayEp(null);
     setShowSettingsPanel(false);
@@ -896,7 +958,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       ? (ep.direct_url || ep.hls_url)
       : (movieMeta.hls_url || movieMeta.video_url);
 
-    if (anchorHd) {
+    // No copy of ours, but a TMDB id: AnchorHD plays it in our player anyway.
+    if (anchorHd || movieMeta.tmdb_id) {
       const srv = availableServers.find(s => s.id === "ourhls") ||
                   availableServers.find(s => s.id === "hls");
       if (srv) setActiveServer(srv);
@@ -1457,7 +1520,9 @@ if (!alive) return;
                    description={movieMeta?.description || ""}
                    episodes={movieMeta?.content_type === "tv" ? episodes : []}
                    currentEpisodeIndex={currentEpIndex}
-                   onEpisodeClick={(ep) => playEpisodeStream(ep)}
+                   onEpisodeClick={(ep) => (ep.direct_url || ep.hls_url)
+                     ? playEpisodeStream(ep)
+                     : handlePlayAction(ep, "ourhls")}  /* not uploaded → AnchorHD by TMDB */
                    startTime={resumeStart}
                    onProgress={handleProgress}
                    preferredAudioLang={preferredAudioLang}
@@ -1940,10 +2005,10 @@ if (!alive) return;
                       // Our uploaded embed mirror (Multi Audio).
                       handlePlayAction(ep, "embed"); return;
                     }
-                    // No AnchorHD/Multi Audio — try the preferred third-party servers
-                    // in order. mirchi needs tmdb_id, so check; omega always works.
+                    // Not uploaded — AnchorHD still plays it in our player by
+                    // TMDB id; Omega (imdb or tmdb) when there is no TMDB id.
                     if (movieMeta?.tmdb_id) {
-                      handlePlayAction(ep, "mirchi"); return;
+                      handlePlayAction(ep, "ourhls"); return;
                     }
                     handlePlayAction(ep, "imdb_reader"); // Omega
                   }}
@@ -1985,6 +2050,7 @@ if (!alive) return;
                   {openDropdown === i && (
                     <div className="mt-2 p-3 rounded-2xl bg-[#0a0a0d] border border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-2">
                      {[
+                        ...(ep.hasDirect || movieMeta.tmdb_id ? [{ id:"ourhls", label:"AnchorHD", color:"green" }] : []),
                         ...(movieMeta.mx_web_url || movieMeta.mx_id ? [{ id:"mx", label:"MX Player", color:"green" }] : []),
                         { id:"imdb_reader", label:"Omega",      color:"yellow" },
                         { id:"embed",       label:"Multi Audio", color:"indigo" },
