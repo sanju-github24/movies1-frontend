@@ -378,6 +378,7 @@ const WatchHtmlPage = () => {
   const [showOverlay,       setShowOverlay      ] = useState(false);
   const [finalSource,       setFinalSource      ] = useState(null);
   const [mxResolving,       setMxResolving      ] = useState(false);
+  const [resolvingLabel,    setResolvingLabel   ] = useState("");
   const [sourceType,        setSourceType       ] = useState(null);
   const [videoTitle,        setVideoTitle       ] = useState(routeSlug);
   const [currentOverlayEp,  setCurrentOverlayEp ] = useState(null);
@@ -669,13 +670,19 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
     const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
     if (ep) setCurrentOverlayEp(ep);
+    setResolvingLabel("Finding the best AnchorHD stream…");
     setMxResolving(true);
     tmdbIterRef.current = tmdbStreams({
-      tmdbId: movieMeta.tmdb_id, type: TV ? "tv" : "movie", season: s, episode: e,
-      title: movieMeta.title || "", backendUrl,
+      tmdbId: movieMeta.tmdb_id, imdbId: movieMeta.imdb_id || "",
+      type: TV ? "tv" : "movie", season: s, episode: e,
+      // FilmU's scrapers match on the bare name and year, not our display title.
+      title: titleForSearch(movieMeta.title || "").name || movieMeta.title || "",
+      year: movieMeta.year || titleForSearch(movieMeta.title || "").year || "",
+      backendUrl,
     });
     const found = await nextTmdbStream();
     setMxResolving(false);
+    setResolvingLabel("");
     if (!found) {
       tmdbIterRef.current = null;
       // Nobody has it — hand over to Mirchi rather than leave a dead button.
@@ -1453,7 +1460,7 @@ if (!alive) return;
       {mxResolving && (
         <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
           <Loader2 className="animate-spin text-blue-500" size={40} />
-          <p className="text-sm text-white/70">Preparing MX Player stream…</p>
+          <p className="text-sm text-white/70">{resolvingLabel || "Preparing MX Player stream…"}</p>
         </div>
       )}
 
