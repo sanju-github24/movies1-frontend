@@ -25,6 +25,14 @@ const safeURI = (uri) => {
   try { return encodeURI(decodeURI(uri)); } catch { return uri; }
 };
 
+/* TMDB answers with an ISO code; these are the languages this catalogue
+   actually carries, so an unlisted code simply shows nothing. */
+const TMDB_LANG_NAMES = {
+  ta: "Tamil", te: "Telugu", hi: "Hindi", ml: "Malayalam", kn: "Kannada",
+  en: "English", ko: "Korean", bn: "Bengali", mr: "Marathi", pa: "Punjabi",
+  ja: "Japanese", zh: "Chinese", es: "Spanish", fr: "French", de: "German",
+};
+
 /* ===== Slug ===== */
 const generateSlug = (title) =>
   title?.toLowerCase().trim()
@@ -1295,7 +1303,18 @@ if (!alive) return;
   const dlBlocks = Array.isArray(movieMeta.download_links) ? movieMeta.download_links : [];
   const dlLabels = dlBlocks.flatMap((b) => [b?.quality || "", ...(b?.links || []).map((l) => l?.name || l?.path || "")]);
   const dlQuality = facetPhrase(downloadFacets([...dlLabels, movieMeta.title || ""]));
-  const dlLangs = languagesFrom([...dlLabels, movieMeta.title || ""]);
+  /* The audio languages, from the most reliable source down to the loosest.
+     The `language` column is filled in for almost every uploaded row, so it
+     wins; the file names behind the download buttons are the next best thing;
+     and a TMDB-only title (nothing uploaded, no labels to read) still has its
+     original language, which beats showing none at all. */
+  const metaLangs = (Array.isArray(movieMeta.language) ? movieMeta.language
+    : String(movieMeta.language || "").split(/[,/|·]+/)).map((l) => String(l).trim()).filter(Boolean);
+  const labelLangs = languagesFrom([...dlLabels, movieMeta.title || ""]);
+  const tmdbLang = TMDB_LANG_NAMES[(tmdbMeta?.original_language || "").toLowerCase()];
+  const dlLangs = metaLangs.length ? metaLangs
+    : labelLangs.length ? labelLangs
+    : tmdbLang ? [tmdbLang] : [];
   /* The largest block, not the sum of them: a season offered in 480p and 720p
      is twelve episodes in two qualities, not twenty-four episodes. */
   const epCount = Math.max(0, ...dlBlocks.map((b) => ((b?.links || []).length > 1 ? b.links.length : 0)));
