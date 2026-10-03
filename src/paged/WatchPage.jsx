@@ -1587,34 +1587,8 @@ if (!alive) return;
 
         <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
 
-          {/* Poster */}
-          <div className="shrink-0 mx-auto lg:mx-0">
-            <div className="relative">
-              <div className="absolute -inset-4 bg-blue-600/10 rounded-[2rem] blur-2xl" />
-              <div className="relative w-[160px] sm:w-[200px] aspect-[2/3] rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.8)]">
-                <img src={movieMeta.poster || "/default-poster.jpg"} className="w-full h-full object-cover" alt={movieMeta.title} />
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
-              </div>
-              <div className="absolute -bottom-3 -right-3 flex items-center gap-1 bg-[#070709] border border-white/10 px-2.5 py-1.5 rounded-xl shadow-xl">
-                <Star size={11} className="text-yellow-400" fill="currentColor" />
-                <span className="text-white font-black text-xs">{movieMeta.imdbRating || "0.0"}</span>
-              </div>
-            </div>
-          </div>
-
           {/* Meta */}
           <div className="flex-1 min-w-0 w-full space-y-5 lg:pt-6 text-center lg:text-left">
-
-            {/* Eyebrow */}
-            <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
-              {isTVShow
-                ? <><Tv2 size={12} className="text-blue-400"/><span className="text-blue-400 font-black text-[9px] uppercase tracking-[0.25em]">TV Series</span></>
-                : <><Film size={12} className="text-blue-400"/><span className="text-blue-400 font-black text-[9px] uppercase tracking-[0.25em]">Feature Film</span></>
-              }
-              {movieMeta.source === "tmdb" && (
-                <span className="px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/20 rounded-md text-yellow-400 text-[8px] font-black uppercase tracking-widest">TMDB</span>
-              )}
-            </div>
 
             {/* Title */}
             {movieMeta.title_logo ? (
@@ -1630,84 +1604,89 @@ if (!alive) return;
               </h1>
             )}
 
-            {/* Tags */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
-              <span className="flex items-center gap-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg shadow-lg shadow-blue-600/30">
-                <ShieldCheck size={10}/> HD
-              </span>
-              {(movieMeta.runtime || tmdbMeta?.runtime) && (
-                <span className="flex items-center gap-1.5 text-gray-400 text-[9px] font-black uppercase tracking-widest bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
-                  <Clock size={10} className="text-blue-400"/> {movieMeta.runtime || tmdbMeta.runtime} min
+            {/* One line, not a wall of pills: the things a person checks before
+                pressing play, in the order they check them. */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-2 text-sm text-gray-300">
+              {movieMeta.imdbRating && movieMeta.imdbRating !== "0.0" && (
+                <span className="flex items-center gap-1.5 font-bold text-white">
+                  <Star size={14} className="text-white" fill="currentColor" />{movieMeta.imdbRating}
                 </span>
               )}
-              {movieMeta.year && (
-                <span className="text-gray-400 text-[9px] font-black uppercase bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
-                  {movieMeta.year}
-                </span>
-              )}
+              {movieMeta.year && <><span className="text-gray-600">•</span><span>{movieMeta.year}</span></>}
               {movieMeta.certification && (
-                <span className="text-gray-400 text-[9px] font-black uppercase bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
-                  {movieMeta.certification}
-                </span>
+                <><span className="text-gray-600">•</span>
+                  <span className="rounded border border-white/25 px-1.5 py-0.5 text-xs">{movieMeta.certification}</span></>
               )}
-              {movieMeta.genres.slice(0,2).map((g,i) => (
-                <span key={i} className="text-gray-400 text-[9px] font-black uppercase bg-white/5 border border-white/5 px-2.5 py-1.5 rounded-lg">
-                  {typeof g === "object" ? g.name : g}
-                </span>
-              ))}
-              {/* The audio languages, as links to their collections. Useful to
-                  someone who wants more of the same, and it is the only path a
-                  crawler has from a title back into the catalogue — this page
-                  hides the site chrome, footer included. */}
-              {dlLangs.slice(0, 4).map((lang) => (
-                <Link
-                  key={lang}
-                  to={`/category/${encodeURIComponent(lang)}`}
-                  className="text-blue-300 hover:text-white text-[9px] font-black uppercase bg-blue-500/10 border border-blue-500/30 px-2.5 py-1.5 rounded-lg transition"
-                >
-                  {lang}
-                </Link>
-              ))}
+              {(movieMeta.runtime || tmdbMeta?.runtime) && (
+                <><span className="text-gray-600">•</span>
+                  <span>{(() => { const m = movieMeta.runtime || tmdbMeta.runtime;
+                    return `${Math.floor(m / 60) ? `${Math.floor(m / 60)}h ` : ""}${m % 60}m`; })()}</span></>
+              )}
               {live && (
-                <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border
-                  ${live.live ? "text-white bg-red-600 border-red-500" : "text-red-300 bg-red-500/10 border-red-500/30"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full bg-current ${live.live ? "animate-pulse" : ""}`} />
+                <span className={`ml-1 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider
+                  ${live.live ? "border-red-500 bg-red-600 text-white" : "border-red-500/30 bg-red-500/10 text-red-300"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full bg-current ${live.live ? "animate-pulse" : ""}`} />
                   {live.badge}
                 </span>
               )}
             </div>
+
+            {/* Genres, and the audio languages as links — the only path a
+                crawler has from this page back into the catalogue, since the
+                site chrome and footer are hidden here. */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-2 text-sm text-gray-400">
+              {movieMeta.genres.slice(0, 3).map((g, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="text-gray-700">|</span>}
+                  <span>{typeof g === "object" ? g.name : g}</span>
+                </React.Fragment>
+              ))}
+              {dlLangs.slice(0, 4).map((lang) => (
+                <Link key={lang} to={`/category/${encodeURIComponent(lang)}`}
+                  className="text-xs text-blue-300/80 transition hover:text-white">{lang}</Link>
+              ))}
+            </div>
+
 
             {/* Description */}
             <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-blue-600 pl-4 mx-auto lg:mx-0 text-left max-w-xl lg:max-w-none max-h-[120px] overflow-y-auto font-normal opacity-90">
               {movieMeta.description}
             </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center lg:justify-start">
+            {/* What to do with the film, in the order a person wants it: play
+                it, keep it, take it. The circles are deliberately quiet — one
+                thing on this page is the action, and it is not the download. */}
+            <div className="flex items-center gap-3 sm:gap-4 pt-2 justify-center lg:justify-start">
               <button
                 onClick={() => {
-                const firstEp = isTVShow && episodes.length > 0 ? episodes[0] : null;
-                // Respect the currently-selected server (e.g. AnchorHD). Only fall back
-                // to the embed mirror when the active server can't play this item.
-                handlePlayAction(firstEp);
-              }}
-                className={`group relative overflow-hidden px-8 py-4 sm:py-3.5 min-h-[48px] text-white font-black rounded-xl flex items-center justify-center gap-3 shadow-xl transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation
-                  ${live && live.live
-                    ? "bg-red-600 shadow-red-600/25 hover:shadow-red-600/50"
-                    : "bg-blue-600 shadow-blue-600/25 hover:shadow-blue-600/50"}`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                <div className="relative p-1.5 bg-white/20 rounded-lg"><Play size={14} fill="currentColor"/></div>
-                {/* Off air the button plays the aired episodes, so it must say so —
-                    the start time is still on the badge above. */}
-                <span className="relative">{live && live.live ? live.cta : (isTVShow ? "Stream Now" : "Play Now")}</span>
+                  const firstEp = isTVShow && episodes.length > 0 ? episodes[0] : null;
+                  // Respect the currently-selected server (e.g. AnchorHD). Only fall
+                  // back to the embed mirror when the active server can't play this.
+                  handlePlayAction(firstEp);
+                }}
+                className={`group flex items-center gap-4 rounded-full py-1.5 pl-1.5 pr-7 transition active:scale-[0.98] touch-manipulation
+                  ${live && live.live ? "bg-red-600 text-white hover:bg-red-500" : "bg-white text-black hover:bg-gray-200"}`}>
+                <span className={`flex h-12 w-12 items-center justify-center rounded-full ${live && live.live ? "bg-black/30" : "bg-black"}`}>
+                  <Play size={18} fill="currentColor" className={`ml-0.5 ${live && live.live ? "text-white" : "text-white"}`} />
+                </span>
+                <span className="text-left leading-tight">
+                  <span className="block text-sm font-black tracking-tight">
+                    {live && live.live ? live.cta : "Watch Now"}
+                  </span>
+                  <span className={`block text-[10px] font-bold uppercase tracking-[0.18em] ${live && live.live ? "text-white/70" : "text-gray-600"}`}>
+                    {isTVShow ? "Series" : "Movie"}
+                  </span>
+                </span>
               </button>
+
               {movieMeta.download_links?.length > 0 && (
-                <button onClick={() => setShowDownloads(true)}
-                  className="px-8 py-4 sm:py-3.5 min-h-[48px] bg-white/5 text-white border border-white/10 font-black rounded-xl flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/20 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] touch-manipulation">
-                  <Download size={15}/> Download
+                <button onClick={() => setShowDownloads(true)} title="Download links"
+                  className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
+                  <Download size={22} />
                 </button>
               )}
             </div>
+
 
             {/* Quick server select */}
             {availableServers.length > 0 && (
