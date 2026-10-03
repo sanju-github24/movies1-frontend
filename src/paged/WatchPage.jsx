@@ -13,14 +13,10 @@ import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveS
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
+import { useMp4Trailer } from "../utils/useMp4Trailer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
-  Loader2, Star, Play, ShieldCheck,
-  ArrowLeft, List, MonitorPlay,
-  Video, Zap, Database, Clock, Globe, AlertCircle,
-  ChevronDown, Monitor, Cpu, Download, X, Languages,
-  Settings, Eye, Film, Tv2,
-  Shield, Signal, Users
+  Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
 } from "lucide-react";
 
 /* ===== Safe URI ===== */
@@ -316,6 +312,13 @@ const WatchHtmlPage = () => {
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
   const [showDownloads,     setShowDownloads    ] = useState(false);
+  const [heroMuted,         setHeroMuted        ] = useState(true);
+  const [heroTrailerOn,     setHeroTrailerOn    ] = useState(true);
+  const [heroTrailerReady,  setHeroTrailerReady ] = useState(false);
+  /* The same chrome-free trailer every other surface plays — a bare MP4, so it
+     sits behind the text with no player furniture of its own. It arrives a
+     moment after the art does, and fades in rather than cutting. */
+  const { trailerMp4: heroTrailer } = useMp4Trailer(movieMeta);
   const [tmdbMeta,          setTmdbMeta         ] = useState(null);
   const [episodes,          setEpisodes         ] = useState([]);
   const [availableServers,  setAvailableServers ] = useState([]);
@@ -1573,33 +1576,59 @@ if (!alive) return;
       </header>
 
       {/* ── HERO ── */}
-      <div className="relative pt-16 w-full min-h-[560px] overflow-hidden">
+      <div className="relative w-full overflow-hidden min-h-[78vh] sm:min-h-[80vh] lg:min-h-[86vh] flex flex-col justify-end">
         {movieMeta.background && (
           <div className="absolute inset-0 z-0">
             <img src={movieMeta.background} alt=""
               className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-110"}`}
               onLoad={() => setImgLoaded(true)} />
+            {/* The trailer, once it has something to show. Muted and looping,
+                because a page that starts talking at you is a page people
+                leave; the controls to change that are bottom-right. */}
+            {heroTrailer && heroTrailerOn && (
+              <video
+                src={heroTrailer}
+                autoPlay muted={heroMuted} loop playsInline preload="none"
+                onCanPlay={() => setHeroTrailerReady(true)}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${heroTrailerReady ? "opacity-100" : "opacity-0"}`}
+              />
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-[#070709] via-[#070709]/80 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/50 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#070709] to-transparent" />
           </div>
         )}
 
-        <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 py-12 flex flex-col lg:flex-row gap-10 lg:gap-14 items-start w-full">
+        {/* Where a streaming service puts them, and the only chrome the
+            trailer gets. Smaller on a phone, where the corner is tighter. */}
+        {heroTrailer && (
+          <div className="absolute bottom-6 right-4 z-20 flex items-center gap-2 sm:bottom-10 sm:right-8 sm:gap-3">
+            <button onClick={() => setHeroMuted((m) => !m)} aria-label={heroMuted ? "Unmute trailer" : "Mute trailer"}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white backdrop-blur-md transition hover:bg-black/70 sm:h-11 sm:w-11">
+              {heroMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <button onClick={() => setHeroTrailerOn((t) => !t)} aria-label={heroTrailerOn ? "Pause trailer" : "Play trailer"}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white backdrop-blur-md transition hover:bg-black/70 sm:h-11 sm:w-11">
+              {heroTrailerOn ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+          </div>
+        )}
+
+        <div className="relative z-10 w-full max-w-[1800px] mx-auto px-5 sm:px-8 lg:px-12 pt-28 sm:pt-32 pb-10 sm:pb-14">
 
           {/* Meta */}
-          <div className="flex-1 min-w-0 w-full space-y-5 lg:pt-6 text-center lg:text-left">
+          <div className="w-full max-w-3xl space-y-4 sm:space-y-5 text-center lg:text-left mx-auto lg:mx-0">
 
             {/* Title */}
             {movieMeta.title_logo ? (
               <img
                 src={movieMeta.title_logo}
                 alt={movieMeta.title || movieMeta.slug}
-                className="max-h-20 sm:max-h-28 lg:max-h-32 w-auto object-contain drop-shadow-2xl mb-1"
+                className="mx-auto lg:mx-0 mt-6 sm:mt-10 max-h-16 sm:max-h-24 lg:max-h-32 w-auto max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] object-contain drop-shadow-2xl"
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
             ) : (
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black uppercase tracking-tighter italic text-white leading-[0.9] drop-shadow-2xl">
+              <h1 className="mt-6 sm:mt-10 text-[28px] leading-[1.05] sm:text-4xl lg:text-5xl xl:text-6xl font-black uppercase tracking-tighter italic text-white drop-shadow-2xl">
                 {movieMeta.title || movieMeta.slug}
               </h1>
             )}
@@ -1649,7 +1678,7 @@ if (!alive) return;
 
 
             {/* Description */}
-            <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-blue-600 pl-4 mx-auto lg:mx-0 text-left max-w-xl lg:max-w-none max-h-[120px] overflow-y-auto font-normal opacity-90">
+            <p className="mx-auto lg:mx-0 max-w-xl text-left text-[13px] sm:text-sm leading-relaxed text-gray-300/90 line-clamp-3 sm:line-clamp-4">
               {movieMeta.description}
             </p>
 
