@@ -244,6 +244,25 @@ const buildServers = (meta, eps = []) => {
   return srv;
 };
 
+/* The audio languages live on the `movies` table as a text[] of names — there
+   is no such column on watch_html, so a row has to be looked up by slug, or by
+   the title when the two tables slugged the same title differently. */
+const fetchLangs = async (slug, title) => {
+  const take = (r) => (Array.isArray(r?.language) ? r.language.filter(Boolean) : []);
+  try {
+    if (slug) {
+      const { data } = await supabase.from("movies").select("language").eq("slug", slug).limit(1);
+      const got = take(data && data[0]);
+      if (got.length) return got;
+    }
+    if (title) {
+      const { data } = await supabase.from("movies").select("language").eq("title", title).limit(1);
+      return take(data && data[0]);
+    }
+  } catch { /* the languages are decoration — never fail the page over them */ }
+  return [];
+};
+
 /* ===================================================================
    attachLocalHls — when we arrive with router state (a TMDB pick, a search
    result, the header's detail sheet), find whether we've ALSO uploaded this
@@ -252,7 +271,7 @@ const buildServers = (meta, eps = []) => {
    Match order: exact slug → exact tmdb_id → fuzzy title (+ year).
 =================================================================== */
 const localNorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const LOCAL_COLS = "slug,hls_url,video_url,html_code,episodes,download_links";
+const LOCAL_COLS = "slug,title,hls_url,video_url,html_code,episodes,download_links";
 /* Any of these makes a row worth attaching: our own HLS, a direct file, the
    uploaded embed (which is what "Multi Audio" plays), per-episode stream links —
    or downloads. An embed-only row used to be discarded here, which is why Multi
@@ -284,7 +303,7 @@ const attachLocalHls = async (m) => {
           ran. The year agreement boost below reads whatever the row carries and
           is simply skipped when it carries none. */
     const { data: rows } = await supabase.from("watch_html")
-      .select(`${LOCAL_COLS},title`)
+      .select(LOCAL_COLS)
       .or("hls_url.not.is.null,html_code.not.is.null,video_url.not.is.null,download_links.not.is.null")
       .limit(500);
     if (!rows || !rows.length) return null;
@@ -1026,6 +1045,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
             // Series: use OUR episodes (with per-episode stream links) as the merge
             // source below, so AnchorHD shows and each episode plays from our stream.
             if (Array.isArray(localHls.episodes) && localHls.episodes.length) eps = localHls.episodes;
+            /* The row's OWN title, not the clean TMDB one: `movies` stores the
+               long release name, which is what the two tables share. */
+            const langs = await fetchLangs(localHls.slug, localHls.title || meta.title);
+            if (langs.length) meta = { ...meta, language: langs };
           }
         }
 
@@ -1086,6 +1109,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               genres:       watchData.genres
                 || (tData?.genres || []).map(g => typeof g === "object" ? g.name : g) || [],
               download_links: Array.isArray(watchData.download_links) ? watchData.download_links : [],
+              // watch_html carries no language; the matching `movies` row does.
+              language: Array.isArray(movieData?.language) ? movieData.language.filter(Boolean) : [],
             };
           }
         }
@@ -1304,8 +1329,8 @@ if (!alive) return;
   const dlLabels = dlBlocks.flatMap((b) => [b?.quality || "", ...(b?.links || []).map((l) => l?.name || l?.path || "")]);
   const dlQuality = facetPhrase(downloadFacets([...dlLabels, movieMeta.title || ""]));
   /* The audio languages, from the most reliable source down to the loosest.
-     The `language` column is filled in for almost every uploaded row, so it
-     wins; the file names behind the download buttons are the next best thing;
+     The `movies` row's language column is filled in for almost every title, so
+     it wins; the file names behind the download buttons are the next best thing;
      and a TMDB-only title (nothing uploaded, no labels to read) still has its
      original language, which beats showing none at all. */
   const metaLangs = (Array.isArray(movieMeta.language) ? movieMeta.language
