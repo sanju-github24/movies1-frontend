@@ -1660,12 +1660,15 @@ if (!alive) return;
               </h1>
             )}
 
-            {/* The facts and the description, as one thing: while the trailer
-                runs they fade down out of its way, and come back the moment a
-                pointer arrives. The space they occupy is kept, so the buttons
-                below do not jump about as they go. */}
-            <div className={`space-y-4 sm:space-y-5 transition-all duration-700 ease-out
-              ${heroQuiet ? "opacity-0 translate-y-5 pointer-events-none" : "opacity-100 translate-y-0"}`}>
+            {/* The facts and the description, as one thing. While the trailer
+                runs this collapses to nothing rather than merely going
+                invisible — the column is anchored to the bottom of the frame,
+                so as it shrinks the title travels down into the space it
+                leaves, which is the movement that makes it read as the film
+                taking over. */}
+            <div className={`grid transition-all duration-700 ease-out
+              ${heroQuiet ? "grid-rows-[0fr] opacity-0 pointer-events-none" : "grid-rows-[1fr] opacity-100"}`}>
+              <div className="min-h-0 overflow-hidden space-y-4 sm:space-y-5">
             {/* One line, not a wall of pills: the things a person checks before
                 pressing play, in the order they check them. */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-2 text-sm text-gray-300">
@@ -1715,6 +1718,7 @@ if (!alive) return;
               {movieMeta.description}
             </p>
 
+              </div>
             </div>
 
             {/* What to do with the film, in the order a person wants it: play
@@ -1751,26 +1755,6 @@ if (!alive) return;
               )}
             </div>
 
-
-            {/* Part of a series of films? Then say so, and go there. */}
-            {movieMeta.collection && (
-              <Link to={`/collection/${movieMeta.collection.id}`}
-                className="group relative mt-1 flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 pr-5 transition hover:border-white/25 hover:bg-white/[0.08] max-w-md mx-auto lg:mx-0">
-                {movieMeta.collection.backdrop && (
-                  <img src={movieMeta.collection.backdrop} alt="" aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 transition duration-500 group-hover:opacity-30" />
-                )}
-                {movieMeta.collection.poster && (
-                  <img src={movieMeta.collection.poster} alt=""
-                    className="relative z-10 h-16 w-11 shrink-0 rounded-lg object-cover shadow-lg" />
-                )}
-                <span className="relative z-10 min-w-0 text-left">
-                  <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Part of a collection</span>
-                  <span className="block truncate text-sm font-bold text-white">{movieMeta.collection.name}</span>
-                  <span className="block text-xs text-gray-400 group-hover:text-white">View collection →</span>
-                </span>
-              </Link>
-            )}
 
 
             {/* Quick server select */}
@@ -1842,6 +1826,35 @@ if (!alive) return;
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* ── Collection ───────────────────────────────────────────────────
+            A film that belongs to a series of films, offered after whatever
+            the viewer already had going — it belongs with the other ways on
+            from this page, not stacked against the title in the hero. */}
+        {movieMeta.collection && (
+          <div>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-1 h-4 bg-blue-600 rounded-full" />
+              <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Collection</h2>
+            </div>
+            <Link to={`/collection/${movieMeta.collection.id}`}
+              className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/25 hover:bg-white/[0.08]">
+              {movieMeta.collection.backdrop && (
+                <img src={movieMeta.collection.backdrop} alt="" aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 transition duration-500 group-hover:opacity-30" />
+              )}
+              {movieMeta.collection.poster && (
+                <img src={movieMeta.collection.poster} alt=""
+                  className="relative z-10 h-20 w-14 shrink-0 rounded-lg object-cover shadow-lg sm:h-24 sm:w-16" />
+              )}
+              <span className="relative z-10 min-w-0 flex-1">
+                <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Part of a collection</span>
+                <span className="block truncate text-base font-bold text-white sm:text-lg">{movieMeta.collection.name}</span>
+                <span className="mt-0.5 block text-xs text-gray-400 group-hover:text-white">Every film in the series →</span>
+              </span>
+            </Link>
           </div>
         )}
 
