@@ -185,7 +185,7 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
   const play = (ep = null, intent = {}) => {
     const episode = ep ? { season: seasonNo(ep), episode: epNo(ep) } : null;
     if (onNavigate) onNavigate(movie, { autoPlay: true, episode, ...intent });
-    else navigate(`/watch/${movie.slug}`, { state: { autoPlay: true, autoPlayEpisode: episode, ...intent } });
+    else navigate(`/watch/${movie.slug}`, { state: { autoPlayEpisode: episode, ...intent } });
     onClose();
   };
   const handlePlayClick = () => play(isTV ? latestEpisode : null);

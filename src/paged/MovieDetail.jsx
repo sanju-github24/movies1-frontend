@@ -260,7 +260,7 @@ const MovieDetail = () => {
   const heroYear = movie.year || x.year;
   const rating = x.imdb_rating && x.imdb_rating !== "0.0" ? x.imdb_rating : "";
   const collection = x.collection || null;
-  const playTitle = () => navigate(`/watch/${movie.slug}`, { state: { autoPlay: true } });
+  const playTitle = () => navigate(`/watch/${movie.slug}`);
   const toggleList = () => { toggleMyList(movie); setListed(inMyList(movie.slug)); };
 
 

@@ -1334,6 +1334,27 @@ const Header = () => {
   const [showBettingPopup, setShowBettingPopup] = useState(false);
 
   const [sheetMovie, setSheetMovie] = useState(null);   // the title whose details are open
+
+  /* An overlay is a place, even though it is drawn over another one. While it
+     is open the address bar names the title, so a refresh — or coming back
+     after logging in again — lands on that title's watch page instead of the
+     home page with everything forgotten. Back closes it rather than leaving
+     the site, and closing it by hand puts the address bar back where it was. */
+  useEffect(() => {
+    if (!sheetMovie) return;
+    const slug = sheetMovie.watch_slug || sheetMovie.slug;
+    if (!slug) return;
+    const cameFrom = window.location.pathname + window.location.search;
+    try { window.history.pushState({ anchorOverlay: slug }, "", `/watch/${slug}`); } catch { /* nothing to lose */ }
+    const onPop = () => setSheetMovie(null);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      try {
+        if (window.history.state?.anchorOverlay === slug) window.history.replaceState({}, "", cameFrom);
+      } catch { /* the address bar is not worth throwing over */ }
+    };
+  }, [sheetMovie]);
   // A live fixture the feeds gave us a stream for, playing over the page.
   const [heroPlaying, setHeroPlaying] = useState(null);
   const [isMuted, setIsMuted] = useState(true);         // desktop overlay's trailer
@@ -1457,8 +1478,13 @@ const Header = () => {
       window.location.href = ownUrl(movie.watchUrl);
       return;
     }
+    /* The watch page, not the player. Pressing play used to drop straight
+       into playback with the page never shown, so the servers, the qualities,
+       the downloads and the episode list were all things a viewer had to back
+       out to find. The page loads with the episode they chose selected; the
+       play button there is one more click, and it is theirs to press. */
     navigate(`/watch/${movie.watch_slug || movie.slug}`, {
-      state: { autoPlay: true, autoPlayEpisode: episode || null, ...intent },
+      state: { autoPlayEpisode: episode || null, ...intent },
     });
     setSheetMovie(null);
   };

@@ -98,7 +98,7 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
       return;
     }
 
-    const state = { autoPlay: true, autoPlayEpisode: episode, ...intent };
+    const state = { autoPlayEpisode: episode, ...intent };
     if (tmdbId || imdbId) {
       state.movie = {
         tmdb_id: tmdbId,

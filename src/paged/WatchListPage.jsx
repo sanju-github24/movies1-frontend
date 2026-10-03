@@ -953,7 +953,7 @@ const WatchListPage = () => {
     // them, so during the live window that button played the live feed instead.
     const { autoPlay: _a, episode: _e, ...intent } = opts;
     const playState = opts.autoPlay
-      ? { autoPlay: true, autoPlayEpisode: opts.episode || null, ...intent }
+      ? { autoPlayEpisode: opts.episode || null, ...intent }
       : {};
 
     // MX Player hero slides open the in-SPA MX watch page (VideoPlayer.jsx).
