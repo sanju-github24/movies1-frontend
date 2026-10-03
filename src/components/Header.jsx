@@ -360,6 +360,34 @@ function languageBit(codes) {
   return names.length <= 3 ? names.join(", ") : `${names.slice(0, 3).join(", ")} +${names.length - 3}`;
 }
 
+/* What kind of copy this is, said the way the site says it everywhere else.
+   Neither `movies` nor `watch_html` has a column for it, so it is read off the
+   release name and the download labels — which is where it has always lived.
+   Ordered deliberately: a pre-DVD release often carries "HD" in its name too,
+   so the rough sources are matched before the clean ones, and anything
+   unrecognised says nothing rather than guessing. */
+const HERO_SOURCES = [
+  [/\bpre[\s._-]?dvd(\s*rip)?\b/i, "PRE DVD"],
+  [/\bhdts\b|\bhd[\s._-]?cam\b|\bcam[\s._-]?rip\b/i, "CAM"],
+  [/\bhdtc\b/i, "HDTC"],
+  [/\b(true[\s._-]+)?web[\s._-]?dl\b/i, "WEB-DL HD"],
+  [/\bweb[\s._-]?rip\b/i, "WEBRip HD"],
+  [/\b(hq[\s._-]+)?hd[\s._-]?rip\b/i, "HDRip HD"],
+  [/\bblu[\s._-]?ray\b|\bbd[\s._-]?rip\b/i, "BluRay HD"],
+  [/\bhdtv\b/i, "HDTV"],
+];
+
+function sourceBit(movie) {
+  const text = [
+    movie.title,
+    ...(Array.isArray(movie.subCategory) ? movie.subCategory : []),
+    ...((movie.downloads || []).map((d) => `${d?.quality || ""} ${d?.format || ""} ${d?.title || ""}`)),
+    ...((movie.download_links || []).map((b) => b?.quality || "")),
+  ].filter(Boolean).join(" ");
+  if (!text) return null;
+  return HERO_SOURCES.find(([re]) => re.test(text))?.[1] || null;
+}
+
 function heroMeta(movie, art = {}, extra = {}) {
   /* A live match has none of the fields below — no year, no certification, no
      season count — but it does have the two things worth knowing at a glance:
@@ -385,6 +413,11 @@ function heroMeta(movie, art = {}, extra = {}) {
   const seasons = Number(extra.number_of_seasons) || (eps.length ? new Set(eps.map(seasonNo)).size : 0);
 
   const bits = [];
+  /* First, because it is the thing that decides whether someone presses play
+     at all: a pre-DVD copy of a new release and a WEB-DL of the same film are
+     not the same offer. */
+  const source = sourceBit(movie);
+  if (source) bits.push(source);
   const year = extra.year
     || extra.first_air_date?.slice(0, 4)   // TV series: TMDB returns first_air_date
     || extra.release_date?.slice(0, 4)     // Movies: TMDB returns release_date
