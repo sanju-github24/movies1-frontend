@@ -971,6 +971,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
                 title:      isTmdbPick ? meta.title      : (full.title || full.name || meta.title),
                 poster:     isTmdbPick ? meta.poster     : safeURI(full.poster_url || full.poster || meta.poster),
                 background: isTmdbPick ? meta.background  : safeURI(full.cover_poster_url || full.backdrop || meta.background),
+                collection: full.collection || meta.collection || null,
                 year:       isTmdbPick ? meta.year       : (full.year || meta.year),
                 description: isTmdbPick ? meta.description : (full.overview || full.description || meta.description),
                 imdbRating: isTmdbPick ? meta.imdbRating  : (full.imdb_rating != null ? String(full.imdb_rating) : meta.imdbRating),
@@ -1051,6 +1052,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               content_type: (eps.length > 0 || ctype === "tv") ? "tv" : (watchData.content_type || tData?.content_type || "movie"),
               poster:       safeURI(tData?.poster_url || watchData.poster || "/default-poster.jpg"),
               background:   safeURI(tData?.cover_poster_url || watchData.cover_poster || watchData.poster),
+              /* TMDB names the series of films a title belongs to; the page
+                 offers the rest of them. Null for anything that is not part
+                 of one, which is most titles and every TV show. */
+              collection:   tData?.collection || null,
               imdbRating:   watchData.imdb_rating || tData?.imdb_rating?.toFixed?.(1) || "0.0",
               year:         watchData.year || tData?.year || null,
               description:  movieData?.description || tData?.overview || watchData?.description || "No description available.",
@@ -1715,6 +1720,27 @@ if (!alive) return;
                 </button>
               )}
             </div>
+
+
+            {/* Part of a series of films? Then say so, and go there. */}
+            {movieMeta.collection && (
+              <Link to={`/collection/${movieMeta.collection.id}`}
+                className="group relative mt-1 flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 pr-5 transition hover:border-white/25 hover:bg-white/[0.08] max-w-md mx-auto lg:mx-0">
+                {movieMeta.collection.backdrop && (
+                  <img src={movieMeta.collection.backdrop} alt="" aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 transition duration-500 group-hover:opacity-30" />
+                )}
+                {movieMeta.collection.poster && (
+                  <img src={movieMeta.collection.poster} alt=""
+                    className="relative z-10 h-16 w-11 shrink-0 rounded-lg object-cover shadow-lg" />
+                )}
+                <span className="relative z-10 min-w-0 text-left">
+                  <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Part of a collection</span>
+                  <span className="block truncate text-sm font-bold text-white">{movieMeta.collection.name}</span>
+                  <span className="block text-xs text-gray-400 group-hover:text-white">View collection →</span>
+                </span>
+              </Link>
+            )}
 
 
             {/* Quick server select */}
