@@ -315,10 +315,26 @@ const WatchHtmlPage = () => {
   const [heroMuted,         setHeroMuted        ] = useState(true);
   const [heroTrailerOn,     setHeroTrailerOn    ] = useState(true);
   const [heroTrailerReady,  setHeroTrailerReady ] = useState(false);
+  const [heroHover,         setHeroHover        ] = useState(false);
+  const heroHideTimer = useRef(null);
   /* The same chrome-free trailer every other surface plays — a bare MP4, so it
      sits behind the text with no player furniture of its own. It arrives a
      moment after the art does, and fades in rather than cutting. */
   const { trailerMp4: heroTrailer } = useMp4Trailer(movieMeta);
+
+  /* Once the trailer is really running, the words step out of its way: the
+     line of facts and the description fade down, the title stays, and the
+     buttons stay — nobody should have to go looking for the play button to
+     get their text back. Hovering brings them straight back; on a phone,
+     where there is no hover, a tap does and they leave again on their own. */
+  const heroPlaying = !!heroTrailer && heroTrailerOn && heroTrailerReady;
+  const heroQuiet = heroPlaying && !heroHover;
+  const peekHero = () => {
+    setHeroHover(true);
+    clearTimeout(heroHideTimer.current);
+    heroHideTimer.current = setTimeout(() => setHeroHover(false), 3500);
+  };
+  useEffect(() => () => clearTimeout(heroHideTimer.current), []);
   const [tmdbMeta,          setTmdbMeta         ] = useState(null);
   const [episodes,          setEpisodes         ] = useState([]);
   const [availableServers,  setAvailableServers ] = useState([]);
@@ -1581,7 +1597,11 @@ if (!alive) return;
       </header>
 
       {/* ── HERO ── */}
-      <div className="relative w-full overflow-hidden min-h-[78vh] sm:min-h-[80vh] lg:min-h-[86vh] flex flex-col justify-end">
+      <div
+        onMouseEnter={() => setHeroHover(true)}
+        onMouseLeave={() => setHeroHover(false)}
+        onTouchStart={peekHero}
+        className="relative w-full overflow-hidden min-h-[78vh] sm:min-h-[80vh] lg:min-h-[86vh] flex flex-col justify-end">
         {movieMeta.background && (
           <div className="absolute inset-0 z-0">
             <img src={movieMeta.background} alt=""
@@ -1598,8 +1618,10 @@ if (!alive) return;
                 className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${heroTrailerReady ? "opacity-100" : "opacity-0"}`}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#070709] via-[#070709]/80 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/50 to-transparent" />
+            <div className={`absolute inset-0 bg-gradient-to-r from-[#070709] to-transparent transition-all duration-700
+              ${heroQuiet ? "via-[#070709]/35" : "via-[#070709]/80"}`} />
+            <div className={`absolute inset-0 bg-gradient-to-t from-[#070709] to-transparent transition-all duration-700
+              ${heroQuiet ? "via-[#070709]/20" : "via-[#070709]/50"}`} />
             <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#070709] to-transparent" />
           </div>
         )}
@@ -1638,6 +1660,12 @@ if (!alive) return;
               </h1>
             )}
 
+            {/* The facts and the description, as one thing: while the trailer
+                runs they fade down out of its way, and come back the moment a
+                pointer arrives. The space they occupy is kept, so the buttons
+                below do not jump about as they go. */}
+            <div className={`space-y-4 sm:space-y-5 transition-all duration-700 ease-out
+              ${heroQuiet ? "opacity-0 translate-y-5 pointer-events-none" : "opacity-100 translate-y-0"}`}>
             {/* One line, not a wall of pills: the things a person checks before
                 pressing play, in the order they check them. */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-2 text-sm text-gray-300">
@@ -1686,6 +1714,8 @@ if (!alive) return;
             <p className="mx-auto lg:mx-0 max-w-xl text-left text-[13px] sm:text-sm leading-relaxed text-gray-300/90 line-clamp-3 sm:line-clamp-4">
               {movieMeta.description}
             </p>
+
+            </div>
 
             {/* What to do with the film, in the order a person wants it: play
                 it, keep it, take it. The circles are deliberately quiet — one
