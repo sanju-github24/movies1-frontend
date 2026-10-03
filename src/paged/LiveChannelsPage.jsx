@@ -185,7 +185,7 @@ function parseBundleUrl(bundleUrl) {
    screen is what appeared while a channel was still loading, and again when
    one was closed, looking like the player had dumped you on a home page. In
    solo it tells us to close the frame instead. */
-const PLAYER = "https://m3u8-player-orcin.vercel.app/player.html";
+const PLAYER = "https://m3u8-player-orcin.vercel.app/";
 const solo = (qs) => `${PLAYER}?${qs}${qs ? "&" : ""}solo=1`;
 
 function buildChannelUrl(basePlayerUrl, channel) {
@@ -469,7 +469,7 @@ function hotstarIdFromUrl(url) {
   catch { return null; }
 }
 
-const STAR_PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/player.html";
+const STAR_PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/";
 
 const StarSportsSection = ({ activeChannel, onPlay }) => {
   const [expanded, setExpanded] = useState(true);
@@ -776,7 +776,7 @@ const LiveChannelsPage = () => {
     } catch (error) {
       if (requestId !== playRequestRef.current) return;
     }
-    const base = "https://m3u8-player-orcin.vercel.app/player.html";
+    const base = "https://m3u8-player-orcin.vercel.app/";
     const url = buildChannelUrl(base, ch);
     setActiveBundle(parsedBundle);
     setActiveBundleMeta(bundleMeta);

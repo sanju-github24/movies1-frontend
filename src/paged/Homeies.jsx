@@ -303,7 +303,7 @@ function MatchCard({ sport, status, leagueLabel, matchLabel, statusLabel, home, 
       const json = await res.json();
       if (res.ok && json.success && json.url) {
         const params = new URLSearchParams({ url: json.url, title: vid.title || "Watch" });
-        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title: vid.title || "Watch" });
+        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title: vid.title || "Watch" });
         setStreamLoading(false);
         return;
       }
@@ -1093,7 +1093,7 @@ function FifaHighlightsRow() {
       const json = await res.json();
       if (res.ok && json.success && json.url) {
         const params = new URLSearchParams({ url: json.url, title });
-        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title });
+        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title });
         setLoadingId(null);
         return;
       }
@@ -1345,7 +1345,7 @@ function IndiaHighlightsRow() {
       const json = await res.json();
       if (res.ok && json.success && json.url) {
         const params = new URLSearchParams({ url: json.url, title });
-        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title });
+        setPlayerModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title });
         setLoadingId(null);
         return;
       }
@@ -1740,7 +1740,7 @@ function IccHighlightsRow() {
       const j = await fetch(`${API_BASE}/api/icc/play?videoId=${encodeURIComponent(v.uuid)}`).then(r => r.json());
       if (j.success && j.manifestUrl) {
         const params = new URLSearchParams({ url: j.manifestUrl, title: v.title || "ICC Highlights" });
-        setModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title: v.title || "ICC Highlights" });
+        setModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title: v.title || "ICC Highlights" });
       }
     } catch { }
     setLoadingId(null);
@@ -1850,7 +1850,7 @@ function BcciHighlightsRow() {
   const play = (v) => {
     if (!v.video_url) return;
     const params = new URLSearchParams({ url: v.video_url, title: v.title || "Match Highlights" });
-    setModal({ src: `https://m3u8-player-orcin.vercel.app/player.html?${params}`, title: v.title || "Match Highlights" });
+    setModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title: v.title || "Match Highlights" });
   };
 
   if (!loading && videos.length === 0) return null;
@@ -1928,7 +1928,7 @@ async function fetchBcciHi() {
   const j = await fetch(`${API_BASE}/api/bcci/highlights?page=1`).then(r => r.json()).catch(() => ({}));
   return (j.videos || []).map(v => ({
     id: v.id, title: v.title, image: v.image, date: v.date, duration: v.duration,
-    resolve: async () => `https://m3u8-player-orcin.vercel.app/player.html?${new URLSearchParams({ url: v.video_url, title: v.title || "Highlights" })}`,
+    resolve: async () => `https://m3u8-player-orcin.vercel.app/?${new URLSearchParams({ url: v.video_url, title: v.title || "Highlights" })}`,
   }));
 }
 async function fetchIccHi() {
@@ -1937,7 +1937,7 @@ async function fetchIccHi() {
     id: v.uuid, title: v.title, image: v.image, date: "", duration: "",
     resolve: async () => {
       const p = await fetch(`${API_BASE}/api/icc/play?videoId=${encodeURIComponent(v.uuid)}`).then(r => r.json()).catch(() => ({}));
-      return p.success && p.manifestUrl ? `https://m3u8-player-orcin.vercel.app/player.html?${new URLSearchParams({ url: p.manifestUrl, title: v.title || "ICC Highlights" })}` : null;
+      return p.success && p.manifestUrl ? `https://m3u8-player-orcin.vercel.app/?${new URLSearchParams({ url: p.manifestUrl, title: v.title || "ICC Highlights" })}` : null;
     },
   }));
 }
@@ -1955,7 +1955,7 @@ async function fetchIplHi() {
           id: v.id || v.shortCode, title: v.title, image: v.thumbnail, date: "", duration: "",
           resolve: async () => {
             const gs = await fetch(`${API_BASE}/api/get-stream?url=${encodeURIComponent(`https://www.bcci.tv/bccilink/videos/${v.shortCode}`)}`).then(x => x.json()).catch(() => ({}));
-            return gs.success && gs.url ? `https://m3u8-player-orcin.vercel.app/player.html?${new URLSearchParams({ url: gs.url, title: v.title || "IPL Highlights" })}` : null;
+            return gs.success && gs.url ? `https://m3u8-player-orcin.vercel.app/?${new URLSearchParams({ url: gs.url, title: v.title || "IPL Highlights" })}` : null;
           },
         });
       });

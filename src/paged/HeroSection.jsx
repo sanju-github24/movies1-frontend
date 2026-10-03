@@ -343,7 +343,7 @@ function CricketSlide({slide, onPlay}){
       const json=await res.json();
       if(res.ok&&json.success&&json.url){
         const params=new URLSearchParams({url:json.url,title:bestClip.title||"Watch"});
-        setPlayerModal({src:`https://m3u8-player-orcin.vercel.app/player.html?${params}`,title:bestClip.title||"Watch"});
+        setPlayerModal({src:`https://m3u8-player-orcin.vercel.app/?${params}`,title:bestClip.title||"Watch"});
         setStreamLoading(false);return;
       }
     }catch{}
@@ -597,7 +597,7 @@ function FootballSlide({slide, onPlay}){
       const json=await res.json();
       if(res.ok&&json.success&&json.url){
         const params=new URLSearchParams({url:json.url,title:highlight.title||"Highlights"});
-        setPlayerModal({src:`https://m3u8-player-orcin.vercel.app/player.html?${params}`,title:highlight.title||"Highlights"});
+        setPlayerModal({src:`https://m3u8-player-orcin.vercel.app/?${params}`,title:highlight.title||"Highlights"});
         setStreamLoading(false);return;
       }
     }catch{}
