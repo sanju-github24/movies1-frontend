@@ -6,6 +6,8 @@ import { MobileBackButton } from "./BackBar";
 import { supabase } from "../utils/supabaseClient";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
 import { X, ChevronDown, LogOut, Settings } from "lucide-react";
+import { Avatar } from "../utils/avatars";
+import { readProfiles } from "../utils/profiles";
 /* The rail runs on Material icons rather than Lucide, because it needs a
    matched outline/filled pair for every destination and Lucide ships stroke
    outlines only. Filling a stroke icon does not work — a filled magnifier or
@@ -121,6 +123,20 @@ const Navbar = () => {
   const { setIsLoggedIn, setUserData } = useContext(AppContext);
 
   const [session, setSession] = useState(null);
+  /* The profile watching now, for its avatar at the foot of the rail. Read off
+     the account, and again whenever the profile page switches or edits one. */
+  const [activeProfile, setActiveProfile] = useState(null);
+  useEffect(() => {
+    const read = async () => {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (!s?.user) { setActiveProfile(null); return; }
+      const { list, active } = readProfiles(s.user);
+      setActiveProfile(list.find((p) => p.id === active) || null);
+    };
+    read();
+    window.addEventListener("profile-changed", read);
+    return () => window.removeEventListener("profile-changed", read);
+  }, [session]);
   const [searchTerm, setSearchTerm] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -343,15 +359,19 @@ const Navbar = () => {
               <>
                 <button type="button" onClick={() => { setRailOpen(true); setProfileOpen(o => !o); }}
                   className={railItem(location.pathname === "/profile")}>
-                  <span className="w-[26px] h-[26px] shrink-0 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center">
-                    {getInitial()}
-                  </span>
+                  {activeProfile ? (
+                    <Avatar id={activeProfile.avatar} size={30} className="shrink-0" title={activeProfile.name} />
+                  ) : (
+                    <span className="w-[26px] h-[26px] shrink-0 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center">
+                      {getInitial()}
+                    </span>
+                  )}
                   <span className={railLabel(railOpen)} style={labelDelay(railOpen, RAIL_LINKS.length + 1)}>My Space</span>
                 </button>
                 {railOpen && profileOpen && (
                   <div className="mt-1 pl-[38px] space-y-0.5">
                     <p className="text-xs font-bold text-gray-500 truncate py-1">
-                      {session.user.user_metadata?.full_name || session.user.email}
+                      {activeProfile?.name || session.user.user_metadata?.full_name || session.user.email}
                     </p>
                     <button onClick={() => { navigate("/profile"); setProfileOpen(false); }}
                       className="flex items-center gap-2 py-2 text-base font-normal text-gray-400 hover:text-white transition-colors whitespace-nowrap">
@@ -559,7 +579,9 @@ const Navbar = () => {
           onClick={() => { session ? navigate("/profile") : navigate("/auth"); }}
           className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}
         >
-          {location.pathname === "/profile" ? <MdPerson size={24} /> : <MdOutlinePerson size={24} />}
+          {session && activeProfile
+            ? <Avatar id={activeProfile.avatar} size={24} className={location.pathname.startsWith('/profile') ? 'ring-2 ring-white' : ''} />
+            : location.pathname === "/profile" ? <MdPerson size={24} /> : <MdOutlinePerson size={24} />}
           <span className="text-[10px] font-bold">Account</span>
         </button>
       </div>

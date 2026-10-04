@@ -70,6 +70,7 @@ import AdPopup from './components/AdPopup';
 import PopAdsScript from './components/PopAdsScript';
 import MbidadmBanner from './components/MbidadmBanner';
 const Profile = safeLazy(() => import('./paged/Profile'));
+const ProfileSettings = safeLazy(() => import('./paged/ProfileSettings'));
 const UploadWatchHtml = safeLazy(() => import('./paged/UploadWatchHtml'));
 const WatchPage = safeLazy(() => import('./paged/WatchPage'));
 const AdminMembers = safeLazy(() => import('./paged/AdminMembers'));
@@ -314,6 +315,11 @@ const AppContent = () => {
         <Route path="/profile"                element={
           <ProtectedRoute session={session} initialized={initialized}>
             <Profile />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile/settings"       element={
+          <ProtectedRoute session={session} initialized={initialized}>
+            <ProfileSettings />
           </ProtectedRoute>
         } />
         <Route path="/verify-account"         element={<EmailVerify />} />
