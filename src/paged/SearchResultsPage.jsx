@@ -410,7 +410,9 @@ export default function SearchResultsPage() {
     const [hov, setHov] = useState(false);
     const { light } = useMemo(() => deriveRgbFromStr(artist.poster || artist.id), []);
     return (
-      <div onClick={() => saveAndGo(`/music/search?find=artist:${encodeURIComponent(artist.title)}`)}
+      <div onClick={() => saveAndGo(artist.id
+          ? `/music/artist/${artist.id}`        // the artist's own page: all their songs, albums
+          : `/music/search?find=artist:${encodeURIComponent(artist.title)}`)}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
         style={{ ...cardBase, background: hov ? `rgba(${light}, 0.12)` : 'rgba(255,255,255,0.04)', borderColor: hov ? `rgba(${light}, 0.3)` : 'rgba(255,255,255,0.07)', display:'flex', flexDirection: viewMode==='grid' ? 'column' : 'row', alignItems:'center', gap: viewMode==='grid' ? 12 : 14, padding: viewMode==='grid' ? '20px 12px 16px' : '12px 14px', transform: hov && viewMode==='grid' ? 'translateY(-3px)' : 'none' }}
       >

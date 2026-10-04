@@ -250,6 +250,7 @@ function artistNames(language) {
 
 function ArtistStations({ language }) {
   const { playStation } = useMusicPlayer();
+  const navigate = useNavigate();
   const names = useMemo(() => artistNames(language), [language]);
   const [artists, setArtists] = useState([]);
   const [busy, setBusy] = useState('');
@@ -296,7 +297,8 @@ function ArtistStations({ language }) {
       <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight mb-4">Recommended Artist Stations</h2>
       <div className="home-scroll flex gap-5 sm:gap-7 overflow-x-auto pb-3">
         {artists.map((a) => (
-          <button key={a.query} type="button" onClick={() => play(a)} aria-label={`Play ${a.name} station`}
+          <button key={a.query} type="button" onClick={() => (a.id ? navigate(`/music/artist/${a.id}`) : play(a))}
+            aria-label={`Open ${a.name}`}
             className="group shrink-0 w-28 sm:w-36 text-center focus:outline-none">
             <span className="relative block w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden bg-white/[0.06] ring-1 ring-white/10 group-hover:ring-white/40 group-focus-visible:ring-2 group-focus-visible:ring-blue-400 transition">
               {a.image
@@ -309,7 +311,7 @@ function ArtistStations({ language }) {
               </span>
             </span>
             <span className="block mt-2.5 text-sm font-semibold text-white truncate">{a.name}</span>
-            <span className="block text-xs text-gray-500">Artist Station</span>
+            <span className="block text-xs text-gray-500">Artist</span>
           </button>
         ))}
       </div>

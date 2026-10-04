@@ -129,6 +129,11 @@ export async function fetchArtistStation(name, language = '') {
   return { stationid: data.stationid || '', songs: data.songs || [] };
 }
 
+/** An artist's page: { id, name, image, followers, language, songs (50 a page), hasMore, albums, similar }. */
+export function fetchArtistPage(id, page = 0) {
+  return getJson(`/artist?id=${encodeURIComponent(id)}&page=${page}`);
+}
+
 /** Songs for a query, one page at a time — { total, page, results }. */
 export function fetchSongsPage(query, page = 1, n = 20) {
   return getJson(`/songs?query=${encodeURIComponent(query)}&page=${page}&n=${n}`);
