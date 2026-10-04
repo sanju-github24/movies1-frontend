@@ -137,7 +137,7 @@ const manifestScore = async (url) => {
 };
 
 // Our backend sleeps on Render; past this a cold start is not worth waiting for.
-const OWN_TIMEOUT = 4000;
+const OWN_TIMEOUT = 2500;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((res) => setTimeout(() => res(null), ms))]);
 
 /**

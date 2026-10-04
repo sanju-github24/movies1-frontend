@@ -601,6 +601,27 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     return `${backendUrl}/api/hls-proxy?url=${encodeURIComponent(u)}`;
   }, [backendUrl]);
 
+  /* ── Resolve a stream link to a playable URL. A full http(s) link plays
+     as-is; an R2 path (movies/<slug>/master.m3u8) is signed via the backend. ── */
+  /* Signed links are good for a day, so one asked for ahead of time — on page
+     load, or for the next episode while this one plays — is reused when it is
+     clicked, and asking twice at once shares one request. A failed answer is
+     not kept, so the next click asks again. */
+  const signedRef = useRef(new Map());   // link → { at, p }
+  const resolveStreamLink = useCallback((link) => {
+    if (!link) return Promise.resolve(null);
+    if (/^(https?:|blob:)/i.test(link)) return Promise.resolve(link);
+    const hit = signedRef.current.get(link);
+    if (hit && Date.now() - hit.at < 12 * 3600e3) return hit.p;
+    const p = fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(link)}`)
+      .then((r) => r.json())
+      .then((j) => (j?.success && j.url ? j.url : null))
+      .catch(() => null)
+      .then((url) => { if (!url) signedRef.current.delete(link); return url; });
+    signedRef.current.set(link, { at: Date.now(), p });
+    return p;
+  }, [backendUrl]);
+
   // Play a movie-level stream in our rich VideoPlayer. Accepts either our HLS
   // (m3u8) field or a Direct URL — both go through the same player (m3u8 via
   // hls.js, direct .mp4/.mkv natively). A full http(s)/blob link plays as-is;
@@ -610,12 +631,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (!link) return;
     setMxResolving(true);
     try {
-      let url = link;
-      if (!/^(https?:|blob:)/i.test(link)) {
-        const r = await fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(link)}`);
-        const j = await r.json();
-        url = j?.success && j.url ? j.url : null;
-      }
+      const url = await resolveStreamLink(link);   // usually already signed on page load
       if (url) {
         setResumeStart(getResumeTime(movieMeta.slug || routeSlug));   // resume movie
         setFinalSource(maybeProxy(url));   // signed m3u8 / direct URL / proxied 3rd-party HLS
@@ -625,19 +641,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       }
     } catch { /* ignore — user can pick another server */ }
     setMxResolving(false);
-  }, [movieMeta, backendUrl, routeSlug, maybeProxy]);
-
-  /* ── Resolve an episode's stream link to a playable URL. A full http(s) link
-     plays as-is; an R2 path (movies/<slug>/master.m3u8) is signed via the backend. ── */
-  const resolveStreamLink = useCallback(async (link) => {
-    if (!link) return null;
-    if (/^(https?:|blob:)/i.test(link)) return link;
-    try {
-      const r = await fetch(`${backendUrl}/api/movie-stream?path=${encodeURIComponent(link)}`);
-      const j = await r.json();
-      return j?.success && j.url ? j.url : null;
-    } catch { return null; }
-  }, [backendUrl]);
+  }, [movieMeta, routeSlug, maybeProxy, resolveStreamLink]);
 
   /* ── Play one episode's stream link in our rich VideoPlayer (episode-wise). ── */
   /* Every play request takes a number; an async one that finishes after a
@@ -663,6 +667,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setSourceType("hls");               // → the rich VideoPlayer (with episode switcher)
     setVideoTitle(`${movieMeta?.title || routeSlug} — S${ep.season || 1}E${epNo || 1}`);
     setShowOverlay(true);
+    prefetchRef.current?.(nextEpisodeRef.current?.(ep));   // the next one, ready when it is wanted
     return true;
   }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy]);
 
@@ -699,12 +704,42 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const nextTmdbStream = useCallback(async () => {
     const search = tmdbIterRef.current;
     if (!search) return null;
-    const i = search.at + 1;
-    if (!search.items[i]) await pullTmdbStream(search);
-    if (!search.items[i] || tmdbIterRef.current !== search) return null;
-    search.at = i;
-    return search.items[i];
+    // A search can be reused (see tmdbSearchFor), so streams refused earlier are skipped.
+    for (let i = search.at + 1; ; i++) {
+      if (!search.items[i]) await pullTmdbStream(search);
+      const item = search.items[i];
+      if (!item || tmdbIterRef.current !== search) return null;
+      if (item.bad) continue;
+      search.at = i;
+      return item;
+    }
   }, [pullTmdbStream]);
+
+  /* Searches are kept, per title or episode, for half an hour: going back
+     to an episode does not search FilmU again, and an episode fetched ahead
+     of time — the next one, while this one plays — is ready when it is
+     clicked. A search that found nothing is not kept. */
+  const tmdbCacheRef = useRef(new Map());   // "tmdb:SxE" → search
+  const tmdbSearchFor = useCallback((ep) => {
+    const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
+    const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
+    const key = `${movieMeta.tmdb_id}:${TV ? `${s}x${e}` : "movie"}`;
+    const hit = tmdbCacheRef.current.get(key);
+    if (hit && Date.now() - hit.created < 30 * 60e3 && !(hit.done && !hit.items.some((x) => !x.bad))) return hit;
+    const search = {
+      key, items: [], at: -1, created: Date.now(),
+      it: tmdbStreams({
+        tmdbId: movieMeta.tmdb_id, imdbId: movieMeta.imdb_id || "",
+        type: TV ? "tv" : "movie", season: s, episode: e,
+        // FilmU's scrapers match on the bare name and year, not our display title.
+        title: titleForSearch(movieMeta.title || "").name || movieMeta.title || "",
+        year: movieMeta.year || titleForSearch(movieMeta.title || "").year || "",
+        backendUrl,
+      }),
+    };
+    tmdbCacheRef.current.set(key, search);
+    return search;
+  }, [movieMeta, episodes, backendUrl]);
   // The viewer picked one from the player's Sources menu.
   const selectTmdbSource = useCallback((src, atSeconds) => {
     const search = tmdbIterRef.current;
@@ -730,23 +765,17 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const resumeAt = TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug);
     setResolvingLabel("Finding the best AnchorHD stream…");
     setMxResolving(true);
-    const search = { items: [], at: -1, it: null };
+    const search = tmdbSearchFor(ep);   // often already searched — fetched ahead, or watched before
+    search.at = -1;
     tmdbIterRef.current = search;
-    setTmdbSources([]);
-    search.it = tmdbStreams({
-      tmdbId: movieMeta.tmdb_id, imdbId: movieMeta.imdb_id || "",
-      type: TV ? "tv" : "movie", season: s, episode: e,
-      // FilmU's scrapers match on the bare name and year, not our display title.
-      title: titleForSearch(movieMeta.title || "").name || movieMeta.title || "",
-      year: movieMeta.year || titleForSearch(movieMeta.title || "").year || "",
-      backendUrl,
-    });
+    setTmdbSources(search.items.filter((x) => !x.bad));
     const found = await nextTmdbStream();
     if (seq !== playSeqRef.current || tmdbIterRef.current !== search) return;   // another pick meanwhile
     setMxResolving(false);
     setResolvingLabel("");
     if (!found) {
       tmdbIterRef.current = null;
+      tmdbCacheRef.current.delete(search.key);   // ask again next time
       // Nobody has it — hand over to Mirchi rather than leave a dead button.
       const next = availableServers.find(sv => sv.id === "mirchi");
       toast.info(next ? "AnchorHD couldn't find this one — trying Mirchi" : "AnchorHD couldn't find this one");
@@ -759,15 +788,58 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setSourceType("hls");
     setVideoTitle(TV ? `${movieMeta.title || routeSlug} — S${s}E${e}` : (movieMeta.title || routeSlug));
     setShowOverlay(true);
-    setTmdbSources([...search.items]);
-    // Keep collecting while it plays, so the Sources menu fills in.
+    setTmdbSources(search.items.filter((x) => !x.bad));
+    // Keep collecting while it plays, so the language and quality choices fill in.
     (async () => {
       while (tmdbIterRef.current === search && search.items.length < 24) {
         if (!(await pullTmdbStream(search))) break;
-        if (tmdbIterRef.current === search) setTmdbSources([...search.items]);
+        if (tmdbIterRef.current === search) setTmdbSources(search.items.filter((x) => !x.bad));
       }
     })();
-  }, [movieMeta, episodes, availableServers, backendUrl, routeSlug, nextTmdbStream, pullTmdbStream]);
+    if (TV) prefetchRef.current?.(nextEpisodeRef.current?.(ep));
+  }, [movieMeta, episodes, availableServers, routeSlug, nextTmdbStream, pullTmdbStream, tmdbSearchFor]);
+
+  /* ── Fetch ahead: the next episode while this one plays, and on page load
+     whatever the play button will start. Uploaded episodes get their link
+     signed; the rest get their FilmU search started. Either way the click
+     finds the work done. ── */
+  const prefetchRef = useRef(null);
+  const nextEpisodeRef = useRef(null);
+  nextEpisodeRef.current = (ep) => {
+    if (!ep || !numberedEpisodes.length) return null;
+    const i = ep.globalIndex != null && numberedEpisodes[ep.globalIndex] ? ep.globalIndex
+      : numberedEpisodes.findIndex((x) => String(x.season || 1) === String(ep.season || 1)
+          && String(x.episodeNumberInSeason || x.episode) === String(ep.episodeNumberInSeason || ep.episode));
+    return i >= 0 ? numberedEpisodes[i + 1] || null : null;
+  };
+  prefetchRef.current = (ep) => {
+    if (!ep) return;
+    const link = ep.direct_url || ep.hls_url;
+    if (link) { resolveStreamLink(link); return; }
+    if (movieMeta?.tmdb_id) pullTmdbStream(tmdbSearchFor(ep));
+  };
+  // On page load, once per title: what pressing play would start.
+  const prefetchedForRef = useRef("");
+  useEffect(() => {
+    if (loading || !movieMeta) return;
+    const key = movieMeta.slug || routeSlug;
+    if (!key || prefetchedForRef.current === key || isLiveNow(movieMeta)) return;
+    prefetchedForRef.current = key;
+    const t = setTimeout(() => {
+      if (numberedEpisodes.length) {
+        // The episode they would resume, else the first.
+        const saved = readOne(key);
+        const ep = (saved && numberedEpisodes.find((x) => String(x.season || 1) === String(saved.season)
+          && String(x.episodeNumberInSeason || x.episode) === String(saved.episode))) || numberedEpisodes[0];
+        prefetchRef.current?.(ep);
+        return;
+      }
+      const own = movieMeta.hls_url || movieMeta.video_url;
+      if (own) resolveStreamLink(own);
+      else if (movieMeta.tmdb_id) pullTmdbStream(tmdbSearchFor(null));
+    }, 600);   // after the page has painted
+    return () => clearTimeout(t);
+  }, [loading, movieMeta, numberedEpisodes, routeSlug, resolveStreamLink, pullTmdbStream, tmdbSearchFor]);
   const handlePlayActionRef = useRef(null);
 
   /* ── Re-sign an expired stream URL and carry on from the same second.
@@ -776,6 +848,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const refreshSource = useCallback(async (atSeconds) => {
     // AnchorHD by TMDB: a refused stream is not re-signed — the next source plays.
     if (tmdbIterRef.current) {
+      const cur = tmdbIterRef.current;
+      if (cur.items[cur.at]) cur.items[cur.at].bad = true;   // never offered again from this search
+      setTmdbSources(cur.items.filter((x) => !x.bad));
       const next = await nextTmdbStream();
       if (next) { setResumeStart(atSeconds || 0); setFinalSource(next.url); }
       return;
