@@ -1430,7 +1430,6 @@ const Header = () => {
   /* The grid is the whole catalogue in upload order, the hero's five
      included. It used to skip them so the page would not repeat itself, which
      made the newest uploads look missing: the first card was the sixth. */
-  const gridMovies = latestMovies;
 
   /* The rows — "Latest uploads", "Best to watch", "Thrillers" … Genres and
      ratings are not on the movies table; they come from watch_html, read once
@@ -1441,12 +1440,22 @@ const Header = () => {
     supabase.from("watch_html").select("slug,title,genres,imdb_rating,is_trending,hls_url").limit(3000)
       .then(({ data }) => setWatchMeta(data || []), () => {});
   }, []);
+  // Homepage titles with their genres, rating and languages joined on.
+  const richHome = useMemo(() => enrichMovies(homeMovies, watchMeta), [homeMovies, watchMeta]);
+  const gridMovies = useMemo(() => richHome.slice(0, 100), [richHome]);
   const shelves = useMemo(() => {
-    if (!homeMovies.length) return [];
+    if (!richHome.length) return [];
     let prefLang = "";
     try { prefLang = localStorage.getItem("preferred_audio_lang") || ""; } catch { /* private mode */ }
-    return buildShelves(enrichMovies(homeMovies, watchMeta), { prefLang });
-  }, [homeMovies, watchMeta]);
+    return buildShelves(richHome, { prefLang });
+  }, [richHome]);
+  // Rows opened into a full grid with "View all".
+  const [openRows, setOpenRows] = useState(() => new Set());
+  const toggleRow = (id) => setOpenRows((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Pool for "More Like This" — the sheet scores it on shared genres (ours and
   // TMDB's) and tops it up with TMDB's own recommendations.
@@ -1570,7 +1579,20 @@ const Header = () => {
   };
 
   /* One poster card — the rows and the grid share it. */
-  const renderCard = (movie, i, eager = i < 6) => (
+  /* The card's text, Hotstar's way: the title, a line of genres, and a
+     line of what it is — year, language, and the print only when it is a
+     theatre copy. How long ago it went up matters only where the order is
+     upload order, so only those places pass showAge. */
+  const cardFacts = (movie) => {
+    const genres = (movie._genres || []).slice(0, 3).join(" | ");
+    const year = (String(movie.title || "").match(/\((19|20)\d{2}\)/) || [])[0]?.slice(1, 5) || "";
+    const langs = movie._langs || [];
+    const lang = langs.length > 1 ? `${langs.length} Languages` : (langs[0] || "");
+    const cam = /PRE-?DVD|PRE-?HD|HDTS|HDCAM/.test(movie._print || "") ? String(movie.subCategory || "").toUpperCase() : "";
+    return { genres, meta: [year, lang, cam].filter(Boolean) };
+  };
+
+  const renderCard = (movie, i, eager = i < 6, showAge = false) => (
       <article key={movie.id}
         className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06]
                    transition-all duration-300 hover:ring-white/25 hover:-translate-y-1
@@ -1608,11 +1630,27 @@ const Header = () => {
                 style={{ color: movie.linkColor || "" }}>
                 {String(movie.title).split("(")[0].trim()}
               </span>
-              <span className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-300">
-                {movie.subCategory && <span className="uppercase tracking-wider">{movie.subCategory}</span>}
-                {movie.subCategory && <span className="text-gray-600" aria-hidden="true">·</span>}
-                <span>{formatTimeAgo(movie.homepage_added_at || movie.created_at)}</span>
-              </span>
+              {(() => {
+                const { genres, meta } = cardFacts(movie);
+                if (showAge) meta.push(formatTimeAgo(movie.homepage_added_at || movie.created_at));
+                return (
+                  <>
+                    {genres && (
+                      <span className="block mt-1 text-[10px] sm:text-[11px] font-semibold text-white/80 truncate">{genres}</span>
+                    )}
+                    {meta.length > 0 && (
+                      <span className="flex items-center gap-1.5 mt-0.5 text-[10px] font-medium text-gray-400 truncate">
+                        {meta.map((t, k) => (
+                          <React.Fragment key={k}>
+                            {k > 0 && <span className="text-gray-600" aria-hidden="true">•</span>}
+                            <span className={/^PRE|HDTS|HDCAM/.test(t) ? "text-amber-300 font-bold" : ""}>{t}</span>
+                          </React.Fragment>
+                        ))}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </span>
           </span>
         </button>
@@ -1761,26 +1799,45 @@ const Header = () => {
         )}
 
         {/* ── ROWS ── */}
-        {shelves.map((row, r) => (
-          <div key={row.id} className="mb-8 sm:mb-10">
-            <div className="flex items-baseline gap-3 mb-3 px-0.5">
-              <h2 className="text-base sm:text-lg font-black text-white tracking-tight">{row.title}</h2>
-              {row.subtitle && <span className="text-[11px] sm:text-xs text-gray-500 font-semibold">{row.subtitle}</span>}
-            </div>
-            <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
-              {row.items.map((movie, i) => (
-                <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
-                  {renderCard(movie, i, r === 0 && i < 6)}
+        {/* Hotstar-style headings: one plain bold line, and "View all" on the
+            right, which opens the row into a grid where it stands. */}
+        {shelves.map((row, r) => {
+          const open = openRows.has(row.id);
+          return (
+            <div key={row.id} className="mb-7 sm:mb-9">
+              <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
+                <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
+                {row.items.length > 6 && (
+                  <button type="button" onClick={() => toggleRow(row.id)} aria-expanded={open}
+                    className="flex items-center gap-0.5 text-[13px] sm:text-sm font-semibold text-gray-400 hover:text-white transition-colors
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
+                    {open ? "Show less" : "View all"}
+                    <ChevronRight className={`w-4 h-4 transition-transform ${open ? "-rotate-90" : ""}`} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              {open ? (
+                <div className={POSTER_GRID}>
+                  {row.items.map((movie, i) => (
+                    <React.Fragment key={movie.id}>{renderCard(movie, i, false, row.id === "latest")}</React.Fragment>
+                  ))}
                 </div>
-              ))}
-            </ScrollRow>
-          </div>
-        ))}
+              ) : (
+                <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
+                  {row.items.map((movie, i) => (
+                    <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
+                      {renderCard(movie, i, r === 0 && i < 6, row.id === "latest")}
+                    </div>
+                  ))}
+                </ScrollRow>
+              )}
+            </div>
+          );
+        })}
 
         {shelves.length > 0 && (
-          <div className="flex items-baseline gap-3 mb-3 px-0.5">
-            <h2 className="text-base sm:text-lg font-black text-white tracking-tight">All titles</h2>
-            <span className="text-[11px] sm:text-xs text-gray-500 font-semibold">Newest first</span>
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
+            <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">All titles</h2>
           </div>
         )}
 
@@ -1792,7 +1849,7 @@ const Header = () => {
         <div ref={movieGridRef} className={POSTER_GRID}>
           {movies.length === 0
             ? Array.from({ length: 12 }, (_, i) => <PosterSkeleton key={i} />)
-            : gridMovies.map((movie, i) => renderCard(movie, i))}
+            : gridMovies.map((movie, i) => renderCard(movie, i, i < 6, true))}
         </div>
 
         {/* Loaded, but this filter has nothing behind it. */}
