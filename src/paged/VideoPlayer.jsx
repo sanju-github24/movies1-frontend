@@ -48,12 +48,8 @@ const BW_KEY = "hls_bw_estimate_v1";
 // proxy — where every request costs an extra hop.
 const isProxied = (u) => /workers\.dev\/\?url=|\/api\/hls-proxy\?/.test(u || "");
 
-/* Some sources answer with one stream per language and quality ("Bastion
-   Tamil HD 720P") instead of one master — nothing inside the stream for the
-   audio or quality menus to read. Those versions come in as `sources`, and
-   their names are what say which language each one is. */
+// The languages a source names its per-language streams by ("Bastion Tamil HD 720P").
 const SOURCE_LANG = /\b(English|Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|Marathi|Punjabi|Gujarati|Urdu|Odia)\b/i;
-const sourceLabel = (s) => String(s?.name || "Source").replace(/^FilmU\s*•\s*/i, "");
 
 const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
@@ -140,6 +136,19 @@ const VideoPlayer = ({
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  /* iPhone Safari has no fullscreen for anything but the bare <video>, which
+     would trade our controls and language bar for Apple's. There the player is
+     made fullscreen with CSS instead, and turned on its side while the phone
+     is held upright — the "rotated" state everything touch-related reads. */
+  const [cssFullScreen, setCssFullScreen] = useState(false);
+  const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
+  const rotated = cssFullScreen && portrait;
+  const rotatedRef = useRef(false);
+  rotatedRef.current = rotated;
+  // Where a touch is along the player's own width, rotated or not.
+  const alongPlayer = (pt, rect) => (rotatedRef.current
+    ? { pos: (pt?.clientY ?? 0) - rect.top, len: rect.height }
+    : { pos: (pt?.clientX ?? 0) - rect.left, len: rect.width });
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
@@ -178,18 +187,41 @@ const VideoPlayer = ({
   const currentEp = isSeries ? (episodes[currentIndex] || null) : null;
   const currentEpNum = currentEp?.episodeNumberInSeason || currentEp?.episode || currentEp?.episode_number || (currentIndex + 1);
 
-  // Other versions of this title, and the ones among them that are a language.
-  // Repeated names ("Citadel" eight times) are numbered so the rows differ.
-  const seenNames = {};
-  const namedSources = (sources || []).map((s) => {
-    const base = sourceLabel(s);
-    seenNames[base] = (seenNames[base] || 0) + 1;
-    return { ...s, label: seenNames[base] > 1 ? `${base} ${seenNames[base]}` : base };
-  });
-  const langSources = namedSources.filter((s) => SOURCE_LANG.test(s.name || ""));
-  const pickSource = (s) => {
-    setShowSettings(null);
-    if (s.url !== src) onSourceSelect?.(s, videoRef.current?.currentTime || 0);
+  /* Languages that come as separate streams. A source like Bastion sends one
+     stream per language and quality ("Bastion Tamil HD 720P"), audio built in,
+     so there is nothing inside the stream for the language bar or the menus
+     to read. Those versions arrive as `sources`; read from their names, they
+     are offered exactly like audio tracks — the bar on start, the Audio menu,
+     the qualities of the current language — and picking one carries on from
+     the same second in the other stream. */
+  const versions = (sources || []).map((s) => {
+    const m = (s?.name || "").match(SOURCE_LANG);
+    if (!m) return null;
+    const lang = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+    const height = Number(((s.name || "").match(/(\d{3,4})\s*p\b/i) || [])[1]) || 0;
+    return { ...s, lang, height };
+  }).filter(Boolean);
+  const playingVersion = versions.find((v) => v.url === src) || null;
+  const langOptions = [];
+  if (playingVersion && audioTracks.length <= 1) {
+    for (const v of versions) {
+      if (langOptions.some((o) => o.lang === v.lang)) continue;
+      const same = versions.filter((x) => x.lang === v.lang);
+      // Same quality as what is playing, else the best this language has.
+      langOptions.push(same.find((x) => x.height === playingVersion.height)
+        || same.reduce((a, b) => (b.height > a.height ? b : a)));
+    }
+  }
+  const streamLangs = langOptions.length > 1;
+  const streamQualities = streamLangs
+    ? versions.filter((v) => v.lang === playingVersion.lang)
+        .filter((v, i, a) => a.findIndex((x) => x.height === v.height) === i)
+        .sort((a, b) => b.height - a.height)
+    : [];
+  const switchVersion = (v, remember = true) => {
+    if (!v || v.url === src) return;
+    if (remember) { try { localStorage.setItem(AUDIO_PREF_KEY, v.lang); } catch {} }
+    onSourceSelect?.(v, videoRef.current?.currentTime || 0);
   };
 
   // Per-episode TMDB still — same field logic as WatchPage. Returns "" when the
@@ -279,7 +311,7 @@ const VideoPlayer = ({
       v.playbackRate = 2;
       setSpeedBoost(true);
     }, 550);
-    tapRef.current.x = e.touches[0].clientX;
+    tapRef.current.x = rotatedRef.current ? e.touches[0].clientY : e.touches[0].clientX;
   }, []);
 
   const endHold = useCallback(() => {
@@ -296,9 +328,11 @@ const VideoPlayer = ({
     if (endHold()) return;
     if (showSettings) { setShowSettings(null); return; }
 
-    const x = e.changedTouches?.[0]?.clientX ?? 0;
+    const touch = e.changedTouches?.[0];
+    const x = (rotatedRef.current ? touch?.clientY : touch?.clientX) ?? 0;
     const rect = containerRef.current?.getBoundingClientRect();
-    const zone = rect && rect.width ? (x - rect.left) / rect.width : 0.5;
+    const a = rect ? alongPlayer(touch, rect) : null;
+    const zone = a && a.len ? a.pos / a.len : 0.5;
     const now = Date.now();
     const prev = tapRef.current;
 
@@ -700,6 +734,28 @@ const VideoPlayer = ({
     }
   }, [audioTracks]);
 
+  /* Stream languages: the bar once per title — switching language loads a new
+     stream, and offering the bar again after every pick would be noise. The
+     title is known by its first version. The viewer's saved language plays
+     straight away when the title has it. */
+  const streamLangKey = streamLangs ? (sources[0]?.url || "") : "";
+  const streamLangShownRef = useRef("");
+  useEffect(() => {
+    if (!streamLangKey || streamLangShownRef.current === streamLangKey) return;
+    streamLangShownRef.current = streamLangKey;
+    let pref = "";
+    try { pref = localStorage.getItem(AUDIO_PREF_KEY) || ""; } catch {}
+    pref = pref || preferredAudioLang;
+    const want = pref && langOptions.find((v) => audioMatchesLang({ name: v.lang, lang: NAME_TO_CODE[v.lang.toLowerCase()] || "" }, pref));
+    if (want && want.url !== src) switchVersion(want, false);
+    langBarShownRef.current = true;
+    setLangIntro(true);
+    setShowLangBar(true);
+    setShowControls(false);
+    showControlsRef.current = false;
+    scheduleEndLangIntro(5000);
+  }, [streamLangKey]);
+
   // Clean up the hidden scrub-preview hls + timer on unmount.
   useEffect(() => () => {
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
@@ -712,10 +768,74 @@ const VideoPlayer = ({
     setIsPlaying(!v.paused);
   };
 
-  const handleFullscreen = () => {
-    if (!document.fullscreenElement) containerRef.current.requestFullscreen();
-    else document.exitFullscreen();
+  /* Fullscreen, sideways. Android and desktop get the real thing, and the
+     screen is locked to landscape while it lasts (where the browser allows
+     it). iPhone gets the CSS version above. */
+  const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const enterFullscreen = async () => {
+    const el = containerRef.current;
+    if (!el) return false;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) {
+      try {
+        await req.call(el, { navigationUI: "hide" });
+        try { await screen.orientation?.lock?.("landscape"); } catch { /* not allowed here */ }
+        return true;
+      } catch { /* refused — usually no tap behind it */ }
+      return false;
+    }
+    setCssFullScreen(true);
+    return true;
   };
+  const exitFullscreen = () => {
+    try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
+    if (fullscreenEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    setCssFullScreen(false);
+  };
+  const handleFullscreen = () => { if (fullscreenEl() || cssFullScreen) exitFullscreen(); else enterFullscreen(); };
+
+  useEffect(() => {
+    const sync = () => setIsFullScreen(!!fullscreenEl());
+    const turn = () => setPortrait(window.innerHeight > window.innerWidth);
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    window.addEventListener("resize", turn);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+      window.removeEventListener("resize", turn);
+      // Closing the player must not leave the phone stuck sideways or fullscreen.
+      try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
+      try { if (fullscreenEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch { /* gone */ }
+    };
+  }, []);
+
+  /* Phones: playing means fullscreen and sideways, as soon as it starts. A
+     browser only allows fullscreen right after a tap, and the stream usually
+     arrives a few seconds after the tap that asked for it — so if it is
+     refused then, the viewer's first tap on the player does it. Once per
+     player: someone who leaves fullscreen is not pushed back in. */
+  const autoFsRef = useRef(false);
+  useEffect(() => {
+    const v = videoRef.current;
+    const el = containerRef.current;
+    if (!v || !el) return;
+    const phone = Math.min(window.innerWidth, window.innerHeight) <= 820
+      && (/Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1);
+    if (!phone) return;
+    let armed = false;
+    const onTap = () => { el.removeEventListener("touchend", onTap); if (!fullscreenEl()) enterFullscreen(); };
+    const onPlaying = async () => {
+      if (autoFsRef.current) return;
+      autoFsRef.current = true;
+      if (!(await enterFullscreen())) { armed = true; el.addEventListener("touchend", onTap, { once: true }); }
+    };
+    v.addEventListener("playing", onPlaying);
+    return () => {
+      v.removeEventListener("playing", onPlaying);
+      if (armed) el.removeEventListener("touchend", onTap);
+    };
+  }, []);
 
   const applySpeed = (rate) => {
     setPlaybackRate(rate);
@@ -764,14 +884,16 @@ const VideoPlayer = ({
     pv.dataset.ready = "1";
   }, [src]);
 
-  const pctFromEvent = (clientX) => {
+  // pt: a mouse event or a touch — anything with clientX/clientY.
+  const pctFromEvent = (pt) => {
     const rect = progressBarRef.current?.getBoundingClientRect();
-    if (!rect || !rect.width) return 0;
-    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    if (!rect) return 0;
+    const { pos, len } = alongPlayer(pt, rect);
+    return len ? Math.min(1, Math.max(0, pos / len)) : 0;
   };
-  const showScrubAt = (clientX) => {
+  const showScrubAt = (pt) => {
     if (!duration) return;
-    const pct = pctFromEvent(clientX);
+    const pct = pctFromEvent(pt);
     const t = pct * duration;
     setHoverPct(pct * 100);      // time label + box follow the cursor instantly
     setHoverTime(t);
@@ -784,7 +906,7 @@ const VideoPlayer = ({
       if (pv) { try { pv.currentTime = Math.max(0, Math.min(t, (pv.duration || duration) - 0.2)); } catch {} }
     }, 140);
   };
-  const seekTo = (clientX) => { if (duration && videoRef.current) videoRef.current.currentTime = pctFromEvent(clientX) * duration; };
+  const seekTo = (pt) => { if (duration && videoRef.current) videoRef.current.currentTime = pctFromEvent(pt) * duration; };
 
   /* ── Where the subtitles sit ─────────────────────────────────────────────
      The browser puts cues at the very bottom of the VIDEO ELEMENT, which is
@@ -869,8 +991,14 @@ const VideoPlayer = ({
   return (
     <div 
       ref={containerRef}
-      className={`${inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all ${showControls || langIntro ? "" : "cursor-none"}`}
-      style={{ touchAction: "manipulation" }}   /* no double-tap zoom stealing our gestures */
+      className={`${cssFullScreen ? "fixed z-[10000]" : inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all ${showControls || langIntro ? "" : "cursor-none"}`}
+      style={{
+        touchAction: "manipulation",   /* no double-tap zoom stealing our gestures */
+        ...(cssFullScreen ? (rotated
+          // Upright phone: the player as wide as the screen is tall, turned a quarter.
+          ? { top: 0, left: 0, width: "100dvh", height: "100vw", transform: "rotate(90deg) translateY(-100%)", transformOrigin: "top left" }
+          : { inset: 0, width: "100vw", height: "100dvh" }) : {}),
+      }}
       onMouseMove={() => {
         if (showSettings || showVolumeSlider) { bumpControls(true); clearTimeout(hideTimer.current); return; }
         bumpControls(true);
@@ -1017,7 +1145,7 @@ const VideoPlayer = ({
           <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
           <div className="absolute bottom-24 right-6 z-[100] w-64 max-w-[80vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in slide-in-from-bottom-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality", speed: "Playback Speed", sources: "Sources" }[showSettings] || showSettings}</h3>
+              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
               <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
             </div>
             <div className="max-h-72 overflow-y-auto custom-scrollbar py-1">
@@ -1045,31 +1173,31 @@ const VideoPlayer = ({
                   </label>
                 </>
               )}
-              {showSettings === 'quality' && levels.length > 0 && (
+              {showSettings === 'quality' && streamQualities.length > 1 && levels.length <= 1 && streamQualities.map((v) => (
+                <button key={v.url} onClick={() => { switchVersion(v, false); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.url === src ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium">{v.height ? `${v.height}p` : "Auto"}</span>{v.url === src && <Check size={16} className="text-blue-400"/>}
+                </button>
+              ))}
+              {showSettings === 'quality' && !(streamQualities.length > 1 && levels.length <= 1) && levels.length > 0 && (
                 <button onClick={() => { hlsRef.current.currentLevel = -1; setShowSettings(null); }}
                   className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentLevel === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">Auto</span>{currentLevel === -1 && <Check size={16} className="text-blue-400"/>}
                 </button>
               )}
-              {showSettings === 'quality' && (levels.length ? levels.map((l, i) => (
+              {showSettings === 'quality' && !(streamQualities.length > 1 && levels.length <= 1) && (levels.length ? levels.map((l, i) => (
                 <button key={i} onClick={() => { hlsRef.current.currentLevel = i; setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentLevel === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{l.height}p</span>{currentLevel === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
-              {showSettings === 'audio' && (audioTracks.length > 1 || !langSources.length) && (audioTracks.length ? audioTracks.map((t, i) => (
+              {showSettings === 'audio' && !streamLangs && (audioTracks.length ? audioTracks.map((t, i) => (
                 <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
-              {/* One language per stream: the languages are the other versions. */}
-              {showSettings === 'audio' && audioTracks.length <= 1 && langSources.length > 0 && langSources.map((s) => (
-                <button key={s.url} onClick={() => pickSource(s)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${s.url === src ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                  <span className="text-sm font-medium text-left">{s.label}</span>{s.url === src && <Check size={16} className="text-blue-400 shrink-0"/>}
-                </button>
-              ))}
-              {showSettings === 'sources' && namedSources.map((s) => (
-                <button key={s.url} onClick={() => pickSource(s)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${s.url === src ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                  <span className="text-sm font-medium text-left">{s.label}</span>{s.url === src && <Check size={16} className="text-blue-400 shrink-0"/>}
+              {/* One language per stream: the languages are the other streams. */}
+              {showSettings === 'audio' && streamLangs && langOptions.map((v) => (
+                <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium">{v.lang}</span>{v.lang === playingVersion.lang && <Check size={16} className="text-blue-400"/>}
                 </button>
               ))}
               {showSettings === 'speed' && [0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => (
@@ -1107,6 +1235,21 @@ const VideoPlayer = ({
       </div>
 
       {/* Audio-language chooser — slides up on load (Hotstar-style), default highlighted */}
+      {showLangBar && streamLangs && (
+        <div className="absolute inset-x-0 bottom-28 sm:bottom-32 z-[60] flex justify-center px-4">
+          <div className="flex items-center gap-1 sm:gap-2 max-w-full overflow-x-auto no-scrollbar bg-black/70 backdrop-blur-xl border border-white/10 rounded-full px-2 py-2 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <span className="hidden sm:inline text-[10px] font-black uppercase tracking-[0.15em] text-white/40 px-2 shrink-0">Audio</span>
+            {langOptions.map((v) => (
+              <button key={v.lang} onClick={() => { switchVersion(v); scheduleEndLangIntro(1200); }}
+                className={`px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 ${v.lang === playingVersion.lang ? "bg-white text-black" : "text-white/80 hover:bg-white/10"}`}>
+                {v.lang}
+              </button>
+            ))}
+            <button onClick={endLangIntro}
+              className="ml-1 p-1.5 rounded-full text-white/50 hover:text-white hover:bg-white/10 shrink-0"><CloseIcon size={16}/></button>
+          </div>
+        </div>
+      )}
       {showLangBar && audioTracks.length > 1 && (
         <div className="absolute inset-x-0 bottom-28 sm:bottom-32 z-[60] flex justify-center px-4">
           <div className="flex items-center gap-1 sm:gap-2 max-w-full overflow-x-auto no-scrollbar bg-black/70 backdrop-blur-xl border border-white/10 rounded-full px-2 py-2 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -1142,11 +1285,11 @@ const VideoPlayer = ({
             </div>
             {/* thin progress bar with a taller invisible hit area for easy hover/drag */}
             <div ref={progressBarRef} className="relative py-2 cursor-pointer group/progress"
-                onClick={(e) => seekTo(e.clientX)}
-                onMouseMove={(e) => showScrubAt(e.clientX)}
+                onClick={(e) => seekTo(e)}
+                onMouseMove={(e) => showScrubAt(e)}
                 onMouseLeave={() => setHoverTime(null)}
-                onTouchStart={(e) => showScrubAt(e.touches[0].clientX)}
-                onTouchMove={(e) => showScrubAt(e.touches[0].clientX)}
+                onTouchStart={(e) => showScrubAt(e.touches[0])}
+                onTouchMove={(e) => showScrubAt(e.touches[0])}
                 onTouchEnd={() => { if (hoverTime != null && videoRef.current) videoRef.current.currentTime = hoverTime; setHoverTime(null); }}>
               <div className="relative h-1 group-hover/progress:h-1.5 w-full bg-white/25 rounded-full transition-all">
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
@@ -1200,14 +1343,12 @@ const VideoPlayer = ({
               className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
             <button onClick={() => setShowSettings('audio')} aria-label="Audio language"
               className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
-            {sources.length > 1 && (
-              <button onClick={() => setShowSettings('sources')} aria-label="Sources"
-                className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'sources' ? 'text-blue-400' : 'text-white'}`}><Layers3 className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
-            )}
             <button onClick={() => setShowSettings('quality')} aria-label="Quality"
               className={`hidden sm:inline-flex p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers className="w-5 h-5" /></button>
-            <button onClick={handleFullscreen} aria-label="Fullscreen"
-              className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white active:scale-90"><Maximize className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
+            <button onClick={handleFullscreen} aria-label={isFullScreen || cssFullScreen ? "Exit fullscreen" : "Fullscreen"}
+              className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white active:scale-90">{isFullScreen || cssFullScreen
+                ? <Minimize className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
+                : <Maximize className="w-[18px] h-[18px] sm:w-5 sm:h-5" />}</button>
           </div>
         </div>
       </div>
