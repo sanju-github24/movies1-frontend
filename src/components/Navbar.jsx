@@ -67,55 +67,6 @@ const railLabel = (open) =>
    usually already moved on to whatever it was reaching for. */
 const labelDelay = (open, i) => ({ transitionDelay: open ? `${50 + i * 22}ms` : "0ms" });
 
-const WatchOptionsPopup = ({ onClose, onNavigate }) => (
-  <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 w-56 bg-white text-black rounded-2xl shadow-2xl p-2 z-[110] border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
-    <div className="flex justify-between items-center px-3 py-2 border-b border-gray-50 mb-1">
-      <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600">Streaming Options</h4>
-      <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-    <ul className="space-y-1">
-      <li>
-        <button
-          onClick={() => { onNavigate("/watch"); onClose(); }}
-          className="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-xl flex items-center gap-3 text-gray-800 transition"
-        >
-          <MdOutlineMovie className="w-5 h-5 text-blue-500" />
-          <span className="text-sm font-bold">Movies & Shows</span>
-        </button>
-      </li>
-      <li>
-        <button
-          onClick={() => { onNavigate("/sports"); onClose(); }}
-          className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-xl flex items-center gap-3 text-red-600 transition"
-        >
-          <MdOutlineSportsCricket className="w-5 h-5 text-red-500" />
-          <span className="text-sm font-black">Live Sports</span>
-        </button>
-      </li>
-      <li>
-        <button
-          onClick={() => { onNavigate("/live-stream"); onClose(); }}
-          className="w-full text-left px-4 py-3 hover:bg-purple-50 rounded-xl flex items-center gap-3 text-purple-600 transition"
-        >
-          <MdOutlineLiveTv className="w-5 h-5 text-purple-500" />
-          <span className="text-sm font-black">Live TV</span>
-        </button>
-      </li>
-      <li>
-        <button
-          onClick={() => { onNavigate("/music"); onClose(); }}
-          className="w-full text-left px-4 py-3 hover:bg-green-50 rounded-xl flex items-center gap-3 text-green-600 transition"
-        >
-          <MdOutlineMusicNote className="w-5 h-5 text-green-500" />
-          <span className="text-sm font-black">Music</span>
-        </button>
-      </li>
-    </ul>
-    <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white"></div>
-  </div>
-);
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -142,12 +93,10 @@ const Navbar = () => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
-  const [showWatchOptions, setShowWatchOptions] = useState(false);
   const [railOpen, setRailOpen] = useState(false);   // desktop: rail is hovered
 
   const profileRef = useRef(null);
   const langRef = useRef(null);
-  const watchButtonRef = useRef(null);
   const mobileSearchRef = useRef(null);
 
   const languages = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
@@ -162,7 +111,6 @@ const Navbar = () => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
       if (langRef.current && !langRef.current.contains(e.target)) setLangOpen(false);
-      if (watchButtonRef.current && !watchButtonRef.current.contains(e.target)) setShowWatchOptions(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -177,7 +125,6 @@ const Navbar = () => {
   // Close sidebar on route change
   useEffect(() => {
     setMobileOpen(false);
-    setShowWatchOptions(false);
     setRailOpen(false);
     setLangOpen(false);
     setProfileOpen(false);
@@ -216,7 +163,29 @@ const Navbar = () => {
     return (name ? name[0] : session.user.email[0]).toUpperCase();
   };
 
-  const isWatchActive = showWatchOptions || ['/watch', '/sports', '/live-stream', '/music'].some(p => location.pathname.startsWith(p));
+  /* The phone's tab bar gets out of the way of what is being read: it slides
+     off as the page scrolls down and comes back the moment it scrolls up, or
+     near the top and the bottom of the page. */
+  const [navHidden, setNavHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY, ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const nearEnd = window.innerHeight + y >= document.documentElement.scrollHeight - 40;
+        if (y < 80 || nearEnd) setNavHidden(false);
+        else if (y > last + 8) setNavHidden(true);
+        else if (y < last - 8) setNavHidden(false);
+        last = y; ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  // A new page starts with the bar showing.
+  useEffect(() => { setNavHidden(false); }, [location.pathname]);
 
   return (
     <nav className="text-white font-sans">
@@ -274,7 +243,7 @@ const Navbar = () => {
               meant the one fixed point in the rail moved every time the pointer
               crossed it. Pinned to the icon gutter so it holds its place while
               the labels come out beside it. */}
-          <Link to="/" className="shrink-0 relative h-16 mb-4 block" aria-label="AnchorMovies home">
+          <Link to="/" className="shrink-0 relative h-16 mt-5 mb-10 block" aria-label="AnchorMovies home">
             <img src="/favicon-cleaned-256x256.png" alt="AnchorMovies"
               className="absolute left-[18px] top-1/2 -translate-y-1/2 w-9 h-9 object-contain" />
           </Link>
@@ -396,24 +365,21 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* ── Mobile Top Bar ── */}
-      {/* Three columns so the logo stays centred whether or not the back
-          button is showing beside the menu. */}
-      <div className="sm:hidden sticky top-0 z-50 bg-blue-700 shadow-lg grid grid-cols-[1fr_auto_1fr] items-center px-3 h-14 border-b border-white/10">
-        <div className="flex items-center gap-0.5">
+      {/* ── Mobile top ──
+          No coloured bar: the back button where there is somewhere to go
+          back to, the mark, and the full menu. It scrolls away with the page;
+          the tab bar at the foot carries the navigation. */}
+      <div className="sm:hidden relative z-50 flex items-center justify-between px-3 h-14">
+        <div className="flex items-center gap-1">
           <MobileBackButton />
-          <button onClick={() => setMobileOpen(true)} className="p-2" aria-label="Open menu">
-            <MdMenu size={26} />
-          </button>
+          <Link to="/" aria-label="Home" className="p-1.5">
+            <img src="/favicon-cleaned-256x256.png" alt="AnchorMovies" className="h-8 w-8 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" />
+          </Link>
         </div>
-        <Link to="/" aria-label="Home">
-          <img src="/logo_39.png" alt="logo" className="h-8" />
-        </Link>
-        <div className="flex justify-end">
-          <button onClick={() => setMobileSearchOpen(true)} className="p-2" aria-label="Search">
-            <MdSearch size={26} />
-          </button>
-        </div>
+        <button onClick={() => setMobileOpen(true)} aria-label="Open menu"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition">
+          <MdMenu size={24} />
+        </button>
       </div>
 
       {/* ── Mobile Search Overlay ── */}
@@ -526,64 +492,54 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* ── Mobile Bottom Navigation Bar ── */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-blue-800 border-t border-white/10 flex justify-around items-center h-16 pb-1 z-[100] shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-        {/* Same icons as the desktop rail, and the same rule: the page you are
-            on is said by a solid icon, every other one is an outline. */}
-        <NavLink to="/" end className={({ isActive }) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
-          {({ isActive }) => (
-            <>
-              {isActive ? <MdHome size={24} /> : <MdOutlineHome size={24} />}
-              <span className="text-[10px] font-bold">Home</span>
-            </>
-          )}
-        </NavLink>
-
-        <NavLink to="/latest" className={({ isActive }) => `flex flex-col items-center gap-1 transition ${isActive ? 'text-white' : 'text-white/50'}`}>
-          {({ isActive }) => (
-            <>
-              {isActive ? <MdWatchLater size={24} /> : <MdOutlineWatchLater size={24} />}
-              <span className="text-[10px] font-bold">Latest</span>
-            </>
-          )}
-        </NavLink>
-
-        {/* Floating Center Search Button */}
-        <div className="relative -mt-8 flex items-center justify-center">
-          <button
-            onClick={() => setMobileSearchOpen(true)}
-            className="w-14 h-14 bg-white text-blue-700 rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-800 active:scale-90 transition"
-          >
-            <MdSearch size={28} />
+      {/* ── Mobile tab bar ──
+          A floating glass pill of round buttons, clear of the screen's edges
+          and the home indicator. The page you are on is the white one. */}
+      <div
+        className={`sm:hidden fixed inset-x-0 z-[100] flex justify-center px-3 pointer-events-none
+                    transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
+                    ${navHidden ? "translate-y-[calc(100%+24px)]" : "translate-y-0"}`}
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+      >
+        <nav aria-label="Main"
+          className="pointer-events-auto w-full max-w-md flex items-center justify-between gap-1 rounded-[26px]
+                     bg-[#111116]/85 backdrop-blur-xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.55)] px-2.5 py-2.5">
+          {[
+            { to: "/", end: true, label: "Home", Icon: MdOutlineHome, IconOn: MdHome },
+            { action: "search", label: "Search", Icon: MdSearch, IconOn: MdSearch },
+            { to: "/watch", label: "Movies", Icon: MdOutlineMovie, IconOn: MdMovie },
+            { to: "/sports", label: "Live Sports", Icon: MdOutlineSportsCricket, IconOn: MdSportsCricket },
+            { to: "/live-stream", label: "Live TV", Icon: MdOutlineLiveTv, IconOn: MdLiveTv },
+            { to: "/music", label: "Music", Icon: MdOutlineMusicNote, IconOn: MdMusicNote },
+          ].map((item) => {
+            const Icon = item.Icon;
+            const IconOn = item.IconOn;
+            const pill = (on) => `w-11 h-11 rounded-full flex items-center justify-center transition-colors active:scale-90
+                                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
+                                  ${on ? "bg-white text-black" : "bg-white/[0.07] text-white/85 hover:bg-white/[0.14]"}`;
+            if (item.action === "search") {
+              return (
+                <button key="search" type="button" onClick={() => setMobileSearchOpen(true)} aria-label="Search" className={pill(mobileSearchOpen)}>
+                  <Icon size={23} />
+                </button>
+              );
+            }
+            return (
+              <NavLink key={item.to} to={item.to} end={item.end} aria-label={item.label} className={({ isActive }) => pill(isActive)}>
+                {({ isActive }) => (isActive ? <IconOn size={23} /> : <Icon size={23} />)}
+              </NavLink>
+            );
+          })}
+          <button type="button" onClick={() => { session ? navigate("/profile") : navigate("/auth"); }}
+            aria-label={session ? "Profile" : "Log in"}
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition active:scale-90
+                        ${location.pathname.startsWith("/profile") ? "ring-2 ring-white" : ""}
+                        ${session && activeProfile ? "" : "bg-white/[0.07] text-white/85"}`}>
+            {session && activeProfile
+              ? <Avatar id={activeProfile.avatar} size={40} />
+              : <MdOutlinePerson size={23} />}
           </button>
-        </div>
-
-        {/* Watch — opens popup with Movies, Live Sports, Live TV, Music */}
-        <div className="relative" ref={watchButtonRef}>
-          <button
-            onClick={() => setShowWatchOptions(prev => !prev)}
-            className={`flex flex-col items-center gap-1 transition ${isWatchActive ? 'text-white' : 'text-white/50'}`}
-          >
-            {isWatchActive ? <MdMovie size={24} /> : <MdOutlineMovie size={24} />}
-            <span className="text-[10px] font-bold">Watch</span>
-          </button>
-          {showWatchOptions && (
-            <WatchOptionsPopup
-              onClose={() => setShowWatchOptions(false)}
-              onNavigate={(path) => { navigate(path); setShowWatchOptions(false); }}
-            />
-          )}
-        </div>
-
-        <button
-          onClick={() => { session ? navigate("/profile") : navigate("/auth"); }}
-          className={`flex flex-col items-center gap-1 transition ${location.pathname === '/profile' ? 'text-white' : 'text-white/50'}`}
-        >
-          {session && activeProfile
-            ? <Avatar id={activeProfile.avatar} size={24} className={location.pathname.startsWith('/profile') ? 'ring-2 ring-white' : ''} />
-            : location.pathname === "/profile" ? <MdPerson size={24} /> : <MdOutlinePerson size={24} />}
-          <span className="text-[10px] font-bold">Account</span>
-        </button>
+        </nav>
       </div>
     </nav>
   );
