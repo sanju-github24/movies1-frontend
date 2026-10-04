@@ -886,15 +886,11 @@ function LiveNowStrip() {
       {showLive && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Activity size={13} className="text-red-500" />
-              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Live Now</span>
-              <span className="flex items-center gap-1 bg-red-500/15 border border-red-500/20 text-red-400 text-[8px] font-black uppercase px-2 py-0.5 rounded-full">
-                <PulsingDot color="#ef4444" size={5} />{liveCount} Live
-              </span>
-            </div>
-            <Link to="/live-cricket-tv" className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors font-bold">
-              All <ChevronRight size={12} />
+            <h2 className="flex items-center gap-2.5 text-lg sm:text-[22px] font-bold text-white tracking-tight">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />Live scores
+            </h2>
+            <Link to="/live-cricket-tv" className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] border border-white/[0.07] px-3 py-1 text-xs sm:text-[13px] font-semibold text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              {liveCount} live <ChevronRight size={14} />
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -907,14 +903,9 @@ function LiveNowStrip() {
       {showScheduled && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <CalendarDays size={13} className="text-violet-400" />
-              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
-                {showLive ? "Next Up" : "Today & Upcoming"}
-              </span>
-            </div>
-            <Link to="/live-cricket-tv" className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors font-bold">
-              Schedule <ChevronRight size={12} />
+            <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight">{showLive ? "Next up" : "Today & upcoming"}</h2>
+            <Link to="/live-cricket-tv" className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] border border-white/[0.07] px-3 py-1 text-xs sm:text-[13px] font-semibold text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              Schedule <ChevronRight size={14} />
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -927,10 +918,7 @@ function LiveNowStrip() {
       {showResults && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Trophy size={13} className="text-amber-400" />
-              <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Recent Results</span>
-            </div>
+            <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight">Recent results</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {recentResults.slice(0, 6).map(r => <MatchCard key={r.id} {...r} />)}
@@ -1646,12 +1634,10 @@ function IplHighlightsRow() {
 /* One heading treatment for the page, instead of a differently-coloured 11px
    caption per section. */
 function SportsHeading(props) {
-  const Icon = props.icon;
   const { children } = props;
   return (
-    <div className="flex items-center gap-2.5 mt-10 mb-4">
-      <Icon className="w-4 h-4 text-gray-400" aria-hidden="true" />
-      <h2 className="text-sm font-black text-white uppercase tracking-[0.18em]">{children}</h2>
+    <div className="flex items-center gap-2.5 mt-10 sm:mt-12 mb-3 sm:mb-4">
+      <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight">{children}</h2>
     </div>
   );
 }

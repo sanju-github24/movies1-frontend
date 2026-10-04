@@ -298,15 +298,10 @@ function FootballHeroBg(){
 
 // ─── CRICKET SLIDE (BCCI-card style: badge + name stacked, centered VS, footer) ──
 function CricketSlide({slide, onPlay}){
-  const { home, away } = slide;
-  const isLive=slide.status==="live";
   const isFinished=slide.status==="finished";
-  const isUpcoming=slide.status==="upcoming";
   const fmtBadge=slide.matchFmt||"CRICKET";
   const isODI=fmtBadge==="ODI", isTest=fmtBadge==="Test";
   const fmtColor=isODI?"#f59e0b":isTest?"#ef4444":"#8b5cf6";
-  const fmtBg=isODI?"rgba(245,158,11,0.15)":isTest?"rgba(239,68,68,0.15)":"rgba(139,92,246,0.15)";
-  const fmtBorder=isODI?"rgba(245,158,11,0.3)":isTest?"rgba(239,68,68,0.3)":"rgba(139,92,246,0.3)";
 
   // ── Highlight support ──────────────────────────────────────────────────────
   const highlight=slide.highlight||null;
@@ -383,186 +378,105 @@ function CricketSlide({slide, onPlay}){
       </div>
       <CricketHeroBg/>
 
-      <div className="relative z-10 flex flex-col justify-end h-full px-4 sm:px-8 pb-5 sm:pb-7 pt-4 sm:pt-5">
+      <HeroCopy slide={slide} sport="cricket" onPlay={onPlay}
+        highlightTitle={bestClip?.title}
+        hasHighlight={isFinished&&!!bestClip}
+        onHighlight={openHighlight} highlightLoading={streamLoading}/>
+    </div>
+  );
+}
 
-        {/* ── Commentary languages ──
-            Above the badges rather than among them: the badges say what the
-            match is, this says how it can be heard, and mixing the two made
-            "Hindi" look like the name of a competition. Named, not counted —
-            it is the name that decides whether someone presses play — and the
-            one the player will open in comes first and is marked. Absent for a
-            single language, which offers nothing to choose. */}
-        {Array.isArray(slide.languages) && slide.languages.length > 1 && (
-          <div className="flex items-center gap-1 sm:gap-1.5 mb-1.5 sm:mb-2 flex-wrap"
-               aria-label={`Commentary in ${slide.languages.map(langName).join(", ")}`}>
-            <span className="font-black uppercase tracking-widest text-white/50 mr-0.5"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              🎙
+/* ── The slide's words, Hotstar's way ─────────────────────────────────────
+   One block for cricket and football: the competition small on top, the
+   match as the title, the scores, then a single meta line — a status tag and
+   what it is, dot-separated — and a white button. The badges, emoji and
+   per-format colours it replaces made every slide a different design. */
+function HeroCopy({ slide, sport, onPlay, hasHighlight, highlightTitle, onHighlight, highlightLoading }) {
+  const { home, away } = slide;
+  const isLive = slide.status === "live", isFinished = slide.status === "finished", isUpcoming = slide.status === "upcoming";
+  const nameOf = (t) => t?.name || t?.code || "";
+  const title = slide.playTitle || [nameOf(home), nameOf(away)].filter(Boolean).join(" vs ");
+  const fmt = slide.matchFmt && slide.matchFmt !== "CRICKET" ? slide.matchFmt : "";
+  const langs = Array.isArray(slide.languages) && slide.languages.length > 1 ? slide.languages.map(langName).join(", ") : "";
+  const meta = [
+    fmt,
+    sport === "football" ? "Football" : "Cricket",
+    slide.group,
+    isLive && slide.minute ? `${slide.minute}'` : "",
+    isUpcoming ? (slide.countdown ? `Starts ${slide.countdown}` : slide.dateLabel || slide.timeLabel) : "",
+    slide.venue,
+    langs,
+  ].filter(Boolean);
+  const note = slide.result || slide.tossText
+    || (isLive && slide.strikerName ? `${slide.strikerName} ${slide.strikerRuns}(${slide.strikerBalls})` : "");
+  const scored = (isLive || isFinished) && (home?.score != null && home?.score !== "" || away?.score != null && away?.score !== "");
+
+  const label = slide.scorecardOnly ? "View Scorecard"
+    : isLive ? "Watch Live"
+    : isFinished ? "View Scorecard"
+    : slide.countdown ? `Starts ${slide.countdown}`
+    : slide.timeLabel ? `Starts ${slide.timeLabel}`
+    : "Match Preview";
+  const primaryCls = "inline-flex items-center justify-center gap-2 rounded-lg bg-white text-black font-bold text-sm sm:text-base px-6 sm:px-9 py-2.5 sm:py-3 hover:bg-gray-200 active:scale-[0.98] transition disabled:opacity-60 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30";
+  const secondaryCls = "inline-flex items-center justify-center gap-2 rounded-lg bg-white/15 backdrop-blur-md text-white font-bold text-sm sm:text-base px-5 sm:px-7 py-2.5 sm:py-3 hover:bg-white/25 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
+  const icon = isUpcoming ? <Clock className="w-4 h-4" aria-hidden="true"/> : <Play className="w-4 h-4 fill-current" aria-hidden="true"/>;
+
+  return (
+    <div className="relative z-10 flex flex-col justify-end h-full px-5 sm:px-10 lg:px-14 pb-10 sm:pb-12 pt-6 max-w-[760px]">
+      {slide.tournament && (
+        <p className="text-xs sm:text-sm font-semibold text-white/75 mb-2 sm:mb-3 truncate">{slide.tournament}</p>
+      )}
+      <h2 className="text-[26px] leading-[1.08] sm:text-4xl lg:text-[52px] font-black tracking-tight text-white line-clamp-2 drop-shadow-[0_2px_16px_rgba(0,0,0,0.5)]">
+        {title}
+      </h2>
+
+      {scored && (
+        <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          {[home, away].map((t, i) => (
+            <span key={i} className="inline-flex items-center gap-2">
+              {sport === "football" ? <FootballTeamBadge team={t} size="22px"/> : <TeamBadge team={t} size="22px"/>}
+              <span className="text-sm sm:text-lg font-bold text-white">{t?.code}</span>
+              <span className="text-sm sm:text-lg font-black text-white">{t?.score}</span>
+              {t?.overs && <span className="text-xs sm:text-sm text-white/55">({t.overs})</span>}
             </span>
-            {slide.languages.map((c, i) => (
-              <span key={c}
-                className={`px-1.5 sm:px-2 py-0.5 rounded-full font-bold border
-                            ${i === 0
-                              ? "bg-white text-black border-white"
-                              : "bg-black/40 text-white/85 border-white/20"}`}
-                style={{fontSize:"clamp(7px,1.8vw,10px)"}}>
-                {langName(c)}
-              </span>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {/* ── Badges row ── */}
-        <div className="flex items-center gap-1 sm:gap-1.5 mb-2 sm:mb-3 flex-wrap">
-          <span className="flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-black uppercase tracking-widest border"
-            style={{fontSize:"clamp(7px,1.8vw,9px)",background:fmtBg,borderColor:fmtBorder,color:fmtColor}}>
-            🏏 {slide.tournament}
+      <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px] sm:text-[15px] font-medium text-white/75">
+        {isLive && (
+          <span className="inline-flex items-center gap-1.5 rounded bg-red-600 px-2 py-0.5 text-[11px] sm:text-xs font-black tracking-wide text-white">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse motion-reduce:animate-none" aria-hidden="true"/>LIVE
           </span>
-          {fmtBadge!=="CRICKET"&&(
-            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-black uppercase border"
-              style={{fontSize:"clamp(7px,1.8vw,9px)",background:fmtBg,borderColor:fmtBorder,color:fmtColor}}>
-              {fmtBadge}
-            </span>
-          )}
-          {isLive&&(
-            <span className="flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-red-500/15 border-red-500/30 text-red-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              <PulsingDot color="#ef4444" size={5}/>Live
-            </span>
-          )}
-          {isFinished&&(
-            <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-purple-500/15 border-purple-500/30 text-purple-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              ✓ Completed
-            </span>
-          )}
-          {isFinished&&bestClip&&(
-            <span className="flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full border font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(249,115,22,0.15)",borderColor:"rgba(249,115,22,0.3)",color:"#fb923c"}}>
-              ▶ Highlights
-            </span>
-          )}
-          {isUpcoming&&(
-            <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-white/5 border-white/10 text-gray-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              ⏱ {slide.countdown || slide.dateLabel}
-            </span>
-          )}
-        </div>
+        )}
+        {isFinished && <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] sm:text-xs font-black tracking-wide text-white">RESULT</span>}
+        {isUpcoming && <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] sm:text-xs font-black tracking-wide text-white">UPCOMING</span>}
+        {meta.map((m, i) => (
+          <span key={i} className="inline-flex items-center gap-2">
+            <span className="text-white/35" aria-hidden="true">•</span>{m}
+          </span>
+        ))}
+      </div>
 
-        {/* ── Teams: badge-over-name BCCI layout ── */}
-        <div className="flex items-center gap-3 sm:gap-8 mb-2 sm:mb-3">
+      {note && <p className="mt-2 text-[13px] sm:text-[15px] text-white/60 line-clamp-1">{note}</p>}
+      {hasHighlight && highlightTitle && <p className="mt-1 text-[13px] sm:text-sm text-white/50 line-clamp-1">{highlightTitle}</p>}
 
-          {/* Home */}
-          <div className="flex flex-col items-center gap-1 sm:gap-1.5 min-w-0" style={{width:"clamp(64px,16vw,120px)"}}>
-            <TeamBadge team={home} size="clamp(28px,6vw,56px)"/>
-            <span className="font-black uppercase tracking-tight text-white text-center truncate w-full"
-              style={{fontSize:"clamp(11px,2.6vw,16px)"}}>
-              {home.code}
-            </span>
-            {(isLive||isFinished)&&home.score&&(
-              <div className="flex items-baseline gap-1">
-                <span className="font-black text-white leading-none" style={{fontSize:"clamp(10px,2.2vw,14px)"}}>{home.score}</span>
-                {home.overs&&<span className="text-gray-400 font-bold" style={{fontSize:"clamp(7px,1.4vw,9px)"}}>({home.overs})</span>}
-              </div>
-            )}
-          </div>
-
-          {/* VS */}
-          <div className="shrink-0 flex flex-col items-center gap-0.5">
-            <span className="font-black text-gray-500 uppercase tracking-widest" style={{fontSize:"clamp(8px,1.8vw,13px)"}}>vs</span>
-          </div>
-
-          {/* Away */}
-          <div className="flex flex-col items-center gap-1 sm:gap-1.5 min-w-0" style={{width:"clamp(64px,16vw,120px)"}}>
-            <TeamBadge team={away} size="clamp(28px,6vw,56px)"/>
-            <span className="font-black uppercase tracking-tight text-white/90 text-center truncate w-full"
-              style={{fontSize:"clamp(11px,2.6vw,16px)"}}>
-              {away.code}
-            </span>
-            {(isLive||isFinished)&&away.score&&(
-              <div className="flex items-baseline gap-1">
-                <span className="font-black text-white leading-none" style={{fontSize:"clamp(10px,2.2vw,14px)"}}>{away.score}</span>
-                {away.overs&&<span className="text-gray-400 font-bold" style={{fontSize:"clamp(7px,1.4vw,9px)"}}>({away.overs})</span>}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Meta ── */}
-        <div className="mb-2.5 sm:mb-4 space-y-0.5">
-          {slide.tossText&&<p className="font-black flex items-center gap-1" style={{fontSize:"clamp(8px,2vw,11px)",color:"#f59e0b"}}>🪙 {slide.tossText}</p>}
-          {slide.venue&&<p className="text-gray-500 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>📍 {slide.venue}</p>}
-          {slide.result&&<p className="font-black" style={{fontSize:"clamp(8px,2vw,11px)",color:isFinished?"#a78bfa":"#f59e0b"}}>{slide.result}</p>}
-          {isLive&&slide.strikerName&&<p className="text-amber-400 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>★ {slide.strikerName} {slide.strikerRuns}({slide.strikerBalls})</p>}
-          {isFinished&&bestClip&&(
-            <p className="font-bold truncate" style={{fontSize:"clamp(8px,2vw,10px)",color:"#fb923c",maxWidth:"70%"}}>▶ {bestClip.title}</p>
-          )}
-        </div>
-
-        {/* ── CTA / footer ── */}
-        {isFinished&&bestClip?(
-          <button onClick={openHighlight} disabled={streamLoading}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03] disabled:opacity-60"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:"linear-gradient(135deg,#f97316,#ea580c)",
-              boxShadow:"0 0 20px rgba(249,115,22,0.45),0 4px 12px rgba(0,0,0,0.4)",
-              color:"#fff",cursor:"pointer",border:"none",
-            }}>
-            {streamLoading
-              ?<div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{borderColor:"rgba(255,255,255,0.3)",borderTopColor:"#fff"}}/>
-              :<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            }
-            {streamLoading?"Loading…":"Watch Highlights"}
+      <div className="mt-5 sm:mt-7 flex flex-wrap items-center gap-3">
+        {hasHighlight ? (
+          <button type="button" onClick={onHighlight} disabled={highlightLoading} className={primaryCls}>
+            {highlightLoading
+              ? <span className="w-4 h-4 rounded-full border-2 border-black/20 border-t-black animate-spin" aria-hidden="true"/>
+              : <Play className="w-4 h-4 fill-current" aria-hidden="true"/>}
+            {highlightLoading ? "Loading…" : "Watch Highlights"}
           </button>
-        ):(
-          slide.playSrc ? (
-          /* A fixture we can actually play opens in place. Everything else is
-             a scorecard or a highlight, which lives on its own route. */
-          <button type="button" onClick={()=>onPlay&&onPlay(slide)}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:`linear-gradient(135deg,${fmtColor},${isODI?"#b45309":isTest?"#b91c1c":"#6d28d9"})`,
-              boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
-              color:"#fff",
-            }}>
-            {/* No play triangle on a fixture that has not started — the icon
-                is a promise, and an upcoming match cannot keep it. */}
-            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
-            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
-            {slide.scorecardOnly?"View Scorecard"
-              :isLive?"Watch Live"
-              :isFinished?"View Scorecard"
-              :slide.countdown?`Starts ${slide.countdown}`
-              :slide.timeLabel?`Starts ${slide.timeLabel}`
-              :"Match Preview"}
-          </button>
-          ) : (
-          <Link to={slide.link || "/live-cricket-tv"}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:`linear-gradient(135deg,${fmtColor},${isODI?"#b45309":isTest?"#b91c1c":"#6d28d9"})`,
-              boxShadow:`0 0 20px ${fmtColor}44,0 4px 12px rgba(0,0,0,0.4)`,
-              color:"#fff",
-            }}>
-            {/* No play triangle on a fixture that has not started — the icon
-                is a promise, and an upcoming match cannot keep it. */}
-            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
-            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
-            {slide.scorecardOnly?"View Scorecard"
-              :isLive?"Watch Live"
-              :isFinished?"View Scorecard"
-              :slide.countdown?`Starts ${slide.countdown}`
-              :slide.timeLabel?`Starts ${slide.timeLabel}`
-              :"Match Preview"}
-          </Link>
-          )
+        ) : slide.playSrc ? (
+          <button type="button" onClick={() => onPlay && onPlay(slide)} className={primaryCls}>{icon}{label}</button>
+        ) : (
+          <Link to={slide.link || "/live-cricket-tv"} className={primaryCls}>{icon}{label}</Link>
+        )}
+        {/* The scorecard as well, when the main button does something else. */}
+        {slide.link && (hasHighlight || slide.playSrc) && (
+          <Link to={slide.link} className={secondaryCls}>Scorecard</Link>
         )}
       </div>
     </div>
@@ -571,12 +485,7 @@ function CricketSlide({slide, onPlay}){
 
 // ─── FOOTBALL SLIDE (same badge-over-name BCCI layout) ───────────────────────
 function FootballSlide({slide, onPlay}){
-  const { home, away } = slide;
-  const isLive=slide.status==="live";
   const isFinished=slide.status==="finished";
-  const isUpcoming=slide.status==="upcoming";
-  const hWon=isFinished&&home.score>away.score;
-  const aWon=isFinished&&away.score>home.score;
 
   // ── Highlight support ──────────────────────────────────────────────────────
   const highlight=slide.highlight||null;
@@ -626,154 +535,10 @@ function FootballSlide({slide, onPlay}){
       </div>
       <FootballHeroBg/>
 
-      <div className="relative z-10 flex flex-col justify-end h-full px-4 sm:px-8 pb-5 sm:pb-7 pt-4 sm:pt-5">
-
-        {/* ── Badges row ── */}
-        <div className="flex items-center gap-1 sm:gap-1.5 mb-2 sm:mb-3 flex-wrap">
-          <span className="flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-black uppercase tracking-widest border"
-            style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(30,213,150,0.12)",borderColor:"rgba(30,213,150,0.3)",color:"#1ed596"}}>
-            ⚽ FIFA World Cup 2026™
-          </span>
-          {slide.group&&(
-            <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-black uppercase tracking-widest border"
-              style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(255,255,255,0.05)",borderColor:"rgba(255,255,255,0.1)",color:"#9ca3af"}}>
-              {slide.group}
-            </span>
-          )}
-          {isLive&&(
-            <span className="flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-red-500/15 border-red-500/30 text-red-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              <PulsingDot color="#ef4444" size={5}/>
-              {slide.minute?`${slide.minute}'`:"Live"}
-            </span>
-          )}
-          {isFinished&&(
-            <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-emerald-500/15 border-emerald-500/30 text-emerald-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              ✓ Full Time
-            </span>
-          )}
-          {isFinished&&highlight&&(
-            <span className="flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full border font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)",background:"rgba(249,115,22,0.15)",borderColor:"rgba(249,115,22,0.3)",color:"#fb923c"}}>
-              ▶ Highlights
-            </span>
-          )}
-          {isUpcoming&&(
-            <span className="px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full border bg-white/5 border-white/10 text-gray-400 font-black uppercase tracking-widest"
-              style={{fontSize:"clamp(7px,1.8vw,9px)"}}>
-              ⏱ {slide.countdown || slide.dateLabel}
-            </span>
-          )}
-        </div>
-
-        {/* ── Teams: badge-over-name BCCI layout ── */}
-        <div className="flex items-center gap-3 sm:gap-8 mb-2 sm:mb-3">
-
-          {/* Home */}
-          <div className="flex flex-col items-center gap-1 sm:gap-1.5 min-w-0" style={{width:"clamp(64px,16vw,120px)"}}>
-            <FootballTeamBadge team={home}/>
-            <span className="font-black uppercase tracking-tight text-center truncate w-full"
-              style={{fontSize:"clamp(11px,2.6vw,16px)",color:hWon?"#4ade80":"white"}}>
-              {home.code}
-            </span>
-            {(isLive||isFinished)&&home.score!==null&&home.score!==undefined&&(
-              <span className="font-black leading-none" style={{fontSize:"clamp(10px,2.2vw,14px)",color:hWon?"#4ade80":"white"}}>{home.score}</span>
-            )}
-          </div>
-
-          {/* Separator */}
-          <div className="shrink-0 flex flex-col items-center gap-0.5">
-            {(isLive||isFinished)
-              ?<span className="font-black text-white/40" style={{fontSize:"clamp(13px,3vw,20px)"}}>:</span>
-              :<span className="font-black text-gray-500 uppercase tracking-widest" style={{fontSize:"clamp(8px,1.8vw,13px)"}}>vs</span>
-            }
-          </div>
-
-          {/* Away */}
-          <div className="flex flex-col items-center gap-1 sm:gap-1.5 min-w-0" style={{width:"clamp(64px,16vw,120px)"}}>
-            <FootballTeamBadge team={away}/>
-            <span className="font-black uppercase tracking-tight text-center truncate w-full"
-              style={{fontSize:"clamp(11px,2.6vw,16px)",color:aWon?"#4ade80":"rgba(255,255,255,0.85)"}}>
-              {away.code}
-            </span>
-            {(isLive||isFinished)&&away.score!==null&&away.score!==undefined&&(
-              <span className="font-black leading-none" style={{fontSize:"clamp(10px,2.2vw,14px)",color:aWon?"#4ade80":"white"}}>{away.score}</span>
-            )}
-          </div>
-        </div>
-
-        {/* ── Meta ── */}
-        <div className="mb-2.5 sm:mb-4 space-y-0.5">
-          {slide.venue&&<p className="text-gray-500 font-bold" style={{fontSize:"clamp(8px,2vw,11px)"}}>📍 {slide.venue}</p>}
-          {isFinished&&<p className="font-black" style={{fontSize:"clamp(8px,2vw,11px)",color:"#4ade80"}}>{hWon?`${home.code} win`:aWon?`${away.code} win`:"Draw"} · FT {home.score}–{away.score}</p>}
-          {isLive&&slide.minute&&<p className="font-black text-amber-400" style={{fontSize:"clamp(8px,2vw,11px)"}}>{slide.minute}' · Match in progress</p>}
-          {isFinished&&highlight&&(
-            <p className="font-bold truncate" style={{fontSize:"clamp(8px,2vw,10px)",color:"#fb923c",maxWidth:"70%"}}>▶ {highlight.title}</p>
-          )}
-        </div>
-
-        {/* ── CTA ── */}
-        {isFinished&&highlight?(
-          <button onClick={openHighlight} disabled={streamLoading}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03] disabled:opacity-60"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:"linear-gradient(135deg,#f97316,#ea580c)",
-              boxShadow:"0 0 20px rgba(249,115,22,0.45),0 4px 12px rgba(0,0,0,0.4)",
-              color:"#fff",cursor:"pointer",border:"none",
-            }}>
-            {streamLoading
-              ?<div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{borderColor:"rgba(255,255,255,0.3)",borderTopColor:"#fff"}}/>
-              :<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>
-            }
-            {streamLoading?"Loading…":"Watch Highlights"}
-          </button>
-        ):(
-          slide.playSrc ? (
-          /* A fixture we can actually play opens in place. Everything else is
-             a scorecard or a highlight, which lives on its own route. */
-          <button type="button" onClick={()=>onPlay&&onPlay(slide)}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:"linear-gradient(135deg,#1ed596,#059669)",
-              boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
-              color:"#fff",
-            }}>
-            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
-            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
-            {slide.scorecardOnly?"View Scorecard"
-              :isLive?"Watch Live"
-              :isFinished?"Match Highlights"
-              :slide.countdown?`Starts ${slide.countdown}`
-              :slide.timeLabel?`Starts ${slide.timeLabel}`
-              :"Match Preview"}
-          </button>
-          ) : (
-          <Link to={slide.link || "/live-cricket-tv"}
-            className="flex items-center gap-1.5 w-fit rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all active:scale-95 hover:scale-[1.03]"
-            style={{
-              fontSize:"clamp(8px,2vw,13px)",
-              padding:"clamp(7px,1.6vw,12px) clamp(12px,2.8vw,20px)",
-              background:"linear-gradient(135deg,#1ed596,#059669)",
-              boxShadow:"0 0 20px rgba(30,213,150,0.4),0 4px 12px rgba(0,0,0,0.4)",
-              color:"#fff",
-            }}>
-            {!isUpcoming&&<Play style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}} fill="currentColor"/>}
-            {isUpcoming&&<Clock style={{width:"clamp(11px,2.2vw,15px)",height:"clamp(11px,2.2vw,15px)"}}/>}
-            {slide.scorecardOnly?"View Scorecard"
-              :isLive?"Watch Live"
-              :isFinished?"Match Highlights"
-              :slide.countdown?`Starts ${slide.countdown}`
-              :slide.timeLabel?`Starts ${slide.timeLabel}`
-              :"Match Preview"}
-          </Link>
-          )
-        )}
-      </div>
+      <HeroCopy slide={slide} sport="football" onPlay={onPlay}
+        highlightTitle={highlight?.title}
+        hasHighlight={isFinished&&!!highlight}
+        onHighlight={openHighlight} highlightLoading={streamLoading}/>
     </div>
   );
 }
@@ -1230,14 +995,14 @@ export default function HeroSection(){
           <>
             <button onClick={()=>{goPrev();resetTimer();}} aria-label="Previous match"
               className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
-                         flex items-center justify-center bg-black/60 backdrop-blur-md
+                         hidden sm:flex items-center justify-center bg-black/60 backdrop-blur-md
                          ring-1 ring-white/15 text-white hover:bg-black/80 transition-colors
                          focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <ChevronLeft className="w-5 h-5"/>
             </button>
             <button onClick={()=>{goNext();resetTimer();}} aria-label="Next match"
               className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
-                         flex items-center justify-center bg-black/60 backdrop-blur-md
+                         hidden sm:flex items-center justify-center bg-black/60 backdrop-blur-md
                          ring-1 ring-white/15 text-white hover:bg-black/80 transition-colors
                          focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <ChevronRight className="w-5 h-5"/>

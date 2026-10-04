@@ -99,18 +99,20 @@ const Card = ({ item, href, live, fallbackPoster, badge, onPlay, allowExternal =
  * the rest behind a button. */
 const UPCOMING_SHOWN = 6;
 
+/* Hotstar's headings: one plain bold line, a red dot only where something is
+   live, and the count as a quiet chip on the right. */
 const Group = (props) => {
-  const Icon = props.icon;
   const { title, tone, count, children } = props;
+  const live = /red/.test(tone || "");
   return (
     <section className="mb-8 sm:mb-10">
-      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-        <h2 className={`text-base sm:text-xl font-black uppercase tracking-tight italic ${tone}`}>
-          <Icon className="inline w-4 h-4 sm:w-5 sm:h-5 mr-2 -mt-0.5" aria-hidden="true" />
+      <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+        <h2 className="flex items-center gap-2.5 text-lg sm:text-[22px] font-bold text-white tracking-tight">
+          {live && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />}
           {title}
         </h2>
         {count > 0 && (
-          <span className="text-[11px] font-bold text-gray-500 shrink-0">{count}</span>
+          <span className="rounded-full bg-white/[0.05] border border-white/[0.07] px-3 py-1 text-xs sm:text-[13px] font-semibold text-gray-400 shrink-0">{count} {count === 1 ? "match" : "matches"}</span>
         )}
       </div>
       {children}
@@ -296,20 +298,19 @@ const LiveTabsSection = ({ rows, heading }) => {
             <button
               type="button"
               onClick={() => setShowAllSoon(true)}
-              className="mt-4 w-full sm:w-auto rounded-xl bg-white/[0.06] px-5 py-2.5 text-[11px] font-black
-                         uppercase tracking-widest text-gray-300 ring-1 ring-white/10
-                         hover:bg-white/[0.12] hover:text-white transition-colors
+              className="mt-5 w-full sm:w-auto rounded-full bg-white/[0.06] px-6 py-2.5 text-sm font-semibold
+                         text-gray-200 ring-1 ring-white/10 hover:bg-white/[0.12] hover:text-white transition-colors
                          focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
-              Explore {hidden} more
+              View all {hidden + shownSoon.length}
             </button>
           )}
           {showAllSoon && soon.length > UPCOMING_SHOWN && (
             <button
               type="button"
               onClick={() => setShowAllSoon(false)}
-              className="mt-4 w-full sm:w-auto rounded-xl px-5 py-2.5 text-[11px] font-black
-                         uppercase tracking-widest text-gray-500 hover:text-white transition-colors"
+              className="mt-5 w-full sm:w-auto rounded-full px-6 py-2.5 text-sm font-semibold
+                         text-gray-500 hover:text-white transition-colors"
             >
               Show fewer
             </button>
