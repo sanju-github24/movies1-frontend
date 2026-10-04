@@ -661,18 +661,48 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
      and played here, so the audio languages, qualities and subtitles come
      straight from its master playlist into our own menus. The remaining
      sources are kept: if this one is refused mid-play, the next takes over. ── */
+  /* One search per play: { it, items, at } — the resolver, every stream it
+     has found so far, and which of them is on screen. Streams found after the
+     first are the viewer's other choices (a source with one stream per
+     language, like Bastion, has its languages there), and the fallback when
+     one is refused. Per search, not per page: state shared by all of them
+     made the search for a newly picked episode give up at once whenever the
+     last one was still running. */
   const tmdbIterRef = useRef(null);
-  /* Busy is per search, not per page: a guard shared by all of them made the
-     search for a newly picked episode give up at once whenever the last one
-     was still running — and hand the viewer to Mirchi. */
+  const [tmdbSources, setTmdbSources] = useState([]);
+  // Pulls the next stream into the list. Callers asking at the same time —
+  // the player can report one refusal more than once — share one answer.
+  const pullTmdbStream = useCallback((search) => {
+    if (!search || search.done) return Promise.resolve(null);
+    if (!search.pulling) {
+      search.pulling = search.it.next()
+        .then(({ value, done }) => {
+          if (done || !value) { search.done = true; return null; }
+          search.items.push(value);
+          return value;
+        })
+        .catch(() => { search.done = true; return null; })
+        .finally(() => { search.pulling = null; });
+    }
+    return search.pulling;
+  }, []);
   const nextTmdbStream = useCallback(async () => {
-    const it = tmdbIterRef.current;
-    if (!it || it.busy) return null;   // the player can report a refusal more than once
-    it.busy = true;
-    try {
-      const { value, done } = await it.next();
-      return done ? null : value;
-    } catch { return null; } finally { it.busy = false; }
+    const search = tmdbIterRef.current;
+    if (!search) return null;
+    const i = search.at + 1;
+    if (!search.items[i]) await pullTmdbStream(search);
+    if (!search.items[i] || tmdbIterRef.current !== search) return null;
+    search.at = i;
+    return search.items[i];
+  }, [pullTmdbStream]);
+  // The viewer picked one from the player's Sources menu.
+  const selectTmdbSource = useCallback((src, atSeconds) => {
+    const search = tmdbIterRef.current;
+    const i = search ? search.items.findIndex(x => x.url === src?.url) : -1;
+    if (i < 0) return;
+    search.at = i;
+    setResumeStart(atSeconds || 0);
+    setFinalSource(search.items[i].url);
   }, []);
 
   const playAnchorTmdb = useCallback(async (ep) => {
@@ -690,7 +720,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const resumeAt = TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug);
     setResolvingLabel("Finding the best AnchorHD stream…");
     setMxResolving(true);
-    tmdbIterRef.current = tmdbStreams({
+    const search = { items: [], at: -1, it: null };
+    tmdbIterRef.current = search;
+    setTmdbSources([]);
+    search.it = tmdbStreams({
       tmdbId: movieMeta.tmdb_id, imdbId: movieMeta.imdb_id || "",
       type: TV ? "tv" : "movie", season: s, episode: e,
       // FilmU's scrapers match on the bare name and year, not our display title.
@@ -699,7 +732,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       backendUrl,
     });
     const found = await nextTmdbStream();
-    if (seq !== playSeqRef.current) return;   // another episode was picked meanwhile
+    if (seq !== playSeqRef.current || tmdbIterRef.current !== search) return;   // another pick meanwhile
     setMxResolving(false);
     setResolvingLabel("");
     if (!found) {
@@ -716,7 +749,15 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setSourceType("hls");
     setVideoTitle(TV ? `${movieMeta.title || routeSlug} — S${s}E${e}` : (movieMeta.title || routeSlug));
     setShowOverlay(true);
-  }, [movieMeta, episodes, availableServers, backendUrl, routeSlug, nextTmdbStream]);
+    setTmdbSources([...search.items]);
+    // Keep collecting while it plays, so the Sources menu fills in.
+    (async () => {
+      while (tmdbIterRef.current === search && search.items.length < 24) {
+        if (!(await pullTmdbStream(search))) break;
+        if (tmdbIterRef.current === search) setTmdbSources([...search.items]);
+      }
+    })();
+  }, [movieMeta, episodes, availableServers, backendUrl, routeSlug, nextTmdbStream, pullTmdbStream]);
   const handlePlayActionRef = useRef(null);
 
   /* ── Re-sign an expired stream URL and carry on from the same second.
@@ -803,6 +844,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
     playSeqRef.current++;          // anything still resolving is now out of date
     tmdbIterRef.current = null;   // whatever plays next, it is not the last TMDB search
+    setTmdbSources([]);
     if (!movieMeta) return;
 
     /* Live telecast, WHILE IT IS ON AIR: one source, one window. The stream is a
@@ -914,6 +956,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     playSeqRef.current++;
     setMxResolving(false);
     setResolvingLabel("");
+    setTmdbSources([]);
     tmdbIterRef.current = null;
     setShowOverlay(false);
     setCurrentOverlayEp(null);
@@ -1555,6 +1598,8 @@ if (!alive) return;
                    onProgress={handleProgress}
                    preferredAudioLang={preferredAudioLang}
                    onRefreshSource={refreshSource}
+                   sources={tmdbSources}
+                   onSourceSelect={selectTmdbSource}
                    onBackClick={closeOverlay}
                  />
                ) :

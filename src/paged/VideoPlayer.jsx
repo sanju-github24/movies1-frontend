@@ -48,6 +48,13 @@ const BW_KEY = "hls_bw_estimate_v1";
 // proxy — where every request costs an extra hop.
 const isProxied = (u) => /workers\.dev\/\?url=|\/api\/hls-proxy\?/.test(u || "");
 
+/* Some sources answer with one stream per language and quality ("Bastion
+   Tamil HD 720P") instead of one master — nothing inside the stream for the
+   audio or quality menus to read. Those versions come in as `sources`, and
+   their names are what say which language each one is. */
+const SOURCE_LANG = /\b(English|Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|Marathi|Punjabi|Gujarati|Urdu|Odia)\b/i;
+const sourceLabel = (s) => String(s?.name || "Source").replace(/^FilmU\s*•\s*/i, "");
+
 const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
   // both 2- and 3-letter ISO codes (our HLS uses 3-letter: kan, hin, tam…)
@@ -97,7 +104,9 @@ const VideoPlayer = ({
   onProgress,         // optional (currentTime, duration) callback for resume/continue-watching
   startTime = 0,      // resume position (seconds) — seek here once the media loads
   preferredAudioLang = "",  // profile language (e.g. "Hindi") → auto-pick that audio track
-  onRefreshSource     // optional (atSeconds) → parent re-signs an expired stream URL
+  onRefreshSource,    // optional (atSeconds) → parent re-signs an expired stream URL
+  sources = [],       // optional [{ name, url }] — other streams of the same title
+  onSourceSelect,     // optional (source, atSeconds) → parent switches to it
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -168,6 +177,20 @@ const VideoPlayer = ({
   const isSeries = Array.isArray(episodes) && episodes.length > 0;
   const currentEp = isSeries ? (episodes[currentIndex] || null) : null;
   const currentEpNum = currentEp?.episodeNumberInSeason || currentEp?.episode || currentEp?.episode_number || (currentIndex + 1);
+
+  // Other versions of this title, and the ones among them that are a language.
+  // Repeated names ("Citadel" eight times) are numbered so the rows differ.
+  const seenNames = {};
+  const namedSources = (sources || []).map((s) => {
+    const base = sourceLabel(s);
+    seenNames[base] = (seenNames[base] || 0) + 1;
+    return { ...s, label: seenNames[base] > 1 ? `${base} ${seenNames[base]}` : base };
+  });
+  const langSources = namedSources.filter((s) => SOURCE_LANG.test(s.name || ""));
+  const pickSource = (s) => {
+    setShowSettings(null);
+    if (s.url !== src) onSourceSelect?.(s, videoRef.current?.currentTime || 0);
+  };
 
   // Per-episode TMDB still — same field logic as WatchPage. Returns "" when the
   // episode has no still, so we never fall back to the wrong series/movie poster.
@@ -994,7 +1017,7 @@ const VideoPlayer = ({
           <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
           <div className="absolute bottom-24 right-6 z-[100] w-64 max-w-[80vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in slide-in-from-bottom-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
+              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality", speed: "Playback Speed", sources: "Sources" }[showSettings] || showSettings}</h3>
               <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
             </div>
             <div className="max-h-72 overflow-y-auto custom-scrollbar py-1">
@@ -1033,11 +1056,22 @@ const VideoPlayer = ({
                   <span className="text-sm font-medium">{l.height}p</span>{currentLevel === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
-              {showSettings === 'audio' && (audioTracks.length ? audioTracks.map((t, i) => (
+              {showSettings === 'audio' && (audioTracks.length > 1 || !langSources.length) && (audioTracks.length ? audioTracks.map((t, i) => (
                 <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
+              {/* One language per stream: the languages are the other versions. */}
+              {showSettings === 'audio' && audioTracks.length <= 1 && langSources.length > 0 && langSources.map((s) => (
+                <button key={s.url} onClick={() => pickSource(s)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${s.url === src ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium text-left">{s.label}</span>{s.url === src && <Check size={16} className="text-blue-400 shrink-0"/>}
+                </button>
+              ))}
+              {showSettings === 'sources' && namedSources.map((s) => (
+                <button key={s.url} onClick={() => pickSource(s)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${s.url === src ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                  <span className="text-sm font-medium text-left">{s.label}</span>{s.url === src && <Check size={16} className="text-blue-400 shrink-0"/>}
+                </button>
+              ))}
               {showSettings === 'speed' && [0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => (
                 <button key={r} onClick={() => applySpeed(r)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${playbackRate === r ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
                   <span className="text-sm font-medium">{r === 1 ? "Normal" : `${r}x`}</span>{playbackRate === r && <Check size={16} className="text-blue-400"/>}
@@ -1166,6 +1200,10 @@ const VideoPlayer = ({
               className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
             <button onClick={() => setShowSettings('audio')} aria-label="Audio language"
               className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
+            {sources.length > 1 && (
+              <button onClick={() => setShowSettings('sources')} aria-label="Sources"
+                className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'sources' ? 'text-blue-400' : 'text-white'}`}><Layers3 className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
+            )}
             <button onClick={() => setShowSettings('quality')} aria-label="Quality"
               className={`hidden sm:inline-flex p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers className="w-5 h-5" /></button>
             <button onClick={handleFullscreen} aria-label="Fullscreen"
