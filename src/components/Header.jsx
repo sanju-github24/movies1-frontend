@@ -14,6 +14,7 @@ import { seasonNo } from "../utils/titleEpisodes";
 import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
+import { enrichMovies, buildShelves } from "../utils/homeShelves";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
@@ -1417,20 +1418,35 @@ const Header = () => {
      resolves — so every link a visitor shared was dead on arrival. */
   const siteUrl = SITE_ORIGIN;
 
-  const latestMovies = useMemo(() => {
+  // Every homepage title, in upload order.
+  const homeMovies = useMemo(() => {
     return [...movies]
       .filter(m => m.showOnHomepage)
-      .sort((a,b) => new Date(b.homepage_added_at||b.created_at||0) - new Date(a.homepage_added_at||a.created_at||0))
-      .slice(0, 100);
+      .sort((a,b) => new Date(b.homepage_added_at||b.created_at||0) - new Date(a.homepage_added_at||a.created_at||0));
   }, [movies]);
+  const latestMovies = useMemo(() => homeMovies.slice(0, 100), [homeMovies]);
 
   const heroSlides = useMemo(() => latestMovies.slice(0, 5), [latestMovies]);
-  /* The grid skips whatever the hero is already showing, so the top of the
-     page never repeats itself. */
-  const gridMovies = useMemo(() => {
-    const shown = new Set(heroSlides.map((m) => m.id));
-    return latestMovies.filter((m) => !shown.has(m.id));
-  }, [latestMovies, heroSlides]);
+  /* The grid is the whole catalogue in upload order, the hero's five
+     included. It used to skip them so the page would not repeat itself, which
+     made the newest uploads look missing: the first card was the sixth. */
+  const gridMovies = latestMovies;
+
+  /* The rows — "Latest uploads", "Best to watch", "Thrillers" … Genres and
+     ratings are not on the movies table; they come from watch_html, read once
+     here (see utils/homeShelves). Until they arrive the rows that need them
+     simply are not there yet. */
+  const [watchMeta, setWatchMeta] = useState([]);
+  useEffect(() => {
+    supabase.from("watch_html").select("slug,title,genres,imdb_rating,is_trending,hls_url").limit(3000)
+      .then(({ data }) => setWatchMeta(data || []), () => {});
+  }, []);
+  const shelves = useMemo(() => {
+    if (!homeMovies.length) return [];
+    let prefLang = "";
+    try { prefLang = localStorage.getItem("preferred_audio_lang") || ""; } catch { /* private mode */ }
+    return buildShelves(enrichMovies(homeMovies, watchMeta), { prefLang });
+  }, [homeMovies, watchMeta]);
 
   // Pool for "More Like This" — the sheet scores it on shared genres (ours and
   // TMDB's) and tops it up with TMDB's own recommendations.
@@ -1553,6 +1569,84 @@ const Header = () => {
     localStorage.setItem("hasJoinedTelegram", "true");
   };
 
+  /* One poster card — the rows and the grid share it. */
+  const renderCard = (movie, i, eager = i < 6) => (
+      <article key={movie.id}
+        className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06]
+                   transition-all duration-300 hover:ring-white/25 hover:-translate-y-1
+                   focus-within:ring-blue-400 motion-reduce:transform-none
+                   hover:shadow-2xl hover:shadow-black/60">
+        <button type="button"
+          onClick={e => handleCardClick(movie, e)}
+          aria-label={`${movie.title} — open details`}
+          className="block w-full text-left cursor-pointer focus:outline-none">
+          <span className="block aspect-[2/3] relative overflow-hidden">
+            <img src={movie.poster || movie.poster_url || "/default-poster.jpg"} alt=""
+              loading={eager ? "eager" : "lazy"}
+              fetchPriority={eager ? "high" : "auto"}
+              decoding="async"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 motion-reduce:transform-none" />
+  
+            {/* Scrim carrying the title — always on, so the name is
+                readable without hovering. */}
+            <span className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black via-black/75 to-transparent" />
+  
+            {movie.note && (
+              <span className="absolute top-2 left-2 text-[9px] font-black bg-red-600 text-white px-2 py-1 rounded-md uppercase tracking-wide">
+                {movie.note}
+              </span>
+            )}
+            {movie.imdb && (
+              <span className="absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] font-black
+                               bg-black/70 backdrop-blur-md text-amber-300 px-2 py-1 rounded-md border border-white/10">
+                <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />{movie.imdb}
+              </span>
+            )}
+  
+            <span className="absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
+              <span className="block text-[12px] sm:text-[13px] font-bold text-white leading-snug line-clamp-2"
+                style={{ color: movie.linkColor || "" }}>
+                {String(movie.title).split("(")[0].trim()}
+              </span>
+              <span className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-300">
+                {movie.subCategory && <span className="uppercase tracking-wider">{movie.subCategory}</span>}
+                {movie.subCategory && <span className="text-gray-600" aria-hidden="true">·</span>}
+                <span>{formatTimeAgo(movie.homepage_added_at || movie.created_at)}</span>
+              </span>
+            </span>
+          </span>
+        </button>
+  
+        {/* Actions rise out of the bottom edge on hover, and on keyboard
+            focus too — the old pair was reachable by mouse only. */}
+        <div className="absolute inset-x-0 bottom-0 p-2.5 flex gap-2 translate-y-full opacity-0 pointer-events-none
+                        bg-gradient-to-t from-black via-black/90 to-transparent
+                        transition-all duration-300 motion-reduce:transition-none
+                        group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto
+                        group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto
+                        hidden sm:flex">
+          {movie.watchUrl && (
+            <a href={ownUrl(movie.watchUrl)}
+              className="flex-1 bg-white text-black text-[11px] font-black py-2.5 rounded-lg flex items-center justify-center gap-1.5
+                         hover:bg-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              onClick={e => {
+                e.stopPropagation();
+              }}>
+              <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> Play
+            </a>
+          )}
+          <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
+            aria-label={`Download links for ${movie.title}`}
+            title="Download links"
+            className="px-3 bg-white/15 backdrop-blur-md text-white border border-white/20 rounded-lg flex items-center justify-center
+                       hover:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            onClick={e => e.stopPropagation()}>
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+      </article>
+  );
+
   /* The page gutter, applied per band rather than once on the shell — the hero
      has to reach both edges, so it cannot sit inside a padded parent. */
   const GUTTER = "px-4 sm:px-6 lg:px-8 2xl:px-12";
@@ -1666,6 +1760,30 @@ const Header = () => {
           </div>
         )}
 
+        {/* ── ROWS ── */}
+        {shelves.map((row, r) => (
+          <div key={row.id} className="mb-8 sm:mb-10">
+            <div className="flex items-baseline gap-3 mb-3 px-0.5">
+              <h2 className="text-base sm:text-lg font-black text-white tracking-tight">{row.title}</h2>
+              {row.subtitle && <span className="text-[11px] sm:text-xs text-gray-500 font-semibold">{row.subtitle}</span>}
+            </div>
+            <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
+              {row.items.map((movie, i) => (
+                <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
+                  {renderCard(movie, i, r === 0 && i < 6)}
+                </div>
+              ))}
+            </ScrollRow>
+          </div>
+        ))}
+
+        {shelves.length > 0 && (
+          <div className="flex items-baseline gap-3 mb-3 px-0.5">
+            <h2 className="text-base sm:text-lg font-black text-white tracking-tight">All titles</h2>
+            <span className="text-[11px] sm:text-xs text-gray-500 font-semibold">Newest first</span>
+          </div>
+        )}
+
         {/* Poster grid. Cards are buttons — they were divs with onClick and
             entirely unreachable by keyboard — and the title now sits on the
             artwork under a scrim instead of in a separate strip below it, so
@@ -1674,82 +1792,7 @@ const Header = () => {
         <div ref={movieGridRef} className={POSTER_GRID}>
           {movies.length === 0
             ? Array.from({ length: 12 }, (_, i) => <PosterSkeleton key={i} />)
-            : gridMovies.map((movie, i) => (
-              <article key={movie.id}
-                className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06]
-                           transition-all duration-300 hover:ring-white/25 hover:-translate-y-1
-                           focus-within:ring-blue-400 motion-reduce:transform-none
-                           hover:shadow-2xl hover:shadow-black/60">
-                <button type="button"
-                  onClick={e => handleCardClick(movie, e)}
-                  aria-label={`${movie.title} — open details`}
-                  className="block w-full text-left cursor-pointer focus:outline-none">
-                  <span className="block aspect-[2/3] relative overflow-hidden">
-                    <img src={movie.poster || movie.poster_url || "/default-poster.jpg"} alt=""
-                      loading={i < 6 ? "eager" : "lazy"}
-                      fetchPriority={i < 6 ? "high" : "auto"}
-                      decoding="async"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 motion-reduce:transform-none" />
-
-                    {/* Scrim carrying the title — always on, so the name is
-                        readable without hovering. */}
-                    <span className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black via-black/75 to-transparent" />
-
-                    {movie.note && (
-                      <span className="absolute top-2 left-2 text-[9px] font-black bg-red-600 text-white px-2 py-1 rounded-md uppercase tracking-wide">
-                        {movie.note}
-                      </span>
-                    )}
-                    {movie.imdb && (
-                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] font-black
-                                       bg-black/70 backdrop-blur-md text-amber-300 px-2 py-1 rounded-md border border-white/10">
-                        <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />{movie.imdb}
-                      </span>
-                    )}
-
-                    <span className="absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
-                      <span className="block text-[12px] sm:text-[13px] font-bold text-white leading-snug line-clamp-2"
-                        style={{ color: movie.linkColor || "" }}>
-                        {String(movie.title).split("(")[0].trim()}
-                      </span>
-                      <span className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-300">
-                        {movie.subCategory && <span className="uppercase tracking-wider">{movie.subCategory}</span>}
-                        {movie.subCategory && <span className="text-gray-600" aria-hidden="true">·</span>}
-                        <span>{formatTimeAgo(movie.homepage_added_at || movie.created_at)}</span>
-                      </span>
-                    </span>
-                  </span>
-                </button>
-
-                {/* Actions rise out of the bottom edge on hover, and on keyboard
-                    focus too — the old pair was reachable by mouse only. */}
-                <div className="absolute inset-x-0 bottom-0 p-2.5 flex gap-2 translate-y-full opacity-0 pointer-events-none
-                                bg-gradient-to-t from-black via-black/90 to-transparent
-                                transition-all duration-300 motion-reduce:transition-none
-                                group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto
-                                group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto
-                                hidden sm:flex">
-                  {movie.watchUrl && (
-                    <a href={ownUrl(movie.watchUrl)}
-                      className="flex-1 bg-white text-black text-[11px] font-black py-2.5 rounded-lg flex items-center justify-center gap-1.5
-                                 hover:bg-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                      onClick={e => {
-                        e.stopPropagation();
-                      }}>
-                      <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> Play
-                    </a>
-                  )}
-                  <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
-                    aria-label={`Download links for ${movie.title}`}
-                    title="Download links"
-                    className="px-3 bg-white/15 backdrop-blur-md text-white border border-white/20 rounded-lg flex items-center justify-center
-                               hover:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    onClick={e => e.stopPropagation()}>
-                    <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Link>
-                </div>
-              </article>
-            ))}
+            : gridMovies.map((movie, i) => renderCard(movie, i))}
         </div>
 
         {/* Loaded, but this filter has nothing behind it. */}
