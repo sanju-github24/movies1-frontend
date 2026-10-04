@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "../utils/supabaseClient";
 import LiveTabsSection from "../components/LiveTabsSection";
 import AnchorPlayer from "../components/AnchorPlayer";
 import { resolveChannelSource } from "../utils/liveSources";
-import { CRICKET_CHANNELS } from "./channels";
-import { useGoBack } from "../components/BackBar";
+import LiveTvBrowse from "../components/livetv/LiveTvBrowse";
+import LiveViewer from "../components/LiveViewer";
+import { categoryOf, languageOf, displayName, isHD } from "../utils/channelMeta";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const tokens = {
@@ -238,33 +239,6 @@ function extractBaseUrl(bundleUrl) {
 // ─── Live feed fetchers ───────────────────────────────────────────────────────
 const OLD_JSON = "https://binge-giotv.pages.dev/data/id.json";
 const NEW_JSON = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
-const HOTSTAR_FEED = "https://jtv-proxy.sanjusanjay0444.workers.dev/?feed=hotstar";
-
-async function fetchHotstarChannel(hotstarId) {
-  if (!_hsCache || Date.now() - _hsCachedAt > 600_000) {
-    try {
-      const r = await fetch(`${HOTSTAR_FEED}&_=${Date.now()}`, { cache: "no-store", signal: AbortSignal.timeout(12000) });
-      const body = await r.json();
-      const list = body.channels || (Array.isArray(body) ? body : []);
-      _hsCache = {};
-      for (const ch of list) {
-        const id = ch.id || ch.channel_id || "";
-        if (id) _hsCache[id] = ch;
-      }
-      _hsCachedAt = Date.now();
-    } catch { _hsCache = {}; }
-  }
-  if (!hotstarId) return null;
-  const cleanId = hotstarId.trim().toLowerCase();
-  return _hsCache[cleanId]
-      || _hsCache[`${cleanId}-digital`]
-      || _hsCache[cleanId.replace(/-digital$/, "")]
-      || Object.values(_hsCache).find(c => {
-          const cid = (c.id || "").toLowerCase();
-          return cid === cleanId || cid === `${cleanId}-digital` || cid.includes(cleanId) || cleanId.includes(cid);
-        })
-      || null;
-}
 
 function normalizeFeedChannel(ch) {
   const clean = (v) => v == null || String(v).toLowerCase() === "null" ? "" : String(v);
@@ -387,7 +361,11 @@ async function resolveBundle(parsed, logoMap) {
  * The font import stays at the top: @import is only valid before other rules. */
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-  .lc-page, .lc-page *, .lc-page *::before, .lc-page *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  /* In Tailwind's base layer: a reset outside any layer beats every utility,
+     whatever its specificity, and wiped the spacing of the Tailwind parts. */
+  @layer base {
+    .lc-page, .lc-page *, .lc-page *::before, .lc-page *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  }
 
   @keyframes spin       { to { transform: rotate(360deg) } }
   @keyframes pulse-dot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
@@ -446,200 +424,8 @@ const GLOBAL_CSS = `
 `;
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
-const SkeletonGrid = () => (
-  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
-    {Array.from({ length: 16 }).map((_, i) => (
-      <div key={i} className="shimmer-block" style={{ borderRadius: 14, height: 100 }} />
-    ))}
-  </div>
-);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STAR SPORTS SECTION  (built-in — no Supabase bundle needed)
-// Resolves the real Hotstar MPD URL + DRM keys from the worker, then plays
-// inline using buildChannelUrl — same path as every other live bundle.
-// ─────────────────────────────────────────────────────────────────────────────
-const STAR_SPORTS_CHANNELS = CRICKET_CHANNELS.filter(
-  (ch) => ch.group === "Star Sports" && ch.url?.includes("tab=bb")
-);
-
-// Extract the `id=` param from a tab=bb channel URL.
-function hotstarIdFromUrl(url) {
-  try { return new URL(url).searchParams.get("id") || null; }
-  catch { return null; }
-}
-
-const STAR_PLAYER_BASE = "https://m3u8-player-orcin.vercel.app/";
-
-const StarSportsSection = ({ activeChannel, onPlay }) => {
-  const [expanded, setExpanded] = useState(true);
-  const [resolving, setResolving] = useState(null); // id of channel being resolved
-  const cfg = CAT_CONFIG.Sports;
-
-  if (!STAR_SPORTS_CHANNELS.length) return null;
-
-  const handlePlay = async (ch) => {
-    const hsId = hotstarIdFromUrl(ch.url);
-    if (!hsId) {
-      // Fallback: no id param, just open tab=bb url directly in iframe
-      onPlay(ch, ch.url);
-      return;
-    }
-    setResolving(ch.id);
-    try {
-      const live = await fetchHotstarChannel(hsId);
-      if (live && (live.url || live.channel_url || live.stream_url)) {
-        const streamUrl = live.url || live.channel_url || live.stream_url;
-        const keyId = live.keyId || live.key_id || "";
-        const key   = live.key || "";
-        const cookie = live.cookie || "";
-        const playerUrl = buildChannelUrl(STAR_PLAYER_BASE, {
-          url: streamUrl, name: ch.name,
-          keyId, key, cookie, logo: ch.logo || "",
-        });
-        onPlay(ch, playerUrl);
-      } else {
-        // Feed didn't have this channel — fall back to the tab=bb URL
-        onPlay(ch, ch.url);
-      }
-    } catch {
-      onPlay(ch, ch.url);
-    } finally {
-      setResolving(null);
-    }
-  };
-
-  return (
-    <div style={{ marginBottom: 40, animation: "fade-up 0.22s ease" }}>
-      {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap",
-        padding: "14px 18px",
-        background: tokens.bg.surface,
-        border: `1px solid ${tokens.border.subtle}`,
-        borderRadius: tokens.radius.lg,
-      }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: tokens.radius.md,
-          background: cfg.bg, border: `1px solid ${cfg.border}`,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <Icon.Sports width={18} height={18} style={{ color: cfg.color }} />
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 14, fontWeight: 700, color: tokens.text.primary, margin: 0 }}>Star Sports Digital</p>
-          <p style={{ fontSize: 11, color: tokens.text.muted, margin: 0 }}>
-            {STAR_SPORTS_CHANNELS.length} channels · Hotstar
-          </p>
-        </div>
-
-        <button
-          className="collapse-btn"
-          onClick={() => setExpanded((v) => !v)}
-          style={{
-            background: "none", border: `1px solid ${tokens.border.subtle}`,
-            color: tokens.text.muted, cursor: "pointer",
-            borderRadius: tokens.radius.md, padding: "5px 12px",
-            fontSize: 11, fontWeight: 600,
-          }}
-        >
-          {expanded ? "Collapse" : "Expand"}
-        </button>
-      </div>
-
-      {/* Channel grid */}
-      {expanded && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
-          gap: 10,
-        }}>
-          {STAR_SPORTS_CHANNELS.map((ch) => {
-            const isActive = activeChannel?.id === ch.id;
-            const isLoading = resolving === ch.id;
-            return (
-              <button
-                key={ch.id}
-                className="ch-card"
-                onClick={() => !isLoading && handlePlay(ch)}
-                title={ch.desc || ch.name}
-                disabled={isLoading}
-                style={{
-                  background: isActive ? cfg.bg : tokens.bg.surface,
-                  border: `1px solid ${isActive ? cfg.border : tokens.border.subtle}`,
-                  borderRadius: tokens.radius.lg,
-                  padding: "12px 8px 10px",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-                  cursor: isLoading ? "wait" : "pointer", textAlign: "center",
-                  boxShadow: isActive ? `0 0 0 2px ${cfg.color}33` : "none",
-                  outline: "none", opacity: isLoading ? 0.7 : 1,
-                  position: "relative",
-                }}
-              >
-                {/* Spinner overlay while resolving */}
-                {isLoading && (
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: tokens.radius.lg,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(0,0,0,0.55)", zIndex: 2,
-                  }}>
-                    <div style={{
-                      width: 18, height: 18, borderRadius: "50%",
-                      border: `2px solid ${cfg.color}40`,
-                      borderTopColor: cfg.color,
-                      animation: "spin 0.7s linear infinite",
-                    }} />
-                  </div>
-                )}
-                {/* Logo / fallback */}
-                {ch.logo ? (
-                  <img
-                    src={ch.logo}
-                    alt={ch.name}
-                    style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 8 }}
-                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  />
-                ) : (
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 8,
-                    background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon.Sports width={20} height={20} style={{ color: cfg.color }} />
-                  </div>
-                )}
-                {/* Name */}
-                <span style={{
-                  fontSize: 10, fontWeight: 600, color: isActive ? cfg.color : tokens.text.secondary,
-                  lineHeight: 1.3, wordBreak: "break-word",
-                }}>
-                  {ch.name}
-                </span>
-                {/* Sub-label tag */}
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                  color: cfg.color, background: cfg.bg,
-                  border: `1px solid ${cfg.border}`,
-                  borderRadius: 4, padding: "1px 5px",
-                  textTransform: "uppercase",
-                }}>
-                  {ch.tag || ch.sub}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
 const LiveChannelsPage = () => {
-  const goBack = useGoBack();
-
   const [bundles, setBundles] = useState([]);
   // resolvedBundles: Map<row.id, { ...parsedBundle, channels: [...] }>
   const [resolvedBundles, setResolvedBundles] = useState({});
@@ -656,8 +442,6 @@ const LiveChannelsPage = () => {
   const [iframeLoading, setIframeLoading] = useState(false);
   const [channelListOpen, setChannelListOpen] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
 
   const iframeRef = useRef(null);
   const playRequestRef = useRef(0);
@@ -683,7 +467,6 @@ const LiveChannelsPage = () => {
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, []);
-  const searchRef = useRef(null);
 
   // ── Boot: fetch feed + bundles in parallel ──────────────────────────────────
   useEffect(() => {
@@ -751,21 +534,6 @@ const LiveChannelsPage = () => {
     })();
   }, []);
 
-  const categories = ["All", ...Array.from(new Set(bundles.map((b) => b.category).filter(Boolean)))];
-
-  const filteredBundles = bundles.filter((b) => {
-    const matchCat = activeCategory === "All" || b.category === activeCategory;
-    const matchSearch = !searchTerm || b.name.toLowerCase().includes(searchTerm.toLowerCase());
-    // Only show bundles that resolved successfully
-    return matchCat && matchSearch && !!resolvedBundles[b.id];
-  });
-
-  const filteredChannels = allChannels.filter((ch) => {
-    const matchCat = activeCategory === "All" || ch._bundleMeta?.category === activeCategory;
-    const matchSearch = !searchTerm || ch.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
   const playChannel = useCallback(async (ch, bundleMeta, parsedBundle) => {
     const requestId = ++playRequestRef.current;
     try {
@@ -797,6 +565,45 @@ const LiveChannelsPage = () => {
 
   const catInfo = activeChannel ? getCat(activeBundleMeta?.category) : null;
 
+  /* ── One list for the page: JioTV and Hotstar together ──────────────────
+     Hotstar's channels play through the player's own Hotstar tab by id — the
+     same link the Bigg Boss card uses — and JioTV's as they always have. Each
+     is given a category and a language from its name (utils/channelMeta). */
+  const [hotstar, setHotstar] = useState([]);
+  useEffect(() => {
+    fetch(`${NEW_JSON}?feed=hotstar`)
+      .then((r) => r.json())
+      .then((b) => setHotstar(Array.isArray(b?.channels) ? b.channels : []))
+      .catch(() => { /* the JioTV channels still fill the page */ });
+  }, []);
+  const [activeKey, setActiveKey] = useState(null);
+  /* Channels play in AnchorHD's own live player — the one live sports uses —
+     given the same player link the cards elsewhere pass: ?tab=bb&id= for
+     Hotstar, ?tab=live&id= for JioTV. It resolves the stream natively. */
+  const [viewer, setViewer] = useState(null);   // { title, src, poster }
+  const watch = useCallback((title, src, poster) => setViewer({ title, src, poster }), []);
+
+
+  const liveTv = useMemo(() => {
+    const hs = hotstar.filter((c) => c?.id && c?.url).map((c) => ({
+      key: `hs:${c.id}`, name: displayName(c.name), rawName: c.name, logo: c.logo, group: c.group,
+      play: () => watch(displayName(c.name), `${PLAYER}?tab=bb&id=${encodeURIComponent(c.id)}`, c.logo),
+    }));
+    // The whole JioTV feed, whether it came as the built-in row or a saved ?tab=live one.
+    const jio = allChannels.filter((ch) => ch._parsedBundle?._format === "tab_live").map((ch) => ({
+      key: `jio:${ch.id}`, name: ch.name, rawName: ch.name, logo: ch.logo, group: "",
+      /* Our worker's channels (numeric ids) play in AnchorHD's player; the
+         few that come only from the second feed keep the player page. */
+      play: /^\d+$/.test(String(ch.id))
+        ? () => watch(ch.name, `${PLAYER}?tab=live&id=${encodeURIComponent(ch.id)}`, ch.logo)
+        : () => playChannel(ch, ch._bundleMeta, ch._parsedBundle),
+    }));
+    return [...hs, ...jio].map((c) => ({
+      ...c, category: categoryOf(c.rawName, c.group), lang: languageOf(c.rawName), hd: isHD(c.rawName),
+    }));
+  }, [hotstar, allChannels, playChannel, watch]);
+  const playTile = useCallback((c) => { setActiveKey(c.key); c.play(); }, []);
+
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="lc-page" style={{ minHeight: "100dvh", background: tokens.bg.base, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, system-ui, sans-serif" }}>
@@ -824,114 +631,6 @@ const LiveChannelsPage = () => {
   return (
     <div className="lc-page" style={{ minHeight: "100dvh", background: tokens.bg.base, color: tokens.text.primary, fontFamily: "Inter, system-ui, sans-serif" }}>
       <style>{GLOBAL_CSS}</style>
-
-      {/* ══ NAVBAR ══════════════════════════════════════════════════════════════ */}
-      <nav style={{
-        position: "sticky", top: 0, zIndex: 100,
-        background: "rgba(7,7,15,0.88)", backdropFilter: "blur(24px) saturate(160%)",
-        borderBottom: `1px solid ${tokens.border.subtle}`,
-        padding: "0 20px", height: 64,
-        display: "flex", alignItems: "center", gap: 14,
-      }}>
-        <button
-          onClick={() => goBack()}
-          aria-label="Go back"
-          style={{
-            background: "none", border: `1px solid ${tokens.border.subtle}`,
-            color: tokens.text.secondary, cursor: "pointer",
-            width: 38, height: 38, borderRadius: tokens.radius.full,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, transition: "all 0.15s",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = tokens.bg.glass; e.currentTarget.style.color = tokens.text.primary; e.currentTarget.style.borderColor = tokens.border.default; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = tokens.text.secondary; e.currentTarget.style.borderColor = tokens.border.subtle; }}
-        >
-          <Icon.Back width={16} height={16} />
-        </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: tokens.radius.md,
-            background: "linear-gradient(135deg, rgba(240,62,62,0.28), rgba(240,62,62,0.08))",
-            border: `1px solid ${tokens.accent.redBorder}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Icon.Tv width={17} height={17} style={{ color: tokens.accent.red }} />
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>Live TV</span>
-              <span style={{
-                fontSize: 9, fontWeight: 700, color: tokens.accent.red,
-                background: tokens.accent.redDim, border: `1px solid ${tokens.accent.redBorder}`,
-                padding: "2px 6px", borderRadius: tokens.radius.full, letterSpacing: "0.08em",
-                display: "flex", alignItems: "center", gap: 4,
-              }}>
-                <span style={{ width: 4, height: 4, borderRadius: "50%", background: tokens.accent.red, animation: "pulse-dot 1.5s ease infinite", display: "inline-block" }} />
-                LIVE
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {allChannels.length > 0 && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 5,
-            fontSize: 11, color: tokens.text.muted,
-            background: tokens.bg.surface, border: `1px solid ${tokens.border.subtle}`,
-            padding: "4px 10px", borderRadius: tokens.radius.full, flexShrink: 0,
-          }}>
-            <Icon.Signal width={10} height={10} style={{ opacity: 0.5 }} />
-            {allChannels.length} channels
-          </div>
-        )}
-
-        <div style={{ flex: 1 }} />
-
-        <div style={{ position: "relative", maxWidth: 280, width: "100%" }}>
-          <Icon.Search width={14} height={14} style={{
-            position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)",
-            color: tokens.text.muted, pointerEvents: "none",
-          }} />
-          <input
-            ref={searchRef}
-            className="nav-input"
-            type="text"
-            placeholder="Search channels…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search channels"
-            style={{
-              width: "100%",
-              background: tokens.bg.glass,
-              border: `1px solid ${tokens.border.default}`,
-              color: tokens.text.primary,
-              borderRadius: tokens.radius.full,
-              padding: "9px 36px 9px 38px",
-              fontSize: 13, fontFamily: "inherit",
-              transition: "all 0.2s",
-            }}
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              aria-label="Clear search"
-              style={{
-                position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)",
-                background: tokens.bg.glass, border: `1px solid ${tokens.border.subtle}`,
-                color: tokens.text.muted,
-                width: 20, height: 20, borderRadius: "50%", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.12)"}
-              onMouseLeave={e => e.currentTarget.style.background = tokens.bg.glass}
-            >
-              <Icon.X width={9} height={9} />
-            </button>
-          )}
-        </div>
-      </nav>
 
       {/* ══ FEED ERROR BANNER ════════════════════════════════════════════════ */}
       {feedError && (
@@ -1110,104 +809,22 @@ const LiveChannelsPage = () => {
         </div>
       )}
 
-      {/* ══ CATEGORY FILTER BAR ═══════════════════════════════════════════════ */}
-      <div style={{
-        display: "flex", gap: 6, overflowX: "auto", padding: "14px 20px 12px",
-        borderBottom: `1px solid ${tokens.border.subtle}`,
-        position: "sticky", top: 64, zIndex: 50,
-        background: "rgba(7,7,15,0.94)", backdropFilter: "blur(16px)",
-        scrollbarWidth: "none",
-      }}>
-        {categories.map((cat) => {
-          const isActive = cat === activeCategory;
-          const cfg = getCat(cat);
-          const CatIcon = getCatIcon(cat);
-          return (
-            <button
-              key={cat}
-              className="cat-pill"
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                background: isActive ? cfg.bg : tokens.bg.surface,
-                border: isActive ? `1px solid ${cfg.border}` : `1px solid ${tokens.border.subtle}`,
-                color: isActive ? cfg.color : tokens.text.secondary,
-                borderRadius: tokens.radius.full, padding: "7px 15px",
-                fontSize: 12, fontWeight: isActive ? 600 : 400,
-              }}
-            >
-              {cat !== "All" && <CatIcon width={13} height={13} />}
-              {cat === "All" && <Icon.Signal width={11} height={11} />}
-              {cat}
-            </button>
-          );
-        })}
-      </div>
+      {/* ══ BROWSE ══════════════════════════════════════════════════════════
+          The hero while nothing plays; the player takes its place when
+          something does. Then Live TV by category, narrowed by language.
+          Live sports fixtures sit under Trending; admin bundles follow. */}
+      <LiveTvBrowse channels={liveTv} activeKey={activeKey} onPlay={playTile} showHero={!playerUrl}>
+        <div className="mb-9 sm:mb-11">
+          <LiveTabsSection rows={bundles.filter((b) => !b.bundle_url?.includes("tab=live"))} />
+        </div>
+        {bundles.filter((b) => !b._builtin && !b.bundle_url?.includes("tab=live") && resolvedBundles[b.id]?.channels?.length).map((row) => (
+          <BundleSection key={row.id} row={row} parsed={resolvedBundles[row.id]} activeChannel={activeChannel}
+            onPlayChannel={playChannel} onPlayBundle={playBundle} />
+        ))}
+      </LiveTvBrowse>
 
-      {/* ══ CONTENT AREA ══════════════════════════════════════════════════════ */}
-      <div style={{ padding: "24px 20px 72px", maxWidth: 1440, margin: "0 auto" }}>
-
-        {/* Search results */}
-        {searchTerm && (
-          <div style={{ marginBottom: 36, animation: "fade-up 0.22s ease" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: tokens.text.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {filteredChannels.length} result{filteredChannels.length !== 1 ? "s" : ""}
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: tokens.text.primary, background: tokens.bg.glass, border: `1px solid ${tokens.border.default}`, padding: "2px 10px", borderRadius: tokens.radius.full }}>
-                "{searchTerm}"
-              </span>
-            </div>
-            {filteredChannels.length === 0 ? (
-              <EmptySearch term={searchTerm} />
-            ) : (
-              <ChannelGrid channels={filteredChannels} activeChannel={activeChannel}
-                onPlay={(ch) => playChannel(ch, ch._bundleMeta, ch._parsedBundle)} />
-            )}
-          </div>
-        )}
-
-        {!searchTerm && filteredBundles.length === 0 && <EmptyState />}
-
-        {/* ── Star Sports Digital (Hotstar) — built-in, no Supabase needed ─── */}
-        {!searchTerm && (
-          <StarSportsSection
-            activeChannel={activeChannel}
-            onPlay={(ch, customUrl) => {
-              setActiveChannel(ch);
-              setPlayerUrl(customUrl || ch.url);
-              setIframeLoading(true);
-              setChannelListOpen(false);
-              setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-            }}
-          />
-        )}
-
-        {!searchTerm && filteredBundles.map((row) => {
-          const fullBundle = resolvedBundles[row.id];
-          if (!fullBundle?.channels?.length) return null;
-          return (
-            <BundleSection
-              key={row.id}
-              row={row}
-              parsed={fullBundle}
-              activeChannel={activeChannel}
-              onPlayChannel={playChannel}
-              onPlayBundle={playBundle}
-            />
-          );
-        })}
-
-        {/* Fixtures behind the player's own tabs. Saved as tab URLs rather
-            than bundles, so they survive the hourly token rotation, and read
-            live on render — a stored copy would be stale by the time anyone
-            looked at it. */}
-        {!searchTerm && (
-          <LiveTabsSection
-            rows={bundles.filter((b) => !b.bundle_url?.includes("tab=live"))}
-          />
-        )}
-      </div>
+      <LiveViewer open={!!viewer} title={viewer?.title || ""} src={viewer?.src || ""} poster={viewer?.poster}
+        onClose={() => { setViewer(null); setActiveKey(null); }} />
     </div>
   );
 };
@@ -1215,32 +832,7 @@ const LiveChannelsPage = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPTY STATES
 // ─────────────────────────────────────────────────────────────────────────────
-const EmptySearch = ({ term }) => (
-  <div style={{ padding: "64px 24px", textAlign: "center", animation: "fade-up 0.2s ease" }}>
-    <div style={{ width: 56, height: 56, borderRadius: "50%", background: tokens.bg.glass, border: `1px solid ${tokens.border.default}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-      <Icon.Search width={22} height={22} style={{ color: tokens.text.muted }} />
-    </div>
-    <h3 style={{ fontSize: 16, fontWeight: 700, color: tokens.text.secondary, marginBottom: 6 }}>No channels found</h3>
-    <p style={{ fontSize: 13, color: tokens.text.muted }}>No results for "{term}". Try a different name.</p>
-  </div>
-);
 
-const EmptyState = () => (
-  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "96px 24px", textAlign: "center" }}>
-    <div style={{
-      width: 72, height: 72, borderRadius: 20,
-      background: "linear-gradient(135deg, rgba(240,62,62,0.14), rgba(240,62,62,0.04))",
-      border: `1px solid rgba(240,62,62,0.32)`,
-      display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
-    }}>
-      <Icon.Tv width={30} height={30} style={{ color: "#f03e3e" }} />
-    </div>
-    <h3 style={{ fontSize: 18, fontWeight: 700, color: tokens.text.secondary, marginBottom: 8 }}>No channels available</h3>
-    <p style={{ fontSize: 13, color: tokens.text.muted, maxWidth: 320, lineHeight: 1.6 }}>
-      Bundles will appear here once published. Check back soon.
-    </p>
-  </div>
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUNDLE SECTION
