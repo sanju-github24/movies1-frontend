@@ -135,6 +135,7 @@ const HOTSTAR_ALIASES = {
 };
 
 async function hotstarSource(id) {
+  if (!id) throw new Error("This link names the Hotstar list but not a channel in it");
   const body = await feed("?feed=hotstar");
   const chans = body.channels || [];
   const ch = chans.find((c) => c.id === id)

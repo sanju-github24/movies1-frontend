@@ -34,7 +34,8 @@ export const LIVE_SHOWS = {
        params, so it goes into the overlay as an iframe rather than through
        hls.js — nothing here should try to rewrite or proxy it. */
     streamUrl:
-      "https://m3u8-player-orcin.vercel.app/?tab=bb",
+      // The Kannada channel itself, solo: no launcher or list in our frame.
+      "https://m3u8-player-orcin.vercel.app/?tab=bb&id=bb-kannada&solo=1",
     startMin: 21 * 60 + 30,          // 9:30 PM IST
     endMin:   22 * 60 + 30,          // 10:30 PM IST
     startLabel: "9:30 PM",

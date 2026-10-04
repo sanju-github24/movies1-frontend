@@ -222,7 +222,10 @@ export const BIGG_BOSS_KANNADA = {
   description: "The Kannada house, streaming live around the clock.",
   content_type: "tv",
   isLiveStream: true,
-  playSrc: "https://m3u8-player-orcin.vercel.app/?tab=bb",
+  /* The channel, by name. "?tab=bb" alone named the Hotstar list, not a
+     channel in it: the site's player had nothing to look up and said the
+     channel was not in the list. */
+  playSrc: "https://m3u8-player-orcin.vercel.app/?tab=bb&id=bb-kannada&solo=1",
   playTitle: "Bigg Boss Kannada 24/7",
 };
 
