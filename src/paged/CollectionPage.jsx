@@ -74,7 +74,18 @@ export default function CollectionPage() {
     return { ...p, row: match };
   }), [data, owned]);
 
-  const haveCount = parts.filter((p) => p.row).length;
+  /* Every film here can be watched. One in our catalogue opens its own
+     page; the rest open the watch page by TMDB id — the way search sends a
+     title we have not uploaded — where AnchorHD finds a stream for it. Only
+     the catalogue used to count, so most of a collection was greyed out as
+     "not here yet" while it played fine from search. */
+  const watchState = (p) => ({
+    movie: {
+      id: `tmdb-${p.tmdb_id}`, tmdb_id: p.tmdb_id, title: p.title, slug: String(p.tmdb_id),
+      poster: p.poster, cover_poster: p.backdrop || p.poster, description: p.overview || "",
+      year: p.year || null, content_type: "movie", source: "tmdb", isTmdbOnly: true,
+    },
+  });
 
   if (loading) {
     return (
@@ -120,7 +131,7 @@ export default function CollectionPage() {
           <p className="max-w-2xl text-sm leading-relaxed text-gray-300 line-clamp-3">{data.overview}</p>
           <p className="mt-3 text-xs text-gray-500">
             {parts.length} film{parts.length === 1 ? "" : "s"}
-            {haveCount > 0 && <> · <span className="text-gray-300">{haveCount} available here</span></>}
+            {parts.length > 0 && <> · <span className="text-gray-300">all streaming</span></>}
           </p>
         </div>
       </section>
@@ -133,20 +144,14 @@ export default function CollectionPage() {
                 <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-xl border border-white/10 bg-white/5">
                   {p.poster
                     ? <img src={p.poster} alt={p.title} loading="lazy"
-                        className={`h-full w-full object-cover transition duration-300 ${p.row ? "group-hover:scale-105" : "opacity-50 grayscale"}`} />
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                     : <div className="flex h-full items-center justify-center text-gray-600">No art</div>}
 
-                  {p.row ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
-                        <Play className="ml-0.5 h-5 w-5 fill-black text-black" />
-                      </span>
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
+                      <Play className="ml-0.5 h-5 w-5 fill-black text-black" />
                     </span>
-                  ) : (
-                    <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-300">
-                      Not here yet
-                    </span>
-                  )}
+                  </span>
 
                   {p.rating && p.rating !== "0.0" && (
                     <span className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white">
@@ -162,7 +167,7 @@ export default function CollectionPage() {
             return p.row ? (
               <Link key={p.tmdb_id} to={`/movie/${p.row.slug}`} className="group block">{body}</Link>
             ) : (
-              <div key={p.tmdb_id} className="group block cursor-default">{body}</div>
+              <Link key={p.tmdb_id} to={`/watch/${p.tmdb_id}`} state={watchState(p)} className="group block">{body}</Link>
             );
           })}
         </div>
