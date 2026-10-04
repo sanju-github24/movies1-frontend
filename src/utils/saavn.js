@@ -115,6 +115,20 @@ export async function fetchSimilar(songId, stationId = '', exclude = []) {
   return { stationid: data.stationid || stationId, songs };
 }
 
+/** Each artist's id and photo, by name — [{ id, name, image, query }]. */
+export async function fetchArtists(names) {
+  const data = await getJson(`/artists?names=${encodeURIComponent(names.join(','))}`);
+  return data.artists || [];
+}
+
+/** An artist's JioSaavn station: { stationid, songs }. Keep the stationid to go on with it.
+    With a language, their songs in it (and no stationid — song radio follows on). */
+export async function fetchArtistStation(name, language = '') {
+  const lang = language ? `&language=${encodeURIComponent(language)}` : '';
+  const data = await getJson(`/radio?artist=${encodeURIComponent(name)}${lang}&n=20`);
+  return { stationid: data.stationid || '', songs: data.songs || [] };
+}
+
 /** Songs for a query, one page at a time — { total, page, results }. */
 export function fetchSongsPage(query, page = 1, n = 20) {
   return getJson(`/songs?query=${encodeURIComponent(query)}&page=${page}&n=${n}`);

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
-import { fetchHomeRows } from '../utils/saavn';
+import { fetchHomeRows, fetchArtists, fetchArtistStation } from '../utils/saavn';
+import { toast } from 'react-toastify';
 import MusicSearchBar from '../components/MusicSearchBar';
-import { Music, Play, Flame, ChevronRight } from 'lucide-react';
+import { Music, Play, Flame, ChevronRight, Loader2 } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
 import PlaylistPanel from "../components/PlaylistPanel";
 import AddToPlaylist from "../components/AddToPlaylist";
@@ -211,6 +212,107 @@ function CategorySection({ name, tracks, onPlay, onSeeAll, expanded = false }) {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Recommended Artist Stations: the singers people come for, by language.
+// One tap plays the artist's own JioSaavn station — their songs, one after
+// another — and the player keeps asking that station for more.
+// ─────────────────────────────────────────────────────────────────────────
+const ARTISTS_BY_LANG = {
+  Kannada:   ['Vijay Prakash', 'Rajesh Krishnan', 'Sonu Nigam', 'Sanjith Hegde', 'Vasuki Vaibhav', 'Raghu Dixit', 'Puneeth Rajkumar', 'S. P. Balasubrahmanyam', 'Arjun Janya', 'Chandan Shetty', 'Anuradha Bhat', 'Kailash Kher'],
+  Hindi:     ['Arijit Singh', 'Shreya Ghoshal', 'Atif Aslam', 'Sonu Nigam', 'Jubin Nautiyal', 'Neha Kakkar', 'KK', 'Kishore Kumar', 'Lata Mangeshkar', 'Badshah', 'Darshan Raval', 'Vishal Mishra'],
+  Tamil:     ['Anirudh Ravichander', 'Sid Sriram', 'A.R. Rahman', 'Yuvan Shankar Raja', 'Ilaiyaraaja', 'Harris Jayaraj', 'Dhanush', 'G. V. Prakash Kumar', 'Chinmayi', 'Hiphop Tamizha'],
+  Telugu:    ['Sid Sriram', 'Devi Sri Prasad', 'S. Thaman', 'Anurag Kulkarni', 'Mangli', 'M. M. Keeravani', 'Kaala Bhairava', 'Armaan Malik', 'Sunitha', 'Rahul Sipligunj'],
+  Malayalam: ['K. J. Yesudas', 'K. S. Chithra', 'Vineeth Sreenivasan', 'Sushin Shyam', 'Shaan Rahman', 'Vidhu Prathap', 'Sithara Krishnakumar', 'M. G. Sreekumar', 'Hesham Abdul Wahab'],
+  English:   ['Taylor Swift', 'Ed Sheeran', 'The Weeknd', 'Justin Bieber', 'Billie Eilish', 'Dua Lipa', 'Coldplay', 'Imagine Dragons', 'Ariana Grande', 'Bruno Mars'],
+  Punjabi:   ['Diljit Dosanjh', 'Sidhu Moose Wala', 'AP Dhillon', 'Karan Aujla', 'Shubh', 'Guru Randhawa', 'B Praak', 'Jasmine Sandlas'],
+  Marathi:   ['Ajay-Atul', 'Avadhoot Gupte', 'Shankar Mahadevan', 'Bela Shende', 'Swapnil Bandodkar'],
+};
+const ARTIST_LANG_CODE = { kan: 'Kannada', hin: 'Hindi', tam: 'Tamil', tel: 'Telugu', mal: 'Malayalam', eng: 'English', pan: 'Punjabi', mar: 'Marathi' };
+
+/* The row's singers. One language chosen: that language's. Otherwise a mix,
+   led by the viewer's own language — the biggest names of each. */
+function artistNames(language) {
+  if (ARTISTS_BY_LANG[language]) return ARTISTS_BY_LANG[language];
+  let pref = 'Kannada';
+  try {
+    const p = String(localStorage.getItem('preferred_audio_lang') || '').toLowerCase();
+    pref = ARTIST_LANG_CODE[p.slice(0, 3)] || Object.keys(ARTISTS_BY_LANG).find((l) => l.toLowerCase() === p) || pref;
+  } catch { /* private mode */ }
+  const order = [pref, ...Object.keys(ARTISTS_BY_LANG).filter((l) => l !== pref)];
+  const out = [];
+  for (const l of order) for (const n of ARTISTS_BY_LANG[l].slice(0, l === pref ? 5 : 2)) if (!out.includes(n)) out.push(n);
+  return out.slice(0, 18);
+}
+
+function ArtistStations({ language }) {
+  const { playStation } = useMusicPlayer();
+  const names = useMemo(() => artistNames(language), [language]);
+  const [artists, setArtists] = useState([]);
+  const [busy, setBusy] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const key = `artists:${names.join('|')}`;
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (cached?.length) { setArtists(cached); return; }
+    } catch { /* ask */ }
+    setArtists(names.map((n) => ({ name: n, query: n, image: '' })));   // names first, photos as they come
+    fetchArtists(names)
+      .then((list) => {
+        if (!alive || !list.length) return;
+        // In the row's own order, whatever order the answers came back in.
+        const byQuery = new Map(list.map((a) => [a.query, a]));
+        const ordered = names.map((n) => byQuery.get(n)).filter(Boolean);
+        setArtists(ordered);
+        try { sessionStorage.setItem(key, JSON.stringify(ordered)); } catch { /* full */ }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [names]);
+
+  const play = async (a) => {
+    if (busy) return;
+    setBusy(a.query);
+    try {
+      // Their songs in the language being browsed — or, on All, their own.
+      const lang = ARTISTS_BY_LANG[language] ? language
+        : Object.keys(ARTISTS_BY_LANG).find((l) => ARTISTS_BY_LANG[l].includes(a.query)) || '';
+      const { stationid, songs } = await fetchArtistStation(a.query, lang);
+      if (!songs.length) throw new Error('empty');
+      playStation(songs, stationid);
+    } catch {
+      toast.error(`Couldn't start ${a.name}'s station`);
+    } finally { setBusy(''); }
+  };
+
+  if (!artists.length) return null;
+  return (
+    <section className="mb-10">
+      <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight mb-4">Recommended Artist Stations</h2>
+      <div className="home-scroll flex gap-5 sm:gap-7 overflow-x-auto pb-3">
+        {artists.map((a) => (
+          <button key={a.query} type="button" onClick={() => play(a)} aria-label={`Play ${a.name} station`}
+            className="group shrink-0 w-28 sm:w-36 text-center focus:outline-none">
+            <span className="relative block w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden bg-white/[0.06] ring-1 ring-white/10 group-hover:ring-white/40 group-focus-visible:ring-2 group-focus-visible:ring-blue-400 transition">
+              {a.image
+                ? <img src={a.image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                : <span className="absolute inset-0 flex items-center justify-center text-3xl font-black text-white/25">{a.name[0]}</span>}
+              <span className={`absolute inset-0 flex items-center justify-center bg-black/45 transition ${busy === a.query ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                {busy === a.query
+                  ? <Loader2 className="w-8 h-8 text-white animate-spin" />
+                  : <span className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center"><Play size={18} style={{ fill: '#000', marginLeft: 2 }} /></span>}
+              </span>
+            </span>
+            <span className="block mt-2.5 text-sm font-semibold text-white truncate">{a.name}</span>
+            <span className="block text-xs text-gray-500">Artist Station</span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -514,6 +616,9 @@ export default function HomeLandingPage() {
                 );
               })}
             </div>
+
+            {/* ── Artist stations ── */}
+            <ArtistStations language={activeLang !== ALL_LANGUAGES ? activeLang : ''} />
 
             {/* ── Moods & playlists ── */}
             <MoodSection language={activeLang !== ALL_LANGUAGES ? activeLang : ''} />

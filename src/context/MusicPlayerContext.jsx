@@ -618,6 +618,12 @@ export function MusicPlayerProvider({ children }) {
     prefetchRef.current?.();
   }, [playQueue]);
   const playNext = useCallback((track) => enqueue(track), [enqueue]);
+  /* A station's first songs, and the station itself: when they run out the
+     radio asks the same station for more rather than starting its own. */
+  const playStation = useCallback((tracks, stationid) => {
+    playQueue(tracks, 0);
+    stationRef.current = stationid || '';
+  }, [playQueue]);
   const addToQueue = useCallback((track) => enqueue(track, { atEnd: true }), [enqueue]);
   const previous = useCallback(() => {
     if (audioRef.current.currentTime > 4) { audioRef.current.currentTime = 0; return; }
@@ -826,7 +832,7 @@ export function MusicPlayerProvider({ children }) {
     queue, queueIndex, shuffle, repeat,
     playQueue, next, previous, toggleShuffle, cycleRepeat,
     /* Queue a song right after the one playing, or at the end. */
-    playNext, addToQueue,
+    playNext, addToQueue, playStation,
     /* The radio: keeps songs coming in the same language once the queue runs
        dry, until this is turned off. */
     autoplay, toggleAutoplay,
