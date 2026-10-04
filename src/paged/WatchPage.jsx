@@ -419,8 +419,9 @@ const WatchHtmlPage = () => {
     if (!currentOverlayEp || !episodes.length) return 0;
     const i = episodes.findIndex((e) =>
       (e.globalIndex != null && e.globalIndex === currentOverlayEp.globalIndex) ||
-      ((e.season || 1) === (currentOverlayEp.season || 1) &&
-        (e.episodeNumberInSeason || e.episode) === (currentOverlayEp.episodeNumberInSeason || currentOverlayEp.episode)));
+      // As strings: uploaded rows carry "13" where TMDB carries 13.
+      (String(e.season || 1) === String(currentOverlayEp.season || 1) &&
+        String(e.episodeNumberInSeason || e.episode) === String(currentOverlayEp.episodeNumberInSeason || currentOverlayEp.episode)));
     return i >= 0 ? i : 0;
   }, [episodes, currentOverlayEp]);
 
@@ -629,17 +630,23 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   }, [backendUrl]);
 
   /* ── Play one episode's stream link in our rich VideoPlayer (episode-wise). ── */
+  /* Every play request takes a number; an async one that finishes after a
+     newer request has started is dropped instead of replacing it. */
+  const playSeqRef = useRef(0);
   const playEpisodeStream = useCallback(async (ep) => {
     const link = ep?.direct_url || ep?.hls_url;
     if (!link) return false;
-    setMxResolving(true);
-    const url = await resolveStreamLink(link);
-    setMxResolving(false);
-    if (!url) return false;
+    const seq = ++playSeqRef.current;
     // Resume only if the saved position is for THIS episode; a different episode starts fresh.
+    // Read before the wait: the episode on screen keeps saving progress until it is replaced.
     const saved = readOne(movieMeta?.slug || routeSlug);
     const epNo = ep.episodeNumberInSeason || ep.episode || null;
     const sameEp = saved && String(saved.season) === String(ep.season || 1) && String(saved.episode) === String(epNo);
+    setMxResolving(true);
+    const url = await resolveStreamLink(link);
+    if (seq !== playSeqRef.current) return false;   // another episode was picked meanwhile
+    setMxResolving(false);
+    if (!url) return false;
     setResumeStart(sameEp ? (saved.time || 0) : 0);
     setCurrentOverlayEp(ep);
     setFinalSource(maybeProxy(url));    // proxy 3rd-party HLS; our own streams pass through
@@ -655,21 +662,32 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
      straight from its master playlist into our own menus. The remaining
      sources are kept: if this one is refused mid-play, the next takes over. ── */
   const tmdbIterRef = useRef(null);
-  const tmdbBusyRef = useRef(false);
+  /* Busy is per search, not per page: a guard shared by all of them made the
+     search for a newly picked episode give up at once whenever the last one
+     was still running — and hand the viewer to Mirchi. */
   const nextTmdbStream = useCallback(async () => {
     const it = tmdbIterRef.current;
-    if (!it || tmdbBusyRef.current) return null;   // the player can report a refusal more than once
-    tmdbBusyRef.current = true;
+    if (!it || it.busy) return null;   // the player can report a refusal more than once
+    it.busy = true;
     try {
       const { value, done } = await it.next();
       return done ? null : value;
-    } catch { return null; } finally { tmdbBusyRef.current = false; }
+    } catch { return null; } finally { it.busy = false; }
   }, []);
 
   const playAnchorTmdb = useCallback(async (ep) => {
     const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
     const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
-    if (ep) setCurrentOverlayEp(ep);
+    const seq = ++playSeqRef.current;
+    /* The resume point is read now, and the episode only becomes "current"
+       once its stream is in hand. The episode on screen keeps playing — and
+       saving its progress — while this one is searched for; marking the new
+       one current first filed the old one's position under it, and the new
+       episode then opened at that time. */
+    const slug = movieMeta.slug || routeSlug;
+    const saved = readOne(slug);
+    const sameEp = !TV || (saved && String(saved.season) === String(s) && String(saved.episode) === String(e));
+    const resumeAt = TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug);
     setResolvingLabel("Finding the best AnchorHD stream…");
     setMxResolving(true);
     tmdbIterRef.current = tmdbStreams({
@@ -681,6 +699,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       backendUrl,
     });
     const found = await nextTmdbStream();
+    if (seq !== playSeqRef.current) return;   // another episode was picked meanwhile
     setMxResolving(false);
     setResolvingLabel("");
     if (!found) {
@@ -691,10 +710,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "mirchi"); }
       return;
     }
-    const slug = movieMeta.slug || routeSlug;
-    const saved = readOne(slug);
-    const sameEp = !TV || (saved && String(saved.season) === String(s) && String(saved.episode) === String(e));
-    setResumeStart(TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug));
+    if (ep) setCurrentOverlayEp(ep);
+    setResumeStart(resumeAt);
     setFinalSource(found.url);
     setSourceType("hls");
     setVideoTitle(TV ? `${movieMeta.title || routeSlug} — S${s}E${e}` : (movieMeta.title || routeSlug));
@@ -784,6 +801,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
 
   /* ── handlePlayAction ── */
   const handlePlayAction = useCallback((manualEp = null, forceServer = null) => {
+    playSeqRef.current++;          // anything still resolving is now out of date
     tmdbIterRef.current = null;   // whatever plays next, it is not the last TMDB search
     if (!movieMeta) return;
 
@@ -893,6 +911,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   /* Closing the player: when we were opened straight from the mobile detail
      sheet, go back to it instead of revealing the watch page underneath. */
   const closeOverlay = useCallback(() => {
+    playSeqRef.current++;
+    setMxResolving(false);
+    setResolvingLabel("");
     tmdbIterRef.current = null;
     setShowOverlay(false);
     setCurrentOverlayEp(null);

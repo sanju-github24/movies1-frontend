@@ -13,13 +13,13 @@
  * back through itself, and sends CORS — which is what hls.js needs.
  */
 
-const WORKER    = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
+const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 const FILMU_REF = "https://embed.filmu.in/";
 
 const viaWorker = (url, { ref = "", ua = "" } = {}) =>
   WORKER + "?url=" + encodeURIComponent(url)
-    + (ref ? "&ref=" + encodeURIComponent(ref) : "")
-    + (ua  ? "&ua="  + encodeURIComponent(ua)  : "");
+  + (ref ? "&ref=" + encodeURIComponent(ref) : "")
+  + (ua ? "&ua=" + encodeURIComponent(ua) : "");
 
 const getJson = async (url, ms) => {
   const r = await fetch(url, { cache: "no-store", ...(ms ? { signal: AbortSignal.timeout(ms) } : {}) });
@@ -61,25 +61,32 @@ const scrape = (extractor, { tmdbId, imdbId, type, season, episode, title, year 
    language, and the one to play. Sources can be paths relative to the `i`
    base, with a "downloads/" prefix that the CDN does not serve.
 
-   A definite "no" ({ error: "…" }) is final. A slow answer is waited for —
-   the full thirty seconds FilmU's own page allows. A failed request (FilmU's
-   backend answers 502 for some titles; connections drop) is asked once more,
-   but only once: for the titles it 502s on it does so every time, and
-   retrying for longer only kept the viewer waiting for the next server. */
+   It is given a window before anyone else is used: a lot of titles are on
+   FilmU and nowhere better, and a Singularity that has not answered yet —
+   a 502, a dropped connection, an error while it is still getting a title
+   ready — is asked again every few seconds until SINGULARITY_PATIENCE has
+   passed. Only NO_MATCH ends that early: FilmU could not match the title at
+   all, and waiting does not change it. A slow answer is waited for in full,
+   the thirty seconds FilmU's own page allows. */
+const SINGULARITY_PATIENCE = 10000;
+const SINGULARITY_POLL = 2500;
 const singularity = (o) => async () => {
   const api = o.type === "movie"
     ? `https://embed.filmu.in/api/singularity-movie?id=${encodeURIComponent(o.tmdbId)}`
     : `https://embed.filmu.in/api/singularity-tv?tmdb=${encodeURIComponent(o.tmdbId)}&s=${o.season}&e=${o.episode}`;
+  const until = Date.now() + SINGULARITY_PATIENCE;
   let d = null;
-  for (let attempt = 0; attempt < 2 && !d; attempt++) {
-    if (attempt) await new Promise((res) => setTimeout(res, 1500));
+  for (; ;) {
     try {
       const r = await fetch(viaWorker(api, { ref: FILMU_REF }), { cache: "no-store", signal: AbortSignal.timeout(SCRAPE_TIMEOUT) });
-      if (r.ok) d = await r.json().catch(() => null);
-      else if (r.status < 500) return null;        // a 4xx will not change
-    } catch { /* timed out or dropped — once more */ }
+      d = r.ok ? await r.json().catch(() => null) : null;
+      if (!r.ok && r.status < 500) return null;    // a 4xx will not change
+    } catch { d = null; }                           // timed out or dropped
+    if (d && !d.error) break;                       // an answer with a stream
+    if (/NO_MATCH/i.test(d?.error || "")) return null;
+    if (Date.now() + SINGULARITY_POLL > until) return null;
+    await new Promise((res) => setTimeout(res, SINGULARITY_POLL));
   }
-  if (!d || d.error) return null;
   const name = "FilmU • Singularity";
   if (d.url) return { url: d.multilingual && d.multilingual_url ? d.multilingual_url : d.url, ref: FILMU_REF, name };
   const base = String(d.i || d._base || "").replace(/\/$/, "");
@@ -100,12 +107,12 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   singularity(o),
-  scrape("VidRock", o),        // Orion · Nova
-  scrape("RiveStream", o),     // Vanguard · Zephyr · Citadel · PrimeVids
+  scrape("Bastion", o),        // right after Singularity, as FilmU's page does
+  scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
-  // Bastion's are often a dub (Mongolian, at the moment) — last resort.
-  scrape("Bastion", o),
+  scrape("VidRock", o),        // Nova · Orion
 ];
+
 
 /* "It answered" and "it plays" are different things — a provider will hand
    back a URL on a host that no longer resolves, or its sample clip: a single
