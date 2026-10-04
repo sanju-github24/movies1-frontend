@@ -98,6 +98,33 @@ function betterHalf(songs) {
  * Returns [] only when there is genuinely nothing left; the caller decides
  * whether that ends the session or starts it round again.
  */
+/**
+ * Songs like this one — JioSaavn's own song radio, the station its app plays
+ * when a song ends. Seeded with the song playing; pass back the stationid it
+ * returns and the same station carries on, twenty new songs a time, staying
+ * in the song's language and mostly with what is well listened-to.
+ *
+ * Returns { stationid, songs } with songs already heard (`exclude`) removed.
+ */
+export async function fetchSimilar(songId, stationId = '', exclude = []) {
+  const qs = stationId ? `stationid=${encodeURIComponent(stationId)}` : `song_id=${encodeURIComponent(songId)}`;
+  const data = await getJson(`/radio?${qs}&n=20`);
+  const skip = new Set(exclude);
+  const seen = new Set();
+  const songs = (data.songs || []).filter((s) => s.id && !skip.has(s.id) && !seen.has(s.id) && seen.add(s.id));
+  return { stationid: data.stationid || stationId, songs };
+}
+
+/** Songs for a query, one page at a time — { total, page, results }. */
+export function fetchSongsPage(query, page = 1, n = 20) {
+  return getJson(`/songs?query=${encodeURIComponent(query)}&page=${page}&n=${n}`);
+}
+
+/** Playlists for a query ("kannada love songs"), one page at a time. */
+export function fetchPlaylistsPage(query, page = 1, n = 20) {
+  return getJson(`/playlists?query=${encodeURIComponent(query)}&page=${page}&n=${n}`);
+}
+
 export async function fetchRadio(language, exclude = []) {
   const key = String(language || '').trim().toLowerCase();
   const charts = LANGUAGE_CHARTS[key] || FALLBACK_CHARTS;
@@ -142,6 +169,9 @@ export function toCard(song) {
     artist: artist || 'Unknown Artist',
     // How well listened-to it is. The radio picks by this.
     plays: Number(song.play_count) || 0,
+    /* Carried on the card so the radio knows what to follow a song with
+       without first having to resolve it. */
+    language: song.language || '',
   };
 }
 
@@ -202,13 +232,13 @@ export function toTrack(song) {
 // ── Calls ───────────────────────────────────────────────────────────────
 
 /** One chart playlist, as a row of cards. */
-export async function fetchPlaylist(id, limit = 20) {
+export async function fetchPlaylist(id, limit = 50) {
   const data = await getJson(`/playlist/?query=${encodeURIComponent(id)}`);
   return (data.songs || []).slice(0, limit).map(toCard);
 }
 
 /** Every chart row, in parallel. Rows that fail are dropped, not fatal. */
-export async function fetchHomeRows(limit = 20) {
+export async function fetchHomeRows(limit = 50) {
   const rows = await Promise.all(CHART_PLAYLISTS.map(async ({ name, id }) => {
     try {
       return [name, await fetchPlaylist(id, limit)];
@@ -232,6 +262,14 @@ export function fetchSearch(query) {
  * search for that name.
  */
 export async function fetchListing(query) {
+  if (query.startsWith('playlist:')) {
+    const list = await getJson(`/playlist/?query=${encodeURIComponent(query.slice(9))}`);
+    const songs = (list.songs || []).map(toCard);
+    return {
+      songs, albums: [], artists: [],
+      metadata: { title: list.listname || '', poster: list.image || songs[0]?.poster || '' },
+    };
+  }
   if (query.startsWith('album:')) {
     const album = await getJson(`/album/?query=${encodeURIComponent(query.slice(6))}`);
     return {

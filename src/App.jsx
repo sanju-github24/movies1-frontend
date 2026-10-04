@@ -95,6 +95,7 @@ const NewsViewer = safeLazy(() => import('./components/NewsReader'));
 const HomeLandingPage = safeLazy(() => import('./paged/HomeLandingPage'));
 const SearchResultsPage = safeLazy(() => import('./paged/SearchResultsPage'));
 const TrackDetailPage = safeLazy(() => import('./paged/TrackDetailPage'));
+const MusicExplorePage = safeLazy(() => import('./paged/MusicExplorePage'));
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import PersistentMiniPlayer from './components/PersistentMiniPlayer';
 
@@ -307,6 +308,7 @@ const AppContent = () => {
         {/* ── Music Feature Routes ── */}
         <Route path="/music"                  element={<HomeLandingPage />} />
         <Route path="/music/search"           element={<SearchResultsPage />} />
+        <Route path="/music/explore"          element={<MusicExplorePage />} />
         <Route path="/music/track/:id"        element={<TrackDetailPage />} />
 
         <Route path="/profile"                element={

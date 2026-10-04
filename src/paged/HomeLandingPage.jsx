@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { absUrl } from '../utils/seo';
 import { fetchHomeRows } from '../utils/saavn';
@@ -9,6 +9,7 @@ import { POSTER_SHELL } from "../utils/posterGrid";
 import PlaylistPanel from "../components/PlaylistPanel";
 import AddToPlaylist from "../components/AddToPlaylist";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
+import PlayNextButton from "../components/PlayNextButton";
 
 // Sentinel for the "everything" chip — a language will never be named this.
 const ALL_LANGUAGES = '__all__';
@@ -45,7 +46,7 @@ function deriveRgbFromStr(str) {
 // Track card — exact same style as RecommendCard in TrackDetailPage
 // ─────────────────────────────────────────────────────────────────────────
 // TrackCard accepts setPreview to open the mini player
-function TrackCard({ track, tracks, index, onPlay }) {
+function TrackCard({ track, tracks, index, onPlay, fluid = false }) {
   const [hov, setHov] = useState(false);
   const { light } = useMemo(() => deriveRgbFromStr(track.poster || track.id), [track.poster, track.id]);
 
@@ -61,7 +62,7 @@ function TrackCard({ track, tracks, index, onPlay }) {
       onMouseLeave={() => setHov(false)}
       style={{
         flexShrink: 0,
-        width: 152,
+        width: fluid ? '100%' : 152,
         cursor: 'pointer',
         borderRadius: 14,
         overflow: 'hidden',
@@ -104,6 +105,13 @@ function TrackCard({ track, tracks, index, onPlay }) {
             <div onClick={(e) => e.stopPropagation()}>
               <AddToPlaylist compact track={track} />
             </div>
+            <PlayNextButton track={track} />
+          </div>
+        )}
+        {/* Phones have no hover, so the same action sits on the artwork. */}
+        {!hov && (
+          <div className="sm:hidden" style={{ position: 'absolute', right: 6, bottom: 6 }}>
+            <PlayNextButton track={track} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white" />
           </div>
         )}
       </div>
@@ -137,7 +145,7 @@ function TrackCard({ track, tracks, index, onPlay }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Section (horizontal scroll strip)
 // ─────────────────────────────────────────────────────────────────────────
-function CategorySection({ name, tracks, onPlay, onSeeAll }) {
+function CategorySection({ name, tracks, onPlay, onSeeAll, expanded = false }) {
   const { light } = useMemo(() => deriveRgbFromStr(name), [name]);
 
   return (
@@ -185,13 +193,76 @@ function CategorySection({ name, tracks, onPlay, onSeeAll }) {
         </button>
       </div>
 
-      {/* Horizontal scroll strip */}
-      <div
-        className="home-scroll"
-        style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 10 }}
-      >
-        {tracks.map((track, i) => (
-          <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} />
+      {/* One language chosen: the whole chart as a grid. Otherwise a strip of
+          its first twenty, with the rest behind "See all". */}
+      {expanded ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14 }}>
+          {tracks.map((track, i) => (
+            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} fluid />
+          ))}
+        </div>
+      ) : (
+        <div
+          className="home-scroll"
+          style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 10 }}
+        >
+          {tracks.slice(0, 20).map((track, i) => (
+            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Moods: JioSaavn's playlists for "<language> <mood> songs", opened on the
+// explore page, where they keep loading as the list is scrolled.
+// ─────────────────────────────────────────────────────────────────────────
+const MOODS = [
+  ['Love', '#e11d48'], ['Romantic', '#db2777'], ['Sad', '#4f46e5'], ['Party', '#f59e0b'],
+  ['Rap', '#0ea5e9'], ['Melody', '#14b8a6'], ['Hits', '#ef4444'], ['Devotional', '#d97706'],
+  ['90s', '#8b5cf6'], ['Workout', '#22c55e'], ['Folk', '#a16207'], ['Retro', '#be123c'],
+  ['Lofi', '#64748b'], ['Wedding', '#c026d3'],
+];
+const MOOD_LANGS = ['Kannada', 'Hindi', 'Tamil', 'Telugu', 'Malayalam', 'English', 'Punjabi', 'Marathi'];
+const CODE_LANG = { kan: 'Kannada', hin: 'Hindi', tam: 'Tamil', tel: 'Telugu', mal: 'Malayalam', eng: 'English', pan: 'Punjabi', mar: 'Marathi' };
+
+function MoodSection({ language }) {
+  const preferred = () => {
+    try {
+      const p = String(localStorage.getItem('preferred_audio_lang') || '').toLowerCase();
+      return CODE_LANG[p.slice(0, 3)] || MOOD_LANGS.find((l) => l.toLowerCase() === p) || 'Kannada';
+    } catch { return 'Kannada'; }
+  };
+  const [lang, setLang] = useState(() => (MOOD_LANGS.includes(language) ? language : preferred()));
+  useEffect(() => { if (MOOD_LANGS.includes(language)) setLang(language); }, [language]);
+
+  return (
+    <section className="mb-10">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight">Moods & playlists</h2>
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+          {MOOD_LANGS.map((l) => (
+            <button key={l} type="button" onClick={() => setLang(l)} aria-pressed={lang === l}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border transition
+                ${lang === l ? 'bg-white text-black border-white' : 'bg-white/[0.04] text-gray-300 border-white/10 hover:bg-white/10'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        {MOODS.map(([mood, color]) => (
+          <Link key={mood} to={`/music/explore?q=${encodeURIComponent(`${lang} ${mood} songs`.toLowerCase())}`}
+            className="group relative overflow-hidden rounded-xl h-20 sm:h-24 p-3 flex items-end focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}99 55%, #111827 120%)` }}>
+            <span aria-hidden="true" className="absolute -right-3 -top-4 text-6xl font-black text-white/10 group-hover:scale-110 transition-transform">♪</span>
+            <span className="relative">
+              <span className="block text-[11px] font-semibold text-white/75">{lang}</span>
+              <span className="block text-base sm:text-lg font-black text-white leading-tight">{mood}</span>
+            </span>
+          </Link>
         ))}
       </div>
     </section>
@@ -444,6 +515,9 @@ export default function HomeLandingPage() {
               })}
             </div>
 
+            {/* ── Moods & playlists ── */}
+            <MoodSection language={activeLang !== ALL_LANGUAGES ? activeLang : ''} />
+
             {/* ── Category sections ─────────────────────────────────── */}
             <div className="flex flex-col gap-10">
               {Object.entries(categories)
@@ -454,6 +528,7 @@ export default function HomeLandingPage() {
                     name={categoryName}
                     tracks={tracks}
                     onPlay={startRow}
+                    expanded={activeLang !== ALL_LANGUAGES}
                     onSeeAll={() => setActiveLang(sectionLanguage(categoryName))}
                   />
                 ))}

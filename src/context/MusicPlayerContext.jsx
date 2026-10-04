@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
 import Hls from 'hls.js';
 import { resolveStream } from "../utils/playlists";
-import { fetchRadio } from "../utils/saavn";
+import { fetchRadio, fetchSimilar } from "../utils/saavn";
 
 export const MusicPlayerContext = createContext(null);
 
@@ -215,6 +215,16 @@ export function MusicPlayerProvider({ children }) {
   /* One refill at a time: `ended` and a failed resolve can both reach for the
      radio at once, and two answers would queue the same songs twice. */
   const radioBusyRef = useRef(false);
+  /* The JioSaavn station the radio is following. Seeded from the song playing
+     when the queue first runs dry, then asked for more of the same station
+     each time, so it keeps moving through similar songs instead of coming
+     back to the top of one chart. A new list starts a new station. */
+  const stationRef = useRef('');
+  // Languages learned while resolving ahead, for songs that did not carry one.
+  const langRef = useRef({});
+  /* "Play next" picks since the current song started, so several of them play
+     in the order they were chosen rather than the last one first. */
+  const playNextCountRef = useRef(0);
 
   /* A stream URL, once resolved, kept for the rest of the session. The next
      song is resolved into here while the current one is still playing, so when
@@ -362,13 +372,16 @@ export function MusicPlayerProvider({ children }) {
        If the answer is no, the queue moves on rather than stopping: one
        unavailable song should not end the listening. */
     if (trackInfo?.id) playedRef.current.add(trackInfo.id);
+    playNextCountRef.current = 0;
 
     let src = trackInfo.streamUrl;
     if (!src && trackInfo.id && resolvedRef.current[trackInfo.id]) {
       // Prefetched while the previous song played — no fetch, so playback
       // continues the instant the last one ended, screen on or off.
       src = resolvedRef.current[trackInfo.id];
-      setCurrentTrack((t) => (t && t.id === trackInfo.id ? { ...t, streamUrl: src } : t));
+      const lang = langRef.current[trackInfo.id];
+      setCurrentTrack((t) => (t && t.id === trackInfo.id
+        ? { ...t, streamUrl: src, language: t.language || lang || '' } : t));
     }
     if (!src && trackInfo.id) {
       const wanted = trackInfo.id;
@@ -429,6 +442,7 @@ export function MusicPlayerProvider({ children }) {
     // Choosing a list to play starts the history over: what was heard before
     // it should not decide what the radio plays after it.
     playedRef.current = new Set();
+    stationRef.current = '';
     const order = buildOrder(tracks.length, startIndex, shuffleRef.current);
     const pos = Math.max(0, order.indexOf(startIndex));
     setQueue(tracks); queueRef.current = tracks;
@@ -453,7 +467,22 @@ export function MusicPlayerProvider({ children }) {
 
     radioBusyRef.current = true;
     try {
-      let more = await fetchRadio(seed.language, [...playedRef.current]);
+      // Heard already, or already waiting in the queue.
+      const skip = () => [...playedRef.current, ...queueRef.current.map((t) => t.id)];
+      let more = [];
+      /* Songs like this one, from JioSaavn's own radio. A batch that is all
+         repeats is asked once more before giving up on the station. */
+      try {
+        for (let tries = 0; tries < 2 && more.length < 3; tries++) {
+          const sim = await fetchSimilar(seed.id, stationRef.current, skip());
+          stationRef.current = sim.stationid || stationRef.current;
+          more = sim.songs;
+        }
+      } catch (e) {
+        console.warn('[MusicPlayer] song radio unavailable, using the charts:', e.message);
+        stationRef.current = '';
+      }
+      if (!more.length) more = await fetchRadio(seed.language || langRef.current[seed.id], skip());
       if (!more.length) {
         /* Every chart we can reach has been heard. The listener has not asked
            to stop, so start the history over and go round again rather than
@@ -517,8 +546,9 @@ export function MusicPlayerProvider({ children }) {
     if (!id || nextTrack.streamUrl || resolvedRef.current[id]) return;
 
     try {
-      const { streamUrl } = await resolveStream(id);
+      const { streamUrl, metadata } = await resolveStream(id);
       resolvedRef.current[id] = streamUrl;
+      if (metadata?.language) langRef.current[id] = metadata.language;
     } catch {
       // It will be tried again the ordinary way when it reaches the front.
     }
@@ -562,6 +592,33 @@ export function MusicPlayerProvider({ children }) {
   }, [loadTrack, extendRadio]);
 
   const next = useCallback(() => step(1), [step]);
+
+  /* Put a song in the queue: right after the one playing ("Play next"), or at
+     the end. With nothing playing, playing it is what was meant. A song
+     playing on its own becomes the start of a queue. */
+  const enqueue = useCallback((track, { atEnd = false } = {}) => {
+    if (!track?.id) return;
+    const current = currentTrackRef.current;
+    if (!current) { playQueue([track], 0); return; }
+    const hasQueue = queueRef.current.length > 0 && orderRef.current.length > 0;
+    const tracks = hasQueue ? queueRef.current : [current];
+    const order = hasQueue ? [...orderRef.current] : [0];
+    const pos = hasQueue ? posRef.current : 0;
+    const added = [...tracks, track];
+    const idx = added.length - 1;
+    if (atEnd) order.push(idx);
+    else {
+      order.splice(pos + 1 + playNextCountRef.current, 0, idx);
+      playNextCountRef.current += 1;
+    }
+    setQueue(added); queueRef.current = added;
+    orderRef.current = order;
+    if (!hasQueue) { posRef.current = 0; setQueueIndex(0); }
+    // Have the new next song ready, as the radio's would be.
+    prefetchRef.current?.();
+  }, [playQueue]);
+  const playNext = useCallback((track) => enqueue(track), [enqueue]);
+  const addToQueue = useCallback((track) => enqueue(track, { atEnd: true }), [enqueue]);
   const previous = useCallback(() => {
     if (audioRef.current.currentTime > 4) { audioRef.current.currentTime = 0; return; }
     step(-1);
@@ -768,6 +825,8 @@ export function MusicPlayerProvider({ children }) {
     // ── Queue, shuffle and repeat ──
     queue, queueIndex, shuffle, repeat,
     playQueue, next, previous, toggleShuffle, cycleRepeat,
+    /* Queue a song right after the one playing, or at the end. */
+    playNext, addToQueue,
     /* The radio: keeps songs coming in the same language once the queue runs
        dry, until this is turned off. */
     autoplay, toggleAutoplay,

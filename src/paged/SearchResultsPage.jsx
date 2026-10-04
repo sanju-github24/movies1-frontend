@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
 import { fetchSearch, fetchListing } from '../utils/saavn';
 import { useGoBack } from "../components/BackBar";
+import PlayNextButton from '../components/PlayNextButton';
+import { useMusicPlayer } from '../context/MusicPlayerContext';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Deterministic color from any string — no CORS, instant, unique per slug
@@ -55,8 +57,9 @@ export default function SearchResultsPage() {
   // YouTube mini-player state
   const [preview,    setPreview]    = useState(null); // { title, artist, poster, accent }
 
-  const isDirectListing = query.startsWith('album:') || query.startsWith('artist:');
-  const listingType     = query.startsWith('album:') ? 'Album' : 'Artist';
+  const isDirectListing = query.startsWith('album:') || query.startsWith('artist:') || query.startsWith('playlist:');
+  const listingType     = query.startsWith('album:') ? 'Album' : query.startsWith('playlist:') ? 'Playlist' : 'Artist';
+  const { playQueue } = useMusicPlayer();
   const rawSlug         = query.split(':', 2)[1] || '';
   // Prefer the real name scraped from the listing page; fall back to the slug
   const listingName     = results.metadata?.title
@@ -172,6 +175,12 @@ export default function SearchResultsPage() {
               <p style={{ fontSize:14, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>
                 <span style={{ color:'rgba(255,255,255,0.8)', fontWeight:700 }}>{results.songs.length}</span> songs
               </p>
+              {results.songs.length > 0 && (
+                <button type="button" onClick={() => playQueue(results.songs, 0)}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-bold hover:bg-gray-200 active:scale-[0.98] transition">
+                  <Play size={16} style={{ fill:'#000' }} /> Play all
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -217,7 +226,9 @@ export default function SearchResultsPage() {
                       background: isHov ? `rgba(${baseRgb}, 0.35)` : isActive ? `rgba(${lightRgb}, 0.08)` : 'transparent',
                       transition:'background 0.12s',
                     }}
-                    onClick={(e) => { if (!e.defaultPrevented) saveAndGo(`/music/track/${track.id}`); }}
+                    /* Plays the list from this song, so next and the radio have
+                       the rest of it to go on with. */
+                    onClick={(e) => { if (!e.defaultPrevented) playQueue(results.songs, idx); }}
                   >
                     {/* Index / play */}
                     <div style={{ textAlign:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.35)' }}>
@@ -271,8 +282,8 @@ export default function SearchResultsPage() {
                       <Youtube size={13} />
                     </button>
 
-                    {/* Duration slot */}
-                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.2)', fontFamily:'monospace', textAlign:'right' }}>—</span>
+                    {/* Where a duration placeholder sat: queue this song next. */}
+                    <PlayNextButton track={track} />
                   </div>
                 );
               })}
@@ -334,10 +345,11 @@ export default function SearchResultsPage() {
             <div style={{ position:'relative', aspectRatio:'1', overflow:'hidden' }}>
               <img src={track.poster} alt={track.title} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', transform: hov ? 'scale(1.06)' : 'scale(1)', transition:'transform 0.3s' }}
                 onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80'; }} />
-              {hov && <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {hov && <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
                 <div style={{ width:40, height:40, borderRadius:'50%', background:`rgb(${light})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <Play size={16} style={{ fill:'#000', color:'#000', marginLeft:2 }} />
                 </div>
+                <PlayNextButton track={track} />
               </div>}
             </div>
             <div style={{ padding:'10px 12px 12px' }}>
@@ -353,6 +365,7 @@ export default function SearchResultsPage() {
               <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{track.title}</p>
               <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0' }}>{track.label||'Mp3 Song'}</p>
             </div>
+            <PlayNextButton track={track} />
           </div>
         )}
       </div>
@@ -516,6 +529,18 @@ export default function SearchResultsPage() {
                 <section>
                   <SectionHeader icon={<Music size={13}/>} label="Songs" count={visSongs.length} color="#5eead4" />
                   <div style={gridCols}>{visSongs.map(t => <SongCard key={t.id} track={t} />)}</div>
+                  {/* The quick search answers five songs; the rest, and the
+                      playlists, are a page at a time on the explore page. */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <Link to={`/music/explore?q=${encodeURIComponent(query)}&tab=songs`}
+                      className="rounded-full bg-white/[0.06] border border-white/10 px-4 py-2 text-sm font-semibold text-gray-200 hover:bg-white/[0.12] transition">
+                      More songs for “{query}”
+                    </Link>
+                    <Link to={`/music/explore?q=${encodeURIComponent(query)}&tab=playlists`}
+                      className="rounded-full bg-white/[0.06] border border-white/10 px-4 py-2 text-sm font-semibold text-gray-200 hover:bg-white/[0.12] transition">
+                      Playlists
+                    </Link>
+                  </div>
                 </section>
               )}
               {visAlbums.length > 0 && (
