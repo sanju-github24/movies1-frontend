@@ -394,6 +394,15 @@ const WatchHtmlPage = () => {
   const [activeTab,         setActiveTab        ] = useState("servers");
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
+  /* The same episodes, numbered the way the page lists them (season, number
+     in season — by position when an upload carries only a label like "EP06"
+     — and globalIndex), in their original order. The player gets this list,
+     not the raw one: matched against raw rows that carry no number, the
+     episode clicked on the page was never found, and the player fell back to
+     the first one — S1 E1 whatever was playing. */
+  const numberedEpisodes = useMemo(
+    () => Object.values(groupedEpisodes).flatMap((g) => g.episodes).sort((a, b) => a.globalIndex - b.globalIndex),
+    [groupedEpisodes]);
 
   // Ticks every 20s so the live pill and its CTA flip themselves at 9:30 and
   // again at 10:30 without the viewer reloading the page.
@@ -416,14 +425,15 @@ const WatchHtmlPage = () => {
   // Index of the currently-playing episode within the flat episodes list (for the
   // in-player episode switcher + auto-next).
   const currentEpIndex = useMemo(() => {
-    if (!currentOverlayEp || !episodes.length) return 0;
-    const i = episodes.findIndex((e) =>
-      (e.globalIndex != null && e.globalIndex === currentOverlayEp.globalIndex) ||
+    if (!currentOverlayEp || !numberedEpisodes.length) return 0;
+    const g = currentOverlayEp.globalIndex;
+    if (g != null && numberedEpisodes[g]) return g;
+    const i = numberedEpisodes.findIndex((e) =>
       // As strings: uploaded rows carry "13" where TMDB carries 13.
       (String(e.season || 1) === String(currentOverlayEp.season || 1) &&
         String(e.episodeNumberInSeason || e.episode) === String(currentOverlayEp.episodeNumberInSeason || currentOverlayEp.episode)));
     return i >= 0 ? i : 0;
-  }, [episodes, currentOverlayEp]);
+  }, [numberedEpisodes, currentOverlayEp]);
 
   // Profile language (persisted by WatchListPage) → the player auto-picks that audio.
   const preferredAudioLang = useMemo(() => {
@@ -789,10 +799,11 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const ep = currentOverlayEp;
     // Next episode (for the "Next Episode" card once this one finishes).
     let next = null;
-    if (ep && episodes.length) {
-      const ci = episodes.findIndex(e => String(e.season || 1) === String(ep.season || 1) &&
-        String(e.episodeNumberInSeason || e.episode) === String(ep.episodeNumberInSeason || ep.episode));
-      const ne = ci >= 0 && ci < episodes.length - 1 ? episodes[ci + 1] : null;
+    if (ep && numberedEpisodes.length) {
+      const ci = ep.globalIndex != null && numberedEpisodes[ep.globalIndex] ? ep.globalIndex
+        : numberedEpisodes.findIndex(e => String(e.season || 1) === String(ep.season || 1) &&
+            String(e.episodeNumberInSeason || e.episode) === String(ep.episodeNumberInSeason || ep.episode));
+      const ne = ci >= 0 && ci < numberedEpisodes.length - 1 ? numberedEpisodes[ci + 1] : null;
       if (ne) next = { season: ne.season || 1, episode: ne.episodeNumberInSeason || ne.episode, epTitle: ne.title || ne.name || null };
     }
     saveProgress({
@@ -811,7 +822,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       next,
       time, duration,
     });
-  }, [movieMeta, routeSlug, currentOverlayEp, episodes]);
+  }, [movieMeta, routeSlug, currentOverlayEp, numberedEpisodes]);
 
   const loadContinue = useCallback(() => setContinueList(readContinueList()), []);
   useEffect(() => { loadContinue(); }, [loadContinue]);
@@ -988,11 +999,11 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
         return m ? Number(m[1]) : null;
       };
       const pos = {};
-      const numbered = episodes.map((e) => {
+      const numbered = episodes.map((e, gi) => {
         const s = String(e.season || 1);
         pos[s] = (pos[s] || 0) + 1;
         const n = Number(e.episodeNumberInSeason ?? e.episode) || fromLabel(e) || pos[s];
-        return { e, s, n };
+        return { e, s, n, gi };
       });
       const hit = want
         ? numbered.find(({ s, n }) =>
@@ -1000,7 +1011,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
         : null;
       // Carry the resolved number onto the row so the player title, the resume
       // key and the dropdown all name the right episode.
-      ep = hit ? { ...hit.e, season: Number(hit.s), episodeNumberInSeason: hit.n, episode: hit.n } : null;
+      ep = hit ? { ...hit.e, season: Number(hit.s), episodeNumberInSeason: hit.n, episode: hit.n, globalIndex: hit.gi } : null;
       // The sheet lists every season/episode TMDB knows about, so the pick may be
       // one we haven't uploaded — play it on a server using its numbers.
       if (!ep && want) {
@@ -1589,7 +1600,7 @@ if (!alive) return;
                    poster={movieMeta?.poster || ""}
                    backdrop={movieMeta?.background || movieMeta?.cover_poster || ""}
                    description={movieMeta?.description || ""}
-                   episodes={movieMeta?.content_type === "tv" ? episodes : []}
+                   episodes={movieMeta?.content_type === "tv" ? numberedEpisodes : []}
                    currentEpisodeIndex={currentEpIndex}
                    onEpisodeClick={(ep) => (ep.direct_url || ep.hls_url)
                      ? playEpisodeStream(ep)
