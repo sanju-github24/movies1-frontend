@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "../utils/supabaseClient";
-import LiveTabsSection from "../components/LiveTabsSection";
 import AnchorPlayer from "../components/AnchorPlayer";
 import { resolveChannelSource } from "../utils/liveSources";
 import LiveTvBrowse from "../components/livetv/LiveTvBrowse";
@@ -811,12 +810,9 @@ const LiveChannelsPage = () => {
 
       {/* ══ BROWSE ══════════════════════════════════════════════════════════
           The hero while nothing plays; the player takes its place when
-          something does. Then Live TV by category, narrowed by language.
-          Live sports fixtures sit under Trending; admin bundles follow. */}
+          something does. Then Live TV by category, narrowed by language, and
+          any admin bundles. Live sports fixtures have their own page. */}
       <LiveTvBrowse channels={liveTv} activeKey={activeKey} onPlay={playTile} showHero={!playerUrl}>
-        <div className="mb-9 sm:mb-11">
-          <LiveTabsSection rows={bundles.filter((b) => !b.bundle_url?.includes("tab=live"))} />
-        </div>
         {bundles.filter((b) => !b._builtin && !b.bundle_url?.includes("tab=live") && resolvedBundles[b.id]?.channels?.length).map((row) => (
           <BundleSection key={row.id} row={row} parsed={resolvedBundles[row.id]} activeChannel={activeChannel}
             onPlayChannel={playChannel} onPlayBundle={playBundle} />
