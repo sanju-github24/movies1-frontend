@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { 
   Search, Loader2, Star, Settings, Trash2, Edit3, Plus, ArrowLeft, 
-  Layers, Database, Tv, Layout, Monitor, Film, RotateCcw, Save, X, Eye, EyeOff, TrendingUp, Languages
+  Layers, Database, Tv, Layout, Monitor, Film, RotateCcw, Save, X, Eye, EyeOff, TrendingUp, Languages, Check
 } from "lucide-react";
 
 /* Tell search engines a title page is new or changed, so an upload is offered
@@ -268,6 +268,35 @@ const EditableItem = ({ item, fetchWatchPages, handleDelete, backendUrl }) => {
   );
 };
 
+/* ================= IMAGE PICKER =================
+   Every cover, logo and poster TMDB has for a title, to choose from before
+   syncing. The first is what TMDB ranks best and is chosen to begin with. */
+const ImageChoice = ({ label, items, value, onPick, shape }) => {
+  if (!items?.length) return (
+    <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">{label}</p>
+      <p className="text-[11px] text-slate-600">None on TMDB</p></div>
+  );
+  const box = shape === "poster" ? "w-20 h-28" : shape === "logo" ? "w-36 h-20" : "w-40 h-[90px]";
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">{label} <span className="text-slate-600">· {items.length}</span></p>
+      <div className="flex gap-2.5 overflow-x-auto pb-2">
+        {items.map((img) => {
+          const on = img.url === value;
+          return (
+            <button key={img.url} type="button" onClick={() => onPick(on ? "" : img.url)} title={img.lang ? `Language: ${img.lang}` : "No text"}
+              className={`relative shrink-0 ${box} rounded-xl overflow-hidden border-2 transition-all ${on ? "border-blue-500 ring-2 ring-blue-500/40" : "border-white/10 hover:border-white/40"} ${shape === "logo" ? "bg-[repeating-conic-gradient(#1e293b_0%_25%,#0f172a_0%_50%)] bg-[length:16px_16px] p-2" : "bg-slate-800"}`}>
+              <img src={img.thumb || img.url} alt="" loading="lazy" className={`w-full h-full ${shape === "logo" ? "object-contain" : "object-cover"}`} />
+              {img.lang && <span className="absolute bottom-1 left-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-black/70 text-white">{img.lang}</span>}
+              {on && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"><Check size={12} className="text-white" /></span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /* ================= MAIN DASHBOARD ================= */
 const UploadWatchHtml = () => {
   const { backendUrl } = useContext(AppContext);
@@ -287,6 +316,8 @@ const UploadWatchHtml = () => {
   const [search, setSearch] = useState("");
   const [tmdbSearchQuery, setTmdbSearchQuery] = useState("");
   const [tmdbResult, setTmdbResult] = useState(null);
+  // The images chosen in the search result, applied on Sync.
+  const [picks, setPicks] = useState({ cover: "", logo: "", poster: "" });
   const [loading, setLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -326,7 +357,11 @@ const UploadWatchHtml = () => {
       const isId = /^tt\d+$/i.test(tmdbSearchQuery) || /^\d+$/.test(tmdbSearchQuery);
       const params = isId ? { imdb_id: tmdbSearchQuery } : { title: tmdbSearchQuery };
       const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params });
-      if (res.data.success) setTmdbResult(res.data.data);
+      if (res.data.success) {
+        const d = res.data.data;
+        setTmdbResult(d);
+        setPicks({ cover: d.cover_poster_url || "", logo: d.title_logo || "", poster: d.poster_url || "" });
+      }
     } catch (err) { toast.error("TMDB error"); } finally { setIsSearching(false); }
   };
 
@@ -339,8 +374,9 @@ const UploadWatchHtml = () => {
       title: data.title || "",
       slug: data.title ? data.title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, '') : "",
       tmdb_id: data.tmdb_id?.toString() || "",
-      poster: data.poster_url || "",
-      cover_poster: data.cover_poster_url || "",
+      poster: picks.poster || data.poster_url || "",
+      cover_poster: picks.cover || data.cover_poster_url || "",
+      title_logo: picks.logo || data.title_logo || "",
       imdb_rating: (ratingVal && !isNaN(ratingVal)) ? `${ratingVal.toFixed(1)}/10` : "",
       imdb_id: data.imdb_id || ""
     }));
@@ -400,9 +436,23 @@ const UploadWatchHtml = () => {
 
       {tmdbResult && (
         <div className="max-w-4xl mx-auto mb-10 bg-slate-900 border border-blue-500/40 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 shadow-2xl animate-in zoom-in-95">
-            <img src={tmdbResult.poster_url || "/default-poster.jpg"} className="w-40 h-56 object-cover rounded-3xl shadow-2xl border border-white/10" alt="" />
-            <div className="flex-1 space-y-4">
-                <h2 className="text-3xl font-black uppercase italic text-white leading-none">{tmdbResult.title} <span className="text-slate-500 block not-italic text-lg mt-2 tracking-widest uppercase">{tmdbResult.year}</span></h2>
+            <img src={picks.poster || tmdbResult.poster_url || "/default-poster.jpg"} className="w-40 h-56 object-cover rounded-3xl shadow-2xl border border-white/10 shrink-0" alt="" />
+            <div className="flex-1 min-w-0 space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <h2 className="text-3xl font-black uppercase italic text-white leading-none">{tmdbResult.title} <span className="text-slate-500 block not-italic text-lg mt-2 tracking-widest uppercase">{tmdbResult.year}</span></h2>
+                  <button onClick={() => setTmdbResult(null)} className="text-slate-500 hover:text-white text-xs font-black uppercase">Close</button>
+                </div>
+                {/* What Sync will apply */}
+                <div className="relative h-28 rounded-2xl overflow-hidden bg-slate-800 border border-white/10">
+                  {picks.cover && <img src={picks.cover} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent" />
+                  {picks.logo
+                    ? <img src={picks.logo} alt="" className="absolute left-4 bottom-3 max-h-16 max-w-[45%] object-contain drop-shadow-lg" />
+                    : <span className="absolute left-4 bottom-3 text-[10px] font-black uppercase text-slate-400">No logo chosen</span>}
+                </div>
+                <ImageChoice label="Cover poster" shape="cover" items={tmdbResult.images?.backdrops} value={picks.cover} onPick={(u) => setPicks((p) => ({ ...p, cover: u }))} />
+                <ImageChoice label="Title logo" shape="logo" items={tmdbResult.images?.logos} value={picks.logo} onPick={(u) => setPicks((p) => ({ ...p, logo: u }))} />
+                <ImageChoice label="Poster" shape="poster" items={tmdbResult.images?.posters} value={picks.poster} onPick={(u) => setPicks((p) => ({ ...p, poster: u }))} />
                 <button onClick={() => applyMetadata(tmdbResult)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg">
                     <Database size={16}/> Sync
                 </button>
@@ -458,6 +508,18 @@ const UploadWatchHtml = () => {
                     <input className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs" value={formData.poster} onChange={e => setFormData({...formData, poster: e.target.value})} placeholder="Poster URL" />
                     <input className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs" value={formData.cover_poster} onChange={e => setFormData({...formData, cover_poster: e.target.value})} placeholder="Cover URL" />
                     <input className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs" value={formData.title_logo} onChange={e => setFormData({...formData, title_logo: e.target.value})} placeholder="Logo URL" />
+                    {(formData.poster || formData.cover_poster || formData.title_logo) && (
+                      <div className="flex gap-3 items-end pt-1">
+                        {formData.poster && <img src={formData.poster} alt="" className="w-14 h-20 object-cover rounded-lg border border-white/10" />}
+                        {formData.cover_poster && (
+                          <div className="relative w-40 h-20 rounded-lg overflow-hidden border border-white/10">
+                            <img src={formData.cover_poster} alt="" className="w-full h-full object-cover" />
+                            {formData.title_logo && <img src={formData.title_logo} alt="" className="absolute left-2 bottom-1.5 max-h-8 max-w-[60%] object-contain drop-shadow" />}
+                          </div>
+                        )}
+                        {!formData.cover_poster && formData.title_logo && <img src={formData.title_logo} alt="" className="max-h-12 max-w-[10rem] object-contain bg-slate-800 rounded-lg p-1.5" />}
+                      </div>
+                    )}
                 </div>
             </section>
 
