@@ -69,7 +69,7 @@ const PlaylistPanel = () => {
     if (!rows?.length) return;
     if (shuffled && !player.shuffle) player.toggleShuffle();
     if (!shuffled && player.shuffle) player.toggleShuffle();
-    player.playQueue(rows.map(toTrack), 0);
+    player.playQueue(rows.map(toTrack), 0, { title: open?.name || 'Your playlist', link: '/music' });
   };
 
   if (session === undefined) return null;

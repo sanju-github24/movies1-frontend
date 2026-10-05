@@ -199,7 +199,7 @@ function CategorySection({ name, tracks, onPlay, onSeeAll, expanded = false }) {
       {expanded ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14 }}>
           {tracks.map((track, i) => (
-            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} fluid />
+            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={(t, n) => onPlay(t, n, name)} fluid />
           ))}
         </div>
       ) : (
@@ -208,7 +208,7 @@ function CategorySection({ name, tracks, onPlay, onSeeAll, expanded = false }) {
           style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 10 }}
         >
           {tracks.slice(0, 20).map((track, i) => (
-            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={onPlay} />
+            <TrackCard key={track.id} track={track} tracks={tracks} index={i} onPlay={(t, n) => onPlay(t, n, name)} />
           ))}
         </div>
       )}
@@ -285,7 +285,7 @@ function ArtistStations({ language }) {
         : Object.keys(ARTISTS_BY_LANG).find((l) => ARTISTS_BY_LANG[l].includes(a.query)) || '';
       const { stationid, songs } = await fetchArtistStation(a.query, lang);
       if (!songs.length) throw new Error('empty');
-      playStation(songs, stationid);
+      playStation(songs, stationid, { title: `${a.name} radio`, link: a.id ? `/music/artist/${a.id}` : '/music' });
     } catch {
       toast.error(`Couldn't start ${a.name}'s station`);
     } finally { setBusy(''); }
@@ -386,9 +386,9 @@ export default function HomeLandingPage() {
      work with. Nothing here carries a stream; the player asks for each song
      as it reaches the front of the queue. */
   const musicPlayer = useMusicPlayer();
-  const startRow = useCallback((rowTracks, index) => {
+  const startRow = useCallback((rowTracks, index, name) => {
     if (!rowTracks?.length) return;
-    musicPlayer.playQueue(rowTracks, index);
+    musicPlayer.playQueue(rowTracks, index, name ? { title: name, link: '/music' } : null);
   }, [musicPlayer]);
   const [activeLang, setActiveLang] = useState(ALL_LANGUAGES);
   const navigate = useNavigate();

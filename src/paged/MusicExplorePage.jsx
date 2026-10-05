@@ -146,14 +146,14 @@ export default function MusicExplorePage() {
               return (
                 <li key={s.id} className="group flex items-center gap-3 sm:gap-4 py-2.5 px-2 -mx-2 rounded-lg hover:bg-white/[0.04]">
                   <span className="w-6 text-right text-xs text-gray-500 tabular-nums shrink-0">{i + 1}</span>
-                  <button type="button" onClick={() => playQueue(songs.items, i)} aria-label={`Play ${s.title}`}
+                  <button type="button" onClick={() => playQueue(songs.items, i, { title: heading, link: `/music/explore?q=${encodeURIComponent(query)}&tab=songs` })} aria-label={`Play ${s.title}`}
                     className="relative w-12 h-12 shrink-0 rounded-md overflow-hidden bg-white/5">
                     {s.poster && <img src={s.poster} alt="" loading="lazy" className="w-full h-full object-cover" />}
                     <span className={`absolute inset-0 flex items-center justify-center bg-black/50 ${playing ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition`}>
                       <Play className="w-4 h-4 fill-white text-white" />
                     </span>
                   </button>
-                  <button type="button" onClick={() => playQueue(songs.items, i)} className="flex-1 min-w-0 text-left">
+                  <button type="button" onClick={() => playQueue(songs.items, i, { title: heading, link: `/music/explore?q=${encodeURIComponent(query)}&tab=songs` })} className="flex-1 min-w-0 text-left">
                     <span className={`block text-sm font-semibold truncate ${playing ? "text-green-400" : "text-white"}`}>{s.title}</span>
                     <span className="block text-xs text-gray-500 truncate">{[s.artist, s.language && titleCase(s.language)].filter(Boolean).join(" · ")}</span>
                   </button>

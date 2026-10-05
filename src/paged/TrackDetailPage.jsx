@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
   Loader2, Download, ArrowLeft, ChevronDown, Radio, Music, Check,
@@ -19,6 +19,54 @@ import PlayNextButton from '../components/PlayNextButton';
 const LYRICS_PREF = 'music_lyrics_panel';
 const FALLBACK_ART = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&q=80';
 const clock = (s) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
+
+/* "Playing from Workout – Kannada": the list the song came from, in its own
+   order, the one playing marked and kept in view. A tap plays that song and
+   the list carries on from there. */
+function QueueFrom({ player }) {
+  const listRef = useRef(null);
+  const src = player?.queueSource;
+  const queue = player?.queue || [];
+  const at = player?.queueIndex ?? -1;
+  useEffect(() => {
+    const row = listRef.current?.querySelector('[data-on="true"]');
+    if (row && listRef.current) listRef.current.scrollTop = row.offsetTop - listRef.current.offsetTop - 60;
+  }, [at, queue.length]);
+  if (!src || queue.length < 2) return null;
+  return (
+    <section className="rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden">
+      <div className="px-5 pt-4 pb-3 flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Playing from</p>
+          {src.link
+            ? <Link to={src.link} className="block text-base font-bold truncate hover:underline">{src.title}</Link>
+            : <p className="text-base font-bold truncate">{src.title}</p>}
+        </div>
+        <span className="shrink-0 text-xs text-gray-500">{at + 1} / {queue.length}</span>
+      </div>
+      <ol ref={listRef} className="max-h-80 overflow-y-auto px-3 pb-3">
+        {queue.map((t, i) => {
+          const on = i === at;
+          return (
+            <li key={`${t.id}-${i}`} data-on={on}>
+              <button type="button" onClick={() => !on && player.jumpTo(i)}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition ${on ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'}`}>
+                <span className={`w-6 text-right text-xs tabular-nums shrink-0 ${on ? 'text-green-400' : 'text-gray-500'}`}>{on ? '▶' : i + 1}</span>
+                <span className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-white/5">
+                  {t.poster && <img src={t.poster} alt="" loading="lazy" className="w-full h-full object-cover" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm font-semibold truncate ${on ? 'text-green-400' : 'text-white'}`}>{t.title}</span>
+                  <span className="block text-xs text-gray-500 truncate">{t.artist}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
 
 export default function TrackDetailPage() {
   const { id } = useParams();
@@ -263,8 +311,9 @@ export default function TrackDetailPage() {
             </div>
           </section>
 
-          {/* ── Lyrics and songs like this ── */}
+          {/* ── The list it is playing from, lyrics, and songs like this ── */}
           <div className="space-y-8 min-w-0">
+            <QueueFrom player={player} />
             {lines.length > 0 && (
               <section className="rounded-2xl bg-white/[0.03] border border-white/[0.06]">
                 <button type="button" onClick={toggleLyrics} aria-expanded={lyricsOpen}
@@ -293,14 +342,14 @@ export default function TrackDetailPage() {
                     const on = player?.currentTrack?.id === s.id;
                     return (
                       <li key={s.id} className="group flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-white/[0.04]">
-                        <button type="button" onClick={() => player?.playQueue(similar, i)} aria-label={`Play ${s.title}`}
+                        <button type="button" onClick={() => player?.playQueue(similar, i, { title: `Similar to ${title}`, link: `/music/track/${id}` })} aria-label={`Play ${s.title}`}
                           className="relative w-11 h-11 shrink-0 rounded-md overflow-hidden bg-white/5">
                           {s.poster && <img src={s.poster} alt="" loading="lazy" className="w-full h-full object-cover" />}
                           <span className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                             <Play className="w-4 h-4 fill-white text-white" />
                           </span>
                         </button>
-                        <button type="button" onClick={() => player?.playQueue(similar, i)} className="flex-1 min-w-0 text-left">
+                        <button type="button" onClick={() => player?.playQueue(similar, i, { title: `Similar to ${title}`, link: `/music/track/${id}` })} className="flex-1 min-w-0 text-left">
                           <span className={`block text-sm font-semibold truncate ${on ? 'text-green-400' : 'text-white'}`}>{s.title}</span>
                           <span className="block text-xs text-gray-500 truncate">{s.artist}</span>
                         </button>

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import MiniYouTubePlayer from '../components/MiniYouTubePlayer';
 import MusicSearchBar from '../components/MusicSearchBar';
-import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Youtube } from 'lucide-react';
+import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Shuffle } from 'lucide-react';
 import { fetchSearch, fetchListing } from '../utils/saavn';
 import { useGoBack } from "../components/BackBar";
 import PlayNextButton from '../components/PlayNextButton';
@@ -53,20 +52,15 @@ export default function SearchResultsPage() {
   const [error,      setError]      = useState(null);
   const [activeTab,  setActiveTab]  = useState('all');
   const [viewMode,   setViewMode]   = useState('grid');
-  const [hoveredRow, setHoveredRow] = useState(null);
-  // YouTube mini-player state
-  const [preview,    setPreview]    = useState(null); // { title, artist, poster, accent }
 
   const isDirectListing = query.startsWith('album:') || query.startsWith('artist:') || query.startsWith('playlist:');
   const listingType     = query.startsWith('album:') ? 'Album' : query.startsWith('playlist:') ? 'Playlist' : 'Artist';
-  const { playQueue } = useMusicPlayer();
+  const { playQueue, currentTrack } = useMusicPlayer();
   const rawSlug         = query.split(':', 2)[1] || '';
   // Prefer the real name scraped from the listing page; fall back to the slug
   const listingName     = results.metadata?.title
     || rawSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-  // Derive color from query slug (instant, no CORS)
-  const { base: baseRgb, light: lightRgb } = useMemo(() => deriveRgbFromStr(rawSlug || query), [rawSlug, query]);
 
   // ── Scroll restoration ────────────────────────────────────────────
   useEffect(() => {
@@ -112,201 +106,83 @@ export default function SearchResultsPage() {
   // ─────────────────────────────────────────────────────────────────────
   if (isDirectListing) {
     const coverImg = results.metadata?.poster || results.songs[0]?.poster || '';
+    // What the player shows as "Playing from", and where it links back to.
+    const source = { title: listingName, link: `/music/search?find=${query}` };
+    const shuffleAll = () => {
+      const list = [...results.songs];
+      for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+      playQueue(list, 0, source);
+    };
 
+    /* One clean page, the same for every album, playlist and artist: no colours
+       taken from the cover, the full title of every song with its artist under
+       it, and the album name only where there is room for it. */
     return (
-      <div style={{ minHeight: '100vh', background: '#09090f', color: 'white', display: 'flex', flexDirection: 'column' }}>
-  
-        {/* Gradient background — derived from slug, renders immediately */}
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: `radial-gradient(ellipse 100% 50% at 50% 0%, rgba(${baseRgb}, 0.65) 0%, rgba(${baseRgb}, 0.2) 50%, transparent 75%)`,
-          pointerEvents: 'none', zIndex: 0,
-        }} />
-
-        {/* ── Hero header ─────────────────────────────────────────── */}
-        <div style={{
-          position: 'relative', zIndex: 10,
-          padding: '24px 24px 40px',
-          background: `linear-gradient(180deg, rgba(${baseRgb}, 0.55) 0%, rgba(${baseRgb}, 0.2) 60%, transparent 100%)`,
-        }}>
-          {/* Back */}
-          <button
-            onClick={() => goBack()}
-            style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.45)', background:'none', border:'none', cursor:'pointer', marginBottom:24 }}
-            onMouseEnter={e => e.currentTarget.style.color='white'}
-            onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.45)'}
-          >
-            <ArrowLeft size={13} /> Back
+      <div className="min-h-dvh bg-gray-950 text-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-5 sm:pt-10 pb-28">
+          <button type="button" onClick={() => goBack()} className="hidden sm:inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6">
+            <ArrowLeft size={16} /> Back
           </button>
 
-          {/* Cover + title */}
-          <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-end', gap:28 }}>
-            {/* Cover art */}
-            <div style={{ position:'relative', flexShrink:0 }}>
-              <div style={{
-                position:'absolute', inset:-16, borderRadius: listingType==='Artist' ? '50%' : 20,
-                background: `rgba(${baseRgb}, 0.85)`, filter:'blur(36px)', opacity:0.7,
-              }} />
-              <div style={{
-                position:'relative',
-                width:180, height:180,
-                borderRadius: listingType==='Artist' ? '50%' : 16,
-                overflow:'hidden',
-                boxShadow: `0 24px 70px rgba(${baseRgb}, 0.7), 0 8px 24px rgba(0,0,0,0.6)`,
-                border:'1px solid rgba(255,255,255,0.12)',
-              }}>
-                <img
-                  src={coverImg || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80'}
-                  alt={listingName}
-                  style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                  onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80'; }}
-                />
-              </div>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5 sm:gap-8">
+            <div className={`w-44 h-44 sm:w-56 sm:h-56 shrink-0 overflow-hidden bg-white/5 shadow-2xl shadow-black/50 ${listingType === 'Artist' ? 'rounded-full' : 'rounded-2xl'}`}>
+              {coverImg && <img src={coverImg} alt="" className="w-full h-full object-cover" />}
             </div>
-
-            {/* Title block */}
-            <div style={{ flex:1, minWidth:200 }}>
-              <p style={{ fontSize:10, fontWeight:900, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(255,255,255,0.35)', marginBottom:10 }}>
-                {listingType}
-              </p>
-              <h1 style={{ fontSize:'clamp(28px, 6vw, 56px)', fontWeight:900, lineHeight:1.05, margin:'0 0 14px', color:'white' }}>
-                {listingName}
-              </h1>
-              <p style={{ fontSize:14, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>
-                <span style={{ color:'rgba(255,255,255,0.8)', fontWeight:700 }}>{results.songs.length}</span> songs
-              </p>
-              {results.songs.length > 0 && (
-                <button type="button" onClick={() => playQueue(results.songs, 0)}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-bold hover:bg-gray-200 active:scale-[0.98] transition">
-                  <Play size={16} style={{ fill:'#000' }} /> Play all
-                </button>
-              )}
+            <div className="min-w-0">
+              <p className="text-xs font-bold tracking-[0.18em] uppercase text-gray-400">{listingType}</p>
+              <h1 className="mt-1.5 text-3xl sm:text-5xl font-black tracking-tight leading-tight break-words">{listingName}</h1>
+              <p className="mt-2 text-sm text-gray-400"><span className="text-white font-semibold">{results.songs.length}</span> songs</p>
             </div>
           </div>
-        </div>
 
-        {/* ── Track list ──────────────────────────────────────────── */}
-        <div style={{ position:'relative', zIndex:10, flex:1, padding:'0 16px 60px' }}>
-          {loading ? (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300, gap:20 }}>
-              <div style={{ position:'relative', width:48, height:48 }}>
-                <div style={{ position:'absolute', inset:0, borderRadius:'50%', border:'2px solid rgba(255,255,255,0.1)' }} />
-                <div style={{ position:'absolute', inset:0, borderRadius:'50%', border:`2px solid transparent`, borderTopColor:`rgb(${lightRgb})`, animation:'spin 0.8s linear infinite' }} />
-                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-              </div>
-              <p style={{ fontSize:13, color:'rgba(255,255,255,0.35)', fontWeight:500 }}>Loading tracks…</p>
+          {results.songs.length > 0 && (
+            <div className="mt-6 flex items-center gap-3">
+              <button type="button" onClick={() => playQueue(results.songs, 0, source)}
+                className="inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 font-bold hover:bg-gray-200 active:scale-[0.98] transition">
+                <Play size={18} className="fill-current" /> Play all
+              </button>
+              <button type="button" onClick={shuffleAll}
+                className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-6 py-3 font-semibold hover:bg-white/20 transition">
+                <Shuffle size={18} /> Shuffle
+              </button>
             </div>
-          ) : error ? (
-            <p style={{ textAlign:'center', color:'#f87171', padding:40 }}>{error}</p>
-          ) : results.songs.length === 0 ? (
-            <p style={{ textAlign:'center', color:'rgba(255,255,255,0.3)', padding:60, fontWeight:700 }}>No tracks found</p>
-          ) : (
-            <>
-              {/* Column headers */}
-              <div style={{ display:'grid', gridTemplateColumns:'36px 1fr 1fr 32px auto', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.08)', padding:'8px 12px', marginBottom:4 }}>
-                {['#','Title','Label','',''].map((h,i) => (
-                  <span key={i} style={{ fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.3)', textAlign: i===0||i===3?'center': i===4?'right':'left' }}>
-                    {i===4 ? <Clock size={13} style={{ opacity:0.3 }} /> : h}
-                  </span>
-                ))}
-              </div>
-
-              {results.songs.map((track, idx) => {
-                const isHov = hoveredRow === idx;
-                const isActive = preview?.trackId === track.id;
-                return (
-                  <div
-                    key={track.id}
-                    onMouseEnter={() => setHoveredRow(idx)}
-                    onMouseLeave={() => setHoveredRow(null)}
-                    style={{
-                      display:'grid', gridTemplateColumns:'36px 1fr 1fr 32px auto',
-                      alignItems:'center', gap:12, padding:'10px 12px',
-                      borderRadius:8, cursor:'pointer',
-                      background: isHov ? `rgba(${baseRgb}, 0.35)` : isActive ? `rgba(${lightRgb}, 0.08)` : 'transparent',
-                      transition:'background 0.12s',
-                    }}
-                    /* Plays the list from this song, so next and the radio have
-                       the rest of it to go on with. */
-                    onClick={(e) => { if (!e.defaultPrevented) playQueue(results.songs, idx); }}
-                  >
-                    {/* Index / play */}
-                    <div style={{ textAlign:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.35)' }}>
-                      {isHov
-                        ? <Play size={14} style={{ fill:'white', color:'white', margin:'0 auto' }} />
-                        : isActive
-                          ? <div style={{ width:8, height:8, borderRadius:'50%', background:`rgb(${lightRgb})`, margin:'0 auto', animation:'pulse-dot 1s ease infinite' }} />
-                          : idx + 1}
-                    </div>
-
-                    {/* Thumbnail + title */}
-                    <div style={{ display:'flex', alignItems:'center', gap:12, minWidth:0 }}>
-                      <img
-                        src={track.poster}
-                        alt={track.title}
-                        style={{ width:40, height:40, borderRadius:6, objectFit:'cover', flexShrink:0, border:'1px solid rgba(255,255,255,0.08)' }}
-                        onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=80&q=80'; }}
-                      />
-                      <span style={{
-                        fontSize:14, fontWeight:600, lineHeight:'1.2',
-                        whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
-                        color: isActive ? `rgb(${lightRgb})` : isHov ? `rgb(${lightRgb})` : 'white',
-                        transition:'color 0.12s',
-                      }}>
-                        {track.title}
-                      </span>
-                    </div>
-
-                    {/* Label */}
-                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.35)', fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                      {track.label || 'Mp3 Song'}
-                    </span>
-
-                    {/* YouTube preview button — appears on hover */}
-                    <button
-                      title="Preview on YouTube"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (isActive) { setPreview(null); return; }
-                        setPreview({ trackId: track.id, title: track.title, artist: track.artist || listingName, poster: track.poster, accent: lightRgb });
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: 28, height: 28, borderRadius: 8, border: 'none',
-                        background: isActive ? `rgba(${lightRgb}, 0.2)` : isHov ? 'rgba(255,255,255,0.08)' : 'transparent',
-                        color: isActive ? `rgb(${lightRgb})` : isHov ? 'rgba(255,255,255,0.6)' : 'transparent',
-                        cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
-                      }}
-                    >
-                      <Youtube size={13} />
-                    </button>
-
-                    {/* Where a duration placeholder sat: queue this song next. */}
-                    <PlayNextButton track={track} />
-                  </div>
-                );
-              })}
-            </>
           )}
-        </div>
 
-        {/* ── Mini YouTube Player ──────────────────────────────── */}
-        {preview && (
-          <MiniYouTubePlayer
-            trackTitle={preview.title}
-            trackArtist={preview.artist}
-            trackPoster={preview.poster}
-            accentRgb={preview.accent}
-            onClose={() => setPreview(null)}
-          />
-        )}
-        <style>{`
-          @keyframes pulse-dot {
-            0%,100% { opacity:1; transform:scale(1); }
-            50%      { opacity:0.5; transform:scale(0.7); }
-          }
-        `}</style>
+          <div className="mt-8">
+            {loading ? (
+              <div className="space-y-2">{Array.from({ length: 8 }, (_, i) => <div key={i} className="h-14 rounded-lg bg-white/[0.04] animate-pulse" />)}</div>
+            ) : error ? (
+              <p className="text-center text-red-400 py-10">{error}</p>
+            ) : results.songs.length === 0 ? (
+              <p className="text-center text-gray-500 py-16">No songs found</p>
+            ) : (
+              <ol className="divide-y divide-white/[0.05]">
+                {results.songs.map((track, idx) => {
+                  const on = currentTrack?.id === track.id;
+                  const album = track.label && track.label !== track.title && track.label !== track.artist ? track.label : '';
+                  return (
+                    <li key={track.id} className="group flex items-center gap-3 sm:gap-4 py-2.5 px-2 -mx-2 rounded-lg hover:bg-white/[0.04] cursor-pointer"
+                      onClick={() => playQueue(results.songs, idx, source)}>
+                      <span className={`w-6 text-right text-sm tabular-nums shrink-0 ${on ? 'text-green-400' : 'text-gray-500'}`}>{idx + 1}</span>
+                      <span className="relative w-12 h-12 shrink-0 rounded-md overflow-hidden bg-white/5">
+                        {track.poster && <img src={track.poster} alt="" loading="lazy" className="w-full h-full object-cover" />}
+                        <span className={`absolute inset-0 flex items-center justify-center bg-black/50 transition ${on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                          <Play size={16} className="fill-white text-white" />
+                        </span>
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className={`block text-[15px] font-semibold leading-snug line-clamp-2 sm:line-clamp-1 ${on ? 'text-green-400' : 'text-white'}`}>{track.title}</span>
+                        <span className="block text-xs text-gray-500 truncate">{track.artist || album || 'Song'}</span>
+                      </span>
+                      {album && <span className="hidden md:block w-56 shrink-0 text-xs text-gray-500 truncate">{album}</span>}
+                      <span onClick={(e) => e.stopPropagation()}><PlayNextButton track={track} /></span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+        </div>
       </div>
     );
   }

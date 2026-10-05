@@ -72,13 +72,16 @@ export default function ArtistPage() {
     return () => io.disconnect();
   }, [more, loadingMore, songs.length]);
 
+  // What the player shows as "Playing from".
+  const source = artist ? { title: artist.name, link: `/music/artist/${artist.id}` } : null;
+
   // Shuffle plays a shuffled copy, leaving the player's own shuffle setting as it was.
   const playAll = (shuffled = false) => {
     if (!songs.length) return;
-    if (!shuffled) { playQueue(songs, 0); return; }
+    if (!shuffled) { playQueue(songs, 0, source); return; }
     const list = [...songs];
     for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-    playQueue(list, 0);
+    playQueue(list, 0, source);
   };
   const radio = async () => {
     if (!artist || radioBusy) return;
@@ -86,7 +89,7 @@ export default function ArtistPage() {
     try {
       const { stationid, songs: list } = await fetchArtistStation(artist.name, titleCase(artist.language));
       if (!list.length) throw new Error("empty");
-      playStation(list, stationid);
+      playStation(list, stationid, { title: `${artist.name} radio`, link: `/music/artist/${artist.id}` });
     } catch { toast.error(`Couldn't start ${artist.name}'s radio`); }
     finally { setRadioBusy(false); }
   };
@@ -153,14 +156,14 @@ export default function ArtistPage() {
             return (
               <li key={s.id} className="group flex items-center gap-3 sm:gap-4 py-2.5 px-2 -mx-2 rounded-lg hover:bg-white/[0.04]">
                 <span className="w-7 text-right text-xs text-gray-500 tabular-nums shrink-0">{i + 1}</span>
-                <button type="button" onClick={() => playQueue(songs, i)} aria-label={`Play ${s.title}`}
+                <button type="button" onClick={() => playQueue(songs, i, source)} aria-label={`Play ${s.title}`}
                   className="relative w-12 h-12 shrink-0 rounded-md overflow-hidden bg-white/5">
                   {s.poster && <img src={s.poster} alt="" loading="lazy" className="w-full h-full object-cover" />}
                   <span className={`absolute inset-0 flex items-center justify-center bg-black/50 ${playing ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition`}>
                     <Play className="w-4 h-4 fill-white text-white" />
                   </span>
                 </button>
-                <button type="button" onClick={() => playQueue(songs, i)} className="flex-1 min-w-0 text-left">
+                <button type="button" onClick={() => playQueue(songs, i, source)} className="flex-1 min-w-0 text-left">
                   <span className={`block text-sm font-semibold truncate ${playing ? "text-green-400" : "text-white"}`}>{s.title}</span>
                   <span className="block text-xs text-gray-500 truncate">{[s.label !== s.title && s.label, s.language && titleCase(s.language)].filter(Boolean).join(" · ")}</span>
                 </button>

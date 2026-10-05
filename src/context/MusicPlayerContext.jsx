@@ -8,6 +8,7 @@ export const MusicPlayerContext = createContext(null);
 /* Whether one song should be followed by another is a preference, not a
    property of the song, so it outlives the track and lives here. */
 const AUTOPLAY_PREF = 'music_autoplay_radio';
+const QUEUE_KEY = 'music_queue';
 
 export function useMusicPlayer() {
   return useContext(MusicPlayerContext);
@@ -181,6 +182,9 @@ export function MusicPlayerProvider({ children }) {
    * from wherever you are, rather than to a list that has been rearranged
    * under you. */
   const [queue, setQueue] = useState([]);
+  /* Where the queue came from — { title, link } — so the song page can say
+     "Playing from Workout – Kannada" and list that playlist under the song. */
+  const [queueSource, setQueueSource] = useState(null);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState("off");   // off | all | one
@@ -257,9 +261,39 @@ export function MusicPlayerProvider({ children }) {
       // Load audio but don't play; seek once buffered. Handles both MP3 and
       // HLS sources (a restored token may have expired — that just fails
       // to buffer, the same as any stale stream, and the user can re-open it).
-      attachSource(saved.streamUrl, () => { audio.currentTime = resumeTime; });
+      attachSource(saved.streamUrl, () => {
+        audio.currentTime = resumeTime;
+        /* It was playing when the page went away (a reload, a back gesture
+           that reloaded): carry on. A browser may refuse without a tap; then
+           it waits paused, with its queue, for the play button. */
+        if (saved.playing) audio.play().catch(() => {});
+      });
+      /* The queue it was playing from, so the next song still follows. Only
+         when it is the queue this song came from. */
+      const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || 'null');
+      // Where this song sits in it — the saved position may be a song or two
+      // behind if the page went away just as one ended.
+      const at = q?.tracks?.findIndex((t) => t.id === saved.id) ?? -1;
+      if (at >= 0 && q.order?.length) {
+        const pos = Math.max(0, q.order.indexOf(at));
+        queueRef.current = q.tracks; orderRef.current = q.order; posRef.current = pos;
+        setQueue(q.tracks); setQueueIndex(at); setQueueSource(q.source || null);
+      }
     } catch (_) {}
   }, []); // eslint-disable-line
+
+  /* The queue survives a reload: saved whenever it, the position or its
+     source changes. Streams are left out — their tokens do not outlive the
+     hour, and each song asks for its own as it comes up. */
+  useEffect(() => {
+    try {
+      if (!queue.length) return;
+      localStorage.setItem(QUEUE_KEY, JSON.stringify({
+        tracks: queue.map((t) => { const c = { ...t }; delete c.streamUrl; return c; }),
+        order: orderRef.current, pos: posRef.current, source: queueSource,
+      }));
+    } catch { /* full or private: the queue just will not survive a reload */ }
+  }, [queue, queueIndex, queueSource]);
 
   // ── Wire up native audio events once ──────────────────────────
   useEffect(() => {
@@ -271,6 +305,8 @@ export function MusicPlayerProvider({ children }) {
         if (audio.src && currentTrackRef.current) {
           localStorage.setItem('music_session', JSON.stringify({
             ...currentTrackRef.current, currentTime: t, volume: audio.volume,
+            // Whether to carry on by itself after a reload.
+            playing: !audio.paused,
           }));
         }
       } catch (_) {}
@@ -436,9 +472,10 @@ export function MusicPlayerProvider({ children }) {
     return idx;
   }, []);
 
-  const playQueue = useCallback((tracks, startIndex = 0) => {
+  const playQueue = useCallback((tracks, startIndex = 0, source = null) => {
     if (!Array.isArray(tracks) || !tracks.length) return;
     failRef.current = 0;
+    setQueueSource(source);
     // Choosing a list to play starts the history over: what was heard before
     // it should not decide what the radio plays after it.
     playedRef.current = new Set();
@@ -592,6 +629,15 @@ export function MusicPlayerProvider({ children }) {
   }, [loadTrack, extendRadio]);
 
   const next = useCallback(() => step(1), [step]);
+  /* Play a particular song of the queue — tapped in the list on the song
+     page — keeping the queue, its order and its source. */
+  const jumpTo = useCallback((queueIdx) => {
+    const order = orderRef.current, tracks = queueRef.current;
+    const pos = order.indexOf(queueIdx);
+    if (pos < 0 || !tracks[queueIdx]) return;
+    posRef.current = pos; setQueueIndex(queueIdx);
+    loadTrack(tracks[queueIdx], { minimized: false });
+  }, [loadTrack]);
 
   /* Put a song in the queue: right after the one playing ("Play next"), or at
      the end. With nothing playing, playing it is what was meant. A song
@@ -620,8 +666,8 @@ export function MusicPlayerProvider({ children }) {
   const playNext = useCallback((track) => enqueue(track), [enqueue]);
   /* A station's first songs, and the station itself: when they run out the
      radio asks the same station for more rather than starting its own. */
-  const playStation = useCallback((tracks, stationid) => {
-    playQueue(tracks, 0);
+  const playStation = useCallback((tracks, stationid, source = null) => {
+    playQueue(tracks, 0, source);
     stationRef.current = stationid || '';
   }, [playQueue]);
   const addToQueue = useCallback((track) => enqueue(track, { atEnd: true }), [enqueue]);
@@ -832,7 +878,9 @@ export function MusicPlayerProvider({ children }) {
     queue, queueIndex, shuffle, repeat,
     playQueue, next, previous, toggleShuffle, cycleRepeat,
     /* Queue a song right after the one playing, or at the end. */
-    playNext, addToQueue, playStation,
+    playNext, addToQueue, playStation, jumpTo,
+    /* { title, link } of the list the queue came from, or null. */
+    queueSource,
     /* The radio: keeps songs coming in the same language once the queue runs
        dry, until this is turned off. */
     autoplay, toggleAutoplay,
