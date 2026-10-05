@@ -107,7 +107,10 @@ export default function PersistentMiniPlayer() {
   const { currentTrack, isPlaying, currentTime, duration, togglePlay, close, setIsMinimized } = player;
   // While dragging, the bar follows the finger rather than the clock.
   const progress = dragPct != null ? dragPct * 100 : (duration ? (currentTime / duration) * 100 : 0);
-  const { lightRgb = '100,160,240', baseRgb = '20,28,48' } = currentTrack;
+  /* One look for every song: white on a dark bar. It used to take its colours
+     from each song's artwork, so the bar changed colour with every track. */
+  const lightRgb = '255,255,255';
+  const baseRgb = '18,18,24';
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
