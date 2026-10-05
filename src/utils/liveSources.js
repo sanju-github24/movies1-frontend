@@ -167,6 +167,14 @@ async function jioSource(id) {
   const ch = rows.find((c) => String(c.channel_id) === String(id));
   if (!ch) throw new Error("That channel is not in the list right now");
   const cookie = String(ch.cookie || "");
+  /* Each channel's access token runs out a few hours after the list was
+     made, and the list is only as fresh as its source. An expired one is
+     refused by Jio and surfaced as a bare Shaka error, so say what it is
+     instead of trying. */
+  const exp = Number(ch.expire_time || (cookie.match(/exp=(\d{10})/) || [])[1] || 0);
+  if (ch.token_expired === true || (exp && exp * 1000 < Date.now())) {
+    throw new Error("This channel is temporarily unavailable — its stream link has expired and hasn't been renewed yet. Please try again later.");
+  }
   return {
     kind: "dash",
     url: ch.channel_url,
