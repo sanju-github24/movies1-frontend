@@ -17,6 +17,7 @@ import { tmdbStreams } from "../utils/anchorTmdb";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
+import TamilmvDownloads, { useTamilmv } from "../components/TamilmvDownloads";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
@@ -506,6 +507,8 @@ const WatchHtmlPage = () => {
   const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
   // And HDHub4u's, matched by IMDb id where we have it.
   const hdhub = useHdhub(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", bollyTitle ? (movieMeta?.imdb_id || "") : "");
+  // And the newest release's own files, for a title in the latest releases.
+  const tmv = useTamilmv(bollyTitle ? movieMeta?.tmdb_id : null, movieMeta?.content_type);
   const hasOwnDownloads = movieMeta?.download_links?.length > 0;
   /* The button is there from the start for any title that is not on air: the
      dialog opens on our own files at once, and the rest load in beneath. */
@@ -2389,10 +2392,13 @@ if (!alive) return;
               })}
             </div>
             </>)}
-            {/* After ours: the BollyFlix post's Google Drive files, loading in
-                beneath while the dialog is already open. */}
-            {hasOwnDownloads && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || hdhub.loading || hdhub.files.length ? "" : "No downloads for this title yet."} />
+            {/* After ours: the newest release's direct files, then the BollyFlix
+                post's Google Drive files, loading in beneath while the dialog
+                is already open. */}
+            {hasOwnDownloads && (tmv.loading || tmv.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
+            <TamilmvDownloads state={tmv} />
+            {(hasOwnDownloads || tmv.files.length > 0) && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
+            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || tmv.loading || tmv.files.length || hdhub.loading || hdhub.files.length ? "" : "No downloads for this title yet."} />
             {(hasOwnDownloads || bolly.loading || bolly.files.length > 0) && (hdhub.loading || hdhub.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
             <HdhubDownloads state={hdhub} />
           </div>
