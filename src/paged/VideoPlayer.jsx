@@ -81,6 +81,30 @@ const langMap = {
   return `Track ${(track.id ?? 0) + 1}`;
 };
 
+/* ── Audio languages ─────────────────────────────────────────────────────
+   Some streams put each language in an audio group of its own, with the
+   video listed once per group. hls.audioTracks names only the group playing
+   now and audioTrack only switches within it, so the menu showed one
+   language while another played, and picking a different one did nothing.
+   allAudioTracks is every language; setAudioOption moves to the group that
+   carries the one picked. A language listed in several groups appears once. */
+const audioKey = (t) => `${String(t?.lang || "").toLowerCase()}|${String(t?.name || "").toLowerCase()}`;
+const allAudio = (h) => {
+  const list = (h?.allAudioTracks?.length ? h.allAudioTracks : h?.audioTracks) || [];
+  const seen = new Set();
+  return list.filter((t) => { const k = audioKey(t); if (seen.has(k)) return false; seen.add(k); return true; });
+};
+const playingAudioIndex = (h, list) => {
+  const cur = (h?.audioTracks || [])[h?.audioTrack];
+  return cur ? list.findIndex((t) => audioKey(t) === audioKey(cur)) : -1;
+};
+const pickAudio = (h, t) => {
+  if (!h || !t) return;
+  if (typeof h.setAudioOption === "function" && h.setAudioOption(t)) return;
+  const i = (h.audioTracks || []).findIndex((x) => audioKey(x) === audioKey(t));
+  if (i >= 0) h.audioTrack = i;
+};
+
 const VideoPlayer = ({ 
   src, 
   title, 
@@ -461,8 +485,9 @@ const VideoPlayer = ({
       hls.attachMedia(video);
 
       const syncTracks = () => {
-        setAudioTracks(hls.audioTracks || []);
-        setCurrentAudioTrackId(hls.audioTrack);
+        const langs = allAudio(hls);
+        setAudioTracks(langs);
+        setCurrentAudioTrackId(playingAudioIndex(hls, langs));
         setSubtitleTracks(hls.subtitleTracks || []);
         setLevels(hls.levels || []);
       };
@@ -486,14 +511,14 @@ const VideoPlayer = ({
          the worst possible window. */
       const applyPreferredAudio = (h) => {
         if (appliedAudioRef.current) return;
-        const tracks = h.audioTracks || [];
+        const tracks = allAudio(h);
         if (!tracks.length) return;
         let saved = "";
         try { saved = localStorage.getItem(AUDIO_PREF_KEY) || ""; } catch {}
         const pref = saved || preferredAudioLang;
         if (pref) {
           const idx = tracks.findIndex((t) => audioMatchesLang(t, pref));
-          if (idx >= 0 && h.audioTrack !== idx) { h.audioTrack = idx; setCurrentAudioTrackId(idx); }
+          if (idx >= 0 && playingAudioIndex(h, tracks) !== idx) { pickAudio(h, tracks[idx]); setCurrentAudioTrackId(idx); }
         }
         appliedAudioRef.current = true;
       };
@@ -510,9 +535,15 @@ const VideoPlayer = ({
           try { hls.startLoad(resumeAt); } catch {}
         }
         if (smallScreen) {
+          /* The cap is a position in the list, and everything after it is
+             barred. A stream with an audio group per language lists every
+             height once per language, so the cap must be the LAST level at
+             the chosen height — the first was one language's copy, and every
+             other language's sat above it, unreachable: picking Kannada kept
+             playing Hindi. */
           const cap = (hls.levels || []).reduce(
             (best, l, i) => (l.height && l.height <= 720 &&
-              (best < 0 || l.height > hls.levels[best].height) ? i : best), -1);
+              (best < 0 || l.height >= hls.levels[best].height) ? i : best), -1);
           if (cap >= 0) hls.autoLevelCapping = cap;
         }
         syncTracks();
@@ -526,8 +557,9 @@ const VideoPlayer = ({
       hls.on(Hls.Events.LEVEL_LOADED, syncTracks);
       // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => setSubtitleTracks(hls.subtitleTracks || []));
-      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => { setAudioTracks(hls.audioTracks || []); applyPreferredAudio(hls); });
-      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => setCurrentAudioTrackId(data.id));
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => { setAudioTracks(allAudio(hls)); applyPreferredAudio(hls); });
+      // data.id counts within the group now playing; the menu counts all languages.
+      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, () => setCurrentAudioTrackId(playingAudioIndex(hls, allAudio(hls))));
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => setCurrentSubtitleId(data.id));
       // Keep the quality menu honest about what's actually playing (-1 = Auto).
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level));
@@ -705,7 +737,7 @@ const VideoPlayer = ({
 
   // Switch audio track + remember the choice (used by the menu and the language bar).
   const changeAudio = (i) => {
-    if (hlsRef.current) hlsRef.current.audioTrack = i;
+    pickAudio(hlsRef.current, audioTracks[i]);
     setCurrentAudioTrackId(i);
     try { localStorage.setItem(AUDIO_PREF_KEY, audioTracks[i]?.lang || audioTracks[i]?.name || ""); } catch {}
   };
