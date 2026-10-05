@@ -1743,6 +1743,17 @@ const Header = () => {
               <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> Play
             </a>
           )}
+          {/* A title from the latest releases has no upload page to link to:
+              Play opens its watch page with the TMDB details, as the sheet's
+              Watch Now does. */}
+          {!movie.watchUrl && movie._fresh && (
+            <button type="button"
+              className="flex-1 bg-white text-black text-[11px] font-black py-2.5 rounded-lg flex items-center justify-center gap-1.5
+                         hover:bg-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              onClick={e => { e.stopPropagation(); playFromDetail(movie); }}>
+              <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" /> Play
+            </button>
+          )}
           <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
             aria-label={`Download links for ${movie.title}`}
             title="Download links"
