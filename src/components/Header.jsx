@@ -564,6 +564,10 @@ const m = /^(.*?)-(?:19|20)\d{2}(?:-|$)/.exec(String(slug || ""));
  * is tried here instead, and the first that exists wins — they cannot
  * disagree, since only one of them is ever a row. */
 const pickArt = (art, m) => {
+  /* A title from the latest releases is not ours and brings its own TMDB
+     art. Looked up here, its shortened slug ("insidious") could land on an
+     older upload of the same name and show that film's pictures. */
+  if (m?._fresh) return {};
   if (!art || !m) return {};
   const u = m.watchUrl || "";
   const fromUrl = (u.match(/\/watch\/([^/?#]+)/) || [])[1];
@@ -985,7 +989,7 @@ function HeroSpotlight({ movies = [], onOpen }) {
   useEffect(() => {
     slides.forEach((m) => {
       const a = pickArt(art, m);
-      const src = a.cover_poster || a.poster || m.poster || m.poster_url;
+      const src = a.cover_poster || m.cover_poster || a.poster || m.poster || m.poster_url;
       if (!src || ratio[src] != null) return;
       const img = new Image();
       img.onload = () => setRatio((r) => (r[src] != null ? r
@@ -1088,7 +1092,9 @@ function HeroSpotlight({ movies = [], onOpen }) {
           /* cover_poster first: this is the wide band, and a 2:3 portrait
              stretched across it crops to an unrecognisable detail. The deck
              on phones leads with the portrait poster instead. */
-          const desktopSrc = a.cover_poster || a.poster || movie.poster || movie.poster_url;
+          /* The slide's own cover before any poster: a title from the latest
+             releases has no upload row, only the TMDB backdrop it brought. */
+          const desktopSrc = a.cover_poster || movie.cover_poster || a.poster || movie.poster || movie.poster_url;
           /* The row's logo first, then whatever the slide brought — a
              telecast and the live channel each carry their own, having been
              read from watch_html directly rather than through this map. The
@@ -1434,8 +1440,23 @@ const Header = () => {
 
   // Every homepage title, in upload order.
   const homeMovies = useMemo(() => {
-    const ours = movies.filter(m => m.showOnHomepage);
     const titleKey = (t) => String(t || "").toLowerCase().split("(")[0].replace(/[^a-z0-9]+/g, " ").trim();
+    const freshByTitle = new Map(fresh.map((f) => [titleKey(f.title), f]));
+    /* A title we hold as a PreDVD that the latest releases now carry as a
+       WEB-DL is the same title, better: our card takes the new print and
+       moves up to the front, rather than a second card appearing beside it.
+       Only the display changes — our own file is what it was until the
+       admin uploads the new one. */
+    const CAM = /PRE-?DVD|PRE-?HD|HDTS|HDTC|HDCAM|\bCAM\b|\bTS\b/i;
+    const CLEAN = /WEB|BLU-?RAY|BDRIP|HDRIP|HDTV|DVDRIP/i;
+    const printOf = (m) => (Array.isArray(m.subCategory) ? m.subCategory : [m.subCategory]).filter(Boolean).join(" ") || m.title || "";
+    const ours = movies.filter(m => m.showOnHomepage).map((m) => {
+      const f = freshByTitle.get(titleKey(m.title));
+      if (!f || !CLEAN.test(f.print || "") || !CAM.test(printOf(m)) || CLEAN.test(printOf(m))) return m;
+      const newer = new Date(f.first_seen || 0) > new Date(m.homepage_added_at || m.created_at || 0);
+      return { ...m, subCategory: [f.print], note: f.print, _upgraded: true,
+        ...(newer ? { homepage_added_at: f.first_seen } : {}) };
+    });
     const have = new Set(ours.map((m) => titleKey(m.title)));
     const extra = fresh
       .filter((f) => !have.has(titleKey(f.title)))

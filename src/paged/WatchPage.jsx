@@ -1389,12 +1389,6 @@ if (!alive) return;
                 dbGrouped[s].push(dbEp);
               });
 
-              // seasons present in DB (e.g. ["1"])
-              const dbSeasons = Object.keys(dbGrouped).map(Number);
-
-              // If DB has NO episodes at all, show all TMDB episodes
-              const hasDbEps = eps.length > 0;
-
               // ── Build position-based lookup: S1E1 → db episode at index 0 ──
               const dbBySeasonEp = {};
               Object.entries(dbGrouped).forEach(([s, list]) => {
@@ -1433,27 +1427,23 @@ if (!alive) return;
                 dbByTitle[key] = dbEp;
               });
 
-              // ── Filter TMDB episodes to only seasons DB has uploaded ──
-              // AND only up to the episode count DB has for that season
-              const filteredTmdbEps = hasDbEps
-                ? tmdbEps.filter(tmdbEp => {
-                    const s = tmdbEp.season;
-                    if (!dbSeasons.includes(s)) return false; // season not uploaded
-                    // Season carries explicit numbers → show exactly those episodes.
-                    const nums = dbEpNumsBySeason[String(s)];
-                    if (nums && nums.size) return nums.has(tmdbEp.episodeNumberInSeason);
-                    // Legacy season (no numbers) → show up to the count DB has.
-                    const dbCountForSeason = dbGrouped[String(s)]?.length || 0;
-                    return tmdbEp.episodeNumberInSeason <= dbCountForSeason;
-                  })
-                : tmdbEps; // no DB eps → show everything from TMDB
+              /* ── Every episode that has aired, not only the uploaded ones ──
+                 An upload is often a few episodes behind the show: 5 of 9 used
+                 to list 5. Now all 9 are listed — the 5 uploaded play from our
+                 links, the other 4 in our player by TMDB id like any title we
+                 do not host. An episode yet to air is left off; one without a
+                 date is kept. */
+              const today = new Date().toISOString().slice(0, 10);
+              const filteredTmdbEps = tmdbEps.filter((tmdbEp) => !tmdbEp.air_date || String(tmdbEp.air_date).slice(0, 10) <= today);
 
               // ── Merge: attach DB html/direct_url onto matching TMDB episode ──
+              const usedDb = new Set();
               eps = filteredTmdbEps.map(tmdbEp => {
                 const exactKey = `${tmdbEp.season}__${tmdbEp.episodeNumberInSeason}`;
                 const posKey   = `${tmdbEp.season}__${tmdbEp.episodeNumberInSeason}`;
                 const titleKey = `${tmdbEp.season}__${normalize(tmdbEp.title)}`;
                 const dbMatch  = dbByExactEp[exactKey] || dbBySeasonEp[posKey] || dbByTitle[titleKey] || null;
+                if (dbMatch) usedDb.add(dbMatch);
 
                 return {
                   ...tmdbEp,
@@ -1464,6 +1454,18 @@ if (!alive) return;
                   hasDirect:  !!(dbMatch?.direct_url || dbMatch?.hls_url),
                 };
               });
+
+              /* An uploaded episode TMDB does not list (a special, a season it
+                 has not added yet) is kept rather than lost. */
+              const extra = Object.values(dbBySeasonEp).filter((dbEp) => !usedDb.has(dbEp) && (dbEp.html || dbEp.direct_url || dbEp.hls_url));
+              extra.forEach((dbEp) => eps.push({
+                ...dbEp,
+                season: Number(dbEp.season || 1),
+                episodeNumberInSeason: dbEpNo(dbEp) || undefined,
+                html: dbEp.html || null, html_code: dbEp.html || null,
+                direct_url: dbEp.direct_url || dbEp.hls_url || null,
+                hasEmbed: !!dbEp.html, hasDirect: !!(dbEp.direct_url || dbEp.hls_url),
+              }));
 
               meta = { ...meta, content_type: "tv" };
             }
