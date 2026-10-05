@@ -14,20 +14,22 @@ import { backendUrl as apiBase } from "../utils/api";
 
 const RELAY = import.meta.env.VITE_DL_RELAY || "";
 
-/** The title's files: { loading, files }. Empty for anything not in the list. */
-export function useTamilmv(tmdbId, contentType) {
-  const [state, setState] = useState({ loading: !!tmdbId, files: [] });
+/** The title's files: { loading, files }. A title from the latest releases
+    is known by its TMDB id; any other is searched for by name and year. */
+export function useTamilmv(tmdbId, contentType, title = "", year = "") {
+  const [state, setState] = useState({ loading: !!(tmdbId || title), files: [] });
   useEffect(() => {
-    if (!tmdbId) { setState({ loading: false, files: [] }); return; }
+    if (!tmdbId && !title) { setState({ loading: false, files: [] }); return; }
     let alive = true;
     setState({ loading: true, files: [] });
     const type = contentType === "tv" ? "tv" : "movie";
-    fetch(`${apiBase}/api/fresh/files?tmdb=${type}:${tmdbId}`)
+    const qs = new URLSearchParams({ tmdb: `${type}:${tmdbId || 0}`, title: title || "", year: String(year || "") });
+    fetch(`${apiBase}/api/fresh/files?${qs}`)
       .then((r) => r.json())
       .then((d) => alive && setState({ loading: false, files: Array.isArray(d?.files) ? d.files : [] }))
       .catch(() => alive && setState({ loading: false, files: [] }));
     return () => { alive = false; };
-  }, [tmdbId, contentType]);
+  }, [tmdbId, contentType, title, year]);
   return state;
 }
 

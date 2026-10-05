@@ -507,8 +507,10 @@ const WatchHtmlPage = () => {
   const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
   // And HDHub4u's, matched by IMDb id where we have it.
   const hdhub = useHdhub(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", bollyTitle ? (movieMeta?.imdb_id || "") : "");
-  // And the newest release's own files, for a title in the latest releases.
-  const tmv = useTamilmv(bollyTitle ? movieMeta?.tmdb_id : null, movieMeta?.content_type);
+  // And 1TamilMV's own files: by TMDB id for a title in the latest releases,
+  // by name and year for any other.
+  const tmv = useTamilmv(bollyTitle ? movieMeta?.tmdb_id : null, movieMeta?.content_type,
+    bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
   const hasOwnDownloads = movieMeta?.download_links?.length > 0;
   /* The button is there from the start for any title that is not on air: the
      dialog opens on our own files at once, and the rest load in beneath. */
