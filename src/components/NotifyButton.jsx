@@ -8,8 +8,9 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { Bell, BellRing, Loader2 } from "lucide-react";
+import { backendUrl } from "../utils/api";
 
-const API = import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
+const API = backendUrl;
 
 const urlBase64ToUint8Array = (base64) => {
   const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4))

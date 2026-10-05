@@ -17,8 +17,9 @@ import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
 import { useGoBack } from "./BackBar";
+import { backendUrl } from "../utils/api";
 
-const API = import.meta.env.VITE_BACKEND_URL;
+const API = backendUrl;
 
 const FEEDS_META = {
   bollywood: { label: "Bollywood", color: "#D85A30" },

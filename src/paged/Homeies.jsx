@@ -6,6 +6,7 @@ import { Tv2, Trophy, ChevronRight, Activity, Clapperboard, Home, PlayCircle, Ca
 import HeroSection from "./HeroSection";
 import { absUrl, jsonLd } from "../utils/seo";
 import LiveTabsSection from "../components/LiveTabsSection";
+import { backendUrl } from "../utils/api";
 
 function encodeMatchHash(payload) {
   // Escape Unicode as ASCII JSON before Base64 encoding.
@@ -24,7 +25,7 @@ function encodeMatchHash(payload) {
 }
 
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = backendUrl;
 const FIFA_API_BASE = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
 const FIFA_SEASON = "285023";

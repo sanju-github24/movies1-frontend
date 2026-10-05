@@ -19,6 +19,7 @@ import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBigg
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
 import LiveViewer from "./LiveViewer";
+import { backendUrl } from "../utils/api";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
   return btoa(JSON.stringify(payload))
@@ -26,7 +27,7 @@ function encodeMatchHash(payload) {
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const API_BASE         = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = backendUrl;
 const FIFA_API_BASE    = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
 const FIFA_SEASON      = "285023";

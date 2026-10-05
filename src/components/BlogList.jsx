@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { absUrl } from "../utils/seo";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet";
+import { backendUrl } from "../utils/api";
 
 /**
  * BlogList.jsx — News hub page.
@@ -18,8 +19,7 @@ import { Helmet } from "react-helmet";
  * this page is now driven entirely by the live RSS proxy.
  */
 
-const RSS_PROXY_BASE =
-  import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
+const RSS_PROXY_BASE = backendUrl;
 
 const FEEDS = [
   { key: "all",       label: "All",       color: "#7F77DD", icon: "🎬" },

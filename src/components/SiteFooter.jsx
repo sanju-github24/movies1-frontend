@@ -13,8 +13,9 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Send } from "lucide-react";
 import NotifyButton from "./NotifyButton";
+import { backendUrl } from "../utils/api";
 
-const API = import.meta.env.VITE_BACKEND_URL || "https://movies1-backend.onrender.com";
+const API = backendUrl;
 
 /* The channel invitation, on every page.
    A channel nobody can find announces to nobody — and a visitor who joins is

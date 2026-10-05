@@ -32,7 +32,9 @@ export const config = {
 const BOT_UA = /googlebot|bingbot|yandex(bot)?|duckduckbot|slurp|baiduspider|applebot|petalbot|twitterbot|facebookexternalhit|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|embedly|quora link preview|redditbot|pinterest/i;
 
 // Where the self-hosted renderer lives. Same host as the rest of the API.
-const RENDER_ORIGIN = process.env.VITE_BACKEND_URL || 'https://movies1-backend.onrender.com';
+// With the backend run as several copies (VITE_BACKEND_URLS), the first one.
+const RENDER_ORIGIN = (process.env.VITE_BACKEND_URLS || '').split(',')[0].trim().replace(/\/$/, '')
+  || process.env.VITE_BACKEND_URL || 'https://movies1-backend.onrender.com';
 
 export default async function middleware(request) {
   const ua = request.headers.get('user-agent') || '';

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
+import { backendUrl } from "../utils/api";
 
 // ── FanCode match → live stream channel (cricket match centers) ──────────────
 const FANCODE_FEED = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
@@ -49,7 +50,7 @@ function useFancodeMatch(homeName, awayName) {
   return ch;
 }
 
-const API_BASE      = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = backendUrl;
 const FIFA_API_BASE = "https://api.fifa.com/api/v3";
 const FIFA_COMPETITION = "17";
 const FIFA_SEASON      = "285023";

@@ -8,6 +8,7 @@ import { fetchTabFeed, fetchHeroFixtures, splitTeams, heroPlayUrl } from "../uti
 import LiveViewer from "../components/LiveViewer";
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
+import { backendUrl } from "../utils/api";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -37,7 +38,7 @@ const FIFA_COMPETITION = "17";
 const FIFA_SEASON      = "285023";
 const FIFA_STAGE       = "289273";
 const WT20_SERIES_ID   = "12672";
-const API_BASE         = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = backendUrl;
 
 // ─── THUMBNAIL RESOLVER ───────────────────────────────────────────────────────
 const IND_VS_IRE_IMG = "https://images.slivcdn.com/videoasset_images/manage_file/1000019970/178238619430072_IRE_vs_IND_Vaibhav_India_Debut_masthead_large_v3_3200x1800.jpg?h=auto&w=1712&q=eco";

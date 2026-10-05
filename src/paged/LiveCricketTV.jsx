@@ -6,6 +6,7 @@ import {
   RefreshCw, Activity, Calendar, Globe, Trophy, Star
 } from "lucide-react";
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
+import { backendUrl } from "../utils/api";
 
 
 // ─── API CONFIG ────────────────────────────────────────────────────────────────
@@ -14,7 +15,7 @@ const FIFA_SEASON      = "285023";
 const FIFA_STAGE       = "289273";
 const FIFA_API_BASE    = "https://api.fifa.com/api/v3";
 const WT20_SERIES_ID   = "12672";
-const API_BASE         = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+const API_BASE = backendUrl;
 const FANCODE_FEED     = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
 // FanCode cricket match → scorecard-only match center (no video stream linked).
 const fcMatchCenterLink = (fc) =>
