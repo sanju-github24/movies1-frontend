@@ -29,8 +29,9 @@ export function enrichMovies(movies, watchRows) {
     const w = bySlug.get(m.slug) || bySlug.get(watchSlugOf(m)) || byTitle.get(norm(m.title)) || null;
     return {
       ...m,
-      _genres: list(w?.genres).map((g) => (typeof g === "string" ? g : g?.name)).filter(Boolean),
-      _rating: ratingOf(w?.imdb_rating),
+      // A title known only from TMDB (see fetchFresh) brings its own.
+      _genres: list(w?.genres ?? (m._fresh ? m.genres : null)).map((g) => (typeof g === "string" ? g : g?.name)).filter(Boolean),
+      _rating: ratingOf(w?.imdb_rating ?? (m._fresh ? m.imdb_rating : null)),
       _trending: !!w?.is_trending,
       _ours: !!(w?.hls_url),
       _langs: list(m.language).map((l) => String(l).trim()).filter(Boolean),

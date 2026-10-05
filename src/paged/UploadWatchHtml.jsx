@@ -297,6 +297,71 @@ const ImageChoice = ({ label, items, value, onPick, shape }) => {
   );
 };
 
+/* ================= NEW ON 1TAMILMV =================
+   The titles the home page shows from the latest releases (backend
+   /api/fresh), which we do not host. Adding our own link to one — CDN m3u8
+   or download — makes the site play ours for it; until then it plays from
+   the usual third-party servers. Matched to uploads by TMDB id. */
+const FreshPanel = ({ backendUrl, watchList, onPick, busyId }) => {
+  const [items, setItems] = useState(null);
+  const [q, setQ] = useState("");
+  const [onlyMissing, setOnlyMissing] = useState(true);
+  useEffect(() => {
+    fetch(`${backendUrl}/api/fresh`).then((r) => r.json())
+      .then((d) => setItems(Array.isArray(d?.items) ? d.items : []))
+      .catch(() => setItems([]));
+  }, [backendUrl]);
+  const ours = new Set(watchList.map((w) => String(w.tmdb_id || "")).filter(Boolean));
+  const shown = (items || [])
+    .filter((f) => !onlyMissing || !ours.has(String(f.tmdb_id)))
+    .filter((f) => !q || f.title.toLowerCase().includes(q.toLowerCase()));
+  const clean = (p) => /WEB|BluRay|BDRip|HDRip|HDTV|DVDRip/.test(p || "");
+  return (
+    <section className="max-w-7xl mx-auto mb-10 bg-slate-900/80 border border-emerald-500/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl">
+      <div className="flex flex-wrap items-center gap-3 border-b border-white/5 pb-4 mb-5">
+        <TrendingUp size={18} className="text-emerald-400" />
+        <h3 className="font-black uppercase tracking-widest text-[11px] text-white">New on 1TamilMV</h3>
+        <span className="text-[10px] text-slate-500">Shown on the home page from TMDB · add our link to play ours</span>
+        <div className="ml-auto flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} /> Without our link
+          </label>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter…" className="bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white w-40" />
+        </div>
+      </div>
+      {items == null ? (
+        <p className="flex items-center gap-2 text-xs text-slate-400"><Loader2 size={14} className="animate-spin" /> Loading the latest releases…</p>
+      ) : !shown.length ? (
+        <p className="text-xs text-slate-500">{items.length ? "Every title here already has our link." : "Nothing came back from the latest releases."}</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[26rem] overflow-y-auto pr-1">
+          {shown.map((f) => {
+            const have = ours.has(String(f.tmdb_id));
+            return (
+              <div key={f.id} className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-950/60 border border-white/5">
+                <img src={f.poster} alt="" className="w-11 h-16 rounded-lg object-cover shrink-0" loading="lazy" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-white truncate">{f.title} <span className="text-slate-500 font-normal">({f.year})</span></p>
+                  <p className="text-[10px] text-slate-500 truncate">{[f.content_type === "tv" ? "Series" : "Movie", (f.languages || []).join(" + ")].filter(Boolean).join(" · ")}</p>
+                  {f.print && <span className={`inline-block mt-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${clean(f.print) ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{f.print}</span>}
+                </div>
+                {have ? (
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase text-emerald-400"><Check size={14} /> Ours</span>
+                ) : (
+                  <button type="button" onClick={() => onPick(f)} disabled={busyId === f.id}
+                    className="shrink-0 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    {busyId === f.id ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add our link
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+};
+
 /* ================= MAIN DASHBOARD ================= */
 const UploadWatchHtml = () => {
   const { backendUrl } = useContext(AppContext);
@@ -363,6 +428,23 @@ const UploadWatchHtml = () => {
         setPicks({ cover: d.cover_poster_url || "", logo: d.title_logo || "", poster: d.poster_url || "" });
       }
     } catch (err) { toast.error("TMDB error"); } finally { setIsSearching(false); }
+  };
+
+  /* From the New on 1TamilMV list: that exact title's TMDB details, by id,
+     into the same result card as a search — pick the images, Sync, then add
+     our stream or download link below and deploy. */
+  const [freshBusy, setFreshBusy] = useState(null);
+  const startFromFresh = async (f) => {
+    setFreshBusy(f.id);
+    try {
+      const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { tmdbId: f.tmdb_id, contentType: f.content_type } });
+      if (!res.data.success) throw new Error("not found");
+      const d = res.data.data;
+      setTmdbResult(d);
+      setPicks({ cover: d.cover_poster_url || "", logo: d.title_logo || "", poster: d.poster_url || "" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch { toast.error(`Couldn't load ${f.title} from TMDB`); }
+    finally { setFreshBusy(null); }
   };
 
   const applyMetadata = (data) => {
@@ -433,6 +515,8 @@ const UploadWatchHtml = () => {
             {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-500" size={18}/>}
         </div>
       </header>
+
+      <FreshPanel backendUrl={backendUrl} watchList={watchList} onPick={startFromFresh} busyId={freshBusy} />
 
       {tmdbResult && (
         <div className="max-w-4xl mx-auto mb-10 bg-slate-900 border border-blue-500/40 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 shadow-2xl animate-in zoom-in-95">

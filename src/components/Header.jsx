@@ -1419,12 +1419,41 @@ const Header = () => {
      resolves — so every link a visitor shared was dead on arrival. */
   const siteUrl = SITE_ORIGIN;
 
+  /* What has just come out, from the backend's hourly read of the latest
+     releases, matched to TMDB (see routes/freshRoutes). Shaped like a
+     homepage upload so every row takes it in by genre and language; a title
+     we have uploaded ourselves wins over its fresh twin. */
+  const [fresh, setFresh] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/fresh`).then((r) => r.json())
+      .then((d) => alive && setFresh(Array.isArray(d?.items) ? d.items : []))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   // Every homepage title, in upload order.
   const homeMovies = useMemo(() => {
-    return [...movies]
-      .filter(m => m.showOnHomepage)
+    const ours = movies.filter(m => m.showOnHomepage);
+    const titleKey = (t) => String(t || "").toLowerCase().split("(")[0].replace(/[^a-z0-9]+/g, " ").trim();
+    const have = new Set(ours.map((m) => titleKey(m.title)));
+    const extra = fresh
+      .filter((f) => !have.has(titleKey(f.title)))
+      .map((f) => ({
+        ...f,
+        _fresh: true,
+        source: "tmdb",
+        showOnHomepage: true,
+        homepage_added_at: f.first_seen,
+        language: f.languages || [],
+        subCategory: f.print ? [f.print] : [],
+        note: f.print || "",                 // "TRUE WEB-DL", "HQ PreDVD" — as the release names it
+        imdb: f.imdb_rating && Number(f.imdb_rating) > 0 ? f.imdb_rating : "",
+        categories: [],
+      }));
+    return [...ours, ...extra]
       .sort((a,b) => new Date(b.homepage_added_at||b.created_at||0) - new Date(a.homepage_added_at||a.created_at||0));
-  }, [movies]);
+  }, [movies, fresh]);
   const latestMovies = useMemo(() => homeMovies.slice(0, 100), [homeMovies]);
 
   const heroSlides = useMemo(() => latestMovies.slice(0, 5), [latestMovies]);
@@ -1490,7 +1519,14 @@ const Header = () => {
     }
     setSheetMovie(movie);   // show immediately with what we already have
     try {
-      let { data } = await supabase.from("watch_html").select("*").eq("slug", movie.slug).limit(1);
+      let data = null;
+      /* A title from the fresh list is ours only if the admin has added our
+         own link for it — found by its TMDB id, since an upload is often
+         renamed to the full release name. */
+      if (movie._fresh && movie.tmdb_id) {
+        ({ data } = await supabase.from("watch_html").select("*").eq("tmdb_id", String(movie.tmdb_id)).limit(1));
+      }
+      if (!data || !data.length) ({ data } = await supabase.from("watch_html").select("*").eq("slug", movie.slug).limit(1));
       if ((!data || !data.length) && movie.title) {
         ({ data } = await supabase.from("watch_html").select("*").ilike("title", movie.title).limit(1));
       }
@@ -1542,8 +1578,20 @@ const Header = () => {
        the downloads and the episode list were all things a viewer had to back
        out to find. The page loads with the episode they chose selected; the
        play button there is one more click, and it is theirs to press. */
+    /* A fresh title we have not uploaded is not in our tables, so the watch
+       page is handed its TMDB details, as search does for a TMDB pick. */
+    const tmdbOnly = movie._fresh && !movie.has_watch_html;
     navigate(`/watch/${movie.watch_slug || movie.slug}`, {
-      state: { autoPlayEpisode: episode || null, ...intent },
+      state: {
+        autoPlayEpisode: episode || null, ...intent,
+        ...(tmdbOnly ? { movie: {
+          tmdb_id: movie.tmdb_id, imdb_id: movie.imdb_id || null, title: movie.title, slug: movie.slug,
+          poster: movie.poster, cover_poster: movie.cover_poster, description: movie.description,
+          year: movie.year, imdb_rating: movie.imdb_rating, content_type: movie.content_type,
+          genres: movie.genres || [], title_logo: movie.title_logo || null, episodes: [], cast: [],
+          source: "tmdb",
+        } } : {}),
+      },
     });
     setSheetMovie(null);
   };
