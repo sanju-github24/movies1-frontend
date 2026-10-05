@@ -15,6 +15,7 @@ import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { tmdbStreams } from "../utils/anchorTmdb";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
+import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
@@ -496,6 +497,13 @@ const WatchHtmlPage = () => {
     })();
     return () => { alive = false; };
   }, [movieMeta?.download_links, backendUrl]);
+
+  /* More download sources: the BollyFlix post for this title, Google Drive
+     files only. Looked up with the page, so the download button can appear
+     for a title we hold nothing for. Not for a live telecast. */
+  const bollyTitle = movieMeta && !isLiveNow(movieMeta) ? (titleForSearch(movieMeta.title || "").name || movieMeta.title || "") : "";
+  const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
+  const hasDownloads = (movieMeta?.download_links?.length > 0) || bolly.files.length > 0;
 
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
@@ -2015,7 +2023,7 @@ if (!alive) return;
                 </span>
               </button>
 
-              {movieMeta.download_links?.length > 0 && (
+              {hasDownloads && (
                 <button onClick={() => setShowDownloads(true)} title="Download links"
                   className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
                   <Download size={22} />
@@ -2296,7 +2304,7 @@ if (!alive) return;
         {/* Downloads */}
         {/* The links, as a dialog. They used to be a column below the page,
             so a page about a film was mostly a list of links to it. */}
-        {showDownloads && movieMeta.download_links?.length > 0 && (
+        {showDownloads && hasDownloads && (
           <div className="fixed inset-0 z-[700] flex items-start justify-center overflow-y-auto p-4 sm:p-8">
             <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setShowDownloads(false)} />
             <div className="relative z-10 my-8 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0f0f14] p-5 sm:p-7 shadow-2xl">
@@ -2305,6 +2313,7 @@ if (!alive) return;
                 <X size={16} />
               </button>
           <div id="download-section" className="space-y-5 scroll-mt-24">
+            {movieMeta.download_links?.length > 0 && (<>
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-green-600/10 border border-green-500/10"><Database size={18} className="text-green-400"/></div>
               <div>
@@ -2371,6 +2380,9 @@ if (!alive) return;
                 );
               })}
             </div>
+            </>)}
+            {/* After ours: the BollyFlix post's Google Drive files, if it has this title. */}
+            <BollyflixDownloads state={bolly} />
           </div>
             </div>
           </div>

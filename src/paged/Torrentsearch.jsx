@@ -22,6 +22,7 @@ import axios from "axios";
 import { AppContext } from "../context/AppContext";
 import { loadCatalog } from "../utils/catalog";
 import { LIST_SHELL } from "../utils/posterGrid";
+import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 
 /* One fallback index, not a menu. The picker used to offer a choice between
    two, which promised the reader control over something that changes nothing
@@ -426,6 +427,8 @@ const TorrentSearch = () => {
   }, [params, catalogReady, handleSearch]);
 
   const hasLibrary = libraryMatches.length > 0;
+  // Google Drive files from BollyFlix for what was searched, after our own.
+  const bolly = useBollyflix(submitted);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-8 py-10">
@@ -491,6 +494,13 @@ const TorrentSearch = () => {
                 </button>
               </div>
             )}
+          </section>
+        )}
+
+        {/* ── BollyFlix: Google Drive files for the search ── */}
+        {submitted && (bolly.loading || bolly.files.length > 0) && (
+          <section className="mb-10">
+            <BollyflixDownloads state={bolly} />
           </section>
         )}
 
