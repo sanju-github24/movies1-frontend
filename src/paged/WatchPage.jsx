@@ -503,7 +503,10 @@ const WatchHtmlPage = () => {
      for a title we hold nothing for. Not for a live telecast. */
   const bollyTitle = movieMeta && !isLiveNow(movieMeta) ? (titleForSearch(movieMeta.title || "").name || movieMeta.title || "") : "";
   const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
-  const hasDownloads = (movieMeta?.download_links?.length > 0) || bolly.files.length > 0;
+  const hasOwnDownloads = movieMeta?.download_links?.length > 0;
+  /* The button is there from the start for any title that is not on air: the
+     dialog opens on our own files at once, and the rest load in beneath. */
+  const hasDownloads = hasOwnDownloads || !!bollyTitle;
 
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
@@ -2381,8 +2384,10 @@ if (!alive) return;
               })}
             </div>
             </>)}
-            {/* After ours: the BollyFlix post's Google Drive files, if it has this title. */}
-            <BollyflixDownloads state={bolly} />
+            {/* After ours: the BollyFlix post's Google Drive files, loading in
+                beneath while the dialog is already open. */}
+            {hasOwnDownloads && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
+            <BollyflixDownloads state={bolly} empty={hasOwnDownloads ? "" : "No downloads for this title yet."} />
           </div>
             </div>
           </div>

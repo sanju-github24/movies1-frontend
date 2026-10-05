@@ -55,11 +55,25 @@ export function useBollyflix(title, year = "") {
   return state;
 }
 
-export default function BollyflixDownloads({ state }) {
+/* `empty` is what to say when nothing turned up — given only when there is
+   nothing else in the dialog either. */
+export default function BollyflixDownloads({ state, empty = "" }) {
+  // Still looking: say so, in the shape of what is coming.
   if (state.loading) return (
-    <div className="flex items-center gap-2 text-sm text-gray-500 py-3"><Loader2 className="w-4 h-4 animate-spin" /> Looking for more download sources…</div>
+    <div className="space-y-3" aria-busy="true">
+      <div className="flex items-center gap-2.5 text-sm font-semibold text-gray-400">
+        <Loader2 className="w-4 h-4 animate-spin text-sky-400" /> Loading more download links…
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[66px] rounded-xl border border-white/[0.05] bg-white/[0.03] animate-pulse" />
+        ))}
+      </div>
+    </div>
   );
-  if (!state.files.length) return null;
+  if (!state.files.length) return empty
+    ? <p className="py-8 text-center text-sm text-gray-500">{empty}</p>
+    : null;
 
   return (
     <div className="space-y-3">
