@@ -33,8 +33,11 @@ function SectionHeader({ icon, label, count }) {
   );
 }
 
-function SongCard({ track, grid, onOpen }) {
-  const open = () => onOpen(`/music/track/${track.id}`);
+/* A tap plays the song there and then, inside the tap — a play started later,
+   after the song page has fetched it, can be refused by the browser as
+   autoplay — and opens its page. */
+function SongCard({ track, grid, onOpen, onPlay }) {
+  const open = () => { onPlay(track); onOpen(`/music/track/${track.id}`); };
   if (!grid) return (
     <div onClick={open} className={`${cardCls} flex items-center gap-3.5 p-3`}>
       <img src={track.poster} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
@@ -258,6 +261,11 @@ export default function SearchResultsPage() {
   ].filter(t => t.id==='all' || t.count>0);
 
   const visSongs   = (activeTab==='all'||activeTab==='songs')   ? results.songs   : [];
+  // The results become the queue, so the next song is the next result.
+  const playFromSearch = (track) => {
+    if (currentTrack?.id === track.id) return;
+    playQueue(visSongs, Math.max(0, visSongs.findIndex((s) => s.id === track.id)), { title: `Search: ${query}`, link: `/music/search?find=${encodeURIComponent(query)}` });
+  };
   const visAlbums  = (activeTab==='all'||activeTab==='albums')  ? results.albums  : [];
   const visArtists = (activeTab==='all'||activeTab==='artists') ? results.artists : [];
 
@@ -356,7 +364,7 @@ export default function SearchResultsPage() {
               {visSongs.length > 0 && (
                 <section>
                   <SectionHeader icon={<Music size={13}/>} label="Songs" count={visSongs.length} color="#5eead4" />
-                  <div style={gridCols}>{visSongs.map(t => <SongCard key={t.id} track={t} grid={viewMode==='grid'} onOpen={saveAndGo} />)}</div>
+                  <div style={gridCols}>{visSongs.map(t => <SongCard key={t.id} track={t} grid={viewMode==='grid'} onOpen={saveAndGo} onPlay={playFromSearch} />)}</div>
                   {/* The quick search answers five songs; the rest, and the
                       playlists, are a page at a time on the explore page. */}
                   <div className="flex flex-wrap gap-2 mt-4">

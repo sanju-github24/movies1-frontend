@@ -101,7 +101,17 @@ export default function TrackDetailPage() {
     setLyrics(entry.lyrics || null);
     setSimilar(entry.similar || null);
     setError('');
-    if (entry.trackData?.success) return;
+    if (entry.trackData?.success) {
+      // Seen before, so nothing to fetch — but it still has to play.
+      if (player?.currentTrack?.id !== id) {
+        const d = entry.trackData, m = d.metadata || {};
+        player?.loadTrack({
+          id, title: m.title, artist: m.singer || 'Unknown Artist', poster: m.cover_image || '',
+          language: m.language || '', streamUrl: playableUrl(d.stream_url),
+        });
+      }
+      return;
+    }
     let alive = true;
     fetchTrack(songId)
       .then((d) => {
@@ -130,10 +140,16 @@ export default function TrackDetailPage() {
   }, [id]);
 
   /* Follow the queue: when the next song starts, the page becomes that song.
-     Replaced, not pushed, so Back returns to wherever listening began. */
+     Replaced, not pushed, so Back returns to wherever listening began.
+     Only on a change of song — opening a different song while one plays is
+     not that, and following then sent the page straight back to the old one
+     before the new one could start. */
+  const followed = useRef(player?.currentTrack?.id);
   useEffect(() => {
     const now = player?.currentTrack?.id;
-    if (now && now !== id) navigate(`/music/track/${now}`, { replace: true });
+    const before = followed.current;
+    followed.current = now;
+    if (now && before && now !== before && now !== id) navigate(`/music/track/${now}`, { replace: true });
   }, [player?.currentTrack?.id, id, navigate]);
 
   // ── Lyrics ──
