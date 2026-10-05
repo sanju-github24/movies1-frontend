@@ -16,6 +16,7 @@ import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { tmdbStreams } from "../utils/anchorTmdb";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
+import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
@@ -503,6 +504,8 @@ const WatchHtmlPage = () => {
      for a title we hold nothing for. Not for a live telecast. */
   const bollyTitle = movieMeta && !isLiveNow(movieMeta) ? (titleForSearch(movieMeta.title || "").name || movieMeta.title || "") : "";
   const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
+  // And HDHub4u's, matched by IMDb id where we have it.
+  const hdhub = useHdhub(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", bollyTitle ? (movieMeta?.imdb_id || "") : "");
   const hasOwnDownloads = movieMeta?.download_links?.length > 0;
   /* The button is there from the start for any title that is not on air: the
      dialog opens on our own files at once, and the rest load in beneath. */
@@ -2387,7 +2390,9 @@ if (!alive) return;
             {/* After ours: the BollyFlix post's Google Drive files, loading in
                 beneath while the dialog is already open. */}
             {hasOwnDownloads && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <BollyflixDownloads state={bolly} empty={hasOwnDownloads ? "" : "No downloads for this title yet."} />
+            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || hdhub.loading || hdhub.files.length ? "" : "No downloads for this title yet."} />
+            {(hasOwnDownloads || bolly.loading || bolly.files.length > 0) && (hdhub.loading || hdhub.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
+            <HdhubDownloads state={hdhub} />
           </div>
             </div>
           </div>
