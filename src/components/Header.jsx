@@ -57,6 +57,7 @@ function useLiveSports() {
 
   const fetch_ = useCallback(async () => {
     const out = [];
+    let feedFixtures = [];   // FanCode and SonyLiv's live fixtures, for their posters
 
     // BCCI India cricket
     try {
@@ -115,6 +116,7 @@ function useLiveSports() {
        hero is built from other sources entirely. */
     try {
       const { live: playable } = await fetchHeroFixtures({ upcomingPerSource: 0 });
+      feedFixtures = playable;
       playable.slice(0, 2).forEach((m) => {
         const sides = splitTeams(m.name);
         /* The feeds name their sides and nothing else, so the code every flag
@@ -217,6 +219,23 @@ function useLiveSports() {
         });
       }
     } catch {}
+
+    /* Pictures for the matches the score feeds bring, which come with none
+       and showed only the two sides' names. FanCode and SonyLiv publish a
+       poster for each fixture they carry: the same two teams there lend
+       theirs. */
+    const words = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const posterFor = (m) => {
+      const a = words(m.homeName || m.homeCode), b = words(m.awayName || m.awayCode);
+      if (!a || !b) return null;
+      const hit = feedFixtures.find((f) => { const n = words(f.name); return n.includes(a) && n.includes(b); });
+      return hit ? (hit.poster || hit.logo || null) : null;
+    };
+    for (const m of out) {
+      if (m.poster || m.cover_poster) continue;
+      const p = posterFor(m);
+      if (p) { m.poster = p; m.cover_poster = p; }
+    }
 
     setMatches(out);
     setLoading(false);
@@ -695,6 +714,18 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                                      bg-[radial-gradient(ellipse_80%_60%_at_50%_35%,rgba(37,99,235,0.22),transparent_70%)]">
                       <CricketCover match={movie.match} compact />
                     </span>
+                  ) : src && isCricketSlide ? (
+                    /* A match poster is landscape (FanCode's are 4:3): in a
+                       portrait card it would lose both sides. Shown whole across
+                       the card's width, on a blurred wash of itself. */
+                    <>
+                      <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async"
+                        className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-60 saturate-150" />
+                      <img src={src} alt="" aria-hidden="true"
+                        fetchPriority={n === 0 ? "high" : "auto"}
+                        loading={n === 0 ? "eager" : "lazy"} decoding="async"
+                        className="absolute inset-x-0 top-12 w-full h-auto object-contain shadow-2xl shadow-black/60" />
+                    </>
                   ) : src ? (
                     <img src={src} alt="" aria-hidden="true"
                       fetchPriority={n === 0 ? "high" : "auto"}
@@ -867,6 +898,9 @@ function HeroSpotlight({ movies = [], onOpen }) {
           m.year,
         ].filter(Boolean).join(" "),
         language: [],
+        // The fixture's poster from FanCode or SonyLiv, when there is one.
+        poster: m.poster || null,
+        cover_poster: m.cover_poster || m.poster || null,
       });
     }
 
@@ -1123,10 +1157,13 @@ function HeroSpotlight({ movies = [], onOpen }) {
           const active = n === i;
           /* Not every title has landscape art. Where it doesn't, the desktop
              slide shows the poster at its own shape as a card rather than
-             cropping it to an unrecognisable detail. 1.2 rather than 1.0
-             because a squarish image crops badly too. */
+             cropping it to an unrecognisable detail. Only true widescreen
+             (16:9 and wider) fills the band: a 4:3 match poster stretched
+             across 21:9 loses its top and bottom — the names and the faces —
+             so it too is shown whole, as a landscape card. */
           const r = desktopSrc ? ratio[desktopSrc] : null;
-          const deskWide = r != null && r >= 1.2;
+          const deskWide = r != null && r >= 1.6;
+          const deskLandscape = r != null && r >= 1;
 
           const rise = active ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0";
 
@@ -1285,7 +1322,10 @@ function HeroSpotlight({ movies = [], onOpen }) {
                     style={heroCopyParallax} {...pauseOnHover}>
                     {desktopSrc && (
                       <img src={desktopSrc} alt=""
-                        className={`h-[70%] max-h-[400px] w-auto aspect-[2/3] object-cover shrink-0
+                        style={deskLandscape ? { aspectRatio: String(r) } : undefined}
+                        className={`${deskLandscape
+                                      ? "w-[min(46%,620px)] max-h-[70%] h-auto object-contain"
+                                      : "h-[70%] max-h-[400px] w-auto aspect-[2/3] object-cover"} shrink-0
                                     rounded-2xl ring-1 ring-white/15 shadow-2xl shadow-black/70
                                     transition-all duration-700 ease-out motion-reduce:transition-none ${rise}`} />
                     )}
