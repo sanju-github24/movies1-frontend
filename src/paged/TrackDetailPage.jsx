@@ -266,9 +266,9 @@ export default function TrackDetailPage() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[380px_minmax(0,1fr)] gap-8 lg:gap-12 items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)] gap-8 lg:gap-12 items-start">
           {/* ── The player ── */}
-          <section className="lg:sticky lg:top-6">
+          <section className="min-w-0 lg:sticky lg:top-6">
             <div className="mx-auto w-full max-w-[260px] sm:max-w-[300px] lg:max-w-none aspect-square rounded-2xl overflow-hidden bg-white/5 shadow-2xl shadow-black/50">
               {trackData || playingThis
                 ? <img src={cover} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
