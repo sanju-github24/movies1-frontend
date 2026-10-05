@@ -220,10 +220,10 @@ const AppContent = () => {
   const authPaths = ["/login", "/auth", "/verify-account", "/reset-password", "/update-password"];
 
   /* /watch is the watchlist — a browsing page, and a rail destination.
-     /watch/:slug is the player. One regex used to cover both, which is why the
-     watchlist had to grow its own header. */
+     /watch/:slug is a title's page — details, servers, episodes, with the
+     player inside it — and keeps the rail like any other page; only the
+     full-screen players below go without. */
   const isPlayerPath = /^\/(player|mx-watch|hls-watch)(\/.*)?$/.test(location.pathname)
-    || /^\/watch\/[^/]+$/.test(location.pathname)
     || /^\/live-cricket\/player\/[^/]+$/.test(location.pathname)
     || location.pathname === "/live-cricket-tv";
   const isAdminPath = location.pathname.startsWith("/admin");

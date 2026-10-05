@@ -67,7 +67,7 @@ export function useGoBack() {
 
 /* Pages that draw a back control of their own in the same place. A second one
    right above it would be two buttons that do the same thing. */
-const OWN_BACK = [/^\/live-stream/, /^\/music\/search/, /^\/music\/track\//, /^\/news/];
+const OWN_BACK = [/^\/live-stream/, /^\/music\/search/, /^\/music\/track\//, /^\/news/, /^\/watch\/[^/]+/];
 
 /* Phones: sits in the blue top bar, beside the menu. */
 export function MobileBackButton() {

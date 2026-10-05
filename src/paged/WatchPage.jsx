@@ -351,6 +351,14 @@ const WatchHtmlPage = () => {
   const [heroTrailerOn,     setHeroTrailerOn    ] = useState(true);
   const [heroTrailerReady,  setHeroTrailerReady ] = useState(false);
   const [heroHover,         setHeroHover        ] = useState(false);
+  // The top bar is see-through over the hero and solid once scrolled past it.
+  const [headerSolid,       setHeaderSolid      ] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setHeaderSolid(window.scrollY > window.innerHeight * 0.5);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const heroHideTimer = useRef(null);
   /* The same chrome-free trailer every other surface plays — a bare MP4, so it
      sits behind the text with no player furniture of its own. It arrives a
@@ -1864,19 +1872,21 @@ if (!alive) return;
       )}
 
       {/* ── NAVBAR ── */}
-      <header className="fixed top-0 inset-x-0 z-[110] h-16 flex items-center px-4">
-        {/* The fill used to fade in on scroll. With the hero no longer pinned
-            there is nothing to fade against, so it stays on — a fixed bar over
-            the catalogue needs its own ground to be readable. */}
-        <div className="absolute inset-0 bg-[#070709]/80 backdrop-blur-xl border-b border-white/[0.04]" />
+      {/* Clear of the site's rail on desktop, which carries the logo there.
+          See-through over the trailer, as the home page's is over its hero,
+          and given its own ground once the page scrolls past it. */}
+      <header className="fixed top-0 left-0 right-0 sm:left-[72px] z-[110] h-16 flex items-center px-4">
+        <div className={`absolute inset-0 transition-all duration-300 ${headerSolid
+          ? "bg-[#070709]/85 backdrop-blur-xl border-b border-white/[0.04]"
+          : "bg-gradient-to-b from-black/60 to-transparent"}`} />
         <div className="relative max-w-[1800px] mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)}
               aria-label="Go back"
-              className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/5 hover:border-white/10 transition-all group touch-manipulation">
-              <ArrowLeft size={18} className="text-gray-400 group-hover:text-white transition-colors" />
+              className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md hover:bg-white/10 active:bg-white/15 border border-white/10 hover:border-white/20 transition-all group touch-manipulation">
+              <ArrowLeft size={18} className="text-gray-200 group-hover:text-white transition-colors" />
             </button>
-            <Link to="/"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
+            <Link to="/" className="sm:hidden"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
           </div>
           <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -2287,15 +2297,15 @@ if (!alive) return;
               </div>
             </div>
 
-            {/* One row that scrolls on a phone and wraps into a grid from sm up,
-                so the faces stay the same size instead of shrinking to fit. */}
+            {/* Small round faces in one row that scrolls — the cast is a
+                detail of the page, not its main event. */}
             <div
-              className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:gap-4 sm:overflow-visible scrollbar-hide"
+              className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {tmdbMeta.cast.slice(0, 12).map((actor, i) => (
-                <div key={i} className="group w-[104px] shrink-0 sm:w-auto">
-                  <div className="aspect-[2/3] rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06] group-hover:border-blue-500/30 transition-colors">
+                <div key={i} className="group w-[76px] sm:w-[92px] shrink-0 text-center">
+                  <div className="mx-auto w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] rounded-full overflow-hidden bg-white/[0.03] border border-white/[0.08] group-hover:border-blue-500/40 transition-colors">
                     <img
                       src={actor.profile_url || (actor.profile_path ? `https://image.tmdb.org/t/p/w300${actor.profile_path}` : "/default-avatar.jpg")}
                       alt={actor.name}
@@ -2304,7 +2314,7 @@ if (!alive) return;
                       onError={e => { e.target.onerror = null; e.target.src = "/default-avatar.jpg"; }}
                     />
                   </div>
-                  <p className="mt-2.5 text-[11px] font-bold text-white leading-tight line-clamp-2">{actor.name}</p>
+                  <p className="mt-2 text-[11px] font-bold text-white leading-tight line-clamp-2">{actor.name}</p>
                   {actor.character && (
                     <p className="mt-0.5 text-[10px] text-gray-500 leading-tight line-clamp-1">{actor.character}</p>
                   )}
