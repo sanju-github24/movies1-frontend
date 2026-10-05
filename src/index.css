@@ -267,3 +267,20 @@ video::cue {
 @media (min-width: 1280px) {
   video::cue { font-size: 1.6rem; }
 }
+
+/* Press feedback, everywhere. A tap on a phone showed nothing until the next
+   page or song arrived, so it was never clear the tap had landed: anything
+   clickable now dims while it is held down. Opacity, not a transform or a
+   filter — those would shift layouts and break fixed-position children. In
+   the base layer so a component's own active: styles still win. */
+@layer base {
+  html { -webkit-tap-highlight-color: rgba(255, 255, 255, 0.08); }
+  a, button, summary, label[for], [role="button"], [role="tab"], [role="link"], .cursor-pointer {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* no 300ms double-tap wait on older mobile browsers */
+  }
+  :is(a, button, summary, [role="button"], [role="tab"], [role="link"], .cursor-pointer):not(:disabled, [aria-disabled="true"]):active {
+    opacity: 0.7;
+    transition: opacity 0s;
+  }
+}

@@ -104,7 +104,7 @@ export default function PersistentMiniPlayer() {
   const isMusicPage = location.pathname.startsWith('/music');
   if (player.isRestoredSession && !isMusicPage) return null;
 
-  const { currentTrack, isPlaying, currentTime, duration, togglePlay, close, setIsMinimized } = player;
+  const { currentTrack, isPlaying, isLoading, currentTime, duration, togglePlay, close, setIsMinimized } = player;
   // While dragging, the bar follows the finger rather than the clock.
   const progress = dragPct != null ? dragPct * 100 : (duration ? (currentTime / duration) * 100 : 0);
   /* One look for every song: white on a dark bar. It used to take its colours
@@ -209,7 +209,9 @@ export default function PersistentMiniPlayer() {
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
             title={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying
+            {isLoading
+              ? <Loader2 size={16} style={{ color: '#000', animation: 'mini-spin 0.8s linear infinite' }} />
+              : isPlaying
               ? <Pause size={16} style={{ fill: '#000', color: '#000' }} />
               : <Play  size={16} style={{ fill: '#000', color: '#000', marginLeft: 2 }} />
             }

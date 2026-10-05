@@ -164,6 +164,10 @@ export function MusicPlayerProvider({ children }) {
 
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying,    setIsPlaying]    = useState(false);
+  /* Between asking for a song and hearing it — the stream is looked up, then
+     buffered — which can take a second or two. Shown as a spinner, so a tap
+     visibly did something rather than seeming ignored. */
+  const [isLoading,    setIsLoading]    = useState(false);
   const [currentTime,  setCurrentTime]  = useState(0);
   const [duration,     setDuration]     = useState(0);
   const [volume,       setVolume]       = useState(0.8);
@@ -352,6 +356,8 @@ export function MusicPlayerProvider({ children }) {
       if (advanceRef.current) advanceRef.current();
     };
     const onVolumeChange  = () => { setVolume(audio.volume); setIsMuted(audio.muted); };
+    const onWaiting       = () => { if (!audio.paused) setIsLoading(true); };
+    const onPlaying       = () => setIsLoading(false);
 
     audio.addEventListener('timeupdate',    onTimeUpdate);
     audio.addEventListener('loadedmetadata',onLoadedMeta);
@@ -360,6 +366,9 @@ export function MusicPlayerProvider({ children }) {
     audio.addEventListener('pause',         onPause);
     audio.addEventListener('ended',         onEnded);
     audio.addEventListener('volumechange',  onVolumeChange);
+    audio.addEventListener('waiting',       onWaiting);
+    audio.addEventListener('playing',       onPlaying);
+    audio.addEventListener('error',         onPlaying);
 
     return () => {
       audio.removeEventListener('timeupdate',    onTimeUpdate);
@@ -368,6 +377,9 @@ export function MusicPlayerProvider({ children }) {
       audio.removeEventListener('play',          onPlay);
       audio.removeEventListener('pause',         onPause);
       audio.removeEventListener('ended',         onEnded);
+      audio.removeEventListener('waiting',       onWaiting);
+      audio.removeEventListener('playing',       onPlaying);
+      audio.removeEventListener('error',         onPlaying);
       audio.removeEventListener('volumechange',  onVolumeChange);
     };
   }, []);
@@ -388,12 +400,14 @@ export function MusicPlayerProvider({ children }) {
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
+    setIsLoading(true);
     setIsMinimized(minimized);
     setIsRestoredSession(false);
 
     // Auto-play once enough data is buffered
     const tryPlay = () => {
       audio.play().catch(err => {
+        setIsLoading(false);
         console.warn('[MusicPlayer] Autoplay blocked:', err);
       });
     };
@@ -441,11 +455,11 @@ export function MusicPlayerProvider({ children }) {
            repeats the same requests. A single track gets one attempt. */
         const limit = Math.max(1, queueRef.current.length);
         if (failRef.current < limit && advanceRef.current) advanceRef.current();
-        else audioRef.current.pause();
+        else { audioRef.current.pause(); setIsLoading(false); }
         return;
       }
     }
-    if (!src) return;
+    if (!src) { setIsLoading(false); return; }
 
     // Something played, so the run of failures is over.
     failRef.current = 0;
@@ -865,6 +879,7 @@ export function MusicPlayerProvider({ children }) {
   const value = {
     currentTrack,
     isPlaying,
+    isLoading,
     currentTime,
     setCurrentTime,
     duration,

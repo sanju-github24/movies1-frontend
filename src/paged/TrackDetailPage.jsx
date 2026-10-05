@@ -290,7 +290,7 @@ export default function TrackDetailPage() {
               </button>
               <button type="button" onClick={player?.togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}
                 className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition">
-                {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-0.5" />}
+                {player?.isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-0.5" />}
               </button>
               <button type="button" onClick={player?.next} aria-label="Next song" className={`${iconBtn} w-12 h-12`}>
                 <SkipForward className="w-6 h-6 fill-current" />

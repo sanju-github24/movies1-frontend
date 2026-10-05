@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import MusicSearchBar from '../components/MusicSearchBar';
 import { Music, Disc, Users, ArrowLeft, Search, LayoutGrid, List, X, Play, Clock, Shuffle } from 'lucide-react';
@@ -7,40 +7,100 @@ import { useGoBack } from "../components/BackBar";
 import PlayNextButton from '../components/PlayNextButton';
 import { useMusicPlayer } from '../context/MusicPlayerContext';
 
-// ─────────────────────────────────────────────────────────────────────────
-// Deterministic color from any string — no CORS, instant, unique per slug
-// ─────────────────────────────────────────────────────────────────────────
-function deriveRgbFromStr(str) {
-  if (!str) return { base: '20, 28, 48', light: '100, 160, 240' };
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  const hue  = Math.abs(h) % 360;
-  const sat  = 55 + (Math.abs(h >> 8)  % 25);
-  const ligB = 18 + (Math.abs(h >> 16) % 12);
-  const ligL = 55 + (Math.abs(h >> 24) % 25);
-
-  const hsl = (H, S, L) => {
-    const s = S/100, l = L/100;
-    const c = (1 - Math.abs(2*l-1)) * s;
-    const x = c * (1 - Math.abs((H/60)%2 - 1));
-    const m = l - c/2;
-    let r,g,b;
-    if      (H<60)  {r=c;g=x;b=0;}
-    else if (H<120) {r=x;g=c;b=0;}
-    else if (H<180) {r=0;g=c;b=x;}
-    else if (H<240) {r=0;g=x;b=c;}
-    else if (H<300) {r=x;g=0;b=c;}
-    else            {r=c;g=0;b=x;}
-    return `${Math.round((r+m)*255)}, ${Math.round((g+m)*255)}, ${Math.round((b+m)*255)}`;
-  };
-  return { base: hsl(hue,sat,ligB), light: hsl(hue,sat,ligL) };
-}
-
 // ── Cache helpers ─────────────────────────────────────────────────────────
 const cacheKey  = q => `music_search_cache_${q}`;
 const scrollKey = q => `music_search_scroll_${q}`;
 
 // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Result cards. Defined here, at the top level, and not inside the page: the
+// page re-renders four times a second while a song plays (it follows the
+// player), and a component defined inside it is a new component on every
+// render — so each card was thrown away and rebuilt, dropping its hover state,
+// and the play button flickered in and out under the pointer. Hover is CSS
+// now too, so there is no state to lose.
+// ─────────────────────────────────────────────────────────────────────────
+const FALLBACK_ART = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80';
+const cardCls = 'group cursor-pointer rounded-2xl overflow-hidden border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 transition-colors active:scale-[0.98]';
+
+function SectionHeader({ icon, label, count }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4">
+      <span className="flex text-gray-400">{icon}</span>
+      <h2 className="text-lg font-bold text-white">{label}</h2>
+      <span className="text-xs text-gray-500 font-semibold">{count}</span>
+    </div>
+  );
+}
+
+function SongCard({ track, grid, onOpen }) {
+  const open = () => onOpen(`/music/track/${track.id}`);
+  if (!grid) return (
+    <div onClick={open} className={`${cardCls} flex items-center gap-3.5 p-3`}>
+      <img src={track.poster} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">{track.title}</p>
+        <p className="text-xs text-gray-500 truncate">{track.artist || track.label || 'Song'}</p>
+      </div>
+      <span onClick={(e) => e.stopPropagation()}><PlayNextButton track={track} /></span>
+    </div>
+  );
+  return (
+    <div onClick={open} className={cardCls}>
+      <div className="relative aspect-square overflow-hidden">
+        <img src={track.poster} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+        {/* Shown on hover with CSS — and always on a touch screen, which has no hover. */}
+        <div className="absolute inset-0 flex items-center justify-center gap-2.5 bg-black/45 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:bg-transparent [@media(hover:none)]:items-end [@media(hover:none)]:justify-end [@media(hover:none)]:p-2 transition-opacity">
+          <span className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center [@media(hover:none)]:hidden"><Play size={16} className="fill-current ml-0.5" /></span>
+          <span onClick={(e) => e.stopPropagation()}><PlayNextButton track={track} className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80" /></span>
+        </div>
+      </div>
+      <div className="px-3 pt-2.5 pb-3">
+        <p className="text-[13px] font-bold text-white truncate">{track.title}</p>
+        <p className="text-[11px] text-gray-500 truncate mt-0.5">{track.artist || track.label || 'Song'}</p>
+      </div>
+    </div>
+  );
+}
+
+function AlbumCard({ album, grid, onOpen }) {
+  const open = () => onOpen(`/music/search?find=album:${album.id}`);
+  if (!grid) return (
+    <div onClick={open} className={`${cardCls} flex items-center gap-3.5 p-3`}>
+      <img src={album.poster} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">{album.title}</p>
+        <p className="text-xs text-gray-500 truncate">Album</p>
+      </div>
+    </div>
+  );
+  return (
+    <div onClick={open} className={cardCls}>
+      <div className="relative aspect-square overflow-hidden">
+        <img src={album.poster} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+        <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/60 text-white/90 border border-white/15">Album</span>
+      </div>
+      <div className="px-3 pt-2.5 pb-3">
+        <p className="text-[13px] font-bold text-white truncate">{album.title}</p>
+        <p className="text-[11px] text-gray-500 truncate mt-0.5">{album.label || 'Album'}</p>
+      </div>
+    </div>
+  );
+}
+
+function ArtistCard({ artist, grid, onOpen }) {
+  const open = () => onOpen(artist.id ? `/music/artist/${artist.id}` : `/music/search?find=artist:${encodeURIComponent(artist.title)}`);
+  return (
+    <div onClick={open} className={`${cardCls} flex items-center ${grid ? 'flex-col gap-3 px-3 pt-5 pb-4 text-center' : 'gap-3.5 p-3'}`}>
+      <img src={artist.poster} alt="" className={`${grid ? 'w-[72px] h-[72px]' : 'w-12 h-12'} rounded-full object-cover shrink-0 border-2 border-white/10 group-hover:border-white/30 transition-colors`} onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-bold text-white truncate">{artist.title}</p>
+        <p className="text-[11px] text-gray-500">Artist</p>
+      </div>
+    </div>
+  );
+}
+
 export default function SearchResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate       = useNavigate();
@@ -201,120 +261,10 @@ export default function SearchResultsPage() {
   const visAlbums  = (activeTab==='all'||activeTab==='albums')  ? results.albums  : [];
   const visArtists = (activeTab==='all'||activeTab==='artists') ? results.artists : [];
 
-  const cardBase = {
-    cursor:'pointer', borderRadius:16, overflow:'hidden',
-    border:'1px solid rgba(255,255,255,0.07)',
-    background:'rgba(255,255,255,0.04)',
-    transition:'all 0.2s',
-  };
-
-  const SongCard = ({ track }) => {
-    const [hov, setHov] = useState(false);
-    const { light } = useMemo(() => deriveRgbFromStr(track.poster || track.id), []);
-    return (
-      <div onClick={() => saveAndGo(`/music/track/${track.id}`)}
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ ...cardBase, background: hov ? `rgba(${light}, 0.12)` : 'rgba(255,255,255,0.04)', borderColor: hov ? `rgba(${light}, 0.3)` : 'rgba(255,255,255,0.07)', transform: hov && viewMode==='grid' ? 'translateY(-3px)' : 'none' }}
-      >
-        {viewMode === 'grid' ? (
-          <>
-            <div style={{ position:'relative', aspectRatio:'1', overflow:'hidden' }}>
-              <img src={track.poster} alt={track.title} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', transform: hov ? 'scale(1.06)' : 'scale(1)', transition:'transform 0.3s' }}
-                onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80'; }} />
-              {hov && <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:'50%', background:`rgb(${light})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <Play size={16} style={{ fill:'#000', color:'#000', marginLeft:2 }} />
-                </div>
-                <PlayNextButton track={track} />
-              </div>}
-            </div>
-            <div style={{ padding:'10px 12px 12px' }}>
-              <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', transition:'color 0.15s' }}>{track.title}</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0', fontWeight:500 }}>{track.label||'Mp3 Song'}</p>
-            </div>
-          </>
-        ) : (
-          <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 14px' }}>
-            <img src={track.poster} alt={track.title} style={{ width:48, height:48, borderRadius:8, objectFit:'cover', flexShrink:0 }}
-              onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=80&q=80'; }} />
-            <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{track.title}</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0' }}>{track.label||'Mp3 Song'}</p>
-            </div>
-            <PlayNextButton track={track} />
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const AlbumCard = ({ album }) => {
-    const [hov, setHov] = useState(false);
-    const { light } = useMemo(() => deriveRgbFromStr(album.poster || album.id), []);
-    return (
-      <div onClick={() => saveAndGo(`/music/search?find=album:${album.id}`)}
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ ...cardBase, background: hov ? `rgba(${light}, 0.12)` : 'rgba(255,255,255,0.04)', borderColor: hov ? `rgba(${light}, 0.3)` : 'rgba(255,255,255,0.07)', transform: hov && viewMode==='grid' ? 'translateY(-3px)' : 'none' }}
-      >
-        {viewMode === 'grid' ? (
-          <>
-            <div style={{ position:'relative', aspectRatio:'1', overflow:'hidden' }}>
-              <img src={album.poster} alt={album.title} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', transform: hov ? 'scale(1.06)' : 'scale(1)', transition:'transform 0.3s' }}
-                onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80'; }} />
-              <div style={{ position:'absolute', top:8, right:8, fontSize:9, fontWeight:900, letterSpacing:'0.12em', textTransform:'uppercase', padding:'3px 8px', borderRadius:20, background:`rgba(${light},0.2)`, color:`rgb(${light})`, border:`1px solid rgba(${light},0.35)` }}>Album</div>
-            </div>
-            <div style={{ padding:'10px 12px 12px' }}>
-              <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', transition:'color 0.15s' }}>{album.title}</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0' }}>Click to view tracks</p>
-            </div>
-          </>
-        ) : (
-          <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 14px' }}>
-            <img src={album.poster} alt={album.title} style={{ width:48, height:48, borderRadius:8, objectFit:'cover', flexShrink:0 }}
-              onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=80&q=80'; }} />
-            <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{album.title}</p>
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0' }}>Album • Click to view tracks</p>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const ArtistCard = ({ artist }) => {
-    const [hov, setHov] = useState(false);
-    const { light } = useMemo(() => deriveRgbFromStr(artist.poster || artist.id), []);
-    return (
-      <div onClick={() => saveAndGo(artist.id
-          ? `/music/artist/${artist.id}`        // the artist's own page: all their songs, albums
-          : `/music/search?find=artist:${encodeURIComponent(artist.title)}`)}
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ ...cardBase, background: hov ? `rgba(${light}, 0.12)` : 'rgba(255,255,255,0.04)', borderColor: hov ? `rgba(${light}, 0.3)` : 'rgba(255,255,255,0.07)', display:'flex', flexDirection: viewMode==='grid' ? 'column' : 'row', alignItems:'center', gap: viewMode==='grid' ? 12 : 14, padding: viewMode==='grid' ? '20px 12px 16px' : '12px 14px', transform: hov && viewMode==='grid' ? 'translateY(-3px)' : 'none' }}
-      >
-        <img src={artist.poster} alt={artist.title}
-          style={{ width: viewMode==='grid' ? 72 : 48, height: viewMode==='grid' ? 72 : 48, borderRadius:'50%', objectFit:'cover', flexShrink:0, border:`2px solid ${hov ? `rgba(${light},0.5)` : 'rgba(255,255,255,0.08)'}`, transition:'border-color 0.15s' }}
-          onError={e => { e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=80&q=80'; }} />
-        <div style={{ textAlign: viewMode==='grid' ? 'center' : 'left', flex:1, minWidth:0 }}>
-          <p style={{ fontSize:13, fontWeight:700, color: hov ? `rgb(${light})` : 'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', transition:'color 0.15s' }}>{artist.title}</p>
-          <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', margin:'3px 0 0' }}>Artist{viewMode==='list' ? ' • Click to view songs' : ''}</p>
-        </div>
-      </div>
-    );
-  };
-
   const gridCols = viewMode==='grid'
     ? { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:12 }
     : { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:8 };
 
-  const SectionHeader = ({ icon, label, count, color }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-      <span style={{ color, display:'flex' }}>{icon}</span>
-      <span style={{ fontSize:11, fontWeight:900, letterSpacing:'0.15em', textTransform:'uppercase', color:'rgba(255,255,255,0.4)' }}>{label}</span>
-      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }} />
-      <span style={{ fontSize:11, color:'rgba(255,255,255,0.25)', fontWeight:700 }}>{count}</span>
-    </div>
-  );
 
   return (
     <div style={{ minHeight:'100vh', background:'#09090f', color:'white', display:'flex', flexDirection:'column' }}>
@@ -406,7 +356,7 @@ export default function SearchResultsPage() {
               {visSongs.length > 0 && (
                 <section>
                   <SectionHeader icon={<Music size={13}/>} label="Songs" count={visSongs.length} color="#5eead4" />
-                  <div style={gridCols}>{visSongs.map(t => <SongCard key={t.id} track={t} />)}</div>
+                  <div style={gridCols}>{visSongs.map(t => <SongCard key={t.id} track={t} grid={viewMode==='grid'} onOpen={saveAndGo} />)}</div>
                   {/* The quick search answers five songs; the rest, and the
                       playlists, are a page at a time on the explore page. */}
                   <div className="flex flex-wrap gap-2 mt-4">
@@ -424,13 +374,13 @@ export default function SearchResultsPage() {
               {visAlbums.length > 0 && (
                 <section>
                   <SectionHeader icon={<Disc size={13}/>} label="Albums" count={visAlbums.length} color="#a78bfa" />
-                  <div style={gridCols}>{visAlbums.map(a => <AlbumCard key={a.id} album={a} />)}</div>
+                  <div style={gridCols}>{visAlbums.map(a => <AlbumCard key={a.id} album={a} grid={viewMode==='grid'} onOpen={saveAndGo} />)}</div>
                 </section>
               )}
               {visArtists.length > 0 && (
                 <section>
                   <SectionHeader icon={<Users size={13}/>} label="Artists" count={visArtists.length} color="#fbbf24" />
-                  <div style={gridCols}>{visArtists.map(a => <ArtistCard key={a.id} artist={a} />)}</div>
+                  <div style={gridCols}>{visArtists.map(a => <ArtistCard key={a.id} artist={a} grid={viewMode==='grid'} onOpen={saveAndGo} />)}</div>
                 </section>
               )}
             </div>
