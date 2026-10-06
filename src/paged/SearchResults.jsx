@@ -567,10 +567,30 @@ const SearchResults = () => {
       const isImdbId = IMDB_ID_RE.test(query.trim());
       const isTmdbId = TMDB_ID_RE.test(query.trim());
 
-      const [moviesRes, watchRes] = await Promise.all([
-        supabase.from("movies").select("*"),
-        supabase.from("watch_html").select("*"),
+      /* Everything at once, and only what matches. This used to download both
+         whole tables — 7 MB, ten seconds — on every search and filter them
+         here, and then ask MX Player and only then TMDB, one after another.
+         The tables are asked for matching titles (and the database stops at
+         1,000 rows, so the whole-table read never even saw most of the
+         catalogue); the other two run alongside, and the library's matches
+         show as soon as they are in. */
+      const like = `%${query.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      const localP = Promise.all([
+        supabase.from("movies").select("*").ilike("title", like).limit(40),
+        supabase.from("watch_html").select("*").ilike("title", like).limit(40),
       ]);
+      const mxP = axios.get(`${MX_WORKER}/`, { params: { search: query.trim() }, timeout: 8000 })
+        .then((r) => r, () => null);
+      const tmdbP = (isImdbId || isTmdbId)
+        ? axios.get(`${backendUrl}/api/tmdb-details`, { params: isImdbId
+            ? { imdbId: query.trim() }
+            : { tmdbId: query.trim(), contentType: searchType === "all" ? undefined : searchType } })
+            .then((r) => (r.data.success ? (Array.isArray(r.data.data) ? r.data.data : [r.data.data]) : []), () => [])
+        : axios.get(`${backendUrl}/api/tmdb-search`, { params: {
+            query: query.trim(), type: searchType === "all" ? "multi" : searchType, lang: searchLang || undefined } })
+            .then((r) => (r.data.success ? r.data.results || [] : []), () => []);
+
+      const [moviesRes, watchRes] = await localP;
 
       const resultsMap = new Map();
 
@@ -626,11 +646,16 @@ const SearchResults = () => {
           }
         });
 
+      // The library's matches, on screen while the others are still answering.
+      if (run !== searchRun.current) return;
+      if (resultsMap.size) { setResults(Array.from(resultsMap.values())); setLoading(false); }
+
       // --- 2.5 MX Player (free/ad-supported) — movie + series results ---
       // Search metadata works from any IP; the real stream is resolved on click
       // by the backend Playwright resolver using the item's webUrl.
       try {
-        const mxRes = await axios.get(`${MX_WORKER}/`, { params: { search: query.trim() } });
+        const mxRes = await mxP;
+        if (!mxRes) throw new Error("MX unavailable");
         const mxItems = (mxRes.data?.sections || []).flatMap((s) => s.items || []);
         mxItems
           .filter((it) => it && it.title && it.webUrl && (it.type === "movie" || it.type === "tvshow"))
@@ -667,27 +692,8 @@ const SearchResults = () => {
 
       // --- 3. TMDB API Fallback & Discovery ---
       try {
-        let tmdbList = [];
-        if (isImdbId || isTmdbId) {
-          // Exact lookup by IMDb ID (tt…) or TMDB ID (numeric)
-          const params = isImdbId
-            ? { imdbId: query.trim() }
-            : { tmdbId: query.trim(), contentType: searchType === "all" ? undefined : searchType };
-          const tmdbRes = await axios.get(`${backendUrl}/api/tmdb-details`, { params });
-          if (tmdbRes.data.success) {
-            tmdbList = Array.isArray(tmdbRes.data.data) ? tmdbRes.data.data : [tmdbRes.data.data];
-          }
-        } else {
-          // Multi-result search, honouring the type + language filters
-          const tmdbRes = await axios.get(`${backendUrl}/api/tmdb-search`, {
-            params: {
-              query: query.trim(),
-              type: searchType === "all" ? "multi" : searchType,
-              lang: searchLang || undefined,
-            },
-          });
-          if (tmdbRes.data.success) tmdbList = tmdbRes.data.results || [];
-        }
+        // Asked at the start, alongside the rest (see above).
+        const tmdbList = await tmdbP;
 
         {
           tmdbList.forEach((t) => {
