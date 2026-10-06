@@ -246,8 +246,13 @@ const buildServers = (meta, eps = []) => {
   // sources), so the viewer stays in our player instead of someone's embed.
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
   else if (meta.tmdb_id) srv.push({ id:"ourhls", name:"AnchorHD", label:"Our Player", icon:<Video size={14}/> });
-  // The same player, fed only MoviBox: each language its own stream, switched from the language menu.
-  if (meta.tmdb_id) srv.push({ id:"movibox", name:"AnchorMB", label:"Every Language", icon:<Languages size={14}/> });
+  /* The same player, fed only MoviBox: each language its own stream, switched
+     from the language menu. Hidden for now: MoviBox's MP4 CDN refuses every
+     data-centre address tried so far (the relay on Cloudflare, the US VPS),
+     so nothing can carry the files to the viewer yet. Turn it back on with
+     VITE_ANCHOR_MB=1 once a relay that it accepts is in place. */
+  if (meta.tmdb_id && import.meta.env.VITE_ANCHOR_MB === "1")
+    srv.push({ id:"movibox", name:"AnchorMB", label:"Every Language", icon:<Languages size={14}/> });
   // Our uploaded embed mirror — ahead of every third-party server.
   if (meta.html_code || eps.some(e => e.html))
     srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> })
