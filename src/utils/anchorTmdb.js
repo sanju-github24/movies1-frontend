@@ -96,6 +96,35 @@ const singularity = (o) => async () => {
   return list.length ? list : null;
 };
 
+/* MoviBox posts each language of a film as its own title, each with h264
+   MP4s (and an HEVC DASH manifest, which hls.js cannot play and most
+   browsers cannot decode, so it is left to anchor-ingest). Our backend finds
+   them all by TMDB id (/api/movibox). Its CDN wants movibox.net as the
+   Referer, which only a relay can send — the download relay, asked to serve
+   for playing. Named "MoviBox • Tamil 1080p", the player reads the language
+   from the name and offers each as a choice in its language menu. */
+const RELAY = import.meta.env.VITE_DL_RELAY || "";
+const LANG_NAME = { ta: "Tamil", te: "Telugu", hi: "Hindi", kn: "Kannada", ml: "Malayalam", en: "English",
+  bn: "Bengali", mr: "Marathi", pa: "Punjabi", gu: "Gujarati", ur: "Urdu", or: "Odia" };
+const moviBox = (o) => async () => {
+  if (!RELAY || !o.backendUrl) return null;
+  const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: o.type, ...(o.type === "tv" ? { se: String(o.season), ep: String(o.episode) } : {}) });
+  const d = await getJson(`${o.backendUrl}/api/movibox?${qs}`, 40000);
+  const out = [];
+  for (const l of d?.languages || []) {
+    const lang = LANG_NAME[l.code] || String(l.language || "").replace(/\s*dub$/i, "");
+    for (const f of l.mp4 || []) {
+      out.push({
+        name: `MoviBox • ${lang} ${f.resolution}${l.original ? " (original)" : ""}`,
+        url: `${RELAY}?u=${encodeURIComponent(f.url)}&play=1&n=${encodeURIComponent(`${o.title || "video"} ${lang} ${f.resolution}.mp4`)}`,
+        own: true, file: true,
+      });
+    }
+  }
+  // The original language first, then the rest; best quality first within each.
+  return out.length ? out.sort((a, b) => Number(/original/.test(b.name)) - Number(/original/.test(a.name))) : null;
+};
+
 /* Each provider returns a candidate, a list of them, or null. In FilmU's own
    order of preference: Singularity's masters carry the most languages; the
    extractors behind it are what FilmU's page falls back to. */
@@ -107,6 +136,7 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   singularity(o),
+  moviBox(o),                  // one stream per language: the player's language menu switches between them
   scrape("Bastion", o),        // right after Singularity, as FilmU's page does
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
@@ -160,9 +190,10 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
     const got = await pending;
     const fresh = (Array.isArray(got) ? got : [got])
       .filter((c) => c?.url && !seen.has(c.url) && seen.add(c.url))
-      .slice(0, 8)
-      .map((c) => ({ name: c.name, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
-    const scored = await Promise.all(fresh.map(async (c) => ({ ...c, score: await manifestScore(c.url) })));
+      .slice(0, 16)
+      .map((c) => ({ name: c.name, file: c.file, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
+    // A plain file has no manifest to read; it keeps its provider's order.
+    const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.file ? 100 - i : await manifestScore(c.url) })));
     for (const c of scored.filter((c) => c.score >= 0).sort((a, b) => b.score - a.score)) {
       yield { url: c.url, name: c.name };
     }
