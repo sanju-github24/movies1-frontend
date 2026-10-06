@@ -45,6 +45,7 @@ if (typeof window !== "undefined" && window.location.search.includes("_r=")) {
 
 // --- Components & Pages Imports ---
 import Navbar from './components/Navbar';
+import TopLoader from './components/TopLoader';
 import CategoryBar from './components/CategoryBar';
 import SiteFooter from './components/SiteFooter';
 import BackBar from './components/BackBar';
@@ -249,6 +250,7 @@ const AppContent = () => {
        over it. `clip` stops the same horizontal overflow without creating a
        scrollport. */
     <div className={`bg-black min-h-screen text-white relative overflow-x-clip ${!hideNavbar ? "sm:pl-[72px]" : ""}`}>
+      <TopLoader />
       <LockoutOverlay />
       <ToastContainer position="top-center" autoClose={3000} theme="dark" />
 

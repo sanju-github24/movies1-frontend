@@ -141,6 +141,12 @@ const Navbar = () => {
     navigate("/auth");
   };
 
+  /* Search is a page, not a panel over this one: its own address, Back to
+     leave it, results as you type. The music section keeps its own search. */
+  const openSearch = () => {
+    navigate(location.pathname.startsWith("/music") ? "/music/search" : "/search");
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
@@ -257,7 +263,7 @@ const Navbar = () => {
                 const SearchIcon = link.Icon;
                 return (
                   <li key="search">
-                    <button type="button" onClick={() => setMobileSearchOpen(true)} className={railItem(false)}>
+                    <button type="button" onClick={openSearch} className={railItem(location.pathname === "/search")}>
                       <SearchIcon size={26} className="shrink-0" />
                       <span className={railLabel(railOpen)} style={labelDelay(railOpen, i)}>{label}</span>
                     </button>
@@ -519,7 +525,7 @@ const Navbar = () => {
                                   ${on ? "bg-white text-black" : "bg-white/[0.07] text-white/85 hover:bg-white/[0.14]"}`;
             if (item.action === "search") {
               return (
-                <button key="search" type="button" onClick={() => setMobileSearchOpen(true)} aria-label="Search" className={pill(mobileSearchOpen)}>
+                <button key="search" type="button" onClick={openSearch} aria-label="Search" className={pill(location.pathname === "/search" || location.pathname === "/music/search")}>
                   <Icon size={23} />
                 </button>
               );

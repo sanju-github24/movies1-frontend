@@ -552,7 +552,10 @@ const SearchResults = () => {
     [enrichWithTmdb]
   );
 
+  // Typing starts a search per pause; only the latest one may land.
+  const searchRun = useRef(0);
   const fetchResults = async () => {
+    const run = ++searchRun.current;
     if (!query) {
       setResults([]);
       setLoading(false);
@@ -738,12 +741,13 @@ const SearchResults = () => {
       }
 
       const finalResults = Array.from(resultsMap.values());
+      if (run !== searchRun.current) return;   // a newer search has started
       setResults(finalResults);
       enrichListInBackground(finalResults, setResults);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (run === searchRun.current) setLoading(false);
     }
   };
 
@@ -806,11 +810,28 @@ const SearchResults = () => {
   /* Refining in place. The page had no field of its own: to change a query you
      had to go back to the rail, open the search overlay and start again. */
   const [draft, setDraft] = useState(prettyQuery);
-  useEffect(() => { setDraft(prettyQuery); }, [prettyQuery]);
+  const typing = useRef(false);
+  // Follow the address (Back, a link) — but not while the field is being typed in.
+  useEffect(() => { if (!typing.current) setDraft(prettyQuery); }, [prettyQuery]);
+  /* Results while typing: a moment after the last key, the query goes into
+     the address in place — replace, so Back leaves the page instead of
+     stepping back through every letter. */
+  useEffect(() => {
+    if (!typing.current) return;
+    const q = draft.trim();
+    const t = setTimeout(() => {
+      typing.current = false;
+      if (q.toLowerCase() === query) return;
+      if (q.length >= 2 || !q) navigate(q ? `/search?query=${encodeURIComponent(q)}` : "/search", { replace: true });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
   const submitSearch = (e) => {
     e.preventDefault();
+    typing.current = false;
     const q = draft.trim();
-    if (q) navigate(`/search?query=${encodeURIComponent(q)}`);
+    if (q) navigate(`/search?query=${encodeURIComponent(q)}`, { replace: q.toLowerCase() === query });
   };
 
   const chip = (on) =>
@@ -839,7 +860,8 @@ const SearchResults = () => {
             <input
               type="search"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { typing.current = true; setDraft(e.target.value); }}
+              autoFocus
               placeholder="Search movies, series, or paste an IMDb / TMDB id"
               aria-label="Search"
               className="bg-transparent outline-none w-full text-sm font-bold placeholder:text-gray-600"
