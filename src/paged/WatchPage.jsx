@@ -56,6 +56,26 @@ const detectStateContentType = (s) => {
   return "movie";
 };
 
+/* ===== Downloads in season and episode order =====
+   A series' blocks are "S01 · 720p", "S02 · …" and their links "E01", "E05"…
+   as they were uploaded, which is not always in order. Blocks by season, then
+   by their first episode; links by episode. Anything without a number keeps
+   its place. */
+const seasonOf = (s) => Number((String(s || "").match(/\bS(?:eason)?\s*0*(\d{1,3})\b/i) || [])[1] || 0);
+const episodeOf = (s) => Number((String(s || "").match(/\bE(?:P|pisode)?\s*0*(\d{1,4})\b/i) || [])[1] || 0);
+const linkText = (l) => `${l?.label || ""} ${l?.name || ""} ${l?.file_name || ""}`;
+const sortEpisodeLinks = (links) => {
+  if (!Array.isArray(links) || links.length < 2 || !links.every((l) => episodeOf(linkText(l)))) return links;
+  return [...links].sort((a, b) => seasonOf(linkText(a)) - seasonOf(linkText(b)) || episodeOf(linkText(a)) - episodeOf(linkText(b)));
+};
+const sortDownloadBlocks = (blocks) => {
+  if (!Array.isArray(blocks) || blocks.length < 2 || !blocks.some((b) => seasonOf(b.quality))) return blocks || [];
+  const firstEp = (b) => Math.min(...(b.links || []).map((l) => episodeOf(linkText(l)) || Infinity));
+  return blocks.map((b, i) => ({ b, i }))
+    .sort((x, y) => seasonOf(x.b.quality) - seasonOf(y.b.quality) || firstEp(x.b) - firstEp(y.b) || x.i - y.i)
+    .map(({ b }) => b);
+};
+
 /* ===== Group episodes by season ===== */
 const groupEpisodesBySeason = (episodes) => {
   if (!Array.isArray(episodes) || episodes.length === 0) return {};
@@ -347,6 +367,13 @@ const WatchHtmlPage = () => {
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
   const [showDownloads,     setShowDownloads    ] = useState(false);
+  // Hold the page still behind the downloads dialog, so only the dialog scrolls.
+  useEffect(() => {
+    if (!showDownloads) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [showDownloads]);
   const [heroMuted,         setHeroMuted        ] = useState(true);
   const [heroTrailerOn,     setHeroTrailerOn    ] = useState(true);
   const [heroTrailerReady,  setHeroTrailerReady ] = useState(false);
@@ -2328,13 +2355,26 @@ if (!alive) return;
         {/* The links, as a dialog. They used to be a column below the page,
             so a page about a film was mostly a list of links to it. */}
         {showDownloads && hasDownloads && (
-          <div className="fixed inset-0 z-[700] flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-            <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setShowDownloads(false)} />
-            <div className="relative z-10 my-8 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0f0f14] p-5 sm:p-7 shadow-2xl">
-              <button onClick={() => setShowDownloads(false)} aria-label="Close"
-                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/15 hover:text-white">
-                <X size={16} />
-              </button>
+          /* One scroller — the panel — instead of the whole overlay scrolling
+             under a full-screen blur with lists that scrolled inside it. The
+             page behind is held still (see the effect on showDownloads), the
+             scroll stops at the panel's ends rather than carrying on into the
+             page, and the header with Close stays put. A bottom sheet on a
+             phone. */
+          <div className="fixed inset-0 z-[700] flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true" aria-label="Downloads">
+            <div className="absolute inset-0 bg-black/80 sm:backdrop-blur-sm" onClick={() => setShowDownloads(false)} />
+            <div className="relative z-10 w-full max-w-4xl max-h-[88dvh] sm:max-h-[86vh] overflow-y-auto overscroll-contain
+                            rounded-t-2xl sm:rounded-2xl border border-white/10 bg-[#0f0f14] px-5 sm:px-7 pb-6 sm:pb-7 shadow-2xl"
+              style={{ WebkitOverflowScrolling: "touch" }}>
+              <div className="sticky top-0 z-20 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3.5 mb-4 flex items-center justify-between
+                              bg-[#0f0f14]/95 backdrop-blur-md border-b border-white/[0.06]">
+                <span className="sm:hidden mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 h-1 w-10 rounded-full bg-white/15" aria-hidden="true" />
+                <span className="text-sm font-black uppercase tracking-[0.15em] text-white">Downloads</span>
+                <button onClick={() => setShowDownloads(false)} aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/15 hover:text-white">
+                  <X size={16} />
+                </button>
+              </div>
           <div id="download-section" className="space-y-5 scroll-mt-24">
             {movieMeta.download_links?.length > 0 && (<>
             <div className="flex items-center gap-3">
@@ -2345,7 +2385,7 @@ if (!alive) return;
               </div>
             </div>
             <div className="space-y-6">
-              {movieMeta.download_links.map((block, idx) => {
+              {sortDownloadBlocks(movieMeta.download_links).map((block, idx) => {
                 // Read what the file actually is from its name — resolution,
                 // source, codec, languages, audio, subs, size — for a clear view.
                 const meta = parseFileMeta(fileNameOf(block.links?.[0] || {}, block) + " " + (block.quality || ""));
@@ -2380,7 +2420,7 @@ if (!alive) return;
                     <p className="text-[10px] text-gray-500 -mt-1 pl-3.5">{meta.languages.list.join(" · ")}</p>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                    {block.links?.map((link, i) => (
+                    {sortEpisodeLinks(block.links)?.map((link, i) => (
                       /* rel is "noopener" WITHOUT "noreferrer": the Cloudflare worker
                          checks the Referer and answers "Forbidden origin" without one,
                          so noreferrer would 403 every download. noopener still stops the
