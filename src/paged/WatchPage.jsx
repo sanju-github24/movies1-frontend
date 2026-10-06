@@ -13,7 +13,7 @@ import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveS
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
-import { tmdbStreams } from "../utils/anchorTmdb";
+import { tmdbStreams, moviboxStreams } from "../utils/anchorTmdb";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
@@ -246,6 +246,8 @@ const buildServers = (meta, eps = []) => {
   // sources), so the viewer stays in our player instead of someone's embed.
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
   else if (meta.tmdb_id) srv.push({ id:"ourhls", name:"AnchorHD", label:"Our Player", icon:<Video size={14}/> });
+  // The same player, fed only MoviBox: each language its own stream, switched from the language menu.
+  if (meta.tmdb_id) srv.push({ id:"movibox", name:"AnchorMB", label:"Every Language", icon:<Languages size={14}/> });
   // Our uploaded embed mirror — ahead of every third-party server.
   if (meta.html_code || eps.some(e => e.html))
     srv.push({ id:"embed",       name:"Multi Audio", label:"Backup Node",   icon:<Languages size={14}/> })
@@ -774,15 +776,15 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
      of time — the next one, while this one plays — is ready when it is
      clicked. A search that found nothing is not kept. */
   const tmdbCacheRef = useRef(new Map());   // "tmdb:SxE" → search
-  const tmdbSearchFor = useCallback((ep) => {
+  const tmdbSearchFor = useCallback((ep, kind = "anchor") => {
     const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
     const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
-    const key = `${movieMeta.tmdb_id}:${TV ? `${s}x${e}` : "movie"}`;
+    const key = `${kind}:${movieMeta.tmdb_id}:${TV ? `${s}x${e}` : "movie"}`;
     const hit = tmdbCacheRef.current.get(key);
     if (hit && Date.now() - hit.created < 30 * 60e3 && !(hit.done && !hit.items.some((x) => !x.bad))) return hit;
     const search = {
       key, items: [], at: -1, created: Date.now(),
-      it: tmdbStreams({
+      it: (kind === "movibox" ? moviboxStreams : tmdbStreams)({
         tmdbId: movieMeta.tmdb_id, imdbId: movieMeta.imdb_id || "",
         type: TV ? "tv" : "movie", season: s, episode: e,
         // FilmU's scrapers match on the bare name and year, not our display title.
@@ -804,7 +806,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setFinalSource(search.items[i].url);
   }, []);
 
-  const playAnchorTmdb = useCallback(async (ep) => {
+  const playAnchorTmdb = useCallback(async (ep, kind = "anchor") => {
+    const mb = kind === "movibox";
     const TV = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
     const s = ep?.season || 1, e = ep?.episodeNumberInSeason || ep?.episode || 1;
     const seq = ++playSeqRef.current;
@@ -817,9 +820,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     const saved = readOne(slug);
     const sameEp = !TV || (saved && String(saved.season) === String(s) && String(saved.episode) === String(e));
     const resumeAt = TV ? (sameEp ? (saved?.time || 0) : 0) : getResumeTime(slug);
-    setResolvingLabel("Finding the best AnchorHD stream…");
+    setResolvingLabel(mb ? "Finding every language on AnchorMB…" : "Finding the best AnchorHD stream…");
     setMxResolving(true);
-    const search = tmdbSearchFor(ep);   // often already searched — fetched ahead, or watched before
+    const search = tmdbSearchFor(ep, kind);   // often already searched — fetched ahead, or watched before
     search.at = -1;
     tmdbIterRef.current = search;
     setTmdbSources(search.items.filter((x) => !x.bad));
@@ -832,7 +835,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       tmdbCacheRef.current.delete(search.key);   // ask again next time
       // Nobody has it — hand over to Mirchi rather than leave a dead button.
       const next = availableServers.find(sv => sv.id === "mirchi");
-      toast.info(next ? "AnchorHD couldn't find this one — trying Mirchi" : "AnchorHD couldn't find this one");
+      const who = mb ? "AnchorMB" : "AnchorHD";
+      toast.info(next ? `${who} couldn't find this one — trying Mirchi` : `${who} couldn't find this one`);
       if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "mirchi"); }
       return;
     }
@@ -1031,6 +1035,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";  // else the embed mirror
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
+    if (serverId === "movibox" && movieMeta.tmdb_id) { playAnchorTmdb(ep, "movibox"); return; }
 
     const imdb = (movieMeta.imdb_id || "").trim();
     const tmdb = String(movieMeta.tmdb_id || movieMeta.id || "");
@@ -2212,6 +2217,8 @@ if (!alive) return;
                 <div key={i} className="relative">
                   <div onClick={() => {
                     if (openDropdown === i) { setOpenDropdown(null); return; }
+                    // AnchorMB chosen: every episode plays there, in whichever language.
+                    if (activeServer?.id === "movibox") { handlePlayAction(ep, "movibox"); return; }
                     // Priority: AnchorHD (our own HLS) → Multi Audio (embed) → Mirchi → Omega
                     // Play immediately without showing the server list whenever possible.
                     if (ep.hasDirect) {

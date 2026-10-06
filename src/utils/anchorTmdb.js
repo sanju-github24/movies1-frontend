@@ -136,7 +136,6 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   singularity(o),
-  moviBox(o),                  // one stream per language: the player's language menu switches between them
   scrape("Bastion", o),        // right after Singularity, as FilmU's page does
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
@@ -198,4 +197,14 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
       yield { url: c.url, name: c.name };
     }
   }
+}
+
+/**
+ * MoviBox's languages for a TMDB title, as its own server: the same player,
+ * fed only these — one MP4 per language and quality, the original first.
+ *   { url, name } — name "MoviBox • Tamil 1080p"; url plays through the relay
+ */
+export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", backendUrl }) {
+  const list = await moviBox({ tmdbId, type, season, episode, title, backendUrl })().catch(() => null);
+  for (const c of list || []) yield { url: c.url, name: c.name };
 }
