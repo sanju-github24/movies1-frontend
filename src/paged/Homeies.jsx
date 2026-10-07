@@ -7,6 +7,7 @@ import HeroSection from "./HeroSection";
 import { absUrl, jsonLd } from "../utils/seo";
 import LiveTabsSection from "../components/LiveTabsSection";
 import { backendUrl } from "../utils/api";
+import HighlightPlayer from "../components/HighlightPlayer";
 
 function encodeMatchHash(payload) {
   // Escape Unicode as ASCII JSON before Base64 encoding.
@@ -1834,10 +1835,10 @@ function BcciHighlightsRow() {
     setLoadingMore(false);
   };
 
+  // In our own player: the page's Mux stream, read by the backend on the click.
   const play = (v) => {
     if (!v.video_url) return;
-    const params = new URLSearchParams({ url: v.video_url, title: v.title || "Match Highlights" });
-    setModal({ src: `https://m3u8-player-orcin.vercel.app/?${params}`, title: v.title || "Match Highlights" });
+    setModal({ page: v.video_url, title: v.title || "Match Highlights" });
   };
 
   if (!loading && videos.length === 0) return null;
@@ -1845,15 +1846,9 @@ function BcciHighlightsRow() {
 
   return (
     <div className="mt-8">
-      {modal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
-            <span style={{ color: ACCENT, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
-            <button onClick={() => setModal(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>×</button>
-          </div>
-          <iframe src={modal.src} style={{ flex: 1, width: "100%", border: "none" }} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
-        </div>
-      )}
+      {modal && (modal.page
+        ? <HighlightPlayer title={modal.title} page={modal.page} accent={ACCENT} onClose={() => setModal(null)} />
+        : null)}
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -1915,7 +1910,8 @@ async function fetchBcciHi() {
   const j = await fetch(`${API_BASE}/api/bcci/highlights?page=1`).then(r => r.json()).catch(() => ({}));
   return (j.videos || []).map(v => ({
     id: v.id, title: v.title, image: v.image, date: v.date, duration: v.duration,
-    resolve: async () => `https://m3u8-player-orcin.vercel.app/?${new URLSearchParams({ url: v.video_url, title: v.title || "Highlights" })}`,
+    // Played in our own player (see the page's modal): { page } rather than a player URL.
+    resolve: async () => ({ page: v.video_url }),
   }));
 }
 async function fetchIccHi() {
@@ -2136,7 +2132,11 @@ export function TournamentPage() {
   const onPlay = async (it) => {
     if (busy) return;
     setBusy(true);
-    try { const src = await it.resolve(); if (src) setModal({ src, title: it.title }); }
+    try {
+      const src = await it.resolve();
+      if (src && typeof src === "object") setModal({ ...src, title: it.title });   // ours to play
+      else if (src) setModal({ src, title: it.title });
+    }
     catch { } finally { setBusy(false); }
   };
 
@@ -2158,7 +2158,10 @@ export function TournamentPage() {
           <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: `${cfg.accent}55`, borderTopColor: cfg.accent }} />
         </div>
       )}
-      {modal && (
+      {modal?.page && (
+        <HighlightPlayer title={modal.title} page={modal.page} accent={cfg.accent} onClose={() => setModal(null)} />
+      )}
+      {modal && !modal.page && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.96)", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.7)", flexShrink: 0 }}>
             <span style={{ color: cfg.accent, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em" }}>▶ {modal.title}</span>
