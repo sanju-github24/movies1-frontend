@@ -243,7 +243,11 @@ export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, epis
     .sort((a, b) => Number(CAM.test(a.l.print)) - Number(CAM.test(b.l.print)) || (rank[b.f.quality] || 0) - (rank[a.f.quality] || 0));
   const seen = new Set(), covered = new Set();
   const out = [];
+  /* A language with a clean print (WEB-DL, HDRip, BluRay…) never offers its
+     PreDVD: the camera copy is only for a language that has nothing better. */
+  const cleanLangs = new Set(files.filter((x) => !CAM.test(x.l.print)).flatMap((x) => x.l.langs.slice(0, 1)));
   const take = (x, lang) => {
+    if (CAM.test(x.l.print) && cleanLangs.has(lang)) return;
     const q = x.f.quality || "480p";
     const k = `${lang}|${q}`;
     if (seen.has(k)) return;

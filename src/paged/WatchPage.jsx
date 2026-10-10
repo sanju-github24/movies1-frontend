@@ -68,8 +68,17 @@ const sortEpisodeLinks = (links) => {
   if (!Array.isArray(links) || links.length < 2 || !links.every((l) => episodeOf(linkText(l)))) return links;
   return [...links].sort((a, b) => seasonOf(linkText(a)) - seasonOf(linkText(b)) || episodeOf(linkText(a)) - episodeOf(linkText(b)));
 };
+/* A clean print before a camera one: WEB-DL, HDRip, BluRay ahead of PreDVD. */
+const CAM_BLOCK = /pre-?dvd|pre-?hd|hdtc|hdts|hdcam|dvdscr|\bcam\b/i;
+const blockIsCam = (b) => CAM_BLOCK.test(`${b?.quality || ""} ${(b?.links || []).map(linkText).join(" ")}`);
 const sortDownloadBlocks = (blocks) => {
-  if (!Array.isArray(blocks) || blocks.length < 2 || !blocks.some((b) => seasonOf(b.quality))) return blocks || [];
+  if (!Array.isArray(blocks)) return [];
+  if (blocks.length < 2) return blocks;
+  if (!blocks.some((b) => seasonOf(b.quality))) {
+    return blocks.map((b, i) => ({ b, i }))
+      .sort((x, y) => Number(blockIsCam(x.b)) - Number(blockIsCam(y.b)) || x.i - y.i)
+      .map(({ b }) => b);
+  }
   const firstEp = (b) => Math.min(...(b.links || []).map((l) => episodeOf(linkText(l)) || Infinity));
   return blocks.map((b, i) => ({ b, i }))
     .sort((x, y) => seasonOf(x.b.quality) - seasonOf(y.b.quality) || firstEp(x.b) - firstEp(y.b) || x.i - y.i)
