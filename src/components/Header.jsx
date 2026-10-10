@@ -660,8 +660,24 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
     el.addEventListener("touchend", release, { passive: true });
     el.addEventListener("touchcancel", release, { passive: true });
 
+    /* Never while the page itself is moving, nor while the deck is mostly off
+       screen. It used to advance on its own clock regardless — a sideways
+       glide, snapping, in the middle of a vertical scroll, which on a phone
+       reads as the top of the page lurching back and forth. */
+    let pageScrolling = false, pageTimer = 0, visible = true;
+    const onPageScroll = () => {
+      pageScrolling = true;
+      clearTimeout(pageTimer);
+      pageTimer = setTimeout(() => { pageScrolling = false; }, 1500);
+    };
+    window.addEventListener("scroll", onPageScroll, { passive: true });
+    const io = typeof IntersectionObserver !== "undefined"
+      ? new IntersectionObserver(([e]) => { visible = e.intersectionRatio >= 0.6; }, { threshold: [0, 0.6, 1] })
+      : null;
+    io?.observe(el);
+
     const tick = setInterval(() => {
-      if (heldRef.current || document.hidden) return;
+      if (heldRef.current || document.hidden || pageScrolling || !visible) return;
       const card = el.firstElementChild;
       if (!card) return;
       const step = card.getBoundingClientRect().width + 12;
@@ -675,6 +691,9 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
     return () => {
       clearInterval(tick);
       clearTimeout(releaseRef.current);
+      clearTimeout(pageTimer);
+      window.removeEventListener("scroll", onPageScroll);
+      io?.disconnect();
       el.removeEventListener("touchstart", hold);
       el.removeEventListener("touchend", release);
       el.removeEventListener("touchcancel", release);
@@ -1078,7 +1097,12 @@ function HeroSpotlight({ movies = [], onOpen }) {
       el.style.pointerEvents = p > 0.95 ? "none" : "";
       el.style.visibility = p > 0.99 ? "hidden" : "";
     };
+    /* Phones have no parallax: once cleared, a scroll there does nothing
+       at all rather than clearing the same styles again every frame. */
+    let phoneCleared = false;
     const onScroll = () => {
+      if (window.innerWidth < 640) { if (phoneCleared) return; phoneCleared = true; }
+      else phoneCleared = false;
       if (frameRef.current) return;
       frameRef.current = requestAnimationFrame(apply);
     };
