@@ -208,3 +208,51 @@ export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, epis
   const list = await moviBox({ tmdbId, type, season, episode, title, backendUrl })().catch(() => null);
   for (const c of list || []) yield { url: c.url, name: c.name };
 }
+
+/* ── 1TamilMV, as its own server ─────────────────────────────────────────
+   A film there is posted once per language, each language's files on a
+   direct link (an MKV the viewer's browser streams from 1TamilMV's CDN —
+   nothing passes through us). Only what a browser can play: x264 video and
+   AAC audio — DD+/AC3/Atmos play silent, HEVC on few devices. Single-language
+   files first; a multi-language one is used only for a language no single
+   file covers, since a browser plays a file's first audio track only.
+   Named "1TamilMV • Tamil 720p", so the player's language menu offers them,
+   and a switch carries on from the same second. The link behind each is
+   found when it plays (/api/fresh/play redirects to it): they last hours. */
+const MKV_OK = () => {
+  try { return !!document.createElement("video").canPlayType('video/x-matroska; codecs="avc1.64001f, mp4a.40.2"'); }
+  catch { return false; }
+};
+export const canPlayMkv = MKV_OK;
+
+export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
+  if (!backendUrl || !MKV_OK()) return;
+  const { releaseLabel } = await import("../components/TamilmvDownloads.jsx");
+  const qs = new URLSearchParams({ tmdb: `${type === "tv" ? "tv" : "movie"}:${tmdbId}`, title: title || "", year: String(year || "") });
+  const d = await getJson(`${backendUrl}/api/fresh/files?${qs}`, 60000).catch(() => null);
+  const playable = (n) => /\b(x264|AVC|H\.?264)\b/i.test(n) && !/\b(HEVC|x265|H\.?265|10\s*bit)\b/i.test(n)
+    && /\bAAC\b/i.test(n) && !/\bDD\+?|\bAC-?3\b|ATMOS|\bDTS\b|EAC3|E-AC-3/i.test(n);
+  const CAM = /PreDVD|PreHD|HDTC|HDTS|HDCAM|DVDScr/i;
+  const rank = { "2160p": 4, "1080p": 3, "720p": 2, "480p": 1 };
+  const files = (d?.files || []).filter((f) => f.direct && playable(f.name)).map((f) => {
+    const l = releaseLabel(f.name);
+    const m = l.episode.match(/^S(\d+) EP(\d+)$/);   // a single episode, not a range
+    return { f, l, se: m ? Number(m[1]) : 0, ep: m ? Number(m[2]) : 0 };
+  }).filter((x) => (type === "tv" ? x.se === Number(season) && x.ep === Number(episode) : !x.l.episode))
+    // Clean prints first, then the best quality.
+    .sort((a, b) => Number(CAM.test(a.l.print)) - Number(CAM.test(b.l.print)) || (rank[b.f.quality] || 0) - (rank[a.f.quality] || 0));
+  const seen = new Set(), covered = new Set();
+  const out = [];
+  const take = (x, lang) => {
+    const q = x.f.quality || "480p";
+    const k = `${lang}|${q}`;
+    if (seen.has(k)) return;
+    seen.add(k); covered.add(lang);
+    out.push({ name: `1TamilMV • ${lang} ${q}${x.l.print ? ` · ${x.l.print}` : ""}`,
+      url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}` });
+  };
+  files.filter((x) => x.l.langs.length === 1).forEach((x) => take(x, x.l.langs[0]));
+  files.filter((x) => x.l.langs.length > 1 && !covered.has(x.l.langs[0])).forEach((x) => take(x, x.l.langs[0]));
+  // The title's own language first (the first single-language one listed), then the rest.
+  for (const c of out) yield c;
+}
