@@ -515,6 +515,8 @@ export function MusicPlayerProvider({ children }) {
     if (!autoplayRef.current || radioBusyRef.current) return false;
     const seed = currentTrackRef.current;
     if (!seed?.id) return false;
+    // A live station has no "songs like it"; the station list is the queue.
+    if (seed.live) return false;
 
     radioBusyRef.current = true;
     try {

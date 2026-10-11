@@ -52,7 +52,7 @@ export default function PersistentMiniPlayer() {
       setDragging(false);
       setDragPct(null);
       const d = player?.duration;
-      if (d) player?.seekTo?.(pct * d);
+      if (d && Number.isFinite(d)) player?.seekTo?.(pct * d);   // a live station has no end to seek against
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -157,8 +157,8 @@ export default function PersistentMiniPlayer() {
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         onClick={() => {
-          // Clicking the bar goes to full track page
-          navigate(`/music/track/${currentTrack.id}`);
+          // Clicking the bar goes to full track page — a live station's is the radio page
+          navigate(currentTrack.live ? '/music/radio' : `/music/track/${currentTrack.id}`);
           player.setIsMinimized(false);
         }}
       >
@@ -182,7 +182,9 @@ export default function PersistentMiniPlayer() {
             {currentTrack.title}
           </p>
           <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {currentTrack.artist} · <span style={{ fontFamily: 'monospace' }}>{fmt(currentTime)}</span>
+            {currentTrack.live
+              ? <><span style={{ color: '#f87171', fontWeight: 800, letterSpacing: 1 }}>● LIVE</span>{currentTrack.place ? ` · ${currentTrack.place}` : ''}</>
+              : <>{currentTrack.artist} · <span style={{ fontFamily: 'monospace' }}>{fmt(currentTime)}</span></>}
           </p>
         </div>
 
@@ -190,7 +192,7 @@ export default function PersistentMiniPlayer() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {/* Expand/Open full */}
           <button
-            onClick={e => { e.stopPropagation(); navigate(`/music/track/${currentTrack.id}`); player.setIsMinimized(false); }}
+            onClick={e => { e.stopPropagation(); navigate(currentTrack.live ? '/music/radio' : `/music/track/${currentTrack.id}`); player.setIsMinimized(false); }}
             style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', padding: 4 }}
             title="Open full player"
           >

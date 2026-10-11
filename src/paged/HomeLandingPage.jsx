@@ -5,7 +5,7 @@ import { absUrl } from '../utils/seo';
 import { fetchHomeRows, fetchArtists, fetchArtistStation } from '../utils/saavn';
 import { toast } from 'react-toastify';
 import MusicSearchBar from '../components/MusicSearchBar';
-import { Music, Play, Flame, ChevronRight, Loader2 } from 'lucide-react';
+import { Music, Play, Flame, ChevronRight, Loader2, Radio } from 'lucide-react';
 import { POSTER_SHELL } from "../utils/posterGrid";
 import PlaylistPanel from "../components/PlaylistPanel";
 import AddToPlaylist from "../components/AddToPlaylist";
@@ -451,6 +451,24 @@ export default function HomeLandingPage() {
             something to draw, so the charts stay at the top for anyone who has
             saved nothing yet. */}
         <PlaylistPanel />
+
+        {/* ── Live radio ── the way into the FM and online stations. */}
+        <Link to="/music/radio"
+          className="group mt-8 mb-10 flex items-center gap-4 rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-red-500/15 via-fuchsia-500/10 to-transparent ring-1 ring-white/[0.07] hover:ring-white/20 transition">
+          <span className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-500/20 flex items-center justify-center shrink-0">
+            <Radio className="w-6 h-6 sm:w-7 sm:h-7 text-red-300" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="text-base sm:text-lg font-black tracking-tight">Live Radio</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 text-red-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> On air
+              </span>
+            </span>
+            <span className="block text-xs sm:text-sm text-gray-400 truncate">FM and online stations in Kannada, Hindi, Tamil, Telugu and more</span>
+          </span>
+          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+        </Link>
 
         {/* ── Loading ─────────────────────────────────────────────── */}
         {loading ? (

@@ -100,6 +100,7 @@ const TrackDetailPage = safeLazy(() => import('./paged/TrackDetailPage'));
 const MusicExplorePage = safeLazy(() => import('./paged/MusicExplorePage'));
 const ArtistPage = safeLazy(() => import('./paged/ArtistPage'));
 const MusicLibraryPage = safeLazy(() => import('./paged/MusicLibraryPage'));
+const RadioPage = safeLazy(() => import('./paged/RadioPage'));
 const PlaylistPage = safeLazy(() => import('./paged/PlaylistPage'));
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import PersistentMiniPlayer from './components/PersistentMiniPlayer';
@@ -317,6 +318,7 @@ const AppContent = () => {
         <Route path="/music/explore"          element={<MusicExplorePage />} />
         <Route path="/music/artist/:id"       element={<ArtistPage />} />
         <Route path="/music/library"          element={<MusicLibraryPage />} />
+        <Route path="/music/radio"            element={<RadioPage />} />
         <Route path="/music/playlist/:id"     element={<PlaylistPage />} />
         <Route path="/music/track/:id"        element={<TrackDetailPage />} />
 
