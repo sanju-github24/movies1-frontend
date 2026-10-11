@@ -21,30 +21,54 @@ const pickBackend = () => BACKENDS[0];
 export const backendUrl = pickBackend();
 export const backendUrls = BACKENDS;
 
+/* The backend in use this visit: the main one, until it has failed over. A
+   link the browser loads itself — a song's audio, a stream — never passes
+   through fetch, so it asks this rather than holding the main server's
+   address. */
+let activeBackend = BACKENDS[0];
+export const liveBackend = () => activeBackend;
+
 /* Failover for every fetch to a backend, wherever in the app it is made —
    the calls are spread over many files, so it is done once here rather than
-   at each. Only a request that never got an answer is retried (an error
-   status is an answer); one with a body that is not a plain string is left
-   alone, since it may already have been read. */
+   at each. A request is tried on the next copy when it got no answer at all,
+   or when the answer is the gateway saying the server behind it is down
+   (502/503/504, Cloudflare's 52x/530 — what a restart looks like through the
+   tunnel). Any other status is the server's own answer and is kept. Only
+   requests that can safely be sent twice are retried: no body, or a plain
+   string one. */
+const GATEWAY_DOWN = new Set([502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530]);
 if (BACKENDS.length > 1 && typeof window !== 'undefined' && !window.__backendFailover) {
   window.__backendFailover = true;
   const nativeFetch = window.fetch.bind(window);
   const movedTo = new Map();   // a copy that failed → the one now used instead
+  const moveOn = (from, why) => {
+    const to = BACKENDS.find((b) => b && b !== from && !movedTo.has(b));
+    if (!to) return null;
+    movedTo.set(from, to);
+    if (from === activeBackend) activeBackend = to;
+    console.warn(`[api] ${from} ${why}; using ${to}`);
+    return to;
+  };
   window.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url;
     const from = url && BACKENDS.find((b) => b && url.startsWith(b + '/'));
     // Already found down in this visit: go straight to its replacement.
     if (from && movedTo.has(from) && !(input instanceof Request)) return nativeFetch(movedTo.get(from) + url.slice(from.length), init);
+    const repeatable = from && !(init?.body && typeof init.body !== 'string') && !(input instanceof Request);
+    let res;
     try {
-      return await nativeFetch(input, init);
+      res = await nativeFetch(input, init);
     } catch (err) {
-      const retryable = from && err?.name !== 'AbortError' && !(init?.body && typeof init.body !== 'string') && !(input instanceof Request);
-      if (!retryable) throw err;
-      const to = BACKENDS.find((b) => b && b !== from);
-      movedTo.set(from, to);
-      console.warn(`[api] ${from} did not answer; trying ${to}`);
+      if (!repeatable || err?.name === 'AbortError') throw err;
+      const to = moveOn(from, 'did not answer');
+      if (!to) throw err;
       return nativeFetch(to + url.slice(from.length), init);
     }
+    if (repeatable && GATEWAY_DOWN.has(res.status)) {
+      const to = moveOn(from, `answered ${res.status} (down behind its gateway)`);
+      if (to) return nativeFetch(to + url.slice(from.length), init);
+    }
+    return res;
   };
 }
 

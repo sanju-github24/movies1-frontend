@@ -3,7 +3,7 @@
 // /api/saavn (a port of github.com/anxkhn/jiosaavn-api). Everything the /music
 // routes render — home rows, search, a track's metadata and its audio URL —
 // comes from here.
-import { musicApi, backendUrl } from './api';
+import { musicApi, liveBackend } from './api';
 
 export const saavnApi = (path) => musicApi(`/api/saavn${path}`);
 
@@ -370,4 +370,4 @@ export async function downloadTrack(url, title, bitrate) {
  * right headers and re-serves the bytes same-origin with CORS.
  */
 export const playableUrl = (streamUrl) =>
-  `${backendUrl}/api/music/stream?url=${encodeURIComponent(streamUrl)}`;
+  `${liveBackend()}/api/music/stream?url=${encodeURIComponent(streamUrl)}`;
