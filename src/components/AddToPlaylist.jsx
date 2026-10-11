@@ -137,7 +137,7 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
             {signedIn === false ? (
               <div className="p-6 text-center">
                 <p className="text-sm text-gray-400">Sign in to save songs to your playlists.</p>
-                <button type="button" onClick={() => { setOpen(false); navigate("/login"); }}
+                <button type="button" onClick={() => { setOpen(false); navigate("/auth"); }}
                   className="mt-4 rounded-full bg-white text-black px-6 py-2.5 text-sm font-bold">Sign in</button>
               </div>
             ) : (

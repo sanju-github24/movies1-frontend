@@ -53,7 +53,7 @@ export default function MusicLibraryPage() {
         {session === null ? (
           <div className="py-16 text-center">
             <p className="text-gray-400">Sign in to see and make your playlists.</p>
-            <Link to="/login" className="inline-block mt-4 rounded-full bg-white text-black px-6 py-2.5 text-sm font-bold">Sign in</Link>
+            <Link to="/auth" className="inline-block mt-4 rounded-full bg-white text-black px-6 py-2.5 text-sm font-bold">Sign in</Link>
           </div>
         ) : lists === null ? (
           <div className="py-16 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-white/50" /></div>
