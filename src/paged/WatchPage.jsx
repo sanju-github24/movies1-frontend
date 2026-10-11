@@ -257,8 +257,12 @@ const buildServers = (meta, eps = []) => {
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
   else if (meta.tmdb_id) srv.push({ id:"ourhls", name:"AnchorHD", label:"Our Player", icon:<Video size={14}/> });
   /* MoviBox's own player, framed, with our language row on top: the video
-     comes from their CDN to the viewer and not through us (MoviboxFrame). */
-  if (meta.tmdb_id)
+     comes from their CDN to the viewer and not through us (MoviboxFrame).
+     Hidden: their page carries scam ads (a fake "not a robot" check, betting
+     banners) drawn over the video, and the ad strip above their player
+     changes height, so the crop to just the player drifts. Turn it back on
+     with VITE_ANCHOR_MB=1. */
+  if (meta.tmdb_id && import.meta.env.VITE_ANCHOR_MB === "1")
     srv.push({ id:"movibox", name:"AnchorMB", label:"Every Language", icon:<Languages size={14}/> });
   /* 1TamilMV's language posts, straight from its CDN in our player. MKV, so
      not offered where the browser cannot play one (Safari, iPhone). */

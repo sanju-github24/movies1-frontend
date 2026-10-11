@@ -13,7 +13,14 @@ import { Loader2, Languages, Maximize2, Minimize2 } from "lucide-react";
    It cannot pick up at the same moment: their player only resumes from its
    own history, kept per language, and a page cannot reach into another
    site's frame to read or set the time. So we keep a rough clock of how long
-   the last language was on screen and offer it as a hint. */
+   the last language was on screen and offer it as a hint.
+
+   The frame is sandboxed. Their ads, left to themselves, send the whole tab
+   to an advertiser's page a few seconds in (seen: xm.com) — our site with
+   it. Without allow-top-navigation and allow-popups they cannot, and the
+   player still plays. It also never scrolls: the crop only holds while their
+   page sits at the top. And while their page is still putting itself
+   together it is covered, until the video has had time to start. */
 const LOOKUP = "https://m3u8-player-orcin.vercel.app/api/movibox";
 
 const LANG_NAMES = { hi: "Hindi", ta: "Tamil", te: "Telugu", ml: "Malayalam", kn: "Kannada", bn: "Bengali",
@@ -62,6 +69,9 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   const [pick, setPick] = useState(null);
   const [hint, setHint] = useState("");
   const [full, setFull] = useState(false);
+  const [ready, setReady] = useState(false);
+  const shownAt = useRef(0);
+  const readyTimer = useRef(0);
   const startedAt = useRef(0);
   const [area, setArea] = useState(null);   // a callback ref: the box appears only once the pages are found
   const box = useBox(area);
@@ -92,6 +102,24 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
 
   useEffect(() => { if (!hint) return; const t = setTimeout(() => setHint(""), 9000); return () => clearTimeout(t); }, [hint]);
 
+  /* Covered from the moment a page starts loading. The video starts about
+     5–6s after that (measured), a few seconds after the frame's load event,
+     so the cover lifts 3.5s after load and not before 5.5s in — and after
+     12s whatever happens, so a slow page is never hidden for good. */
+  useEffect(() => {
+    if (!pick) return undefined;
+    setReady(false);
+    shownAt.current = Date.now();
+    clearTimeout(readyTimer.current);
+    readyTimer.current = setTimeout(() => setReady(true), 12000);
+    return () => clearTimeout(readyTimer.current);
+  }, [pick, full]);
+  const loaded = () => {
+    clearTimeout(readyTimer.current);
+    const wait = Math.max(3500, 5500 - (Date.now() - shownAt.current));
+    readyTimer.current = setTimeout(() => setReady(true), wait);
+  };
+
   const choose = (l) => {
     if (l.subjectId === pick?.subjectId) return;
     const was = (Date.now() - startedAt.current) / 1000;
@@ -118,6 +146,8 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   const frameProps = {
     src: pick.url, title: `${title} — ${nameOf(pick)}`,
     allow: "autoplay; encrypted-media; fullscreen; picture-in-picture", allowFullScreen: true,
+    sandbox: "allow-scripts allow-same-origin allow-presentation",
+    scrolling: "no", onLoad: loaded,
   };
 
   // Pinned to its container: the language row's width must not widen the page on a phone.
@@ -153,8 +183,14 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
             )}
           </div>
         )}
+        {!ready && (
+          <div className="absolute inset-0 z-10 bg-black flex flex-col items-center justify-center gap-3 text-gray-400">
+            <Loader2 className="w-7 h-7 animate-spin" />
+            <p className="text-xs uppercase tracking-widest font-bold">Starting {nameOf(pick)}…</p>
+          </div>
+        )}
         {hint && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-16 max-w-[90%] rounded-full bg-black/85 ring-1 ring-white/15 px-4 py-2 text-xs text-white text-center pointer-events-none">
+          <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-16 max-w-[90%] rounded-full bg-black/85 ring-1 ring-white/15 px-4 py-2 text-xs text-white text-center pointer-events-none">
             {hint}
           </div>
         )}
