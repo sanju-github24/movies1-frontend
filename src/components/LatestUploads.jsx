@@ -10,6 +10,7 @@ import { Helmet } from "react-helmet-async";
 import { Loader2, Calendar, RefreshCw, LayoutGrid, AlertCircle } from "lucide-react";
 import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { loadCatalog, groupByDay } from "../utils/catalog";
+import { loadFresh, mergeFresh } from "../utils/freshCatalog";
 import CatalogCard from "./CatalogCard";
 
 const PAGE_SIZE = 60;
@@ -28,8 +29,11 @@ const LatestUploads = () => {
     if (force) setRefreshing(true);
     setError(null);
     try {
-      const rows = await loadCatalog({ force });
-      setEntries(rows);
+      /* Our uploads and the latest releases (read hourly), together and
+         newest first. The releases are optional: if they do not come,
+         the page is our uploads alone, as before. */
+      const [rows, fresh] = await Promise.all([loadCatalog({ force }), loadFresh()]);
+      setEntries(mergeFresh(rows, fresh));
     } catch (err) {
       console.error("[LatestUploads]", err);
       setError("Couldn't load the latest uploads. Please try again.");

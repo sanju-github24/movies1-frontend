@@ -13,6 +13,7 @@ import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { loadCatalog } from "../utils/catalog";
 import { absUrl, jsonLd } from "../utils/seo";
 import CatalogCard from "./CatalogCard";
+import { loadFresh, mergeFresh } from "../utils/freshCatalog";
 
 const PAGE_SIZE = 60;
 
@@ -21,6 +22,7 @@ const CategoryPage = () => {
   const pageName = decodeURIComponent(name || "");
 
   const [entries, setEntries] = useState([]);
+  const [fresh, setFresh] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSub, setActiveSub] = useState("All");
@@ -41,6 +43,12 @@ const CategoryPage = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // The latest releases: optional, so a slow or failed answer costs only those.
+  useEffect(() => {
+    let alive = true;
+    loadFresh().then((list) => alive && setFresh(list));
+    return () => { alive = false; };
+  }, []);
 
   /* Tell the prerenderer when this page is worth snapshotting.
 
@@ -56,10 +64,13 @@ const CategoryPage = () => {
   // A new language means a fresh set of filters.
   useEffect(() => { setActiveSub("All"); setSearch(""); setShown(PAGE_SIZE); }, [pageName]);
 
+  /* Ours and the latest releases together, newest first. A release we have
+     already uploaded keeps our card (it has our links); its twin is dropped. */
   const inLanguage = useMemo(() => {
     const want = pageName.toLowerCase();
-    return entries.filter((e) => e.language.some((l) => l.toLowerCase() === want));
-  }, [entries, pageName]);
+    const inLang = (e) => e.language.some((l) => l.toLowerCase() === want);
+    return mergeFresh(entries.filter(inLang), fresh.filter(inLang));
+  }, [entries, fresh, pageName]);
 
   const subCategories = useMemo(() => {
     const subs = new Set();
