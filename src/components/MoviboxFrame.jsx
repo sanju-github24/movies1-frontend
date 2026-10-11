@@ -41,6 +41,15 @@ const clock = (s) => {
    to 767 and moves in a straight line with the width; its height is 16:9.
    If they change the layout, "Full page" still shows all of it. */
 const playerTop = (L) => Math.round(0.2453 * L + 69.4);
+/* Directly above their player sits an ad box (their ThirdPartyBannerAd): a
+   70px placeholder that either takes the height its ad reports or, with no
+   ad within 12 seconds of appearing, collapses to nothing — and the player
+   moves up by 70px. Embedded on our watch page it collapsed in most loads,
+   13.8–14.3s after the frame's load event; in the rest an ad filled it.
+   We cannot see inside their frame to tell which, so the crop follows the
+   usual case: it glides up with the collapse when it is due. */
+const AD_SLOT = 70;
+const AD_COLLAPSE_MS = 13800;
 function useBox(el) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -100,6 +109,8 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   }, [ready, full]);
   const shownAt = useRef(0);
   const readyTimer = useRef(0);
+  const [settled, setSettled] = useState(false);   // their ad box above the player has collapsed
+  const settleTimer = useRef(0);
   const startedAt = useRef(0);
   const [cssFull, setCssFull] = useState(false);     // iPhone: no element fullscreen there
   const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth);
@@ -143,11 +154,15 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
     if (!pick) return undefined;
     setReady(false);
     shownAt.current = Date.now();
+    setSettled(false);
+    clearTimeout(settleTimer.current);
     clearTimeout(readyTimer.current);
     readyTimer.current = setTimeout(() => setReady(true), 12000);
-    return () => clearTimeout(readyTimer.current);
+    return () => { clearTimeout(readyTimer.current); clearTimeout(settleTimer.current); };
   }, [pick, full, at]);
   const loaded = () => {
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => setSettled(true), AD_COLLAPSE_MS);
     clearTimeout(readyTimer.current);
     const wait = Math.max(3500, 5500 - (Date.now() - shownAt.current));
     readyTimer.current = setTimeout(() => setReady(true), wait);
@@ -277,7 +292,8 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
               <div className="relative overflow-hidden" style={{ width: vw, height: vh }}>
                 <iframe key={frameProps.src} {...frameProps} className="absolute left-0 top-0 border-0"
                   style={{ width: L, height: playerTop(L) + L + 200, transformOrigin: "0 0",
-                    transform: `scale(${k}) translateY(${-(playerTop(L) + 1)}px)` }} />
+                    transform: `scale(${k}) translateY(${-(playerTop(L) - (settled ? AD_SLOT : 0) + 1)}px)`,
+                    transition: "transform 0.45s ease" }} />
                 {fsTip && (
                   <div className="absolute right-2 bottom-12 z-10 pointer-events-none flex items-end gap-1 animate-pulse">
                     <span className="rounded-full bg-black/85 ring-1 ring-white/20 px-3 py-1.5 text-xs font-semibold text-white">
