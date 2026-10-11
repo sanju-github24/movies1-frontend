@@ -99,7 +99,7 @@ export default function TrackDetailPage() {
     const entry = player?.trackCache?.[id] || {};
     setTrackData(entry.trackData || null);
     setLyrics(entry.lyrics || null);
-    setSimilar(entry.similar || null);
+    setSimilar(entry.similar?.length ? entry.similar : null);   // an empty one is asked again
     setError('');
     if (entry.trackData?.success) {
       // Seen before, so nothing to fetch — but it still has to play.
@@ -172,11 +172,25 @@ export default function TrackDetailPage() {
   useEffect(() => {
     if (similar) return;
     let alive = true;
-    fetchSimilar(songId).then(({ songs }) => {
-      if (!alive) return;
-      const list = songs.filter((s) => s.id !== songId).slice(0, 15);
-      setSimilar(list); player?.updateTrackCache(id, { similar: list });
-    }).catch(() => alive && setSimilar([]));
+    /* Asked up to three times: a backend waking up, or a moment's error,
+       otherwise left the song with "nothing similar" for good — an empty
+       answer was kept in the cache and never asked again. Only a real list
+       is kept now. */
+    (async () => {
+      for (let attempt = 0; attempt < 3 && alive; attempt++) {
+        try {
+          const { songs } = await fetchSimilar(songId);
+          const list = songs.filter((s) => s.id !== songId).slice(0, 15);
+          if (list.length) {
+            if (!alive) return;
+            setSimilar(list); player?.updateTrackCache(id, { similar: list });
+            return;
+          }
+        } catch { /* try again */ }
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
+      if (alive) setSimilar([]);
+    })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
