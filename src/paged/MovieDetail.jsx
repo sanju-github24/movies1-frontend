@@ -635,19 +635,6 @@ const MovieDetail = () => {
                       </p>
                     </div>
                   )}
-
-                  {/* Telegram Link (Styled for dark theme) */}
-                  <div className="mt-2 text-center text-xs text-gray-400">
-                    Stay updated —{" "}
-                    <a
-                      href="https://t.me/AnchorMovies"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-cyan-400 underline hover:text-cyan-300 font-semibold transition"
-                    >
-                      join our Telegram Channel
-                    </a>
-                  </div>
                 </div>
 
                 {/* Optional GIF (Kept the logic) */}

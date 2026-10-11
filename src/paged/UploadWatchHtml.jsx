@@ -388,9 +388,6 @@ const UploadWatchHtml = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
-  const [telegramFiles, setTelegramFiles] = useState([]);
-  const [tgLoading, setTgLoading] = useState(true);
-  const [tgSearch, setTgSearch] = useState("");
   const [downloads, setDownloads] = useState([{ quality: "", size: "", links: [{ label: "", url: "" }] }]);
 
   const fetchWatchPages = useCallback(async () => {
@@ -400,20 +397,9 @@ const UploadWatchHtml = () => {
     } catch (e) { console.error("Database fetch failed"); }
   }, []);
 
-  const fetchTelegramFiles = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("telegram_files")
-      .select("file_name, file_code, created_at")
-      .order("created_at", { ascending: false });
-
-    if (!error && data) setTelegramFiles(data);
-    setTgLoading(false);
-  }, []);
-
   useEffect(() => {
     fetchWatchPages();
-    fetchTelegramFiles();
-  }, [fetchWatchPages, fetchTelegramFiles]);
+  }, [fetchWatchPages]);
 
   const handleTMDBSearch = async () => {
     if (!tmdbSearchQuery.trim()) return;
@@ -663,7 +649,7 @@ const UploadWatchHtml = () => {
                         </div>
                         {q.links.map((l, lIdx) => (
                         <div key={lIdx} className="grid grid-cols-2 gap-3">
-                            <input placeholder="Label (Telegram / Direct)" className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-[10px]" value={l.label} onChange={(e) => { const u = [...downloads]; u[qIdx].links[lIdx].label = e.target.value; setDownloads(u); }} />
+                            <input placeholder="Label (e.g. Direct)" className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-[10px]" value={l.label} onChange={(e) => { const u = [...downloads]; u[qIdx].links[lIdx].label = e.target.value; setDownloads(u); }} />
                             <input placeholder="Download URL" className="bg-slate-900 border border-slate-800 p-2 rounded-xl text-[10px] font-mono" value={l.url} onChange={(e) => { const u = [...downloads]; u[qIdx].links[lIdx].url = e.target.value; setDownloads(u); }} />
                         </div>
                         ))}
@@ -683,26 +669,6 @@ const UploadWatchHtml = () => {
                 <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-6">
                     <Layers size={18} className="text-yellow-500"/>
                     <h3 className="font-black uppercase tracking-widest text-[11px] text-white">Live Content Cloud</h3>
-                </div>
-                <div className="mt-10 bg-slate-900/50 border border-white/5 p-6 rounded-[2.5rem] space-y-6 shadow-2xl">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-4"><Database size={18} className="text-blue-500" /><h3 className="font-black uppercase tracking-widest text-[11px] text-white">Telegram Cloud Files</h3></div>
-                    <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input value={tgSearch} onChange={(e) => setTgSearch(e.target.value)} placeholder="Search file name or code..." className="w-full bg-slate-950 border border-slate-800 pl-9 p-2 rounded-xl text-[10px] text-white outline-none focus:border-blue-500/40" />
-                    </div>
-                    {tgLoading && <div className="flex items-center gap-2 text-slate-400 text-xs"><Loader2 className="animate-spin" size={14} />Loading telegram files...</div>}
-                    <div className="space-y-4 max-h-[45vh] overflow-y-auto custom-scroll pr-2">
-                        {telegramFiles.filter((file) => `${file.file_name} ${file.file_code}`.toLowerCase().includes(tgSearch.toLowerCase())).map((file, index) => {
-                            const url = `https://t.me/anchormovies_bot?start=${file.file_code}`;
-                            return (
-                                <div key={index} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl hover:border-blue-500/40 transition-all space-y-2">
-                                    <p className="text-xs font-bold text-white truncate">{file.file_name}</p>
-                                    <div className="flex justify-between items-center text-[10px] font-mono"><span className="text-blue-400">Code: {file.file_code}</span><button onClick={() => navigator.clipboard.writeText(url)} className="text-green-400 hover:text-green-300 transition">Copy URL</button></div>
-                                    <input readOnly value={url} className="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-[9px] text-slate-300" />
-                                </div>
-                            );
-                        })}
-                    </div>
                 </div>
                 <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>

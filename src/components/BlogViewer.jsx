@@ -319,9 +319,6 @@ const BlogViewer = () => {
               <Link to="/about" className="hover:text-white block">About Us</Link>
               <Link to="/contact" className="hover:text-white block">Contact</Link>
               <Link to="/blogs" className="hover:text-white block">Blogs</Link>
-              <a href="https://t.me/AnchorMovies" target="_blank" rel="noreferrer" className="hover:text-white block">
-                Telegram
-              </a>
             </div>
             <div className="space-y-2">
               <a href="#" className="hover:text-white block">Privacy Policy</a>

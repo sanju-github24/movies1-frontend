@@ -3,7 +3,7 @@ import { SITE_ORIGIN, ownUrl } from "../utils/seo";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
-import { FaWhatsapp, FaTelegramPlane } from "react-icons/fa";
+import { FaWhatsapp } from "react-icons/fa";
 import { Copy, Zap, MonitorPlay, Sparkles, ChevronRight,
          Goal, Trophy, Play, ImageOff, Flame, Star, Download } from "lucide-react";
 import { AppContext } from "../context/AppContext";
@@ -1709,7 +1709,6 @@ const Header = () => {
 
   const handleShareComplete = () => {
     setShowSharePopup(false);
-    localStorage.setItem("hasJoinedTelegram", "true");
   };
 
   /* One poster card — the rows and the grid share it. */
@@ -2008,28 +2007,6 @@ const Header = () => {
           </div>
         )}
 
-        {/* Telegram banner — moved below the catalogue. It used to sit between
-            the heading and the posters, so the first thing under "Fresh
-            Releases" was an ad for a different platform. */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-900/30 to-cyan-900/20 rounded-2xl p-5 sm:p-6 border border-blue-500/15 mt-10">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
-            <div className="flex items-center gap-4">
-              <span className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
-                <FaTelegramPlane className="text-blue-500 text-2xl" aria-hidden="true" />
-              </span>
-              <div className="text-center sm:text-left">
-                <h3 className="text-white font-bold text-base sm:text-lg">Never miss a release</h3>
-                <p className="text-blue-200/70 text-sm mt-0.5">Join our channel for instant HD links.</p>
-              </div>
-            </div>
-            <a href="https://t.me/anchor2025" target="_blank" rel="noopener noreferrer"
-              className="bg-cyan-500 hover:bg-cyan-400 text-black px-7 py-3 rounded-2xl font-black text-sm tracking-widest
-                         shadow-xl shadow-cyan-500/20 transition-colors flex items-center gap-2 shrink-0
-                         focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
-              <Zap className="w-4 h-4 fill-current" aria-hidden="true" /> Join Telegram
-            </a>
-          </div>
-        </div>
       </section>
 
           </div>

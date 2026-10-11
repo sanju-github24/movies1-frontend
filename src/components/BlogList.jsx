@@ -582,7 +582,6 @@ const BlogList = () => {
                 <Link to="/about" className="hover:text-white block transition">About Us</Link>
                 <Link to="/contact" className="hover:text-white block transition">Contact</Link>
                 <Link to="/blogs" className="hover:text-white block transition">Blogs</Link>
-                <a href="https://t.me/AnchorMovies" target="_blank" rel="noreferrer" className="hover:text-white block transition">Telegram</a>
               </div>
               <div className="space-y-2">
                 <a href="#" className="hover:text-white block transition">Privacy Policy</a>

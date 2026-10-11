@@ -4,7 +4,6 @@ import { toast } from "react-toastify";
 import {
   User, HelpCircle, ChevronRight, ArrowLeft, Laptop, Smartphone, Loader2, Check, ShieldCheck, ShieldAlert, Send, MessageSquarePlus,
 } from "lucide-react";
-import { FaTelegramPlane } from "react-icons/fa";
 import { supabase } from "../utils/supabaseClient";
 import { AppContext } from "../context/AppContext";
 
@@ -13,8 +12,6 @@ import { AppContext } from "../context/AppContext";
    and a section opens over it. */
 
 const LANGUAGES = ["Hindi", "English", "Kannada", "Tamil", "Telugu", "Malayalam"];
-const COMMUNITY = "https://t.me/AnchorMovies";
-const REQUESTS = "https://t.me/anchormovies_bot";
 
 const SECTIONS = [
   { id: "account", label: "Account & Devices", hint: "Manage Account & Devices", Icon: User },
@@ -123,34 +120,6 @@ function Help() {
   return (
     <div className="space-y-6">
       <p className="text-sm font-bold tracking-[0.15em] text-gray-300">HELP &amp; SUPPORT</p>
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-5 justify-between">
-        <div>
-          <h3 className="text-lg sm:text-xl font-semibold">Join the Community</h3>
-          <p className="mt-2 text-gray-400 leading-relaxed max-w-xl">
-            New uploads, live matches and announcements land on our Telegram first. Join to report a problem, ask for a title, or just hang out with other viewers.
-          </p>
-        </div>
-        <a href={COMMUNITY} target="_blank" rel="noopener noreferrer"
-          className="shrink-0 inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1c8cc2] px-6 py-3.5 font-semibold transition">
-          <FaTelegramPlane className="w-5 h-5" /> Join Telegram
-        </a>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <a href={REQUESTS} target="_blank" rel="noopener noreferrer"
-          className="group rounded-2xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] p-5 flex items-center gap-4 transition">
-          <MessageSquarePlus className="w-6 h-6 text-gray-300 shrink-0" />
-          <span className="flex-1"><span className="block font-semibold">Request a title</span><span className="block text-sm text-gray-500">Ask our bot for a movie or show we don't have yet</span></span>
-          <ChevronRight className="w-4 h-4 text-gray-500 group-hover:translate-x-0.5 transition-transform" />
-        </a>
-        <a href={COMMUNITY} target="_blank" rel="noopener noreferrer"
-          className="group rounded-2xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] p-5 flex items-center gap-4 transition">
-          <Send className="w-6 h-6 text-gray-300 shrink-0" />
-          <span className="flex-1"><span className="block font-semibold">Report a problem</span><span className="block text-sm text-gray-500">A stream not playing, a wrong title, a broken link</span></span>
-          <ChevronRight className="w-4 h-4 text-gray-500 group-hover:translate-x-0.5 transition-transform" />
-        </a>
-      </div>
-
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 space-y-3 text-sm text-gray-400 leading-relaxed">
         <p className="font-semibold text-gray-200">Quick fixes</p>
         <p>• A stream won't start? Try another server from the list under the player — AnchorHD first.</p>
