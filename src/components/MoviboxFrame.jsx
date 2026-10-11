@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, Languages, Maximize2, Minimize2, Expand, Shrink } from "lucide-react";
+import { Loader2, Languages, Maximize2, Minimize2, Expand, Shrink, ArrowDownRight } from "lucide-react";
 
 /* AnchorMB: MoviBox's own player, framed, with our language row on top.
 
@@ -83,11 +83,24 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   const [hint, setHint] = useState("");
   const [full, setFull] = useState(false);
   const [ready, setReady] = useState(false);
+  /* Their player's own fullscreen button is the real fix for the crop: in
+     it the video fills the screen whatever their ads do above it (checked:
+     1280×800 exactly, from inside our sandbox). Only a tap inside their
+     frame can press it, so we point at it — bottom right of the player —
+     for a few seconds once the video is up. A tap in their frame takes the
+     focus from our window, which is how we know to stop pointing. */
+  const [fsTip, setFsTip] = useState(false);
+  useEffect(() => {
+    if (!ready || full) { setFsTip(false); return undefined; }
+    setFsTip(true);
+    const t = setTimeout(() => setFsTip(false), 8000);
+    const gone = () => setFsTip(false);
+    window.addEventListener("blur", gone);
+    return () => { clearTimeout(t); window.removeEventListener("blur", gone); };
+  }, [ready, full]);
   const shownAt = useRef(0);
   const readyTimer = useRef(0);
   const startedAt = useRef(0);
-  const root = useRef(null);
-  const [isFull, setIsFull] = useState(false);       // the real fullscreen
   const [cssFull, setCssFull] = useState(false);     // iPhone: no element fullscreen there
   const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth);
   const [area, setArea] = useState(null);   // a callback ref: the box appears only once the pages are found
@@ -140,50 +153,23 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
     readyTimer.current = setTimeout(() => setReady(true), wait);
   };
 
-  /* Fullscreen and sideways, as AnchorHD does it. It is asked for when the
-     frame first appears — still inside the tap that picked AnchorMB, which
-     the browser insists on; by the time the video starts (~6s) that tap no
-     longer counts. Refused anyway, the next tap on our part of the screen
-     tries again. iPhone has no fullscreen for a page element, so it gets a
-     fixed box turned on its side instead. */
-  const fullEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-  const enterFull = async () => {
-    const el = root.current;
-    if (!el) return false;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (!req) { setCssFull(true); return true; }
-    try {
-      await req.call(el, { navigationUI: "hide" });
-      try { await screen.orientation?.lock?.("landscape"); } catch { /* not allowed here */ }
-      return true;
-    } catch { return false; }
-  };
-  const exitFull = () => {
-    try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
-    if (fullEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
-    setCssFull(false);
-  };
+  /* Fullscreen is their player's own button, not ours. With our box
+     fullscreen, pressing theirs puts the whole of their page on screen
+     (sidebar, toolbar and all) instead of the video; with ours left alone,
+     theirs fills the screen with just the video, wherever their ads have
+     pushed it, and turns a phone sideways. So we never go fullscreen where
+     theirs can — we point at it (fsTip). iPhone is the exception: there no
+     page element goes fullscreen at all, so the box is fixed over the page
+     and turned on its side while the phone is upright. */
+  const realFullscreen = typeof document !== "undefined"
+    && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   useEffect(() => {
-    const sync = () => setIsFull(!!fullEl() && fullEl() === root.current);
+    if (realFullscreen) return undefined;
+    setCssFull(true);
     const turn = () => setPortrait(window.innerHeight > window.innerWidth);
-    document.addEventListener("fullscreenchange", sync);
-    document.addEventListener("webkitfullscreenchange", sync);
     window.addEventListener("resize", turn);
-    let armed = false;
-    const el = root.current;
-    const retry = () => { armed = false; if (!fullEl()) enterFull(); };
-    enterFull().then((ok) => { if (!ok && el) { armed = true; el.addEventListener("pointerup", retry, { once: true }); } });
-    return () => {
-      document.removeEventListener("fullscreenchange", sync);
-      document.removeEventListener("webkitfullscreenchange", sync);
-      window.removeEventListener("resize", turn);
-      if (armed && el) el.removeEventListener("pointerup", retry);
-      // Closing the player must not leave the phone stuck sideways or fullscreen.
-      try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
-      if (fullEl() && fullEl() === el) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
-    };
-   
-  }, []);
+    return () => window.removeEventListener("resize", turn);
+  }, [realFullscreen]);
 
   const playEpisode = (se, ep) => {
     if (se === at.se && ep === at.ep) return;
@@ -213,7 +199,7 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
 
   if (!langs || !pick) {
     return (
-      <div ref={root} style={shell} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 bg-black">
+      <div style={shell} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 bg-black">
         <Loader2 className="w-7 h-7 animate-spin" />
         <p className="text-xs uppercase tracking-widest font-bold">Finding every language on AnchorMB…</p>
       </div>
@@ -234,7 +220,7 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
 
   // Pinned to its container: the language row's width must not widen the page on a phone.
   return (
-    <div ref={root} style={shell} className="absolute inset-0 flex flex-col bg-black">
+    <div style={shell} className="absolute inset-0 flex flex-col bg-black">
       <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 overflow-x-auto home-scroll border-b border-white/[0.06]">
         <Languages className="w-4 h-4 text-gray-500 shrink-0 mr-1" aria-hidden="true" />
         {langs.map((l) => (
@@ -245,13 +231,15 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
             {nameOf(l)}
           </button>
         ))}
-        <button type="button" onClick={() => (isFull || cssFull ? exitFull() : enterFull())}
-          aria-label={isFull || cssFull ? "Exit fullscreen" : "Fullscreen"}
-          className="ml-auto shrink-0 w-8 h-8 rounded-full bg-white/[0.04] text-gray-400 hover:text-white flex items-center justify-center">
-          {isFull || cssFull ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
-        </button>
+        {!realFullscreen && (
+          <button type="button" onClick={() => setCssFull((x) => !x)}
+            aria-label={cssFull ? "Exit fullscreen" : "Fullscreen"}
+            className="ml-auto shrink-0 w-8 h-8 rounded-full bg-white/[0.04] text-gray-400 hover:text-white flex items-center justify-center">
+            {cssFull ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
+          </button>
+        )}
         <button type="button" onClick={() => setFull((x) => !x)} title={full ? "Just the player" : "Their full page"}
-          className="shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white bg-white/[0.04]">
+          className={`${realFullscreen ? "ml-auto " : ""}shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white bg-white/[0.04]`}>
           {full ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />} {full ? "Player" : "Full page"}
         </button>
       </div>
@@ -290,6 +278,14 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
                 <iframe key={frameProps.src} {...frameProps} className="absolute left-0 top-0 border-0"
                   style={{ width: L, height: playerTop(L) + L + 200, transformOrigin: "0 0",
                     transform: `scale(${k}) translateY(${-(playerTop(L) + 1)}px)` }} />
+                {fsTip && (
+                  <div className="absolute right-2 bottom-12 z-10 pointer-events-none flex items-end gap-1 animate-pulse">
+                    <span className="rounded-full bg-black/85 ring-1 ring-white/20 px-3 py-1.5 text-xs font-semibold text-white">
+                      Tap the player's fullscreen ⛶ for the full picture
+                    </span>
+                    <ArrowDownRight className="w-6 h-6 text-white drop-shadow" aria-hidden="true" />
+                  </div>
+                )}
               </div>
             )}
           </div>
