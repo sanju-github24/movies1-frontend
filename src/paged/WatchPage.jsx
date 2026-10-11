@@ -18,6 +18,7 @@ import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
 import TamilmvDownloads, { useTamilmv } from "../components/TamilmvDownloads";
+import MoviboxFrame from "../components/MoviboxFrame";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
@@ -255,12 +256,9 @@ const buildServers = (meta, eps = []) => {
   // sources), so the viewer stays in our player instead of someone's embed.
   if (meta.hls_url || eps.some(e => e.direct_url || e.hls_url)) srv.push({ id:"ourhls", name:"AnchorHD", label:"Multi-Audio · Our CDN", icon:<Video size={14}/> });
   else if (meta.tmdb_id) srv.push({ id:"ourhls", name:"AnchorHD", label:"Our Player", icon:<Video size={14}/> });
-  /* The same player, fed only MoviBox: each language its own stream, switched
-     from the language menu. Hidden for now: MoviBox's MP4 CDN refuses every
-     data-centre address tried so far (the relay on Cloudflare, the US VPS),
-     so nothing can carry the files to the viewer yet. Turn it back on with
-     VITE_ANCHOR_MB=1 once a relay that it accepts is in place. */
-  if (meta.tmdb_id && import.meta.env.VITE_ANCHOR_MB === "1")
+  /* MoviBox's own player, framed, with our language row on top: the video
+     comes from their CDN to the viewer and not through us (MoviboxFrame). */
+  if (meta.tmdb_id)
     srv.push({ id:"movibox", name:"AnchorMB", label:"Every Language", icon:<Languages size={14}/> });
   /* 1TamilMV's language posts, straight from its CDN in our player. MKV, so
      not offered where the browser cannot play one (Safari, iPhone). */
@@ -1053,7 +1051,15 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";  // else the embed mirror
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
-    if (serverId === "movibox" && movieMeta.tmdb_id) { playAnchorTmdb(ep, "movibox"); return; }
+    if (serverId === "movibox" && movieMeta.tmdb_id) {
+      const TVmb = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
+      if (ep) setCurrentOverlayEp(ep);
+      setFinalSource({ tv: TVmb, season: ep?.season || 1, episode: ep?.episodeNumberInSeason || ep?.episode || 1 });
+      setSourceType("movibox");
+      setVideoTitle(ep ? `${movieMeta.title || routeSlug} — S${ep.season || 1}E${ep.episodeNumberInSeason || ep.episode || 1}` : (movieMeta.title || routeSlug));
+      setShowOverlay(true);
+      return;
+    }
     if (serverId === "tamilmv" && movieMeta.tmdb_id) { playAnchorTmdb(ep, "tamilmv"); return; }
 
     const imdb = (movieMeta.imdb_id || "").trim();
@@ -1767,6 +1773,22 @@ if (!alive) return;
                    sources={tmdbSources}
                    onSourceSelect={selectTmdbSource}
                    onBackClick={closeOverlay}
+                 />
+               ) :
+               sourceType === "movibox" ? (
+                 <MoviboxFrame
+                   tmdbId={movieMeta.tmdb_id}
+                   tv={finalSource?.tv}
+                   season={finalSource?.season}
+                   episode={finalSource?.episode}
+                   title={videoTitle}
+                   preferredLang={preferredAudioLang}
+                   onUnavailable={() => {
+                     // MoviBox doesn't have it — hand over to Mirchi rather than leave a dead screen.
+                     const next = availableServers.find(sv => sv.id === "mirchi");
+                     toast.info(next ? "AnchorMB couldn't find this one — trying Mirchi" : "AnchorMB couldn't find this one");
+                     if (next) { setActiveServer(next); handlePlayActionRef.current?.(currentOverlayEp, "mirchi"); }
+                   }}
                  />
                ) :
                sourceType === "html"  ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: sanitizeEmbed(finalSource) }} /> :
