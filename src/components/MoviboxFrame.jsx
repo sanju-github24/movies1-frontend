@@ -64,8 +64,21 @@ function lookup(qs) {
   return lookups.get(qs);
 }
 
-export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, title = "", preferredLang = "", onUnavailable }) {
+/* The same page for another episode: only these two parameters change. */
+const atEpisode = (url, se, ep) => {
+  try { const u = new URL(url); u.searchParams.set("detailSe", se); u.searchParams.set("detailEp", ep); return u.toString(); }
+  catch { return url; }
+};
+
+export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, title = "", preferredLang = "", onUnavailable, onEpisode }) {
   const [langs, setLangs] = useState(null);
+  /* A series: its seasons (from MoviBox, with how many episodes each has),
+     the episode playing, and the season being looked through — picking a
+     season only shows its episodes, picking an episode plays it. Switching
+     episode is just that page with other numbers, so it needs no lookup. */
+  const [seasons, setSeasons] = useState([]);
+  const [at, setAt] = useState({ se: season, ep: episode });
+  const [viewSe, setViewSe] = useState(season);
   const [pick, setPick] = useState(null);
   const [hint, setHint] = useState("");
   const [full, setFull] = useState(false);
@@ -94,6 +107,9 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
       let saved = "";
       try { saved = localStorage.getItem(memo) || ""; } catch { /* private window */ }
       setLangs(list);
+      setSeasons(tv ? (d.seasons || []) : []);
+      setAt({ se: season, ep: episode });
+      setViewSe(season);
       setPick(list.find((l) => l.subjectId === saved)
         || list.find((l) => preferredLang && (l.code === preferredLang.toLowerCase()
           || nameOf(l).toLowerCase().startsWith(preferredLang.toLowerCase())))
@@ -117,7 +133,7 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
     clearTimeout(readyTimer.current);
     readyTimer.current = setTimeout(() => setReady(true), 12000);
     return () => clearTimeout(readyTimer.current);
-  }, [pick, full]);
+  }, [pick, full, at]);
   const loaded = () => {
     clearTimeout(readyTimer.current);
     const wait = Math.max(3500, 5500 - (Date.now() - shownAt.current));
@@ -169,6 +185,15 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
    
   }, []);
 
+  const playEpisode = (se, ep) => {
+    if (se === at.se && ep === at.ep) return;
+    setHint("");
+    setAt({ se, ep });
+    startedAt.current = Date.now();
+    onEpisode?.(se, ep);
+  };
+  const shownSeason = seasons.find((x) => x.se === viewSe) || seasons[0];
+
   const choose = (l) => {
     if (l.subjectId === pick?.subjectId) return;
     const was = (Date.now() - startedAt.current) / 1000;
@@ -200,7 +225,8 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   const L = Math.min(720, Math.max(390, Math.round(vw)));
   const k = vw / L;
   const frameProps = {
-    src: pick.url, title: `${title} — ${nameOf(pick)}`,
+    src: tv ? atEpisode(pick.url, at.se, at.ep) : pick.url,
+    title: `${title} — ${nameOf(pick)}`,
     allow: "autoplay; encrypted-media; fullscreen; picture-in-picture", allowFullScreen: true,
     sandbox: "allow-scripts allow-same-origin allow-presentation",
     scrolling: "no", onLoad: loaded,
@@ -229,15 +255,39 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
           {full ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />} {full ? "Player" : "Full page"}
         </button>
       </div>
+      {tv && shownSeason && (
+        <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 overflow-x-auto home-scroll border-b border-white/[0.06]">
+          {seasons.length > 1 ? seasons.map((x) => (
+            <button key={x.se} type="button" onClick={() => setViewSe(x.se)}
+              aria-label={`Season ${x.se}`}
+              className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-black transition-colors
+                ${x.se === shownSeason.se ? "bg-blue-500 text-white" : "bg-white/[0.08] text-gray-300 hover:bg-white/15"}`}>
+              S{x.se}
+            </button>
+          )) : <span className="shrink-0 text-xs font-black text-gray-400 px-1">S{shownSeason.se}</span>}
+          <span className="shrink-0 w-px h-5 bg-white/15 mx-1" aria-hidden="true" />
+          {Array.from({ length: shownSeason.eps }, (_, i) => i + 1).map((ep) => {
+            const on = shownSeason.se === at.se && ep === at.ep;
+            return (
+              <button key={ep} type="button" onClick={() => playEpisode(shownSeason.se, ep)}
+                aria-label={`Season ${shownSeason.se} episode ${ep}`} aria-current={on ? "true" : undefined}
+                className={`shrink-0 min-w-[2.25rem] rounded-lg px-2 py-1.5 text-xs font-bold transition-colors
+                  ${on ? "bg-white text-black" : "bg-white/[0.06] text-gray-300 hover:bg-white/15"}`}>
+                E{ep}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="relative flex-1 min-h-0">
         {/* Keyed by language, so a switch is a fresh page that starts by itself. */}
         {full ? (
-          <iframe key={pick.subjectId} {...frameProps} className="absolute inset-0 w-full h-full border-0" />
+          <iframe key={frameProps.src} {...frameProps} className="absolute inset-0 w-full h-full border-0" />
         ) : (
           <div ref={setArea} className="absolute inset-0 flex items-center justify-center">
             {vw > 0 && (
               <div className="relative overflow-hidden" style={{ width: vw, height: vh }}>
-                <iframe key={pick.subjectId} {...frameProps} className="absolute left-0 top-0 border-0"
+                <iframe key={frameProps.src} {...frameProps} className="absolute left-0 top-0 border-0"
                   style={{ width: L, height: playerTop(L) + L + 200, transformOrigin: "0 0",
                     transform: `scale(${k}) translateY(${-(playerTop(L) + 1)}px)` }} />
               </div>
@@ -247,7 +297,7 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
         {!ready && (
           <div className="absolute inset-0 z-10 bg-black flex flex-col items-center justify-center gap-3 text-gray-400">
             <Loader2 className="w-7 h-7 animate-spin" />
-            <p className="text-xs uppercase tracking-widest font-bold">Starting {nameOf(pick)}…</p>
+            <p className="text-xs uppercase tracking-widest font-bold">Starting {nameOf(pick)}{tv ? ` · S${at.se}E${at.ep}` : ""}…</p>
           </div>
         )}
         {hint && (

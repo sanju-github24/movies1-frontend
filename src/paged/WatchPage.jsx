@@ -1787,6 +1787,7 @@ if (!alive) return;
                    episode={finalSource?.episode}
                    title={videoTitle}
                    preferredLang={preferredAudioLang}
+                   onEpisode={(se, epn) => setVideoTitle(`${movieMeta.title || routeSlug} — S${se}E${epn}`)}
                    onUnavailable={() => {
                      // MoviBox doesn't have it — hand over to Mirchi rather than leave a dead screen.
                      const next = availableServers.find(sv => sv.id === "mirchi");
