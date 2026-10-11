@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { absUrl, jsonLd } from "../utils/seo";
@@ -9,6 +9,7 @@ import {
 import { CRICKET_CHANNELS, FOOTBALL_CHANNELS } from "./channels";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
 import { backendUrl } from "../utils/api";
+import { fetchStarSportsGroups, preferredLanguage } from "../utils/starSports";
 
 // ── FanCode match → live stream channel (cricket match centers) ──────────────
 const FANCODE_FEED = "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json";
@@ -1011,11 +1012,41 @@ async function fetchHotstarChannelMC(hotstarId) {
       || null;
 }
 
+/* Star Sports 1 and 2 from the live feed, one entry each with its languages
+   inside. null while loading, [] when the feed has neither — and then the
+   Hotstar list in channels.js is what shows, as it did before. */
+function useStarSportsChannels(enabled) {
+  const [groups, setGroups] = useState(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fetchStarSportsGroups()
+      .then((g) => { if (alive) setGroups(g); })
+      .catch(() => { if (alive) setGroups([]); });
+    return () => { alive = false; };
+  }, [enabled]);
+  return useMemo(() => groups?.length ? groups.map(({ num, languages }) => {
+    const lang = preferredLanguage(languages);
+    return {
+      id: `star-sports-${num}`, name: `Star Sports ${num}`, sub: lang.label,
+      group: "Star Sports",
+      color: "#00a8e1", glow: "rgba(0,168,225,0.3)", border: "rgba(0,168,225,0.25)",
+      bg: "rgba(0,168,225,0.06)", useIcon: false,
+      logo: `/star-sports-${num}.jpg`,
+      url: lang.url, lang: lang.code, languages,
+    };
+  }) : groups, [groups]);
+}
+
 function LivePlayer({ sport, fancodeChannel }) {
-  // Only Willow and Hotstar Digital Star Sports channels for cricket
-  const cricketBase = CRICKET_CHANNELS.filter(
-    (c) => c.group === "Willow" || (c.group === "Star Sports" && (c.id.includes("digital") || c.url?.includes("tab=bb")))
+  const starGroups = useStarSportsChannels(sport !== "football");
+  // Willow, plus Star Sports 1 and 2 grouped by language from the live feed;
+  // the Hotstar Digital list only when the feed has given us nothing.
+  const willow = CRICKET_CHANNELS.filter((c) => c.group === "Willow");
+  const hotstarStar = CRICKET_CHANNELS.filter(
+    (c) => c.group === "Star Sports" && (c.id.includes("digital") || c.url?.includes("tab=bb"))
   );
+  const cricketBase = starGroups?.length ? [...starGroups, ...willow] : [...willow, ...hotstarStar];
   const base = sport === "football"
     ? FOOTBALL_CHANNELS
     : cricketBase;
@@ -1024,6 +1055,8 @@ function LivePlayer({ sport, fancodeChannel }) {
   const [activeUrl, setActiveUrl] = useState(channels[0]?.url || "");
   const [switching, setSwitching] = useState(false);
   const playerRef = useRef(null);
+  // Once someone has picked a channel, the feed arriving late does not move them.
+  const picked = useRef(false);
 
   const resolveStream = useCallback(async (ch) => {
     if (!ch?.url) return ch?.url || "";
@@ -1052,6 +1085,7 @@ function LivePlayer({ sport, fancodeChannel }) {
   }, []);
 
   useEffect(() => {
+    if (picked.current) return;
     let activeFlag = true;
     (async () => {
       const initialCh = fancodeChannel || channels[0];
@@ -1062,15 +1096,24 @@ function LivePlayer({ sport, fancodeChannel }) {
       }
     })();
     return () => { activeFlag = false; };
-  }, [fancodeChannel, resolveStream]);
+  }, [fancodeChannel, resolveStream, starGroups]);
 
   const switchTo = async (ch) => {
     if (ch.id === active.id) return;
+    picked.current = true;
     setSwitching(true);
     setActive(ch);
     const resolved = await resolveStream(ch);
     setActiveUrl(resolved);
     setTimeout(() => setSwitching(false), 300);
+  };
+
+  // Same channel, another commentary: only the stream changes.
+  const switchLang = (lang) => {
+    if (lang.code === active.lang) return;
+    picked.current = true;
+    setActive({ ...active, url: lang.url, lang: lang.code, sub: lang.label });
+    setActiveUrl(lang.url);
   };
 
   const goFullscreen = () => {
@@ -1091,7 +1134,7 @@ function LivePlayer({ sport, fancodeChannel }) {
             </div>
           ) : (
             <iframe
-              key={active.id}
+              key={`${active.id}:${active.lang || ""}`}
               src={activeUrl || active.url}
               className="absolute inset-0 w-full h-full border-none"
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
@@ -1171,12 +1214,12 @@ function LivePlayer({ sport, fancodeChannel }) {
                     >
                       {ch.name}
                     </span>
-                    {ch.sub && (
+                    {(isActive ? active.sub : ch.languages ? `${ch.languages.length} languages` : ch.sub) && (
                       <span
                         className="text-[8px] font-bold uppercase tracking-wider truncate"
                         style={{ color: isActive ? (ch.color || "#60a5fa") : "#6b7280" }}
                       >
-                        {ch.sub}
+                        {isActive ? active.sub : ch.languages ? `${ch.languages.length} languages` : ch.sub}
                       </span>
                     )}
                   </div>
@@ -1190,6 +1233,29 @@ function LivePlayer({ sport, fancodeChannel }) {
           </div>
         </div>
       </div>
+
+      {active.languages?.length > 1 && (
+        <div className="flex items-center gap-2 px-3 py-2 border-t border-white/[0.08] bg-white/[0.02] overflow-x-auto">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest shrink-0">Commentary</span>
+          {active.languages.map((l) => {
+            const on = l.code === active.lang;
+            return (
+              <button
+                key={l.code}
+                onClick={() => switchLang(l)}
+                className="shrink-0 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all duration-200 active:scale-95"
+                style={{
+                  background: on ? (active.bg || "rgba(255,255,255,0.1)") : "rgba(255,255,255,0.02)",
+                  borderColor: on ? (active.border || "rgba(255,255,255,0.3)") : "rgba(255,255,255,0.08)",
+                  color: on ? "#ffffff" : "#9ca3af",
+                }}
+              >
+                {l.label}{l.hd ? " HD" : ""}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
