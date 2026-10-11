@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, Languages, Maximize2, Minimize2 } from "lucide-react";
+import { Loader2, Languages, Maximize2, Minimize2, Expand, Shrink } from "lucide-react";
 
 /* AnchorMB: MoviBox's own player, framed, with our language row on top.
 
@@ -73,6 +73,10 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
   const shownAt = useRef(0);
   const readyTimer = useRef(0);
   const startedAt = useRef(0);
+  const root = useRef(null);
+  const [isFull, setIsFull] = useState(false);       // the real fullscreen
+  const [cssFull, setCssFull] = useState(false);     // iPhone: no element fullscreen there
+  const [portrait, setPortrait] = useState(() => window.innerHeight > window.innerWidth);
   const [area, setArea] = useState(null);   // a callback ref: the box appears only once the pages are found
   const box = useBox(area);
   const memo = `anchormb_lang:${tmdbId}`;
@@ -120,6 +124,51 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
     readyTimer.current = setTimeout(() => setReady(true), wait);
   };
 
+  /* Fullscreen and sideways, as AnchorHD does it. It is asked for when the
+     frame first appears — still inside the tap that picked AnchorMB, which
+     the browser insists on; by the time the video starts (~6s) that tap no
+     longer counts. Refused anyway, the next tap on our part of the screen
+     tries again. iPhone has no fullscreen for a page element, so it gets a
+     fixed box turned on its side instead. */
+  const fullEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const enterFull = async () => {
+    const el = root.current;
+    if (!el) return false;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) { setCssFull(true); return true; }
+    try {
+      await req.call(el, { navigationUI: "hide" });
+      try { await screen.orientation?.lock?.("landscape"); } catch { /* not allowed here */ }
+      return true;
+    } catch { return false; }
+  };
+  const exitFull = () => {
+    try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
+    if (fullEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
+    setCssFull(false);
+  };
+  useEffect(() => {
+    const sync = () => setIsFull(!!fullEl() && fullEl() === root.current);
+    const turn = () => setPortrait(window.innerHeight > window.innerWidth);
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    window.addEventListener("resize", turn);
+    let armed = false;
+    const el = root.current;
+    const retry = () => { armed = false; if (!fullEl()) enterFull(); };
+    enterFull().then((ok) => { if (!ok && el) { armed = true; el.addEventListener("pointerup", retry, { once: true }); } });
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+      window.removeEventListener("resize", turn);
+      if (armed && el) el.removeEventListener("pointerup", retry);
+      // Closing the player must not leave the phone stuck sideways or fullscreen.
+      try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
+      if (fullEl() && fullEl() === el) (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch?.(() => {});
+    };
+   
+  }, []);
+
   const choose = (l) => {
     if (l.subjectId === pick?.subjectId) return;
     const was = (Date.now() - startedAt.current) / 1000;
@@ -130,9 +179,16 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
     startedAt.current = Date.now();
   };
 
+  // iPhone's stand-in for fullscreen: fixed over everything, turned sideways while the phone is upright.
+  const shell = cssFull
+    ? { position: "fixed", zIndex: 2147483000, top: 0, left: 0, ...(portrait
+        ? { width: "100vh", height: "100vw", transformOrigin: "top left", transform: "rotate(90deg) translateY(-100%)" }
+        : { width: "100vw", height: "100vh" }) }
+    : undefined;
+
   if (!langs || !pick) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400 bg-black">
+      <div ref={root} style={shell} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400 bg-black">
         <Loader2 className="w-7 h-7 animate-spin" />
         <p className="text-xs uppercase tracking-widest font-bold">Finding every language on AnchorMB…</p>
       </div>
@@ -152,7 +208,7 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
 
   // Pinned to its container: the language row's width must not widen the page on a phone.
   return (
-    <div className="absolute inset-0 flex flex-col bg-black">
+    <div ref={root} style={shell} className="absolute inset-0 flex flex-col bg-black">
       <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 overflow-x-auto home-scroll border-b border-white/[0.06]">
         <Languages className="w-4 h-4 text-gray-500 shrink-0 mr-1" aria-hidden="true" />
         {langs.map((l) => (
@@ -163,8 +219,13 @@ export default function MoviboxFrame({ tmdbId, tv, season = 1, episode = 1, titl
             {nameOf(l)}
           </button>
         ))}
+        <button type="button" onClick={() => (isFull || cssFull ? exitFull() : enterFull())}
+          aria-label={isFull || cssFull ? "Exit fullscreen" : "Fullscreen"}
+          className="ml-auto shrink-0 w-8 h-8 rounded-full bg-white/[0.04] text-gray-400 hover:text-white flex items-center justify-center">
+          {isFull || cssFull ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
+        </button>
         <button type="button" onClick={() => setFull((x) => !x)} title={full ? "Just the player" : "Their full page"}
-          className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white bg-white/[0.04]">
+          className="shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white bg-white/[0.04]">
           {full ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />} {full ? "Player" : "Full page"}
         </button>
       </div>
