@@ -2,28 +2,21 @@
 const devMode = import.meta.env.DEV;
 
 /* ── Which backend ───────────────────────────────────────────────────────
-   The backend can run as more than one copy, to share the load: list them
-   all in VITE_BACKEND_URLS, comma-separated (VITE_BACKEND_URL alone still
-   works for one). Each visitor is given one at random and keeps it, so a
-   visit's requests stay together and the copies' caches stay warm; across
-   visitors the load splits evenly.
+   The backend runs as more than one copy: list them in VITE_BACKEND_URLS,
+   comma-separated, main one first (VITE_BACKEND_URL alone still works for
+   one). Every visitor uses the first — the main server — and the others
+   are standbys.
 
-   If a copy stops answering — a request to it fails outright — that request
-   is tried once more on another copy, and the visitor moves over for good. */
+   If the main one stops answering — a request to it fails outright — that
+   request is tried once more on the next copy, and the rest of the visit
+   stays there. The next visit starts on the main server again. */
 const BACKENDS = String(import.meta.env.VITE_BACKEND_URLS || import.meta.env.VITE_BACKEND_URL || (devMode ? '' : 'https://movies1-backend.onrender.com'))
   .split(',').map((u) => u.trim().replace(/\/$/, '')).filter((u, i, a) => a.indexOf(u) === i);
 if (!BACKENDS.length) BACKENDS.push('');
-const PICK_KEY = 'backend_pick';
 
-function pickBackend() {
-  try {
-    const kept = localStorage.getItem(PICK_KEY);
-    if (kept && BACKENDS.includes(kept)) return kept;
-  } catch { /* storage blocked: pick afresh */ }
-  const chosen = BACKENDS[Math.floor(Math.random() * BACKENDS.length)];
-  try { localStorage.setItem(PICK_KEY, chosen); } catch { /* fine */ }
-  return chosen;
-}
+// The old random, kept-forever pick is no longer used; clear it.
+try { localStorage.removeItem('backend_pick'); } catch { /* storage blocked */ }
+const pickBackend = () => BACKENDS[0];
 
 export const backendUrl = pickBackend();
 export const backendUrls = BACKENDS;
@@ -49,7 +42,6 @@ if (BACKENDS.length > 1 && typeof window !== 'undefined' && !window.__backendFai
       if (!retryable) throw err;
       const to = BACKENDS.find((b) => b && b !== from);
       movedTo.set(from, to);
-      try { localStorage.setItem(PICK_KEY, to); } catch { /* fine */ }
       console.warn(`[api] ${from} did not answer; trying ${to}`);
       return nativeFetch(to + url.slice(from.length), init);
     }
