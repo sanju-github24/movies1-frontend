@@ -134,3 +134,29 @@ export function toTrack(row) {
     poster: row.poster,
   };
 }
+
+/* Playlists with what a library shows: the first few songs' artwork for the
+   cover, and how many songs there are. One query — the tracks come embedded,
+   scoped by the same policies as the rest. */
+export async function listPlaylistsWithCovers() {
+  const { data, error } = await supabase
+    .from("music_playlists")
+    .select("id,name,created_at,updated_at,covers:music_playlist_tracks(poster,position),total:music_playlist_tracks(count)")
+    .order("updated_at", { ascending: false })
+    .order("position", { foreignTable: "covers", ascending: true })
+    .limit(4, { foreignTable: "covers" });
+  if (error) throw error;
+  return (data || []).map((p) => ({
+    ...p,
+    covers: (p.covers || []).map((c) => c.poster).filter(Boolean),
+    count: p.total?.[0]?.count ?? 0,
+  }));
+}
+
+/** One playlist, by id: { id, name, updated_at } or null. */
+export async function getPlaylist(id) {
+  const { data, error } = await supabase
+    .from("music_playlists").select("id,name,created_at,updated_at").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}

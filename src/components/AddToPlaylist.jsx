@@ -1,117 +1,100 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ListPlus, Check, Plus, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { ListPlus, Check, Plus, Loader2, X } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
-import { listPlaylists, createPlaylist, addTrack } from "../utils/playlists";
+import { listPlaylistsWithCovers, createPlaylist, addTrack } from "../utils/playlists";
+import PlaylistCover from "./PlaylistCover";
 
 /* Put this song in a playlist.
- *
- * The lists are fetched when the menu opens rather than on mount: most people
- * never press it, and a track page should not query the database for something
- * nobody asked to see. */
+
+   A sheet rather than a dropdown: a bottom sheet on a phone, a centred box on
+   a wider screen — the song at the top, each playlist with its cover and how
+   many songs it holds, and a new one made in place. Adding says so, with a
+   way to open the playlist, and closes the sheet: the old menu only ticked a
+   row, so it was never clear the song had gone anywhere.
+
+   The lists are fetched when it opens, not on mount: most people never press
+   it, and a song row should not query the database for it. */
 const AddToPlaylist = ({ track, className = "", compact = false }) => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [lists, setLists] = useState(null);
-  const [state, setState] = useState({});      // playlist id → saving | saved | already
-  const [signedIn, setSignedIn] = useState(false);
+  const [busy, setBusy] = useState("");          // playlist id being saved to, or "new"
+  const [signedIn, setSignedIn] = useState(null);
+  const [making, setMaking] = useState(false);
   const [name, setName] = useState("");
   const [err, setErr] = useState(null);
-  const [at, setAt] = useState(null);      // where on screen to draw the menu
-  const box = useRef(null);
-  const menu = useRef(null);
-
-  /* A card sits in a row that scrolls sideways, and a scrolling box clips what
-     grows out of it — which is why the menu appeared as a grey sliver above
-     the card with the list cut off. Drawn on the body instead and positioned
-     to the button, it is clipped by nothing.
-   
-     Measured from the button each time rather than remembered: the row it sits
-     in moves. */
-  const place = () => {
-    const b = box.current?.getBoundingClientRect();
-    if (!b) return;
-    const W = 256, GAP = 8, H = 300;
-    const below = window.innerHeight - b.bottom;
-    setAt({
-      // Above the button when there is no room beneath it.
-      top: below > H + GAP ? b.bottom + GAP : Math.max(GAP, b.top - H - GAP),
-      // Kept on screen at both edges, wherever the card has scrolled to.
-      left: Math.min(Math.max(GAP, b.right - W), window.innerWidth - W - GAP),
-      width: W,
-    });
-  };
+  const input = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
   }, []);
 
-  // A click anywhere else closes it, as a menu should.
+  // Esc closes; the page behind stays put.
   useEffect(() => {
     if (!open) return;
-    const away = (e) => {
-      if (box.current?.contains(e.target)) return;
-      if (menu.current?.contains(e.target)) return;   // it lives elsewhere in the DOM now
-      setOpen(false);
-    };
     const esc = (e) => { if (e.key === "Escape") setOpen(false); };
-    /* Fixed to the viewport, so it would otherwise sit still while the row
-       scrolls out from under it. Re-placed on both, and true on the scroll
-       listener so a scrolling row reports too, not just the page. */
-    const follow = () => place();
-    document.addEventListener("mousedown", away);
     document.addEventListener("keydown", esc);
-    window.addEventListener("scroll", follow, true);
-    window.addEventListener("resize", follow);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", esc);
-      window.removeEventListener("scroll", follow, true);
-      window.removeEventListener("resize", follow);
-    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prev; };
   }, [open]);
 
-  const show = async () => {
-    place();
-    setOpen(true); setErr(null);
-    if (lists) return;
-    try { setLists(await listPlaylists()); }
-    catch (e) { setErr(e.message); setLists([]); }
+  useEffect(() => { if (making) setTimeout(() => input.current?.focus(), 50); }, [making]);
+
+  const show = async (e) => {
+    e?.stopPropagation();
+    setOpen(true); setErr(null); setMaking(false);
+    if (!signedIn) return;
+    try { setLists(await listPlaylistsWithCovers()); }
+    catch (e2) { setErr(e2.message); setLists([]); }
+  };
+
+  const done = (pl, already) => {
+    setOpen(false);
+    const view = () => navigate(`/music/playlist/${pl.id}`);
+    const body = (
+      <span className="text-sm">
+        {already ? "Already in " : "Added to "}<b>{pl.name}</b>
+        <button type="button" onClick={view} className="ml-2 underline font-semibold">View</button>
+      </span>
+    );
+    (already ? toast.info : toast.success)(body, { autoClose: 3500 });
   };
 
   const save = async (pl) => {
-    setState((s) => ({ ...s, [pl.id]: "saving" }));
+    if (busy) return;
+    setBusy(pl.id); setErr(null);
     try {
       const { already } = await addTrack(pl.id, track);
-      setState((s) => ({ ...s, [pl.id]: already ? "already" : "saved" }));
-    } catch (e) {
-      setErr(e.message);
-      setState((s) => ({ ...s, [pl.id]: undefined }));
-    }
+      done(pl, already);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(""); }
   };
 
   const makeAndSave = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    setErr(null);
+    if (!name.trim() || busy) return;
+    setBusy("new"); setErr(null);
     try {
       const pl = await createPlaylist(name);
-      setName("");
-      setLists((l) => [pl, ...(l || [])]);
-      await save(pl);
+      await addTrack(pl.id, track);
+      setName(""); setMaking(false);
+      done(pl, false);
     } catch (e2) { setErr(e2.message); }
+    finally { setBusy(""); }
   };
 
   if (!track?.id && !track?.track_id) return null;
 
   return (
-    <div className={`relative ${className}`} ref={box}>
-      {/* On a card there is room for a circle and nothing else, so the label
-          moves to the tooltip. Same menu underneath either way. */}
+    <div className={`relative ${className}`} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
-        onClick={() => (open ? setOpen(false) : show())}
-        aria-haspopup="menu"
-        aria-expanded={open}
+        onClick={show}
+        aria-haspopup="dialog"
         aria-label="Add to playlist"
         title="Add to playlist"
         className={compact
@@ -128,65 +111,78 @@ const AddToPlaylist = ({ track, className = "", compact = false }) => {
           : <><ListPlus className="w-4 h-4" aria-hidden="true" /> Add to playlist</>}
       </button>
 
-      {open && at && createPortal((
-        <div role="menu" ref={menu}
-          style={{ position: "fixed", top: at.top, left: at.left, width: at.width }}
-          className="z-[2147483000] rounded-xl bg-gray-900 ring-1 ring-white/10 shadow-2xl p-2">
-          {!signedIn && (
-            <p className="text-xs text-gray-400 p-3">Sign in to save songs to a playlist.</p>
-          )}
+      {open && createPortal((
+        <div className="fixed inset-0 z-[2147483000] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label="Add to playlist">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setOpen(false)} />
+          <div className="relative w-full sm:max-w-sm max-h-[80dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-[#121218] ring-1 ring-white/10 shadow-2xl
+                          animate-in slide-in-from-bottom-4 sm:fade-in sm:zoom-in-95 duration-200">
+            <span className="sm:hidden mx-auto mt-2 h-1 w-10 rounded-full bg-white/15" aria-hidden="true" />
 
-          {signedIn && (
-            <>
-              {lists === null && (
-                <p className="text-xs text-gray-500 p-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Loading…
-                </p>
-              )}
+            {/* The song */}
+            <div className="flex items-center gap-3 px-4 pt-3 pb-3 border-b border-white/[0.06]">
+              {track.poster
+                ? <img src={track.poster} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                : <div className="w-12 h-12 rounded-lg bg-white/10 shrink-0" />}
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Add to playlist</p>
+                <p className="text-sm font-bold text-white truncate">{track.title}</p>
+                {track.artist && <p className="text-xs text-gray-500 truncate">{track.artist}</p>}
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/15 flex items-center justify-center text-gray-300 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              {lists?.length === 0 && (
-                <p className="text-xs text-gray-500 px-3 pt-2 pb-1">No playlists yet — name one below.</p>
-              )}
+            {signedIn === false ? (
+              <div className="p-6 text-center">
+                <p className="text-sm text-gray-400">Sign in to save songs to your playlists.</p>
+                <button type="button" onClick={() => { setOpen(false); navigate("/login"); }}
+                  className="mt-4 rounded-full bg-white text-black px-6 py-2.5 text-sm font-bold">Sign in</button>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2">
+                {/* A new one, made here and the song put in it */}
+                {making ? (
+                  <form onSubmit={makeAndSave} className="flex gap-2 p-2">
+                    <input ref={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Playlist name" maxLength={80}
+                      className="flex-1 min-w-0 bg-white/[0.06] rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-gray-600" />
+                    <button type="submit" disabled={!name.trim() || !!busy}
+                      className="shrink-0 rounded-xl bg-white text-black px-4 text-sm font-bold disabled:opacity-40 flex items-center gap-1.5">
+                      {busy === "new" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Create
+                    </button>
+                  </form>
+                ) : (
+                  <button type="button" onClick={() => setMaking(true)}
+                    className="w-full flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/[0.06]">
+                    <span className="w-12 h-12 rounded-lg bg-white text-black flex items-center justify-center shrink-0"><Plus className="w-6 h-6" /></span>
+                    <span className="text-sm font-bold text-white">New playlist</span>
+                  </button>
+                )}
 
-              <ul className="max-h-56 overflow-y-auto">
-                {(lists || []).map((pl) => {
-                  const st = state[pl.id];
-                  return (
-                    <li key={pl.id}>
-                      <button type="button" role="menuitem"
-                        onClick={() => save(pl)}
-                        disabled={st === "saving" || st === "saved" || st === "already"}
-                        className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm
-                                   hover:bg-white/10 disabled:opacity-70 disabled:hover:bg-transparent">
-                        <span className="flex-1 min-w-0 truncate">{pl.name}</span>
-                        {st === "saving" && <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />}
-                        {st === "saved" && <Check className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />}
-                        {/* Already there is not a failure — say so plainly. */}
-                        {st === "already" && <span className="text-[10px] text-gray-500 shrink-0">already in</span>}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+                {lists === null && (
+                  <p className="flex items-center gap-2 text-xs text-gray-500 px-3 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Loading your playlists…</p>
+                )}
+                {lists?.map((pl) => (
+                  <button key={pl.id} type="button" onClick={() => save(pl)} disabled={!!busy}
+                    className="w-full flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/[0.06] disabled:opacity-60">
+                    <PlaylistCover covers={pl.covers} className="w-12 shrink-0" rounded="rounded-lg" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-white truncate">{pl.name}</span>
+                      <span className="block text-xs text-gray-500">{pl.count} song{pl.count === 1 ? "" : "s"}</span>
+                    </span>
+                    {busy === pl.id && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
+                  </button>
+                ))}
+                {lists?.length === 0 && !making && (
+                  <p className="text-xs text-gray-500 px-3 py-3">No playlists yet — make the first one above.</p>
+                )}
+              </div>
+            )}
 
-              <form onSubmit={makeAndSave} className="flex gap-1.5 p-2 pt-2 border-t border-white/10 mt-1">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="New playlist"
-                  maxLength={80}
-                  className="flex-1 min-w-0 bg-white/[0.06] rounded-lg px-3 py-2 text-sm outline-none
-                             focus:ring-1 focus:ring-white/30 placeholder:text-gray-600"
-                />
-                <button type="submit" disabled={!name.trim()} aria-label="Create and add"
-                  className="shrink-0 rounded-lg bg-white text-black px-3 disabled:opacity-40">
-                  <Plus className="w-4 h-4" aria-hidden="true" />
-                </button>
-              </form>
-            </>
-          )}
-
-          {err && <p className="text-[11px] text-amber-400 px-3 pb-2">{err}</p>}
+            {err && <p className="text-xs text-amber-400 px-4 pb-3">{err}</p>}
+            <div className="pb-[env(safe-area-inset-bottom)]" />
+          </div>
         </div>
       ), document.body)}
     </div>
