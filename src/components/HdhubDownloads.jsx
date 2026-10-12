@@ -2,6 +2,18 @@ import React, { useEffect, useState } from "react";
 import { Download, Loader2, Server, ChevronDown, ExternalLink } from "lucide-react";
 import { backendUrl as apiBase } from "../utils/api";
 
+/* VITE_DL_RELAY, when set, streams the file under its clean name — HDHub4u
+   stamps "…-HDHub4u.Ms" on every file. Only the direct-file hosts the relay
+   allows are sent through it; a landing page (Buzz/fuckingfast) or a host it
+   has rotated to is left to open straight, under the host's own name. */
+const RELAY = import.meta.env.VITE_DL_RELAY || "";
+const RELAY_HOSTS = /(^|\.)(pixeldrain\.dev|cloudflarestorage\.com|googleusercontent\.com)$/i;
+const viaRelay = (url, name) => {
+  if (!RELAY || !name) return url;
+  try { if (!RELAY_HOSTS.test(new URL(url).hostname)) return url; } catch { return url; }
+  return `${RELAY}?u=${encodeURIComponent(url)}&n=${encodeURIComponent(name)}`;
+};
+
 /* More downloads for a title, from HDHub4u: each quality the matching post
    carries, with its size. The site's wait pages are skipped by the backend,
    so each one is the file host's page; opening one asks for its servers
@@ -34,6 +46,7 @@ export function useHdhub(title, year = "", imdb = "") {
 function FileRow({ file }) {
   const [open, setOpen] = useState(false);
   const [servers, setServers] = useState(null);   // null = not asked yet
+  const [name, setName] = useState("");            // the file's real name, for the relay
   const [error, setError] = useState("");
   const link = file.links[0]?.url;
 
@@ -43,7 +56,7 @@ function FileRow({ file }) {
     setServers("loading");
     fetch(`${apiBase}/api/hdhub/servers?url=${encodeURIComponent(link)}`)
       .then((r) => r.json())
-      .then((d) => { setServers(d.servers || []); if (!d.servers?.length) setError(d.error || "No servers answered for this file."); })
+      .then((d) => { setName(d.name || ""); setServers(d.servers || []); if (!d.servers?.length) setError(d.error || "No servers answered for this file."); })
       .catch(() => { setServers([]); setError("Couldn't reach the file host."); });
   };
 
@@ -66,7 +79,7 @@ function FileRow({ file }) {
             <p className="flex items-center gap-2 text-xs text-gray-400 py-1"><Loader2 size={14} className="animate-spin text-emerald-400" /> Finding servers…</p>
           )}
           {Array.isArray(servers) && servers.map((s, i) => (
-            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer nofollow"
+            <a key={i} href={viaRelay(s.url, name)} target="_blank" rel="noopener noreferrer nofollow"
               className="flex items-center gap-2.5 rounded-lg bg-white/[0.05] border border-white/[0.06] px-3 py-2.5 text-sm font-semibold text-gray-200 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-white transition">
               <Server size={14} className="text-emerald-400 shrink-0" />
               <span className="flex-1 truncate">{s.name}</span>
