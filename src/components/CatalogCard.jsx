@@ -9,6 +9,7 @@
    stored download links now live. The card says which it is before you
    click. */
 import React from "react";
+import ProgressiveImg from "./ProgressiveImg";
 import { Link } from "react-router-dom";
 import { Play, Download, Clock3 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -33,12 +34,11 @@ const CatalogCard = ({ entry, showAge = false }) => {
        is handed its TMDB details, as the home page does. */
     <Link to={to} state={entry.linkState} className="group block card-cv">
       <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/5 shadow-xl transition-all duration-300 group-hover:border-blue-500/60 group-hover:scale-[1.03] group-hover:shadow-blue-900/40">
-        <img
+        <ProgressiveImg
           src={entry.cover}
           alt={label}
-          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          onError={(e) => { e.currentTarget.src = "/default-cover.jpg"; }}
+          fallback="/default-cover.jpg"
         />
 
         {/* Badges */}

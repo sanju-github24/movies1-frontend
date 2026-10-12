@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import ProgressiveImg from "./ProgressiveImg";
 import { SITE_ORIGIN, ownUrl } from "../utils/seo";
 import { isIndiaMensMatch } from "../utils/indiaMatch";
 import { Link, useNavigate } from "react-router-dom";
@@ -1736,10 +1737,9 @@ const Header = () => {
           aria-label={`${movie.title} — open details`}
           className="block w-full text-left cursor-pointer focus:outline-none">
           <span className="block aspect-[2/3] relative overflow-hidden">
-            <img src={movie.poster || movie.poster_url || "/default-poster.jpg"} alt=""
-              loading={eager ? "eager" : "lazy"}
-              fetchPriority={eager ? "high" : "auto"}
-              decoding="async"
+            <ProgressiveImg src={movie.poster || movie.poster_url || "/default-poster.jpg"} alt=""
+              eager={eager}
+              fallback="/default-poster.jpg"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 motion-reduce:transform-none" />
   
             {/* Scrim carrying the title — always on, so the name is
