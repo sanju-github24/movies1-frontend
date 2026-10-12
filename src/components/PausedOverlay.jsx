@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ShieldCheck, PlayCircle, Star, Layers3 } from "lucide-react";
 
-const PausedOverlay = ({ 
-  isVisible, 
-  title, 
-  genres = [], 
-  quality = "Full HD", 
-  logoUrl, 
-  imdbRating, 
-  year 
+const PausedOverlay = ({
+  isVisible,
+  title,
+  genres = [],
+  quality = "Full HD",
+  logoUrl,
+  imdbRating,
+  year,
+  recommendations = [],
+  onSelect,
 }) => {
   const [shouldRender, setShouldRender] = useState(false);
   const timerRef = useRef(null);
@@ -107,6 +109,35 @@ const PausedOverlay = ({
           <span className="sm:hidden">Tap to resume</span>
         </div>
       </div>
+
+      {/* More Like This — the OTT move: while paused, a row of what to watch
+          next, straight from the overlay. Only this row takes pointer events
+          (the rest of the overlay stays click-through so a tap resumes). */}
+      {onSelect && recommendations.length > 0 && (
+        <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-auto px-4 sm:px-8 md:px-16 lg:px-24 pb-5 sm:pb-8">
+          <p className="text-[10px] sm:text-xs font-bold tracking-[0.2em] uppercase text-white/60 mb-2 sm:mb-3">More like this</p>
+          <div className="flex gap-2.5 sm:gap-3 overflow-x-auto scrollbar-hide snap-x pb-1"
+            onClick={(e) => e.stopPropagation()}>
+            {recommendations.slice(0, 12).map((m) => (
+              <button key={m.id || m.slug} type="button"
+                onClick={() => onSelect(m)}
+                title={m.title || m.slug}
+                className="group/rec relative shrink-0 w-24 sm:w-32 md:w-36 snap-start rounded-lg overflow-hidden
+                           ring-1 ring-white/10 hover:ring-white/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <span className="block aspect-[2/3] bg-gray-900">
+                  <img src={m.poster || m.poster_url || "/default-poster.jpg"} alt=""
+                    loading="lazy" decoding="async"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover/rec:scale-105"
+                    onError={(e) => { e.currentTarget.src = "/default-poster.jpg"; }} />
+                </span>
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pt-4 pb-1.5">
+                  <span className="block text-[10px] sm:text-[11px] font-semibold text-white truncate">{m.title || m.slug}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

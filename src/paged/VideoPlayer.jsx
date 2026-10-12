@@ -127,6 +127,8 @@ const VideoPlayer = ({
   onRefreshSource,    // optional (atSeconds) → parent re-signs an expired stream URL
   sources = [],       // optional [{ name, url }] — other streams of the same title
   onSourceSelect,     // optional (source, atSeconds) → parent switches to it
+  recommendations = [],       // optional titles for the paused overlay's "More Like This"
+  onSelectRecommendation,     // optional (movie) → parent navigates to it
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -1084,6 +1086,8 @@ const VideoPlayer = ({
         poster={poster}
         backdrop={backdrop}
         description={description}
+        recommendations={recommendations}
+        onSelect={onSelectRecommendation}
       />
 
       {isBuffering && (

@@ -14,6 +14,7 @@ import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv } from "../utils/anchorTmdb";
+import { useRecommendations } from "../utils/recommendations";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
@@ -384,7 +385,7 @@ const WatchHtmlPage = () => {
   const { slug: routeSlug } = useParams();
   const navigate   = useNavigate();
   const location   = useLocation();
-  const { backendUrl } = useContext(AppContext);
+  const { backendUrl, movies } = useContext(AppContext);
 
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
@@ -428,6 +429,10 @@ const WatchHtmlPage = () => {
   };
   useEffect(() => () => clearTimeout(heroHideTimer.current), []);
   const [tmdbMeta,          setTmdbMeta         ] = useState(null);
+  /* Suggestions for the paused/desktop overlay: our library first (shared
+     genres, same language), topped up with TMDB. Same source the mobile
+     detail sheet uses, so the two stay consistent. */
+  const recommendations = useRecommendations(movieMeta, movies, tmdbMeta, 12);
   const [episodes,          setEpisodes         ] = useState([]);
   const [availableServers,  setAvailableServers ] = useState([]);
   const [activeServer,      setActiveServer     ] = useState(null);
@@ -1765,6 +1770,8 @@ if (!alive) return;
                    poster={movieMeta?.poster || ""}
                    backdrop={movieMeta?.background || movieMeta?.cover_poster || ""}
                    description={movieMeta?.description || ""}
+                   recommendations={recommendations}
+                   onSelectRecommendation={(m) => { setShowOverlay(false); navigate(`/movie/${m.slug}`); }}
                    episodes={movieMeta?.content_type === "tv" ? numberedEpisodes : []}
                    currentEpisodeIndex={currentEpIndex}
                    onEpisodeClick={(ep) => (ep.direct_url || ep.hls_url)
