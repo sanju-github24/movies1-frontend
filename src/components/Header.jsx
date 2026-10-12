@@ -1727,7 +1727,7 @@ const Header = () => {
 
   const renderCard = (movie, i, eager = i < 6, showAge = false) => (
       <article key={movie.id}
-        className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06]
+        className="group relative rounded-xl overflow-hidden bg-white/[0.03] ring-1 ring-white/[0.06] card-cv
                    transition-all duration-300 hover:ring-white/25 hover:-translate-y-1
                    focus-within:ring-blue-400 motion-reduce:transform-none
                    hover:shadow-2xl hover:shadow-black/60">

@@ -284,3 +284,10 @@ video::cue {
     transition: opacity 0s;
   }
 }
+
+/* Skip rendering (layout + paint) for cards scrolled well off-screen, so a
+   long grid keeps only what's near the viewport live — smoother scroll on
+   phones. contain-intrinsic-size keeps the scrollbar/length honest for the
+   cards being skipped; `auto` remembers each card's real size once seen. A
+   hovered card is always on-screen, so its scale/shadow render normally. */
+.card-cv { content-visibility: auto; contain-intrinsic-size: auto 320px; }

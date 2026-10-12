@@ -31,7 +31,7 @@ const CatalogCard = ({ entry, showAge = false }) => {
   return (
     /* A title from the latest releases is not in our tables: its watch page
        is handed its TMDB details, as the home page does. */
-    <Link to={to} state={entry.linkState} className="group block">
+    <Link to={to} state={entry.linkState} className="group block card-cv">
       <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-900 border border-white/5 shadow-xl transition-all duration-300 group-hover:border-blue-500/60 group-hover:scale-[1.03] group-hover:shadow-blue-900/40">
         <img
           src={entry.cover}
