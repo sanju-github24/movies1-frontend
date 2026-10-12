@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useRef, useState, useEffect, useCallback } from 'react';
-import Hls from 'hls.js';
 import { resolveStream } from "../utils/playlists";
 import { fetchRadio, fetchSimilar } from "../utils/saavn";
 
@@ -45,6 +44,9 @@ export function MusicPlayerProvider({ children }) {
 
   // Active hls.js instance (only used for .m3u8 streams); torn down on each new load.
   const hlsRef = useRef(null);
+  // Bumped on every attachSource, so an hls.js load that resolves late for a
+  // track the user already skipped past is ignored.
+  const attachSeqRef = useRef(0);
   // Interval that watches HLS playback for a mid-song freeze and un-sticks it.
   const stallWatchdogRef = useRef(null);
 
@@ -68,7 +70,22 @@ export function MusicPlayerProvider({ children }) {
       hlsRef.current = null;
     }
 
-    if (isHlsUrl(url) && !audio.canPlayType('application/vnd.apple.mpegurl') && Hls.isSupported()) {
+    const seq = ++attachSeqRef.current;
+    const playNative = () => {
+      audio.src = url;
+      audio.load();
+      if (onReady) audio.addEventListener('canplay', onReady, { once: true });
+    };
+    // A plain MP3/MP4 (most tracks) plays natively; Safari plays HLS natively too.
+    if (!isHlsUrl(url) || audio.canPlayType('application/vnd.apple.mpegurl')) { playNative(); return; }
+
+    /* An HLS stream in a browser with no native HLS. hls.js (~0.5 MB) is
+       loaded only here, on demand, instead of at the top of a provider that
+       wraps the whole app — so it never weighs on a page that plays no HLS,
+       which is most of them (JioSaavn tracks are MP4). */
+    import('hls.js').then(({ default: Hls }) => {
+      if (seq !== attachSeqRef.current || audioRef.current !== audio) return;   // a newer source won
+      if (!Hls.isSupported()) { playNative(); return; }
       // Tuned to behave like a progressive MP3 download: buffer the whole track
       // far ahead so brief segment-load hiccups never interrupt playback, jump
       // small gaps instead of stalling, and retry/nudge aggressively rather than
@@ -155,11 +172,7 @@ export function MusicPlayerProvider({ children }) {
         }
         lastTime = t;
       }, 500);
-    } else {
-      audio.src = url;
-      audio.load();
-      if (onReady) audio.addEventListener('canplay', onReady, { once: true });
-    }
+    }).catch(() => { if (seq === attachSeqRef.current) playNative(); });   // hls.js chunk failed to load
   }, []);
 
   const [currentTrack, setCurrentTrack] = useState(null);
