@@ -1,6 +1,15 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { AppContext } from "../context/AppContext";
+import { readContinueList, isFinished } from "./continueWatching";
+
+/* Slugs the viewer has already finished — never recommend one of those back.
+   Read once per call rather than per candidate. */
+const finishedSlugs = () => {
+  try { return new Set(readContinueList().filter(isFinished).map((r) => r.slug)); }
+  catch { return new Set(); }
+};
+const ratingOf = (m) => parseFloat(m?.imdbRating ?? m?.imdb_rating ?? 0) || 0;
 
 /* Recommendations for the detail overlays.
    Two sources, one list:
@@ -39,14 +48,22 @@ export function localRecommendations(movie, pool = [], tmdbExtra = null, limit =
   const wantGenres = new Set(genresOf(movie, tmdbExtra).map(norm));
   const wantLangs = new Set(asList(movie.language).map(norm));
   const wantType = movie.content_type || null;
+  const done = finishedSlugs();
 
   return pool
-    .filter((m) => m && m.slug !== movie.slug && m.id !== movie.id)
+    .filter((m) => m && m.slug !== movie.slug && m.id !== movie.id && !done.has(m.slug))
     .map((m) => {
       const shared = genresOf(m).filter((g) => wantGenres.has(norm(g))).length;
       const sameLang = asList(m.language).some((l) => wantLangs.has(norm(l)));
       const sameType = wantType && m.content_type === wantType;
-      return { m, score: shared * 3 + (sameLang ? 2 : 0) + (sameType ? 1 : 0), shared };
+      /* Shared genre is the signal that matters most. Language is nearly as
+         strong — someone watching a Kannada film mostly wants more Kannada —
+         so it is weighted like a genre. Type is a light nudge, and the IMDb
+         rating only breaks ties between otherwise equal titles (a 9.0 adds
+         ~1.3, less than a single shared genre), so the better of two similar
+         titles surfaces without rating alone deciding the row. */
+      const score = shared * 3 + (sameLang ? 3 : 0) + (sameType ? 1 : 0) + ratingOf(m) * 0.15;
+      return { m, score, shared };
     })
     .filter((r) => r.shared > 0)
     .sort((a, b) => b.score - a.score)
@@ -119,12 +136,14 @@ export function useRecommendations(movie, pool = [], tmdbExtra = null, limit = 1
     return () => { alive = false; };
   }, [backendUrl, tmdbId, genreKey, contentType, limit]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ours first, then TMDB — skipping anything already in the library row.
+  // Ours first (streamable), then TMDB — skipping anything already in the
+  // library row and anything the viewer has already finished.
   return useMemo(() => {
+    const done = finishedSlugs();
     const seen = new Set(local.map((m) => String(m.tmdb_id || m.slug)));
     const extra = tmdbRecs.filter((m) => {
       const key = String(m.tmdb_id || m.slug);
-      if (seen.has(key)) return false;
+      if (seen.has(key) || done.has(m.slug)) return false;
       seen.add(key);
       return true;
     });
