@@ -124,9 +124,15 @@ const TrendingNumbersRow = ({ movies, onSelect, title = "Top 10 Today", limit = 
                       <span className="text-[9px] font-black text-white">{movie.imdbRating}</span>
                     </div>
                   )}
-                  <div className="bg-blue-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
-                    {formatLanguageCount(movie.language)}
-                  </div>
+                  {(() => {
+                    const lang = formatLanguageCount(movie.language);
+                    if (!lang || lang === "Unknown") return null;   // a source-site title carries no language — no badge
+                    return (
+                      <div className="bg-blue-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
+                        {lang}
+                      </div>
+                    );
+                  })()}
                   {movie.content_type === "tv" && (
                     <div className="bg-purple-600/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-tighter">
                       SERIES
