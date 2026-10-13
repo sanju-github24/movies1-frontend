@@ -1954,7 +1954,7 @@ const Header = () => {
         )}
 
         {/* ── Top 10 — follows live viewing, sits above the shelves ── */}
-        {trending.length >= 5 && (
+        {trending.length >= 4 && (
           <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
         )}
 
