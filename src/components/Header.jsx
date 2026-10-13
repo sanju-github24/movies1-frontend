@@ -15,6 +15,8 @@ import { seasonNo } from "../utils/titleEpisodes";
 import { teamCrest } from "../utils/teamCrest";
 import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
+import TrendingNumbersRow from "./TrendingNumbersRow";
+import { fetchTrending } from "../utils/trending";
 import { enrichMovies, buildShelves } from "../utils/homeShelves";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
@@ -1565,6 +1567,15 @@ const Header = () => {
     try { prefLang = localStorage.getItem("preferred_audio_lang") || ""; } catch { /* private mode */ }
     return buildShelves(richHome, { prefLang });
   }, [richHome]);
+
+  /* Top 10 — ranked by what people are actually watching now (the backend
+     decays each play over days), enriched there so this just renders it. */
+  const [trending, setTrending] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    fetchTrending(10).then((list) => { if (alive) setTrending(list); });
+    return () => { alive = false; };
+  }, []);
   // Rows opened into a full grid with "View all".
   const [openRows, setOpenRows] = useState(() => new Set());
   const toggleRow = (id) => setOpenRows((prev) => {
@@ -1940,6 +1951,11 @@ const Header = () => {
               <MonitorPlay className="w-4 h-4" aria-hidden="true" /> R2 movie uploader
             </a>
           </div>
+        )}
+
+        {/* ── Top 10 — follows live viewing, sits above the shelves ── */}
+        {trending.length >= 5 && (
+          <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
         )}
 
         {/* ── ROWS ── */}

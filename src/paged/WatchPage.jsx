@@ -15,6 +15,7 @@ import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv } from "../utils/anchorTmdb";
 import { useRecommendations } from "../utils/recommendations";
+import { recordTrendingHit } from "../utils/trending";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
@@ -1015,6 +1016,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     tmdbIterRef.current = null;   // whatever plays next, it is not the last TMDB search
     setTmdbSources([]);
     if (!movieMeta) return;
+    recordTrendingHit(movieMeta.slug || routeSlug);   // a play is a vote for the Top 10
 
     /* Live telecast, WHILE IT IS ON AIR: one source, one window. The stream is a
        player page carrying its own signed params, so it goes in as an embed —
