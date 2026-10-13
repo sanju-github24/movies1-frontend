@@ -1953,18 +1953,16 @@ const Header = () => {
           </div>
         )}
 
-        {/* ── Top 10 — follows live viewing, sits above the shelves ── */}
-        {trending.length >= 4 && (
-          <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
-        )}
-
         {/* ── ROWS ── */}
         {/* Hotstar-style headings: one plain bold line, and "View all" on the
-            right, which opens the row into a grid where it stands. */}
+            right, which opens the row into a grid where it stands. The Top 10
+            — live viewing + the source sites' hot releases — sits after the
+            first two rows rather than on top of the page. */}
         {shelves.map((row, r) => {
           const open = openRows.has(row.id);
           return (
-            <div key={row.id} className="mb-7 sm:mb-9">
+            <React.Fragment key={row.id}>
+            <div className="mb-7 sm:mb-9">
               <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
                 <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
                 {row.items.length > 6 && (
@@ -1992,6 +1990,10 @@ const Header = () => {
                 </ScrollRow>
               )}
             </div>
+            {r === 1 && trending.length >= 4 && (
+              <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
+            )}
+            </React.Fragment>
           );
         })}
 
