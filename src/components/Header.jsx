@@ -1561,12 +1561,22 @@ const Header = () => {
   // Homepage titles with their genres, rating and languages joined on.
   const richHome = useMemo(() => enrichMovies(homeMovies, watchMeta), [homeMovies, watchMeta]);
   const gridMovies = useMemo(() => richHome.slice(0, 100), [richHome]);
+  /* A seed kept per browser, so the row names (The Crime Vault / Into the
+     Underworld …) differ from one viewer to the next but never shuffle under
+     the same person on a refresh. */
+  const nameSeed = useMemo(() => {
+    try {
+      let v = localStorage.getItem("row_name_seed");
+      if (!v) { v = Math.random().toString(36).slice(2, 10); localStorage.setItem("row_name_seed", v); }
+      return v;
+    } catch { return "anon"; }
+  }, []);
   const shelves = useMemo(() => {
     if (!richHome.length) return [];
     let prefLang = "";
     try { prefLang = localStorage.getItem("preferred_audio_lang") || ""; } catch { /* private mode */ }
-    return buildShelves(richHome, { prefLang });
-  }, [richHome]);
+    return buildShelves(richHome, { prefLang, seed: nameSeed });
+  }, [richHome, nameSeed]);
 
   /* Top 10 — ranked by what people are actually watching now (the backend
      decays each play over days), enriched there so this just renders it. */
@@ -1964,7 +1974,10 @@ const Header = () => {
             <React.Fragment key={row.id}>
             <div className="mb-7 sm:mb-9">
               <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
-                <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
+                <div className="min-w-0">
+                  <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
+                  {row.subtitle && <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate">{row.subtitle}</p>}
+                </div>
                 {row.items.length > 6 && (
                   <button type="button" onClick={() => toggleRow(row.id)} aria-expanded={open}
                     className="flex items-center gap-0.5 text-[13px] sm:text-sm font-semibold text-gray-400 hover:text-white transition-colors

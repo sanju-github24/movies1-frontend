@@ -47,16 +47,47 @@ const hasGenre = (m, re) => m._genres.some((g) => re.test(g));
 const hasLang = (m, lang) => m._langs.some((l) => l.toLowerCase() === lang.toLowerCase());
 const cats = (m) => list(m.categories).join(" ");
 
+/* Evocative, Hotstar-style names, each with a plain subtitle so a viewer
+   still knows what the row is. The subtitle is the honest label; the title
+   is the hook — and each row has a POOL of hooks, one chosen per viewer (see
+   nameOf), so two people see "The Crime Vault" and "Into the Underworld" for
+   the same row. */
+const NAMES = {
+  trending: ["Trending in India", "Everyone's Watching", "Hot Right Now", "Buzzing This Week"],
+  best:     ["Critically Acclaimed", "Top Rated", "Must-Watch Masterpieces", "Cream of the Crop"],
+  multi:    ["One Film, Every Language", "Watch in Your Language", "Many Voices, One Film"],
+  hollywood:["Hollywood Blockbusters", "Hollywood Heavyweights", "Straight from Hollywood"],
+  theatre:  ["Fresh From Theatres", "Straight Outta Cinemas", "Now Showing"],
+  thrillers:["The Crime Vault", "Into the Underworld", "Edge of Your Seat", "Mystery & Mayhem"],
+  action:   ["Adrenaline Rush", "Full-Throttle Action", "No Guts, No Glory", "Blockbuster Action"],
+  comedy:   ["Laugh Out Loud", "Comedy Central", "Just for Laughs", "Feel-Good Funnies"],
+  romance:  ["Hopelessly Romantic", "Hearts & Sparks", "Love, Actually", "Date Night Picks"],
+  horror:   ["After Dark", "Lights Out", "Nightmare Fuel", "Things That Go Bump"],
+  scifi:    ["Beyond Reality", "Worlds Apart", "Into the Unknown", "Future Shock"],
+  family:   ["Family Movie Night", "For the Whole Family", "Popcorn & Pajamas", "Kids & Family"],
+  drama:    ["Edge of Drama", "Stories That Linger", "Life, Unscripted", "Pure Drama"],
+};
+
 const GENRE_ROWS = [
-  { id: "thrillers", title: "Thrillers", subtitle: "Crime, mystery and edge-of-the-seat", re: /thriller|crime|mystery/i },
-  { id: "action", title: "Action & adventure", re: /action|adventure|war/i },
-  { id: "comedy", title: "Comedy", subtitle: "Something light", re: /comedy/i },
-  { id: "romance", title: "Romance", re: /romance/i },
-  { id: "horror", title: "Horror", subtitle: "Watch with the lights on", re: /horror/i },
-  { id: "scifi", title: "Sci-fi & fantasy", re: /sci-?fi|science fiction|fantasy/i },
-  { id: "family", title: "Family & animation", re: /family|animation|kids/i },
-  { id: "drama", title: "Drama", re: /drama/i },
+  { id: "thrillers", subtitle: "Thrillers, heists & whodunits", re: /thriller|crime|mystery/i },
+  { id: "action", subtitle: "Action, war & adventure", re: /action|adventure|war/i },
+  { id: "comedy", subtitle: "Comedies to lighten the mood", re: /comedy/i },
+  { id: "romance", subtitle: "Love stories", re: /romance/i },
+  { id: "horror", subtitle: "Horror — watch with the lights on", re: /horror/i },
+  { id: "scifi", subtitle: "Sci-fi & fantasy", re: /sci-?fi|science fiction|fantasy/i },
+  { id: "family", subtitle: "Fun for all ages", re: /family|animation|kids/i },
+  { id: "drama", subtitle: "Stories that stay with you", re: /drama/i },
 ];
+
+/* One hook per viewer per row: a small hash of the viewer's seed and the row
+   id picks from the pool, so each person sees a consistent-but-different set,
+   and it never changes under them on a refresh. */
+const hashStr = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+const nameOf = (id, seed, fallback) => {
+  const pool = NAMES[id];
+  if (!pool || !pool.length) return fallback;
+  return pool[hashStr(`${seed}:${id}`) % pool.length];
+};
 
 const LANG_ROWS = ["Kannada", "Tamil", "Telugu", "Malayalam", "Hindi"];
 
@@ -66,7 +97,7 @@ const LANG_ROWS = ["Kannada", "Tamil", "Telugu", "Malayalam", "Hindi"];
  *   prefLang — the viewer's audio language, if they ever chose one ("Kannada", "kan" …)
  * Returns [{ id, title, subtitle?, items }], each row at least MIN long.
  */
-export function buildShelves(movies, { prefLang = "" } = {}) {
+export function buildShelves(movies, { prefLang = "", seed = "" } = {}) {
   const MIN = 6, MAX = 24;
   /* Already in upload order. Some titles were uploaded twice (two rows, one
      film); a row shows each once — the newest upload, which comes first. */
@@ -107,7 +138,7 @@ export function buildShelves(movies, { prefLang = "" } = {}) {
   const flagged = newest.filter((m) => m._trending);
   const hot = recent.filter((m) => !m._trending && m._rating >= 6.5 && isClean(m))
     .sort((a, b) => b._rating - a._rating);
-  add({ id: "trending", title: "Trending now" }, [...flagged, ...hot]);
+  add({ id: "trending", title: nameOf("trending", seed, "Trending now") }, [...flagged, ...hot]);
 
   /* 3. Best to watch: well rated and a clean print. A 10/10 is nearly always
      a handful of votes — there is no vote count to tell — so a near-perfect
@@ -119,7 +150,7 @@ export function buildShelves(movies, { prefLang = "" } = {}) {
     .filter(({ m }) => m._rating >= 7 && isClean(m))
     .sort((a, b) => b.score - a.score)
     .map(({ m }) => m);
-  add({ id: "best", title: "Best to watch", subtitle: "Rated 7+ · clean prints" }, best);
+  add({ id: "best", title: nameOf("best", seed, "Best to watch"), subtitle: "Rated 7+ · clean prints" }, best);
 
   // 4. The viewer's own language, right after.
   const pref = LANG_ROWS.find((l) => {
@@ -130,21 +161,21 @@ export function buildShelves(movies, { prefLang = "" } = {}) {
 
   // 5. Genres. Clean prints first — a thriller is better met in WEB-DL.
   const cleanFirst = (items) => [...items.filter(isClean), ...items.filter((m) => !isClean(m))];
-  for (const g of GENRE_ROWS.slice(0, 5)) add(g, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
+  for (const g of GENRE_ROWS.slice(0, 5)) add({ ...g, title: nameOf(g.id, seed, g.id) }, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
 
   // 6. Many audio languages in one file.
-  add({ id: "multi", title: "Watch in your language", subtitle: "Three or more audio languages" },
+  add({ id: "multi", title: nameOf("multi", seed, "Watch in your language"), subtitle: "Three or more audio tracks" },
     newest.filter((m) => m._langs.length >= 3 && isClean(m)));
 
-  for (const g of GENRE_ROWS.slice(5)) add(g, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
+  for (const g of GENRE_ROWS.slice(5)) add({ ...g, title: nameOf(g.id, seed, g.id) }, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
 
   // 7. Languages, and Hollywood.
   for (const l of LANG_ROWS) if (l !== pref) add({ id: `lang-${l}`, title: `${l} movies` }, newest.filter((m) => hasLang(m, l)));
-  add({ id: "hollywood", title: "Hollywood" },
+  add({ id: "hollywood", title: nameOf("hollywood", seed, "Hollywood") },
     newest.filter((m) => /hollywood/i.test(cats(m)) || (m._langs.length === 1 && hasLang(m, "English"))));
 
   // 8. Theatre prints, under their own name rather than among the rest.
-  add({ id: "theatre", title: "New in theatres", subtitle: "Early theatre prints" },
+  add({ id: "theatre", title: nameOf("theatre", seed, "New in theatres"), subtitle: "Early theatre prints" },
     newest.filter((m) => !isClean(m)), { vary: false });
 
   return rows;
