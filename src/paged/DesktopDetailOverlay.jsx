@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { X, Play, Volume2, VolumeX, Star, ChevronDown, CheckCircle2, Download } from "lucide-react";
+import { X, Play, Volume2, VolumeX, Star, ChevronDown, Download } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, newestEpisode } from "../utils/titleEpisodes";
 import { readOne, isFinished } from "../utils/continueWatching";
@@ -125,6 +125,7 @@ const RelatedRow = ({ movies, onSelect, onPlay }) => {
 
 const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relatedMovies, isMuted, setIsMuted }) => {
   const [introDone, setIntroDone] = useState(false);   // the 1s the artwork holds for
+  const [descExpanded, setDescExpanded] = useState(false);   // storyline "more"
   const [mp4Live, setMp4Live] = useState(false);      // the MP4 is actually playing
   const [isEntering, setIsEntering] = useState(false);
   const [activeSeason, setActiveSeason] = useState(null);
@@ -365,14 +366,21 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
         {/* Details and Recommended Section */}
         <div className={`bg-[#111111] p-10 xl:p-12 transition-all duration-1000 delay-500 ${isEntering ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
-            <div className="xl:col-span-2 space-y-6">
-               <div className="flex items-center gap-3 text-green-500 font-black text-sm uppercase tracking-tighter">
-                 <CheckCircle2 size={16} />
-                 <span>98% Match</span>
-               </div>
-               <p className="text-lg text-gray-200 leading-relaxed font-medium italic border-l-2 border-blue-600 pl-6">
+            <div className="xl:col-span-2">
+               {/* Hotstar-style storyline: a quiet label, then the synopsis as
+                   calm, readable prose — no italics, no coloured bar, no fake
+                   match score. Long overviews clamp to four lines with a
+                   gentle "more". */}
+               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-3">Storyline</p>
+               <p className={`text-[15px] xl:text-base text-gray-300 leading-[1.7] max-w-2xl ${descExpanded ? "" : "line-clamp-4"}`}>
                  {description}
                </p>
+               {description.length > 260 && (
+                 <button type="button" onClick={() => setDescExpanded((v) => !v)}
+                   className="mt-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+                   {descExpanded ? "Show less" : "More"}
+                 </button>
+               )}
             </div>
 
             <div className="space-y-6 pl-8 border-l border-white/5">
