@@ -97,8 +97,34 @@ const LANG_ROWS = ["Kannada", "Tamil", "Telugu", "Malayalam", "Hindi"];
  *   prefLang — the viewer's audio language, if they ever chose one ("Kannada", "kan" …)
  * Returns [{ id, title, subtitle?, items }], each row at least MIN long.
  */
-export function buildShelves(movies, { prefLang = "", seed = "" } = {}) {
+export function buildShelves(movies, { prefLang = "", seed = "", affinity = { genres: {}, langs: {} } } = {}) {
   const MIN = 6, MAX = 24;
+
+  /* Per-viewer mix. Two levers, both seeded by the viewer so their page is
+     their own but steady across refreshes:
+       • row order — the genres and languages a viewer actually watches
+         (affinity, from continue-watching) float up; with no history the
+         seed alone varies the order, so no two people get the same page;
+       • item order — titles inside a row are shuffled per viewer (clean
+         prints still ahead of CAMs), so the same genre row leads with
+         different films for different people. */
+  const seededShuffle = (arr, salt) => {
+    const a = [...arr];
+    let h = (hashStr(`${seed}:${salt}`) || 1) >>> 0;
+    for (let i = a.length - 1; i > 0; i--) {
+      h = (h * 1103515245 + 12345) & 0x7fffffff;
+      const j = h % (i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const genreScore = (g) => {
+    let s = 0;
+    for (const [name, n] of Object.entries(affinity.genres || {})) if (g.re.test(name)) s += n;
+    return s + (hashStr(`${seed}:${g.id}`) % 7) * 0.01;   // seeded jitter varies order for a viewer with no history
+  };
+  const langScore = (l) => (affinity.langs?.[l.toLowerCase()] || 0) + (hashStr(`${seed}:${l}`) % 7) * 0.01;
+  const orderedGenres = [...GENRE_ROWS].sort((a, b) => genreScore(b) - genreScore(a));
   /* Already in upload order. Some titles were uploaded twice (two rows, one
      film); a row shows each once — the newest upload, which comes first. */
   const seenTitle = new Set();
@@ -159,18 +185,24 @@ export function buildShelves(movies, { prefLang = "", seed = "" } = {}) {
   });
   if (pref) add({ id: `lang-${pref}`, title: `In ${pref}` }, newest.filter((m) => hasLang(m, pref)));
 
-  // 5. Genres. Clean prints first — a thriller is better met in WEB-DL.
-  const cleanFirst = (items) => [...items.filter(isClean), ...items.filter((m) => !isClean(m))];
-  for (const g of GENRE_ROWS.slice(0, 5)) add({ ...g, title: nameOf(g.id, seed, g.id) }, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
+  // 5. Genres, in the viewer's own order, each shuffled for them — clean
+  //    prints still ahead of CAMs.
+  const genreItems = (g) => {
+    const match = newest.filter((m) => hasGenre(m, g.re));
+    return [...seededShuffle(match.filter(isClean), g.id), ...seededShuffle(match.filter((m) => !isClean(m)), g.id)];
+  };
+  const genreRow = (g) => add({ ...g, title: nameOf(g.id, seed, g.id) }, genreItems(g));
+  orderedGenres.slice(0, 5).forEach(genreRow);
 
   // 6. Many audio languages in one file.
   add({ id: "multi", title: nameOf("multi", seed, "Watch in your language"), subtitle: "Three or more audio tracks" },
-    newest.filter((m) => m._langs.length >= 3 && isClean(m)));
+    seededShuffle(newest.filter((m) => m._langs.length >= 3 && isClean(m)), "multi"));
 
-  for (const g of GENRE_ROWS.slice(5)) add({ ...g, title: nameOf(g.id, seed, g.id) }, cleanFirst(newest.filter((m) => hasGenre(m, g.re))));
+  orderedGenres.slice(5).forEach(genreRow);
 
-  // 7. Languages, and Hollywood.
-  for (const l of LANG_ROWS) if (l !== pref) add({ id: `lang-${l}`, title: `${l} movies` }, newest.filter((m) => hasLang(m, l)));
+  // 7. Languages (the viewer's most-watched first), and Hollywood.
+  [...LANG_ROWS].filter((l) => l !== pref).sort((a, b) => langScore(b) - langScore(a))
+    .forEach((l) => add({ id: `lang-${l}`, title: `${l} movies` }, seededShuffle(newest.filter((m) => hasLang(m, l)), `lang-${l}`)));
   add({ id: "hollywood", title: nameOf("hollywood", seed, "Hollywood") },
     newest.filter((m) => /hollywood/i.test(cats(m)) || (m._langs.length === 1 && hasLang(m, "English"))));
 

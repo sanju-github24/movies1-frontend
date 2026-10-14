@@ -18,6 +18,7 @@ import ScrollRow from "./ScrollRow";
 import TrendingNumbersRow from "./TrendingNumbersRow";
 import { fetchTrending } from "../utils/trending";
 import { enrichMovies, buildShelves } from "../utils/homeShelves";
+import { readContinueList } from "../utils/continueWatching";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
@@ -1517,7 +1518,11 @@ const Header = () => {
     const CAM = /PRE-?DVD|PRE-?HD|HDTS|HDTC|HDCAM|\bCAM\b|\bTS\b/i;
     const CLEAN = /WEB|BLU-?RAY|BDRIP|HDRIP|HDTV|DVDRIP/i;
     const printOf = (m) => (Array.isArray(m.subCategory) ? m.subCategory : [m.subCategory]).filter(Boolean).join(" ") || m.title || "";
-    const ours = movies.filter(m => m.showOnHomepage).map((m) => {
+    /* The whole catalogue, not just the homepage-flagged few, so the rows mix
+       from everything we hold. Recency still rules the order (the flagged and
+       the newest lead; old titles sink), and the genre/language rows now draw
+       on the full library instead of a curated slice. */
+    const ours = movies.map((m) => {
       const f = freshByTitle.get(titleKey(m.title));
       if (!f || !CLEAN.test(f.print || "") || !CAM.test(printOf(m)) || CLEAN.test(printOf(m))) return m;
       const newer = new Date(f.first_seen || 0) > new Date(m.homepage_added_at || m.created_at || 0);
@@ -1571,12 +1576,28 @@ const Header = () => {
       return v;
     } catch { return "anon"; }
   }, []);
+  /* What this viewer actually watches, from continue-watching — the genres
+     and languages of titles they have in progress or finished. Feeds the
+     per-viewer row order so a thriller watcher's rows lead with thrillers. */
+  const affinity = useMemo(() => {
+    const genres = {}, langs = {};
+    try {
+      const bySlug = new Map(richHome.map((m) => [m.slug, m]));
+      for (const w of readContinueList()) {
+        const m = bySlug.get(w.slug);
+        if (!m) continue;
+        (m._genres || []).forEach((g) => { const k = String(g).toLowerCase(); genres[k] = (genres[k] || 0) + 1; });
+        (m._langs || []).forEach((l) => { const k = String(l).toLowerCase(); langs[k] = (langs[k] || 0) + 1; });
+      }
+    } catch { /* no history */ }
+    return { genres, langs };
+  }, [richHome]);
   const shelves = useMemo(() => {
     if (!richHome.length) return [];
     let prefLang = "";
     try { prefLang = localStorage.getItem("preferred_audio_lang") || ""; } catch { /* private mode */ }
-    return buildShelves(richHome, { prefLang, seed: nameSeed });
-  }, [richHome, nameSeed]);
+    return buildShelves(richHome, { prefLang, seed: nameSeed, affinity });
+  }, [richHome, nameSeed, affinity]);
 
   /* Top 10 — ranked by what people are actually watching now (the backend
      decays each play over days), enriched there so this just renders it. */
