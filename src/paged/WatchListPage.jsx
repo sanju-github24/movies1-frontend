@@ -252,6 +252,37 @@ const buildTmdbMovie = (t) => {
   };
 };
 
+/* A source-site title (1TamilMV / HDHub4u, matched to TMDB by the backend's
+   /api/fresh) in the shape the rows, cards and overlay already use. These are
+   not in our tables — they stream from the external post — so they fill the
+   catalogue alongside our uploads and TMDB's regional lists. */
+const buildFreshMovie = (f) => ({
+  id: `fresh_${f.tmdb_id}`,
+  tmdb_id: f.tmdb_id || null,
+  imdb_id: f.imdb_id || null,
+  title: f.title,
+  slug: f.slug,
+  source: "fresh",
+  content_type: f.content_type === "tv" ? "tv" : "movie",
+  poster: f.poster || "/default-poster.jpg",
+  cover_poster: f.cover_poster || f.poster || "/default-cover.jpg",
+  title_logo: f.title_logo || null,
+  trailer_key: null,
+  language: [],
+  genres: f.genres || [],
+  tmdb_genres: f.genres || [],
+  imdbRating: f.imdb_rating ? String(f.imdb_rating) : null,
+  year: f.year || null,
+  description: f.description || "",
+  is_trending: !!f.top_week,
+  tmdbPayload: {
+    tmdb_id: f.tmdb_id, imdb_id: f.imdb_id || null, title: f.title, slug: f.slug,
+    poster: f.poster, cover_poster: f.cover_poster, description: f.description || "",
+    year: f.year || null, imdb_rating: f.imdb_rating, content_type: f.content_type,
+    genres: f.genres || [],
+  },
+});
+
 /* Its mobile bottom nav is gone too — the site navbar already puts one on
    every phone screen, and this page was stacking a second on top of it. */
 
@@ -567,9 +598,16 @@ const WatchListPage = () => {
     const fetchMovies = async () => {
       if (!readCache()) setLoading(true);   // never blank out an already-painted page
       try {
-        const [watchRes, moviesRes] = await Promise.all([
-          supabase.from("watch_html").select("*").order("created_at", { ascending: false }).limit(400),
+        const [watchRes, moviesRes, freshRes] = await Promise.all([
+          /* Only the columns the browse grid needs — not html_code,
+             download_links, downloads or the stream URLs, which are large and
+             unused here (the watch page refetches the full row by slug). This
+             alone cuts the 400-row payload several-fold. */
+          supabase.from("watch_html")
+            .select("id, title, slug, created_at, poster, cover_poster, title_logo, episodes, imdb_rating, imdb_id, tmdb_id, mal_id, content_type, show_on_hero, is_trending, genres, trailer_codes")
+            .order("created_at", { ascending: false }).limit(400),
           supabase.from("movies").select("slug, title, language, categories, subCategory, description"),
+          axios.get(`${backendUrl}/api/fresh`, { timeout: 15000 }).then((r) => r.data?.items || []).catch(() => []),
         ]);
 
         const merged = (watchRes.data || []).map((item) => {
@@ -597,12 +635,32 @@ const WatchListPage = () => {
 
         setMovies(merged);
 
+        /* The source-site titles (1TamilMV / HDHub4u), deduped against our
+           own by title and slug. */
+        const localTitleSet = new Set(merged.map((m) => m.title?.toLowerCase().trim()).filter(Boolean));
+        const localSlugSet = new Set(merged.map((m) => m.slug?.toLowerCase()).filter(Boolean));
+        const freshMovies = (freshRes || [])
+          .filter((f) => f && f.tmdb_id && f.poster
+            && !localTitleSet.has((f.title || "").toLowerCase().trim())
+            && !localSlugSet.has((f.slug || "").toLowerCase()))
+          .map(buildFreshMovie);
+
+        /* Paint now, before the TMDB fan-out. Our uploads plus the source-site
+           titles are already a full catalogue, so the page is usable in one
+           round-trip instead of waiting on ~30 TMDB requests; those merge in
+           when they arrive. */
+        const base = [...merged, ...freshMovies];
+        setAllMovies(base);
+        if (!readCache()) setLoading(false);
+        const baseTrending = [...merged.filter((m) => m.is_trending), ...freshMovies.filter((m) => m.is_trending)].slice(0, 10);
+        if (baseTrending.length) setTrendingMovies(baseTrending);
+
         const [tmdb, langTrendingMap] = await Promise.all([
-          fetchTmdbMovies(merged, fetchLangs),
+          fetchTmdbMovies([...merged, ...freshMovies], fetchLangs),
           fetchLangTrending(fetchLangs),
         ]);
         setLangTrending(langTrendingMap);
-        const combined = [...merged, ...tmdb];
+        const combined = [...merged, ...freshMovies, ...tmdb];
         setAllMovies(combined);
 
         // When the user picked languages, keep hero/trending fills within them
