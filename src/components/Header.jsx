@@ -1614,12 +1614,16 @@ const Header = () => {
   const [mxShelves, setMxShelves] = useState([]);
   useEffect(() => {
     let alive = true;
+    // No &lang filter: MX's browse SSR leaves per-item languages blank, so the
+    // filter can't see Hindi and would (once MX tags some items) drop the
+    // untagged ones. These MX-India collections are the Hindi-dubbed catalog
+    // already, so the whole collection in MX's own order is what we want.
     const defs = [
-      { id: "kdrama", path: "show-videos/korean-drama-shows", lang: "hindi", sub: "Korean dramas, dubbed in Hindi" },
-      { id: "anime", path: "show-videos/anime-shows", lang: "hindi", sub: "Anime, dubbed in Hindi" },
+      { id: "kdrama", path: "show-videos/korean-drama-shows", sub: "Korean dramas, dubbed in Hindi" },
+      { id: "anime", path: "show-videos/anime-shows", sub: "Anime, dubbed in Hindi" },
     ];
     Promise.all(defs.map((d) =>
-      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&lang=${d.lang}&limit=24`)
+      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&limit=24`)
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           const items = (j?.items || [])
