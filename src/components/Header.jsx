@@ -1599,6 +1599,18 @@ const Header = () => {
     return buildShelves(richHome, { prefLang, seed: nameSeed, affinity });
   }, [richHome, nameSeed, affinity]);
 
+  /* The MX rows (K-drama / anime / new releases) sit just below the second
+     genre row rather than at the very bottom. Find that row's index; if there
+     aren't two genre rows, they fall back to the end of the list. */
+  const secondGenreIdx = useMemo(() => {
+    const GENRE_IDS = new Set(["thrillers", "action", "comedy", "romance", "horror", "scifi", "family", "drama"]);
+    let count = 0;
+    for (let i = 0; i < shelves.length; i++) {
+      if (GENRE_IDS.has(shelves[i].id) && ++count === 2) return i;
+    }
+    return -1;
+  }, [shelves]);
+
   /* Top 10 — ranked by what people are actually watching now (the backend
      decays each play over days), enriched there so this just renders it. */
   const [trending, setTrending] = useState([]);
@@ -1621,9 +1633,10 @@ const Header = () => {
     const defs = [
       { id: "kdrama", path: "show-videos/korean-drama-shows", sub: "Korean dramas, dubbed in Hindi" },
       { id: "anime", path: "show-videos/anime-shows", sub: "Anime, dubbed in Hindi" },
+      { id: "mxnew", path: "new-release", sub: "Newly added on MX Player" },
     ];
     Promise.all(defs.map((d) =>
-      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&limit=24`)
+      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&limit=40`)
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           const items = (j?.items || [])
@@ -1915,6 +1928,47 @@ const Header = () => {
       </article>
   );
 
+  /* An MX Player shelf (K-drama / anime / new releases). Same look as the main
+     rows, with an "Explore more" toggle that opens the whole fetched collection
+     into a grid in place — the MX list has no further page, so this shows all
+     we pulled rather than linking off-site. */
+  const renderMxRow = (row) => {
+    const open = openRows.has(row.id);
+    return (
+      <div key={row.id} className="mb-7 sm:mb-9">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
+          <div className="min-w-0">
+            <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
+            {row.subtitle && <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate">{row.subtitle}</p>}
+          </div>
+          {row.items.length > 6 && (
+            <button type="button" onClick={() => toggleRow(row.id)} aria-expanded={open}
+              className="flex items-center gap-0.5 text-[13px] sm:text-sm font-semibold text-gray-400 hover:text-white transition-colors
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
+              {open ? "Show less" : "Explore more"}
+              <ChevronRight className={`w-4 h-4 transition-transform ${open ? "-rotate-90" : ""}`} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {open ? (
+          <div className={POSTER_GRID}>
+            {row.items.map((movie, i) => (
+              <React.Fragment key={movie.id}>{renderCard(movie, i, false, false)}</React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
+            {row.items.map((movie, i) => (
+              <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
+                {renderCard(movie, i, false, false)}
+              </div>
+            ))}
+          </ScrollRow>
+        )}
+      </div>
+    );
+  };
+
   /* The page gutter, applied per band rather than once on the shell — the hero
      has to reach both edges, so it cannot sit inside a padded parent. */
   const GUTTER = "px-4 sm:px-6 lg:px-8 2xl:px-12";
@@ -2071,28 +2125,15 @@ const Header = () => {
             {r === 1 && trending.length >= 4 && (
               <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
             )}
+            {/* MX Player shelves (K-drama / anime / new releases) ride in just
+                below the second genre row. Cards open /mx-watch via handleCardClick. */}
+            {r === secondGenreIdx && mxShelves.map(renderMxRow)}
             </React.Fragment>
           );
         })}
 
-        {/* MX Player trending shelves — Korean drama & anime, in Hindi. Same
-            heading and card treatment as the rows above, so they read as part
-            of the catalogue; cards open /mx-watch via handleCardClick. */}
-        {mxShelves.map((row) => (
-          <div key={row.id} className="mb-7 sm:mb-9">
-            <div className="mb-2.5 sm:mb-3 px-0.5 min-w-0">
-              <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
-              {row.subtitle && <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate">{row.subtitle}</p>}
-            </div>
-            <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
-              {row.items.map((movie, i) => (
-                <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
-                  {renderCard(movie, i, false, false)}
-                </div>
-              ))}
-            </ScrollRow>
-          </div>
-        ))}
+        {/* Fewer than two genre rows this pass — show the MX shelves at the end. */}
+        {secondGenreIdx < 0 && mxShelves.map(renderMxRow)}
 
         {shelves.length > 0 && (
           <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">

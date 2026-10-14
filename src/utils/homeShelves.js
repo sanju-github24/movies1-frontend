@@ -68,6 +68,7 @@ const NAMES = {
   drama:    ["Edge of Drama", "Stories That Linger", "Life, Unscripted", "Pure Drama"],
   kdrama:   ["K-Drama Fever", "Seoul Searching", "Korean Obsession", "Hooked on Hallyu"],
   anime:    ["Anime Unleashed", "The Otaku Zone", "Ink & Imagination", "Anime Legends"],
+  mxnew:    ["Fresh on MX", "Just Dropped", "New & Noteworthy", "Hot Off the Press"],
 };
 
 /* Row names for the MX Player shelves (K-drama, Anime). Same seeded pick as the
