@@ -108,7 +108,7 @@ const LANG_ROWS = ["Kannada", "Tamil", "Telugu", "Malayalam", "Hindi"];
  * Returns [{ id, title, subtitle?, items }], each row at least MIN long.
  */
 export function buildShelves(movies, { prefLang = "", seed = "", affinity = { genres: {}, langs: {} } } = {}) {
-  const MIN = 6, MAX = 24;
+  const MIN = 6, MAX = 50;
 
   /* Per-viewer mix. Two levers, both seeded by the viewer so their page is
      their own but steady across refreshes:

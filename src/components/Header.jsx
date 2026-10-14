@@ -1636,7 +1636,7 @@ const Header = () => {
       { id: "mxnew", path: "new-release", sub: "Newly added on MX Player" },
     ];
     Promise.all(defs.map((d) =>
-      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&limit=40`)
+      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&limit=50`)
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           const items = (j?.items || [])
