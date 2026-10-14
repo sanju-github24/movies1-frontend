@@ -66,7 +66,16 @@ const NAMES = {
   scifi:    ["Beyond Reality", "Worlds Apart", "Into the Unknown", "Future Shock"],
   family:   ["Family Movie Night", "For the Whole Family", "Popcorn & Pajamas", "Kids & Family"],
   drama:    ["Edge of Drama", "Stories That Linger", "Life, Unscripted", "Pure Drama"],
+  kdrama:   ["K-Drama Fever", "Seoul Searching", "Korean Obsession", "Hooked on Hallyu"],
+  anime:    ["Anime Unleashed", "The Otaku Zone", "Ink & Imagination", "Anime Legends"],
 };
+
+/* Row names for the MX Player shelves (K-drama, Anime). Same seeded pick as the
+   home rows, so each viewer gets a consistent-but-personal title that holds
+   across refreshes. Exported because these rows live in Header, not buildShelves. */
+export function mxRowName(id, seed, fallback) {
+  return nameOf(id, seed, fallback);
+}
 
 const GENRE_ROWS = [
   { id: "thrillers", subtitle: "Thrillers, heists & whodunits", re: /thriller|crime|mystery/i },

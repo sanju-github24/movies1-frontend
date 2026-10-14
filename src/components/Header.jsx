@@ -17,7 +17,7 @@ import { POSTER_GRID } from "../utils/posterGrid";
 import ScrollRow from "./ScrollRow";
 import TrendingNumbersRow from "./TrendingNumbersRow";
 import { fetchTrending } from "../utils/trending";
-import { enrichMovies, buildShelves } from "../utils/homeShelves";
+import { enrichMovies, buildShelves, mxRowName } from "../utils/homeShelves";
 import { readContinueList } from "../utils/continueWatching";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
@@ -1607,6 +1607,40 @@ const Header = () => {
     fetchTrending(10).then((list) => { if (alive) setTrending(list); });
     return () => { alive = false; };
   }, []);
+  /* MX Player trending shelves — Korean dramas and anime, in Hindi, in MX's own
+     on-page (trending) order. The backend reads the category pages residentially
+     and hands back lightweight cards; clicking one opens /mx-watch. Each row's
+     title is a seeded pick, so it reads differently per viewer like the rest. */
+  const [mxShelves, setMxShelves] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const defs = [
+      { id: "kdrama", path: "show-videos/korean-drama-shows", lang: "hindi", sub: "Korean dramas, dubbed in Hindi" },
+      { id: "anime", path: "show-videos/anime-shows", lang: "hindi", sub: "Anime, dubbed in Hindi" },
+    ];
+    Promise.all(defs.map((d) =>
+      fetch(`${API_BASE}/api/mx/shelf?path=${encodeURIComponent(d.path)}&lang=${d.lang}&limit=24`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          const items = (j?.items || [])
+            .filter((it) => it && it.title && it.webUrl && it.poster)
+            .map((it) => ({
+              id: `mx-${it.id}`,
+              title: it.title,
+              poster: it.poster,
+              year: it.year || "",
+              _genres: it.genres || [],
+              source: "mxplayer",
+              mxWebUrl: it.webUrl,
+              mxType: it.type,
+            }));
+          return items.length ? { id: d.id, title: mxRowName(d.id, nameSeed, d.id), subtitle: d.sub, items } : null;
+        })
+        .catch(() => null)
+    )).then((rows) => { if (alive) setMxShelves(rows.filter(Boolean)); });
+    return () => { alive = false; };
+  }, [nameSeed]);
+
   // Rows opened into a full grid with "View all".
   const [openRows, setOpenRows] = useState(() => new Set());
   const toggleRow = (id) => setOpenRows((prev) => {
@@ -1687,6 +1721,12 @@ const Header = () => {
   const handleCardClick = (movie, event) => {
     event.stopPropagation();
     event.preventDefault();
+    // MX Player cards aren't in our DB — open the in-SPA MX watch page, which
+    // resolves the real stream on the backend, exactly like an MX search result.
+    if (movie.source === "mxplayer" && movie.mxWebUrl) {
+      navigate("/mx-watch", { state: { webUrl: movie.mxWebUrl, mxType: movie.mxType, title: movie.title, image: movie.poster } });
+      return;
+    }
     openMobileSheet(movie);
   };
 
@@ -2030,6 +2070,25 @@ const Header = () => {
             </React.Fragment>
           );
         })}
+
+        {/* MX Player trending shelves — Korean drama & anime, in Hindi. Same
+            heading and card treatment as the rows above, so they read as part
+            of the catalogue; cards open /mx-watch via handleCardClick. */}
+        {mxShelves.map((row) => (
+          <div key={row.id} className="mb-7 sm:mb-9">
+            <div className="mb-2.5 sm:mb-3 px-0.5 min-w-0">
+              <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">{row.title}</h2>
+              {row.subtitle && <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate">{row.subtitle}</p>}
+            </div>
+            <ScrollRow gap="gap-3 sm:gap-4" label={row.title}>
+              {row.items.map((movie, i) => (
+                <div key={movie.id} className="flex-shrink-0 w-[128px] sm:w-[160px] lg:w-[180px]">
+                  {renderCard(movie, i, false, false)}
+                </div>
+              ))}
+            </ScrollRow>
+          </div>
+        ))}
 
         {shelves.length > 0 && (
           <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
