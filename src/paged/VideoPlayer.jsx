@@ -55,28 +55,35 @@ const getLanguageName = (track) => {
   if (!track) return "Unknown Audio";
   // both 2- and 3-letter ISO codes (our HLS uses 3-letter: kan, hin, tam…)
 const langMap = {
-  en: 'English', eng: 'English',
-  hi: 'हिंदी', hin: 'हिंदी',
-  bn: 'বাংলা', ben: 'বাংলা',
-  ta: 'தமிழ்', tam: 'தமிழ்',
-  te: 'తెలుగు', tel: 'తెలుగు',
-  kn: 'ಕನ್ನಡ', kan: 'ಕನ್ನಡ',
-  ml: 'മലയാളം', mal: 'മലയാളം',
-  mr: 'मराठी', mar: 'मराठी',
-  pa: 'ਪੰਜਾਬੀ', pan: 'ਪੰਜਾਬੀ',
-  ur: 'اردو', urd: 'اردو',
-  gu: 'ગુજરાતી', guj: 'ગુજરાતી',
-  kok: 'कोंकणी',
-  or: 'ଓଡ଼ିଆ', ori: 'ଓଡ଼ିଆ',
-  as: 'অসমীয়া', asm: 'অসমীয়া',
-  ne: 'नेपाली', nep: 'नेपाली'
+  en: 'English', eng: 'English', english: 'English',
+  hi: 'हिंदी', hin: 'हिंदी', hindi: 'हिंदी',
+  bn: 'বাংলা', ben: 'বাংলা', bengali: 'বাংলা',
+  ta: 'தமிழ்', tam: 'தமிழ்', tamil: 'தமிழ்',
+  te: 'తెలుగు', tel: 'తెలుగు', telugu: 'తెలుగు',
+  kn: 'ಕನ್ನಡ', kan: 'ಕನ್ನಡ', kannada: 'ಕನ್ನಡ',
+  ml: 'മലയാളം', mal: 'മലയാളം', malayalam: 'മലയാളം',
+  mr: 'मराठी', mar: 'मराठी', marathi: 'मराठी',
+  pa: 'ਪੰਜਾਬੀ', pan: 'ਪੰਜਾਬੀ', punjabi: 'ਪੰਜਾਬੀ',
+  ur: 'اردو', urd: 'اردو', urdu: 'اردو',
+  gu: 'ગુજરાતી', guj: 'ગુજરાતી', gujarati: 'ગુજરાતી',
+  kok: 'कोंकणी', konkani: 'कोंकणी',
+  or: 'ଓଡ଼ିଆ', ori: 'ଓଡ଼ିଆ', odia: 'ଓଡ଼ିଆ',
+  as: 'অসমীয়া', asm: 'অসমীয়া', assamese: 'অসমীয়া',
+  ne: 'नेपाली', nep: 'नेपाली', nepali: 'नेपाली'
 };
   const langCode = (track.lang || "").toLowerCase();
   const name = (track.name || "").trim();
-  // ignore ffmpeg's generic labels like "audio_1" / "Track 2" / "und"
+  /* Always the language in its own script, however the source named the
+     track. A source that labels a track "Hindi" (or "Tamil HD 720p") should
+     still read हिंदी / தமிழ் here, the same as a track that only carries the
+     "hin" code — so the audio menu looks the same wherever the stream came
+     from. The source's wording is kept only when it names no known language
+     (a real descriptive label, not a language). */
+  if (langMap[langCode]) return langMap[langCode];        // the track's own code → native script
+  const m = name.match(SOURCE_LANG);                      // a language word inside the source's label
+  if (m) return langMap[m[1].toLowerCase()] || m[1];
   const generic = !name || /^(audio|track|stream|und|unknown)[\s_-]*\d*$/i.test(name);
-  if (!generic && isNaN(name)) return name;          // a real descriptive name wins
-  if (langMap[langCode]) return langMap[langCode];   // else map the language code
+  if (!generic && isNaN(name)) return name;               // a genuine non-language label
   if (langCode && langCode !== "und") return langCode.toUpperCase();
   return `Track ${(track.id ?? 0) + 1}`;
 };
