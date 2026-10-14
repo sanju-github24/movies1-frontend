@@ -4,7 +4,8 @@ import { ownUrl } from "../utils/seo";
 import { Link, useNavigate } from "react-router-dom";
 import { X, Play, Info, Volume2, VolumeX, Download, Share2, Star } from "lucide-react";
 import { getRating, setRating } from "../utils/myList";
-import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, langLabel } from "../utils/titleEpisodes";
+import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, langLabel, newestEpisode } from "../utils/titleEpisodes";
+import { readOne, isFinished } from "../utils/continueWatching";
 import { getLiveShow } from "../utils/liveShow";
 import LiveShowActions from "./LiveShowActions";
 import { useRecommendations } from "../utils/recommendations";
@@ -60,8 +61,25 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
     [episodes, currentSeason]
   );
 
-  // The episode the big button plays: first of the latest season.
-  const latestEpisode = seasonEpisodes[0] || episodes[0] || null;
+  /* Two ways into a series: the newest episode held, and — if this viewer
+     has watched some of it — where they left off (or the next episode, if
+     they finished the one they were on). Both carry the episode to the watch
+     page, which resumes the exact time for a continue. Hooks stay above the
+     early return below. */
+  const newest = useMemo(() => newestEpisode(episodes), [episodes]);
+  const resume = useMemo(() => {
+    const isSeries = episodes.length > 0 || movie?.content_type === "tv";
+    if (!isSeries || !movie) return null;
+    const saved = readOne(movie.watch_slug || movie.slug) || (movie.slug ? readOne(movie.slug) : null);
+    if (!saved || !saved.season || !saved.episode) return null;
+    if (isFinished(saved)) {
+      return saved.next && saved.next.episode
+        ? { season: saved.next.season || saved.season, episode: saved.next.episode, kind: "next" }
+        : null;
+    }
+    return { season: saved.season, episode: saved.episode, kind: "continue" };
+  }, [episodes, movie]);
+  const epObj = (sn, en) => ({ season: sn, episodeNumberInSeason: en, episode: en });
 
   if (!movie) return null;
 
@@ -248,12 +266,28 @@ export default function MobileDetailSheet({ movie, onClose, relatedMovies = [], 
               onWatchLive={() => goWatch(null, { live: true })}
               onWatchEpisode={(ep) => goWatch(ep, { preferEpisode: true })}
             />
+          ) : isTV && resume ? (
+            <div className="w-full space-y-2">
+              <button onClick={() => goWatch(epObj(resume.season, resume.episode), { preferEpisode: true })}
+                className="w-full bg-gray-100 text-black py-4 rounded-lg font-bold text-base flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-lg">
+                <Play className="w-5 h-5 fill-current" />
+                {resume.kind === "next" ? "Next Episode" : "Continue Watching"}
+                <span className="text-gray-600 font-semibold">S{resume.season} E{resume.episode}</span>
+              </button>
+              {newest && (
+                <button onClick={() => goWatch(newest, { preferEpisode: true })}
+                  className="w-full bg-white/10 text-white py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                  <Play className="w-4 h-4 fill-current" /> Watch Latest Episode
+                  <span className="text-gray-400 font-semibold">S{seasonNo(newest)} E{epNo(newest)}</span>
+                </button>
+              )}
+            </div>
           ) : (
-          <button onClick={() => goWatch(isTV ? latestEpisode : null)}
+          <button onClick={() => goWatch(isTV ? newest : null, isTV ? { preferEpisode: true } : {})}
             className="w-full bg-gray-100 text-black py-4 rounded-lg font-bold text-base flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-lg">
             <Play className="w-5 h-5 fill-current" />
-            {isTV && latestEpisode
-              ? <>Watch Latest Season <span className="text-gray-600 font-semibold">S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</span></>
+            {isTV && newest
+              ? <>Watch Latest Episode <span className="text-gray-600 font-semibold">S{seasonNo(newest)} E{epNo(newest)}</span></>
               : isTV ? "Stream Series" : "Watch Now"}
           </button>
           )}

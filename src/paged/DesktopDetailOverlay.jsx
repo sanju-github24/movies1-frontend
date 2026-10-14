@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Play, Volume2, VolumeX, Star, ChevronDown, CheckCircle2, Download } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate } from "../utils/titleEpisodes";
+import { useTitleEpisodes, cleanTitle, epNo, seasonNo, epStill, airDate, newestEpisode } from "../utils/titleEpisodes";
+import { readOne, isFinished } from "../utils/continueWatching";
 import { getLiveShow } from "../utils/liveShow";
 import LiveShowActions from "../components/LiveShowActions";
 import { useRecommendations } from "../utils/recommendations";
@@ -160,7 +161,23 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
     () => episodes.filter((e) => seasonNo(e) === currentSeason).sort((a, b) => epNo(a) - epNo(b)),
     [episodes, currentSeason]
   );
-  const latestEpisode = seasonEpisodes[0] || episodes[0] || null;
+  /* Newest episode, and where this viewer left off — both carry to the watch
+     page (which resumes the exact time for a continue). Hooks stay above the
+     early return just below. */
+  const newest = useMemo(() => newestEpisode(episodes), [episodes]);
+  const resume = useMemo(() => {
+    const isSeries = episodes.length > 0 || movie?.content_type === "tv";
+    if (!isSeries || !movie) return null;
+    const saved = readOne(movie.watch_slug || movie.slug) || (movie.slug ? readOne(movie.slug) : null);
+    if (!saved || !saved.season || !saved.episode) return null;
+    if (isFinished(saved)) {
+      return saved.next && saved.next.episode
+        ? { season: saved.next.season || saved.season, episode: saved.next.episode, kind: "next" }
+        : null;
+    }
+    return { season: saved.season, episode: saved.episode, kind: "continue" };
+  }, [episodes, movie]);
+  const epObj = (sn, en) => ({ season: sn, episodeNumberInSeason: en, episode: en });
 
   if (!movie) return null;
 
@@ -188,7 +205,6 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
     else navigate(`/watch/${movie.slug}`, { state: { autoPlayEpisode: episode, ...intent } });
     onClose();
   };
-  const handlePlayClick = () => play(isTV ? latestEpisode : null);
 
   return (
     <div className="fixed inset-0 z-[500] hidden lg:flex items-center justify-center p-8 xl:p-16">
@@ -302,14 +318,32 @@ const DesktopDetailOverlay = ({ movie, onClose, onNavigate, onSelectMovie, relat
                       onWatchEpisode={(ep) => play(ep, { preferEpisode: true })}
                     />
                   </div>
+                ) : isTV && resume ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => play(epObj(resume.season, resume.episode), { preferEpisode: true })}
+                      className="px-8 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black flex items-center gap-2 transition-all transform hover:scale-105 uppercase text-xs tracking-widest shadow-xl"
+                    >
+                      <Play size={18} className="fill-current" />
+                      {resume.kind === "next" ? "NEXT" : "CONTINUE"} S{resume.season} E{resume.episode}
+                    </button>
+                    {newest && (
+                      <button
+                        onClick={() => play(newest, { preferEpisode: true })}
+                        className="px-6 py-3.5 bg-white/10 text-white hover:bg-white/20 rounded-xl font-black flex items-center gap-2 transition-all uppercase text-xs tracking-widest"
+                      >
+                        <Play size={16} className="fill-current" /> LATEST S{seasonNo(newest)} E{epNo(newest)}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
-                    onClick={handlePlayClick}
+                    onClick={() => play(isTV ? newest : null, isTV ? { preferEpisode: true } : {})}
                     className="px-8 py-3.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl font-black flex items-center gap-2 transition-all transform hover:scale-105 uppercase text-xs tracking-widest shadow-xl"
                   >
                     <Play size={18} className="fill-current" />
-                    {isTV && latestEpisode
-                      ? <>WATCH S{seasonNo(latestEpisode)} E{epNo(latestEpisode)}</>
+                    {isTV && newest
+                      ? <>WATCH LATEST S{seasonNo(newest)} E{epNo(newest)}</>
                       : "PLAY NOW"}
                   </button>
                 )}
