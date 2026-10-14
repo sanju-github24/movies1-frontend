@@ -198,32 +198,39 @@ export default function AnchorPlayer({
             });
             engine.current = { kind: "hls", inst: hls };
 
-            /* A fatal network error on a live stream is usually one dead
-               proxy or one slow segment, not the end of it: loading is
-               restarted with a growing pause, and every segment that does
-               arrive resets the count. */
-            let revives = 0, reviveTimer = null;
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-              if (revives) { revives = 0; setState((s) => (s === "reconnecting" ? "playing" : s)); }
-            });
-            hls.on(Hls.Events.DESTROYING, () => clearTimeout(reviveTimer));
+            /* A fatal network error on a live stream is almost always one
+               slow or missed segment through the proxy, not the end of it —
+               and the picture keeps playing from the buffer meanwhile. So,
+               like a bare hls.js player, we reload immediately and quietly;
+               "Reconnecting" is shown only if nothing recovers for a few
+               seconds, and only then does it count toward giving up. A blip
+               never flashes the overlay. */
+            let revives = 0, graceTimer = null;
+            const recovered = () => {
+              clearTimeout(graceTimer); graceTimer = null;
+              if (revives) revives = 0;
+              setState((s) => (s === "reconnecting" ? "playing" : s));
+            };
+            hls.on(Hls.Events.FRAG_LOADED, recovered);
+            hls.on(Hls.Events.LEVEL_LOADED, () => { clearTimeout(graceTimer); graceTimer = null; });
+            hls.on(Hls.Events.DESTROYING, () => clearTimeout(graceTimer));
             hls.on(Hls.Events.ERROR, (_e, data) => {
               if (!data.fatal) return;
               if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                if (revives >= REVIVES) {
-                  giveUp("The stream stopped answering — its token may have expired, or the proxy could not reach it.");
-                  return;
-                }
-                revives += 1;
-                setState("reconnecting");
-                clearTimeout(reviveTimer);
-                reviveTimer = setTimeout(() => {
+                // Recover now, without changing what's on screen.
+                try { if (hls.levels?.length) hls.startLoad(); else hls.loadSource(url); } catch { /* destroyed */ }
+                if (graceTimer) return;                 // already waiting out this outage
+                graceTimer = setTimeout(() => {
                   if (dead) return;
-                  // Before anything has loaded there is no level to resume, so
-                  // the playlist is asked for again from the top.
-                  if (!hls.levels?.length) hls.loadSource(url);
-                  else hls.startLoad();
-                }, Math.min(1000 * 2 ** (revives - 1), 8000));
+                  graceTimer = null;
+                  setState("reconnecting");             // still nothing after the grace — now say so
+                  revives += 1;
+                  if (revives >= REVIVES) {
+                    giveUp("The stream stopped answering — its token may have expired, or the proxy could not reach it.");
+                    return;
+                  }
+                  try { if (hls.levels?.length) hls.startLoad(); else hls.loadSource(url); } catch { /* destroyed */ }
+                }, 5000);
               } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                 try { hls.recoverMediaError(); } catch { fail("This stream could not be decoded."); }
               } else {
