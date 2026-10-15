@@ -766,7 +766,12 @@ export function MusicPlayerProvider({ children }) {
 
   /* The buttons on the lock screen and in the notification. Set once the
      handlers exist; passing null to one removes it, which is how the platform
-     knows to grey it out rather than show a control that does nothing. */
+     knows to grey it out rather than show a control that does nothing.
+
+     Skip-10-seconds is deliberately left off. A phone has room for one pair
+     either side of play, and given both it shows the ±10s pair (iOS always
+     does), so the lock screen offered no way to change song. Without them it
+     shows previous and next, like a music app. The scrubber still seeks. */
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     const ms = navigator.mediaSession;
@@ -777,8 +782,8 @@ export function MusicPlayerProvider({ children }) {
     set("pause", () => audio.pause());
     set("nexttrack",     () => next());
     set("previoustrack", () => previous());
-    set("seekbackward", (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d?.seekOffset || 10)); });
-    set("seekforward",  (d) => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d?.seekOffset || 10)); });
+    set("seekbackward", null);
+    set("seekforward",  null);
     set("seekto", (d) => { if (d?.seekTime != null) audio.currentTime = d.seekTime; });
     set("stop", () => { audio.pause(); audio.currentTime = 0; });
 

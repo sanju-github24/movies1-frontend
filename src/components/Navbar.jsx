@@ -193,6 +193,16 @@ const Navbar = () => {
   // A new page starts with the bar showing.
   useEffect(() => { setNavHidden(false); }, [location.pathname]);
 
+  /* The music mini player floats just above this bar on a phone, and sits
+     beside the 72px rail on a wider screen, so it needs to know whether the
+     navbar is there. Put on the page rather than passed down: the two are
+     siblings, and a page without this navbar has neither bar nor rail, which
+     the attribute's absence says. */
+  useEffect(() => {
+    document.documentElement.dataset.tabbar = navHidden ? "hidden" : "shown";
+  }, [navHidden]);
+  useEffect(() => () => { delete document.documentElement.dataset.tabbar; }, []);
+
   return (
     <nav className="text-white font-sans">
 
