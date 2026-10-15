@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { ArrowLeft, Radio, Play, Pause, Loader2 } from "lucide-react";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
@@ -33,6 +33,8 @@ function Cover({ s, size = "w-full" }) {
 
 export default function RadioPage() {
   const navigate = useNavigate();
+  // Opened from the mini player, whose sheet has just grown over the screen.
+  const fromMini = !!useLocation().state?.fromMini;
   const player = useMusicPlayer();
   const [lang, setLang] = useState(initialLang);
   const [stations, setStations] = useState(null);
@@ -60,7 +62,7 @@ export default function RadioPage() {
   return (
     <div className="min-h-dvh bg-gray-950 text-white">
       <Helmet><title>Live Radio — Music</title></Helmet>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-28">
+      <div className={`max-w-[1400px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-28${fromMini ? " mp-page-in" : ""}`}>
         <button type="button" onClick={() => navigate(-1)} aria-label="Back"
           className="mb-6 w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/15 flex items-center justify-center">
           <ArrowLeft className="w-5 h-5" />

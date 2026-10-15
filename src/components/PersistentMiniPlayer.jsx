@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Pause, X, ChevronUp, SkipBack, SkipForward, Download, Loader2 } from 'lucide-react';
 import { fetchTrack, downloadTrack } from '../utils/saavn';
@@ -24,6 +25,14 @@ export default function PersistentMiniPlayer() {
   const [dls, setDls] = useState({});
   const dlCache = useRef({});
   const dlBoxRef = useRef(null);
+
+  /* Opening the full player. The bar grows from where it sits into the whole
+     screen, the cover rising out of its thumbnail, and the page fades up under
+     it. Holds the rectangles it starts from; `open` flips a frame later so the
+     browser has a start position to transition from. */
+  const rootRef = useRef(null);
+  const thumbRef = useRef(null);
+  const [expand, setExpand] = useState(null);
 
   const barRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -114,10 +123,30 @@ export default function PersistentMiniPlayer() {
 
   const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
+  // The full track page — a live station's is the radio page.
+  const fullPage = () => (currentTrack.live ? import('../paged/RadioPage') : import('../paged/TrackDetailPage'));
+
   const openFull = () => {
-    // The full track page — a live station's is the radio page.
-    navigate(currentTrack.live ? '/music/radio' : `/music/track/${currentTrack.id}`);
-    setIsMinimized(false);
+    if (expand) return;
+    const go = () => {
+      navigate(currentTrack.live ? '/music/radio' : `/music/track/${currentTrack.id}`, { state: { fromMini: true } });
+      setIsMinimized(false);
+      setExpand(null);      // the bar stays mounted, hidden; it must come back as a bar
+    };
+    const el = rootRef.current;
+    if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { go(); return; }
+
+    const r = el.getBoundingClientRect();
+    const t = thumbRef.current?.getBoundingClientRect();
+    setExpand({ rect: r, thumb: t, radius: getComputedStyle(el).borderRadius, open: false });
+    requestAnimationFrame(() => requestAnimationFrame(() => setExpand(x => x && { ...x, open: true })));
+
+    /* The page is code-split, so fetch it while the animation runs and switch
+       once both are done. A slow network keeps the dark screen up a little
+       longer rather than flashing a spinner; past 2.5s it goes regardless. */
+    const animDone = new Promise(res => setTimeout(res, 400));
+    const loaded = Promise.race([fullPage().catch(() => {}), new Promise(res => setTimeout(res, 2500))]);
+    Promise.all([animDone, loaded]).then(go);
   };
   const stop = e => e.stopPropagation();
   const iconBtn = (color = 'rgba(255,255,255,0.55)') => ({
@@ -127,7 +156,8 @@ export default function PersistentMiniPlayer() {
 
   return (
     <div
-      className="mp-root"
+      ref={rootRef}
+      className={`mp-root${isPlaying ? ' is-playing' : ''}`}
       style={{
         background: `linear-gradient(90deg, rgba(${baseRgb}, 0.98) 0%, rgba(12, 12, 20, 0.98) 100%)`,
         backdropFilter: 'blur(24px)',
@@ -161,13 +191,14 @@ export default function PersistentMiniPlayer() {
 
       <div
         className="mp-body"
-        onMouseEnter={() => setHov(true)}
+        onMouseEnter={() => { setHov(true); fullPage().catch(() => {}); }}
+        onTouchStart={() => { fullPage().catch(() => {}); }}
         onMouseLeave={() => setHov(false)}
         onClick={openFull}
       >
         {/* Song: cover and title. Tapping anywhere outside the buttons opens the full player. */}
         <div className="mp-left">
-          <div style={{ position: 'relative', flexShrink: 0, width: 42, height: 42, borderRadius: 8, overflow: 'hidden', border: `1px solid rgba(${lightRgb}, 0.25)` }}>
+          <div ref={thumbRef} style={{ position: 'relative', flexShrink: 0, width: 42, height: 42, borderRadius: 8, overflow: 'hidden', border: `1px solid rgba(${lightRgb}, 0.25)` }}>
             <img
               src={currentTrack.poster}
               alt={currentTrack.title}
@@ -185,7 +216,15 @@ export default function PersistentMiniPlayer() {
             <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {currentTrack.live
                 ? <><span style={{ color: '#f87171', fontWeight: 800, letterSpacing: 1 }}>● LIVE</span>{currentTrack.place ? ` · ${currentTrack.place}` : ''}</>
-                : <>{currentTrack.artist} · <span style={{ fontFamily: 'monospace' }}>{fmt(currentTime)}</span></>}
+                : <>
+                    {/* A phone shows where the song is while it plays and who
+                        sings it while it is paused; a wider screen has room
+                        for both, always. */}
+                    <span className="mp-artist">{currentTrack.artist} · <span style={{ fontFamily: 'monospace' }}>{fmt(currentTime)}</span></span>
+                    <span className="mp-time" style={{ fontFamily: 'monospace' }}>
+                      {fmt(currentTime)}{Number.isFinite(duration) && duration > 0 ? ` / ${fmt(duration)}` : ''}
+                    </span>
+                  </>}
             </p>
           </div>
         </div>
@@ -290,6 +329,38 @@ export default function PersistentMiniPlayer() {
         </div>
       </div>
 
+      {/* The expanding sheet: starts as an exact copy of the bar's box and
+          grows to the screen, ending on the full page's own background so the
+          swap underneath it is invisible. Portalled to the body: the bar's
+          backdrop blur makes it the containing block for anything fixed inside
+          it, so in place the sheet could only grow within the bar. */}
+      {expand && createPortal((() => {
+        const { rect: r, thumb: t, radius, open } = expand;
+        const W = window.innerWidth, H = window.innerHeight;
+        const S = Math.min(W * 0.7, 360);
+        const from = t ? { left: t.left - r.left, top: t.top - r.top, size: t.width } : { left: 12, top: 12, size: 42 };
+        return (
+          <div
+            className="mp-expand"
+            aria-hidden="true"
+            style={open
+              ? { top: 0, left: 0, width: W, height: H, borderRadius: 0 }
+              : { top: r.top, left: r.left, width: r.width, height: r.height, borderRadius: radius }}
+          >
+            {currentTrack.poster && (
+              <img
+                src={currentTrack.poster}
+                alt=""
+                className="mp-expand-art"
+                style={open
+                  ? { left: (W - S) / 2, top: H * 0.14, width: S, height: S, borderRadius: 16, opacity: 0 }
+                  : { left: from.left, top: from.top, width: from.size, height: from.size, borderRadius: 8, opacity: 1 }}
+              />
+            )}
+          </div>
+        );
+      })(), document.body)}
+
       <style>{`
         /* Desktop and tablet: a full-width bar along the bottom, with the
            three playback buttons in its true centre — the side columns are
@@ -343,7 +414,27 @@ export default function PersistentMiniPlayer() {
           }
           .mp-center { gap: 22px; }
           .mp-desktop-only { display: none !important; }
+          .mp-root.is-playing .mp-artist { display: none; }
+          .mp-root.is-playing .mp-time { display: inline; animation: mp-fade 0.25s ease both; }
         }
+        .mp-time { display: none; }
+
+        .mp-expand {
+          position: fixed; z-index: 9995; overflow: hidden; pointer-events: none;
+          background: linear-gradient(180deg, rgb(18,18,26) 0%, rgb(3,7,18) 55%);
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+          transition: top 0.4s cubic-bezier(0.32,0.72,0,1), left 0.4s cubic-bezier(0.32,0.72,0,1),
+                      width 0.4s cubic-bezier(0.32,0.72,0,1), height 0.4s cubic-bezier(0.32,0.72,0,1),
+                      border-radius 0.4s cubic-bezier(0.32,0.72,0,1);
+        }
+        .mp-expand-art {
+          position: absolute; object-fit: cover;
+          box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+          transition: top 0.4s cubic-bezier(0.32,0.72,0,1), left 0.4s cubic-bezier(0.32,0.72,0,1),
+                      width 0.4s cubic-bezier(0.32,0.72,0,1), height 0.4s cubic-bezier(0.32,0.72,0,1),
+                      border-radius 0.4s ease, opacity 0.22s ease 0.2s;
+        }
+        @keyframes mp-fade { from { opacity: 0; } to { opacity: 1; } }
 
         @keyframes mini-spin { to { transform: rotate(360deg); } }
         @keyframes mini-pulse {

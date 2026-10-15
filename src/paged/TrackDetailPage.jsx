@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
   Loader2, Download, ArrowLeft, ChevronDown, Radio, Music, Check,
@@ -71,6 +71,8 @@ function QueueFrom({ player }) {
 export default function TrackDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  // Opened from the mini player, whose sheet has just grown over the screen.
+  const fromMini = !!useLocation().state?.fromMini;
   const player = useMusicPlayer();
   const songId = id.replace(/^saavn__/, '');
 
@@ -246,7 +248,7 @@ export default function TrackDetailPage() {
 
   return (
     <div className="min-h-dvh bg-gray-950 text-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-8 pb-28">
+      <div className={`max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-8 pb-28${fromMini ? ' mp-page-in' : ''}`}>
         {/* ── Top bar ── */}
         <div className="flex items-center justify-between gap-3 mb-6">
           {/* Phones have the site's own back button just above. */}
