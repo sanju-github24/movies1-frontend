@@ -1,23 +1,22 @@
 /**
- * NewsViewer.jsx
+ * NewsReader.jsx — reads a FilmiBeat or ESPNcricinfo story on the site.
  *
- * Renders a FilmiBeat or Cricinfo article in-site instead of redirecting away.
+ * Route: /news?url=https://www.filmibeat.com/...  (or an espncricinfo.com story)
  *
- * Route: /news?url=https://www.filmibeat.com/...  or  ?url=https://www.espncricinfo.com/...
- * Add to your router:
- *   <Route path="/news" element={<NewsViewer />} />
- *
- * The article URL is passed as a query param so it's bookmarkable/shareable.
- * Content is fetched via your Express proxy (/api/rss/article?url=...) which
- * handles CORS and content extraction server-side.
+ * The article URL rides in the query string so a story is bookmarkable and
+ * shareable. The backend (/api/rss/article?url=...) fetches the page and pulls
+ * the whole story out as clean HTML; this page lays it out in the site's own
+ * type, with more stories from the same feed alongside.
  */
 
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet";
+import { ArrowLeft, Clock, BookOpen, ExternalLink, RefreshCw, Newspaper } from "lucide-react";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
 import { useGoBack } from "./BackBar";
 import { backendUrl } from "../utils/api";
+import { POSTER_SHELL } from "../utils/posterGrid";
 
 const API = backendUrl;
 
@@ -27,358 +26,280 @@ const FEEDS_META = {
   telugu:    { label: "Telugu",    color: "#378ADD" },
   kannada:   { label: "Kannada",   color: "#BA7517" },
   malayalam: { label: "Malayalam", color: "#D4537E" },
-  hollywood: { label: "Hollywood", color: "#444441" },
+  hollywood: { label: "Hollywood", color: "#9CA3AF" },
   tv:        { label: "TV",        color: "#639922" },
-  ott:       { label: "OTT",       color: "#993556" },
-  cricket:   { label: "Cricket",   color: "#0B6E4F" },
+  ott:       { label: "OTT",       color: "#C0567F" },
+  cricket:   { label: "Cricket",   color: "#10B981" },
 };
 
-// Detect source/language from the article URL's domain and path.
-function detectLanguage(url = "") {
+// Which feed a story belongs to, from its address.
+function detectFeed(url = "") {
   if (url.includes("cricinfo.com")) return "cricket";
+  if (url.includes("/television/")) return "tv";
   for (const key of Object.keys(FEEDS_META)) {
     if (url.includes(`/${key}/`) || url.includes(`/${key}-`)) return key;
   }
-  if (url.includes("/bollywood/") || url.includes("/hindi/")) return "bollywood";
-  if (url.includes("/english/") || url.includes("/hollywood/")) return "hollywood";
+  if (url.includes("/hindi/")) return "bollywood";
+  if (url.includes("/english/")) return "hollywood";
   return "bollywood";
 }
 
-function sourceLabel(url = "") {
-  return url.includes("cricinfo.com") ? "ESPNcricinfo" : "FilmiBeat";
-}
-function sourceHome(url = "") {
-  return url.includes("cricinfo.com") ? "https://www.espncricinfo.com" : "https://www.filmibeat.com";
-}
+const sourceLabel = (url = "") => (url.includes("cricinfo.com") ? "ESPNcricinfo" : "FilmiBeat");
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60) return `${diff}s ago`;
+  if (Number.isNaN(diff)) return "";
+  if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// ─── Skeleton loader ─────────────────────────────────────────────────────────
-const Skeleton = () => (
-  <div className="animate-pulse space-y-6 p-6 sm:p-10">
-    <div className="h-8 bg-white/10 rounded w-3/4" />
-    <div className="h-4 bg-white/10 rounded w-1/3" />
-    <div className="h-64 bg-white/10 rounded-xl" />
-    {[...Array(5)].map((_, i) => (
-      <div key={i} className="h-4 bg-white/10 rounded" style={{ width: `${85 - i * 5}%` }} />
+const plainText = (html = "") => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+// ─── Pieces ──────────────────────────────────────────────────────────────────
+const SourceTag = ({ meta }) => (
+  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-gray-200">
+    <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
+    {meta.label}
+  </span>
+);
+
+const ArticleSkeleton = () => (
+  <div className="space-y-5" aria-busy="true" aria-label="Loading article">
+    <div className="h-4 w-40 rounded-full shimmer" />
+    <div className="h-9 w-11/12 rounded-xl shimmer" />
+    <div className="h-9 w-2/3 rounded-xl shimmer" />
+    <div className="aspect-video w-full rounded-2xl shimmer mt-6" />
+    {Array.from({ length: 6 }, (_, i) => (
+      <div key={i} className="h-4 rounded-full shimmer" style={{ width: `${92 - i * 6}%` }} />
     ))}
   </div>
 );
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-const NewsViewer = () => {
-  const [article, setArticle] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const goBack = useGoBack();
-
-  // Read ?url= from query string
-  const params     = new URLSearchParams(window.location.search);
-  const articleUrl = params.get("url") || "";
-  const language   = detectLanguage(articleUrl);
-  const feedMeta   = FEEDS_META[language] || FEEDS_META.bollywood;
-  const srcLabel   = sourceLabel(articleUrl);
-  const srcHome    = sourceHome(articleUrl);
+// More stories from the same feed, beside the article on a wide screen and
+// under it on a phone, so reading one leads to the next without going back.
+const MoreStories = ({ feedKey, meta, currentUrl }) => {
+  const [items, setItems] = useState(null);
 
   useEffect(() => {
-    if (!articleUrl) {
-      setError("No article URL provided.");
-      setLoading(false);
-      return;
-    }
-    window.scrollTo(0, 0);
-    fetchArticle();
-  }, [articleUrl]);
+    let live = true;
+    setItems(null);
+    fetch(`${API}/api/rss?feed=${feedKey}&count=10`)
+      .then((r) => r.json())
+      .then((j) => { if (live) setItems((j.articles || []).filter((a) => a.link !== currentUrl).slice(0, 6)); })
+      .catch(() => { if (live) setItems([]); });
+    return () => { live = false; };
+  }, [feedKey, currentUrl]);
 
-  const fetchArticle = async () => {
+  if (items && items.length === 0) return null;
+
+  return (
+    <section aria-label={`More ${meta.label} news`}>
+      <h2 className="text-lg font-bold tracking-tight mb-4">More {meta.label} news</h2>
+      <div className="space-y-3">
+        {items === null
+          ? Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="w-28 aspect-video rounded-xl shimmer shrink-0" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="h-3 rounded-full shimmer" />
+                  <div className="h-3 w-2/3 rounded-full shimmer" />
+                </div>
+              </div>
+            ))
+          : items.map((a) => (
+              <Link
+                key={a.link}
+                to={`/news?url=${encodeURIComponent(a.link)}`}
+                className="group flex gap-3 rounded-xl p-2 -mx-2 hover:bg-white/[0.04] transition"
+              >
+                <div className="w-28 aspect-video rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
+                  {a.thumbnail
+                    ? <img src={a.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    : <div className="w-full h-full flex items-center justify-center"><Newspaper className="w-5 h-5 text-gray-700" /></div>}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold leading-snug text-gray-200 group-hover:text-white line-clamp-3">{a.title}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{timeAgo(a.pubDate)}</p>
+                </div>
+              </Link>
+            ))}
+      </div>
+      <Link
+        to="/blogs"
+        className="mt-5 inline-flex items-center justify-center w-full rounded-xl bg-white/[0.06] ring-1 ring-white/10 py-2.5 text-[11px] font-black uppercase tracking-widest text-gray-200 hover:bg-white/[0.1] hover:text-white transition"
+      >
+        All news
+      </Link>
+    </section>
+  );
+};
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+const NewsReader = () => {
+  const [params] = useSearchParams();
+  const articleUrl = params.get("url") || "";
+  const feedKey = detectFeed(articleUrl);
+  const meta = FEEDS_META[feedKey] || FEEDS_META.bollywood;
+  const srcLabel = sourceLabel(articleUrl);
+  const goBack = useGoBack();
+
+  const [article, setArticle] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchArticle = useCallback(async () => {
+    if (!articleUrl) { setError("No article was given."); setLoading(false); return; }
     setLoading(true);
     setError(null);
+    setArticle(null);
     try {
-      const res = await fetch(
-        `${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`
-      );
+      const res = await fetch(`${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`);
       const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Failed to load article");
+      if (!json.success) throw new Error(json.error || "The story could not be loaded.");
       setArticle(json.article);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [articleUrl]);
 
-  const readingTime = article
-    ? Math.max(1, Math.ceil(article.content.replace(/<[^>]+>/g, "").split(/\s+/).length / 200))
-    : 0;
+  // A new story — including one picked from "More news" — starts at the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    fetchArticle();
+  }, [fetchArticle]);
+
+  const words = article ? plainText(article.content).split(" ").length : 0;
+  const readingTime = Math.max(1, Math.ceil(words / 200));
+  // The story usually carries its own lead picture, often under a different
+  // file name or size than the header image, so the header image is only shown
+  // for a story that has no pictures of its own.
+  const showHero = article?.thumbnail && !/<img\s/i.test(article.content);
 
   return (
     <>
       {article && (
         <Helmet>
           <title>{article.title} | AnchorMovies</title>
-          <meta name="description" content={article.content.replace(/<[^>]+>/g, "").slice(0, 160)} />
+          <meta name="description" content={plainText(article.content).slice(0, 160)} />
         </Helmet>
       )}
 
-      <div className="min-h-screen bg-[#0e0e0e] text-white font-['Roboto']">
+      <div className="min-h-dvh bg-gray-950 text-white">
+        <div className={`${POSTER_SHELL} px-4 sm:px-6 lg:px-8 2xl:px-12 pt-6 sm:pt-10 pb-24`}>
 
-        {/* ── Header ── */}
-        {/* Site navigation is the rail's job — this page used to draw its own. */}
-
-        {/* ── Back bar ── */}
-        <div className="border-b border-white/5 bg-black/40">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+          {/* Top bar */}
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
             <button
+              type="button"
               onClick={() => goBack()}
-              className="text-xs font-semibold text-[#c5c107] uppercase tracking-widest hover:text-white transition flex items-center gap-1"
+              aria-label="Back"
+              className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0"
             >
-              ← Back
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-white/10">|</span>
-            <span
-              className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
-              style={{ background: feedMeta.color }}
-            >
-              {feedMeta.label}
-            </span>
-            <span className="text-xs text-gray-500 ml-auto">
-              Powered by{" "}
-              <a
-                href={srcHome}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#c5c107] hover:underline"
-              >
-                {srcLabel}
-              </a>
-            </span>
+            <Link to="/blogs" className="text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition">
+              News
+            </Link>
+            <span className="text-gray-700">/</span>
+            <SourceTag meta={meta} />
           </div>
-        </div>
 
-        {/* ── Content ── */}
-        <main className="max-w-7xl mx-auto py-10 px-4 grid grid-cols-1 lg:grid-cols-4 gap-10">
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_320px] xl:gap-16">
+            <main className="min-w-0 max-w-3xl">
+              {loading && <ArticleSkeleton />}
 
-          {/* Article column */}
-          <div className="lg:col-span-3">
-
-            {loading && (
-              <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden">
-                <Skeleton />
-              </div>
-            )}
-
-            {/* ── Error / iframe fallback ──────────────────────────────────────
-                When our scraper can't extract the article (common for ESPNcricinfo
-                due to bot protections / JS rendering), we embed the original page
-                in a sandboxed iframe so the user always reads the full article.  */}
-            {!loading && error && articleUrl && (
-              <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden">
-                {/* Top strip */}
-                <div className="flex items-center justify-between px-5 py-3 bg-amber-500/10 border-b border-amber-500/20 gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
-                      style={{ background: feedMeta.color }}
+              {!loading && error && (
+                <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.07] px-6 py-14 text-center">
+                  <Newspaper className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+                  <p className="text-gray-300 font-black uppercase tracking-widest text-xs">Couldn't load this story</p>
+                  <p className="text-gray-500 text-[13px] mt-2 max-w-sm mx-auto leading-relaxed">
+                    {srcLabel} didn't answer in time. It usually works on a second try.
+                  </p>
+                  <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={fetchArticle}
+                      className="inline-flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition"
                     >
-                      {feedMeta.label}
-                    </span>
-                    <span className="text-xs text-amber-300 font-semibold">
-                      Loading full article from {srcLabel}…
-                    </span>
+                      <RefreshCw className="w-4 h-4" /> Try again
+                    </button>
+                    {articleUrl && (
+                      <a
+                        href={articleUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 bg-white/[0.06] ring-1 ring-white/10 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest text-gray-200 hover:bg-white/[0.1] transition"
+                      >
+                        Read on {srcLabel} <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
-                  <a
-                    href={articleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-xs font-bold border border-[#c5c107]/50 text-[#c5c107] px-3.5 py-1.5 rounded-full hover:bg-[#c5c107] hover:text-black transition"
-                  >
-                    Open original ↗
-                  </a>
                 </div>
-                {/* Iframe — renders the full original article */}
-                <iframe
-                  src={articleUrl}
-                  title="Article"
-                  className="w-full"
-                  style={{ height: "82vh", border: "none", background: "#fff" }}
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                  loading="lazy"
-                />
-              </div>
-            )}
+              )}
 
-            {/* ── No URL provided ── */}
-            {!loading && error && !articleUrl && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-10 text-center">
-                <a
-                  href={articleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block bg-[#c5c107] text-black text-sm font-bold px-6 py-2.5 rounded-full hover:bg-yellow-400 transition"
-                >
-                  Read on {srcLabel} →
-                </a>
-              </div>
-            )}
-
-            {!loading && !error && article && (
-              <article className="bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden">
-
-                {/* Hero image */}
-                {article.thumbnail && (
-                  <div className="w-full h-[260px] sm:h-[380px] overflow-hidden relative">
-                    <img
-                      src={article.thumbnail}
-                      alt={article.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-transparent to-transparent" />
-                  </div>
-                )}
-
-                <div className="p-6 sm:p-10">
-                  {/* Meta row */}
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <span
-                      className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
-                      style={{ background: feedMeta.color }}
-                    >
-                      {feedMeta.label}
-                    </span>
+              {!loading && !error && article && (
+                <article>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-400 mb-4">
                     {article.pubDate && (
-                      <span className="text-xs text-gray-500">
-                        🕒 {timeAgo(article.pubDate)}
-                        {" · "}
-                        {new Date(article.pubDate).toLocaleDateString("en-IN", {
-                          day: "numeric", month: "long", year: "numeric",
-                        })}
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        {new Date(article.pubDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                        <span className="text-gray-600">· {timeAgo(article.pubDate)}</span>
                       </span>
                     )}
-                    <span className="text-xs text-gray-500">📖 {readingTime} min read</span>
-                    {article.author && article.author !== "FilmiBeat" && article.author !== "ESPNcricinfo" && (
-                      <span className="text-xs text-gray-500">✍️ {article.author}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5" /> {readingTime} min read
+                    </span>
+                    {article.author && !["FilmiBeat", "ESPNcricinfo"].includes(article.author) && (
+                      <span>By {article.author}</span>
                     )}
                   </div>
 
-                  {/* Title */}
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-snug mb-8">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight mb-8">
                     {article.title}
                   </h1>
 
-                  {/* Article body */}
-                  <div
-                    className="
-                      prose prose-invert prose-sm sm:prose-base max-w-none
-                      prose-headings:text-[#c5c107] prose-headings:font-bold
-                      prose-p:text-gray-300 prose-p:leading-relaxed
-                      prose-a:text-[#c5c107] prose-a:no-underline hover:prose-a:underline
-                      prose-img:rounded-xl prose-img:shadow-lg prose-img:w-full
-                      prose-strong:text-white
-                      prose-ul:text-gray-300 prose-ol:text-gray-300
-                      prose-blockquote:border-l-[#c5c107] prose-blockquote:text-gray-400
-                      prose-hr:border-white/10
-                    "
-                    dangerouslySetInnerHTML={{ __html: sanitizeArticle(article.content) }}
-                  />
+                  {showHero && (
+                    <img
+                      src={article.thumbnail}
+                      alt=""
+                      className="w-full aspect-video object-cover rounded-2xl ring-1 ring-white/[0.07] mb-8"
+                    />
+                  )}
 
-                  {/* Source attribution */}
-                  <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
-                    <p className="text-xs text-gray-500">
-                      Content sourced from{" "}
-                      <a
-                        href={srcHome}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#c5c107] hover:underline"
-                      >
-                        {srcLabel}
-                      </a>
-                      . All rights reserved to original authors.
+                  <div className="article-body" dangerouslySetInnerHTML={{ __html: sanitizeArticle(article.content) }} />
+
+                  {/* Credit where it is due — the story is theirs. */}
+                  <div className="mt-12 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.07] p-5">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Originally published on <span className="text-gray-200 font-semibold">{srcLabel}</span>. All rights belong to the original authors.
                     </p>
                     <a
                       href={articleUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="shrink-0 text-xs font-bold border border-[#c5c107]/40 text-[#c5c107] px-4 py-2 rounded-full hover:bg-[#c5c107] hover:text-black transition"
+                      className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-gray-300 hover:text-white transition"
                     >
-                      View original →
+                      View original <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
-                </div>
-              </article>
-            )}
-          </div>
+                </article>
+              )}
+            </main>
 
-          {/* ── Sidebar ── */}
-          <aside className="space-y-6 lg:col-span-1">
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-5 sticky top-24">
-              <h3 className="text-xs font-bold text-[#c5c107] uppercase tracking-[0.2em] pb-3 mb-4 border-b border-white/10">
-                Browse News
-              </h3>
-              <div className="space-y-2">
-                {Object.entries(FEEDS_META).map(([key, meta]) => (
-                  <Link
-                    key={key}
-                    to={`/blogs`}
-                    className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-white transition py-1.5 group"
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0 group-hover:scale-125 transition"
-                      style={{ background: meta.color }}
-                    />
-                    {meta.label}
-                  </Link>
-                ))}
-              </div>
-
-              <div className="mt-6 pt-5 border-t border-white/10">
-                <Link
-                  to="/blogs"
-                  className="block text-center text-xs font-bold bg-[#c5c107] text-black px-4 py-2.5 rounded-full hover:bg-yellow-400 transition"
-                >
-                  ← All Articles
-                </Link>
-              </div>
-            </div>
-          </aside>
-        </main>
-
-        {/* ── Footer ── */}
-        <footer className="bg-black border-t border-white/5 text-gray-500 py-12 mt-10">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 px-6">
-            <div className="space-y-3">
-              <h4 className="text-xs uppercase font-bold tracking-widest text-gray-300">Join our community</h4>
-              <p className="text-sm leading-relaxed">Get updates on the latest movies, blogs, and entertainment news.</p>
-            </div>
-            <div className="flex justify-center items-center">
-              <h1 className="text-white text-5xl font-black tracking-tighter italic">ANCHOR</h1>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="space-y-2">
-                <Link to="/about"   className="hover:text-white block transition">About Us</Link>
-                <Link to="/contact" className="hover:text-white block transition">Contact</Link>
-                <Link to="/blogs"   className="hover:text-white block transition">Blogs</Link>
-              </div>
-              <div className="space-y-2">
-                <a href="#" className="hover:text-white block transition">Privacy Policy</a>
-                <a href="#" className="hover:text-white block transition">Terms of Service</a>
-              </div>
-            </div>
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              {articleUrl && <MoreStories feedKey={feedKey} meta={meta} currentUrl={articleUrl} />}
+            </aside>
           </div>
-          <div className="mt-10 border-t border-white/5 pt-6 text-center text-xs text-gray-600">
-            <p>&copy; {new Date().getFullYear()} AnchorMovies. All Rights Reserved.</p>
-          </div>
-        </footer>
+        </div>
       </div>
     </>
   );
 };
 
-export default NewsViewer;
+export default NewsReader;

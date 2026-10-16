@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { ArrowLeft, Clock, Newspaper, ChevronRight } from "lucide-react";
+import { useGoBack } from "./BackBar";
+import { POSTER_SHELL } from "../utils/posterGrid";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../utils/supabaseClient";
 import { absUrl, jsonLd } from "../utils/seo";
@@ -28,6 +31,7 @@ function firstImage(html) {
 
 const BlogViewer = () => {
   const { slug } = useParams();
+  const goBack = useGoBack();
   const [blog, setBlog] = useState(null);
   const [relatedMovies, setRelatedMovies] = useState([]);
   const [recentBlogs, setRecentBlogs] = useState([]);
@@ -104,15 +108,42 @@ const BlogViewer = () => {
     if (!error) setRecentBlogs(data);
   };
 
-  if (error) return <div className="text-red-500 text-center py-6">{error}</div>;
-  if (!blog) return <div className="text-gray-400 text-center py-6">Loading blog...</div>;
+  const shell = `${POSTER_SHELL} px-4 sm:px-6 lg:px-8 2xl:px-12 pt-6 sm:pt-10 pb-24`;
+
+  if (error) return (
+    <div className="min-h-dvh bg-gray-950 text-white">
+      <div className={`${shell} text-center py-24`}>
+        <Newspaper className="w-10 h-10 text-gray-700 mx-auto mb-4" aria-hidden="true" />
+        <p className="text-gray-300 font-black uppercase tracking-widest text-xs">This post isn't here</p>
+        <p className="text-gray-500 text-[13px] mt-2">It may have been moved or taken down.</p>
+        <Link to="/blogs" className="inline-block mt-6 bg-white text-black px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition">
+          All news
+        </Link>
+      </div>
+    </div>
+  );
+
+  if (!blog) return (
+    <div className="min-h-dvh bg-gray-950">
+      <div className={`${shell} max-w-3xl space-y-5`} aria-busy="true" aria-label="Loading post">
+        <div className="h-9 w-11/12 rounded-xl shimmer" />
+        <div className="h-9 w-2/3 rounded-xl shimmer" />
+        <div className="aspect-video w-full rounded-2xl shimmer" />
+        {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-4 rounded-full shimmer" style={{ width: `${92 - i * 6}%` }} />)}
+      </div>
+    </div>
+  );
 
   const blogUrl  = absUrl(`/blogs/${slug}`);
   const blogDesc = excerpt(blog.content);
   const blogImg  = blog.cover_poster || blog.thumbnail_url || blog.poster || firstImage(blog.content);
+  const cover    = relatedMovies[0]?.cover_poster;
+  const published = blog.created_at
+    ? new Date(blog.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+    : "";
 
   return (
-    <div className="min-h-screen bg-[#ebebeb] text-[#222] font-['Roboto']">
+    <div className="min-h-dvh bg-gray-950 text-white">
       {/* This is original writing — the one thing here that can genuinely rank —
           but without this it inherited index.html's site-wide title, so every
           post looked like the same movie download page to Google. */}
@@ -140,202 +171,117 @@ const BlogViewer = () => {
         })}</script>
       </Helmet>
 
-      {/* Header */}
-      {/* Site navigation is the rail's job — this page used to draw its own. */}
+      <div className={shell}>
+        {/* Top bar */}
+        <div className="flex items-center gap-3 mb-6 sm:mb-8">
+          <button
+            type="button"
+            onClick={() => goBack()}
+            aria-label="Back"
+            className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <Link to="/blogs" className="text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition">
+            News
+          </Link>
+          <span className="text-gray-700">/</span>
+          <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Blog</span>
+        </div>
 
-      {/* Main Section */}
-      <main className="max-w-7xl mx-auto py-10 px-4 grid grid-cols-1 lg:grid-cols-4 gap-10">
-        
-        {/* Left content */}
-        <div className="lg:col-span-3 bg-gray-100 shadow-md rounded-md overflow-hidden">
-          {/* Thumbnail */}
-          {relatedMovies[0]?.cover_poster && (
-            <div className="w-full h-[320px] sm:h-[400px] overflow-hidden">
-              <img
-                src={relatedMovies[0].cover_poster}
-                alt={blog.title}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_320px] xl:gap-16">
+          <main className="min-w-0 max-w-3xl">
+            <article>
+              {published && (
+                <p className="inline-flex items-center gap-1.5 text-xs text-gray-400 mb-4">
+                  <Clock className="w-3.5 h-3.5" /> {published}
+                </p>
+              )}
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight mb-8">
+                {blog.title}
+              </h1>
 
-          {/* Blog content */}
-          <div className="p-6 sm:p-10">
-            <h1 className="text-3xl sm:text-4xl font-extrabold mb-6 text-[#2c3e50]">
-              {blog.title}
-            </h1>
+              {cover && (
+                <img src={cover} alt="" className="w-full aspect-video object-cover rounded-2xl ring-1 ring-white/[0.07] mb-8" />
+              )}
 
-            {/*
-              CRITICAL: Render the AI-generated HTML content using dangerouslySetInnerHTML.
-              The 'max-w-none' class prevents tailwind's 'prose' styles from breaking custom
-              AI-generated styles (like dark backgrounds for embedded components).
-            */}
-            <div
-              className="max-w-none" 
-              dangerouslySetInnerHTML={{ __html: sanitizeArticle(blog.content) }}
-            />
-
-            {/* Related Movies Section */}
-            {relatedMovies.length > 0 && (
-              <div className="mt-12">
-                <h2 className="text-2xl font-bold mb-5 text-[#2c3e50]">
-                  Related Movies
-                </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {relatedMovies.map((movie) => (
-                    <Link
-                      key={movie.id}
-                      to={`/watch/${movie.slug}`}
-                      className="group bg-gray-50 hover:bg-gray-100 rounded-lg overflow-hidden shadow-md transition"
-                    >
-                      <div className="relative w-full h-60 overflow-hidden">
-                        <img
-                          src={movie.cover_poster || movie.poster || "https://via.placeholder.com/300/333/fff?text=No+Cover"}
-                          alt={movie.title}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        {movie.poster && (
-                          <img
-                            src={movie.poster}
-                            alt={movie.slug}
-                            className="absolute bottom-3 right-3 w-16 h-24 object-cover rounded shadow-md border border-gray-300"
-                          />
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <h3 className="text-lg font-semibold text-[#333] group-hover:text-[#c5c107] transition">
-                          {/* Corrected to display title */}
-                          {movie.title}
-                        </h3>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+              <div className="article-body" dangerouslySetInnerHTML={{ __html: sanitizeArticle(blog.content) }} />
+            </article>
 
             {/* Tags */}
             {blog.tags?.length > 0 && (
-              <div className="pt-8 border-t border-gray-200 mt-10">
-                <h4 className="text-lg font-semibold mb-3">Tags:</h4>
-                <div className="flex flex-wrap gap-2">
-                  {blog.tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="bg-[#d14242] text-white px-3 py-1 rounded-full text-sm font-medium"
-                    >
-                      #{tag}
-                    </span>
+              <div className="flex flex-wrap gap-2 mt-10 pt-8 border-t border-white/[0.07]">
+                {blog.tags.map((tag, i) => (
+                  <span key={i} className="rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-1 text-xs font-semibold text-gray-300">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Related movies */}
+            {relatedMovies.length > 0 && (
+              <section className="mt-12">
+                <h2 className="text-lg sm:text-[22px] font-bold tracking-tight mb-4">Related movies</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {relatedMovies.map((movie) => (
+                    <Link key={movie.id} to={`/watch/${movie.slug}`} className="group">
+                      <div className="aspect-[2/3] rounded-xl overflow-hidden bg-white/[0.04] ring-1 ring-white/[0.07] group-hover:ring-white/20 transition">
+                        {(movie.poster || movie.cover_poster) && (
+                          <img
+                            src={movie.poster || movie.cover_poster}
+                            alt={movie.title}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
+                          />
+                        )}
+                      </div>
+                      <p className="text-[13px] font-semibold text-gray-200 group-hover:text-white mt-2 line-clamp-2">{movie.title}</p>
+                    </Link>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Next blog */}
+            {/* Next post */}
             {nextBlog && (
-              <div className="mt-14 border-t border-gray-200 pt-10">
-                <h2 className="text-2xl font-bold mb-4 text-[#2c3e50]">
-                  You might also like
-                </h2>
-                <Link
-                  to={`/blogs/${nextBlog.slug}`}
-                  className="block group bg-gray-50 hover:bg-gray-100 transition rounded-lg overflow-hidden shadow-md"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <img
-                      src={nextBlog.thumbnail_url || "https://via.placeholder.com/300/666/fff?text=Next+Blog"}
-                      alt={nextBlog.title}
-                      className="w-full h-48 object-cover"
-                    />
-                    <div className="sm:col-span-2 flex flex-col justify-center px-4 pb-4 sm:pb-0">
-                      <h3 className="text-xl font-semibold group-hover:text-[#c5c107] transition">
-                        {nextBlog.title}
-                      </h3>
-                      <p className="text-gray-500 mt-1 text-sm">
-                        Read the next article →
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              </div>
+              <Link
+                to={`/blogs/${nextBlog.slug}`}
+                className="group mt-12 flex items-center gap-4 rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.07] hover:ring-white/20 p-3 transition"
+              >
+                <div className="w-32 sm:w-40 aspect-video rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
+                  {nextBlog.thumbnail_url && <img src={nextBlog.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-cover" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Next post</p>
+                  <p className="text-sm sm:text-base font-bold text-gray-100 group-hover:text-white leading-snug line-clamp-2 mt-1">{nextBlog.title}</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-500 group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </Link>
             )}
-          </div>
-        </div>
+          </main>
 
-        {/* Sidebar */}
-        <aside className="space-y-6 lg:col-span-1">
-          <div className="bg-white shadow-md rounded-md p-5">
-            <h3 className="text-lg font-bold text-[#2c3e50] border-b border-gray-200 pb-3 mb-4 uppercase">
-              Trending Now
-            </h3>
-            <div className="space-y-5">
-              {recentBlogs.map((blogItem) => (
-                <Link
-                  key={blogItem.id}
-                  to={`/blogs/${blogItem.slug}`}
-                  className="block group"
-                >
-                  <div className="flex flex-col space-y-2 hover:scale-[1.02] transition">
-                    <img
-                      // Using thumbnail_url for consistency with data fetched
-                      src={blogItem.thumbnail_url || "https://via.placeholder.com/300/666/fff?text=Blog+Thumb"}
-                      alt={blogItem.title}
-                      className="rounded-md shadow-sm object-cover h-40 w-full"
-                    />
-                    <div>
-                      <h4 className="text-base font-semibold text-[#222] group-hover:text-[#c5c107] transition leading-snug">
-                        {blogItem.title}
-                      </h4>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {new Date(blogItem.created_at).toLocaleDateString()}
-                      </p>
+          {/* Recent posts */}
+          {recentBlogs.length > 0 && (
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <h2 className="text-lg font-bold tracking-tight mb-4">Recent posts</h2>
+              <div className="space-y-3">
+                {recentBlogs.map((item) => (
+                  <Link key={item.id} to={`/blogs/${item.slug}`} className="group flex gap-3 rounded-xl p-2 -mx-2 hover:bg-white/[0.04] transition">
+                    <div className="w-28 aspect-video rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
+                      {item.thumbnail_url && <img src={item.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-cover" />}
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </aside>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-[#111] text-[#cecece] py-12">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 px-6">
-          <div className="space-y-3">
-            <h4 className="text-sm uppercase font-bold tracking-wide text-white">
-              Join our community
-            </h4>
-            <p className="text-sm">
-              Get updates on the latest movies, blogs, and reviews.
-            </p>
-          </div>
-          <div className="flex justify-center items-center">
-            <h1 className="text-white text-5xl sm:text-6xl font-extrabold tracking-tight italic">
-              ANCHOR
-            </h1>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="space-y-2">
-              <Link to="/about" className="hover:text-white block">About Us</Link>
-              <Link to="/contact" className="hover:text-white block">Contact</Link>
-              <Link to="/blogs" className="hover:text-white block">Blogs</Link>
-            </div>
-            <div className="space-y-2">
-              <a href="#" className="hover:text-white block">Privacy Policy</a>
-              <a href="#" className="hover:text-white block">Terms of Service</a>
-              <a href="#" className="hover:text-white block">Refund Policy</a>
-            </div>
-          </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold leading-snug text-gray-200 group-hover:text-white line-clamp-3">{item.title}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">{new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </aside>
+          )}
         </div>
-        <div className="mt-10 border-t border-gray-700 pt-4 text-center text-sm text-gray-400">
-          <p>&copy; {new Date().getFullYear()} AnchorMovies. All Rights Reserved.</p>
-          <div className="flex justify-center gap-5 mt-2 text-sm font-medium">
-            <a href="https://instagram.com" target="_blank" className="hover:text-white">Instagram</a>
-            <a href="https://twitter.com" target="_blank" className="hover:text-white">Twitter</a>
-            <a href="https://facebook.com" target="_blank" className="hover:text-white">Facebook</a>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };
