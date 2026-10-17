@@ -156,7 +156,10 @@ const NewsReader = () => {
     setError(null);
     setArticle(null);
     try {
-      const res = await fetch(`${API}/api/rss/article?url=${encodeURIComponent(articleUrl)}`);
+      /* `v` names the extractor's version. Responses are cached for an hour,
+         so a browser that read a story before the extractor improved would
+         keep showing the old, shorter copy; a new version asks afresh. */
+      const res = await fetch(`${API}/api/rss/article?v=3&url=${encodeURIComponent(articleUrl)}`);
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "The story could not be loaded.");
       setArticle(json.article);
