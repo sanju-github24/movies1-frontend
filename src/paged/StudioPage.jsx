@@ -40,17 +40,19 @@ export default function StudioPage() {
   const navigate = useNavigate();
   const studio = studioBySlug(slug);
 
+  const [tab, setTab] = useState("all");   // all | movie | tv
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (p) => {
+  const load = useCallback(async (p, type) => {
     if (!studio) return;
     setLoading(true);
     try {
       const r = await axios.get(`${backendUrl}/api/tmdb-network`, {
-        params: { network: studio.network, provider: studio.provider, region: studio.region, page: p },
+        params: { network: studio.network, provider: studio.provider, region: studio.region, page: p,
+          ...(type && type !== "all" ? { type } : {}) },
         timeout: 20000,
       });
       const list = r.data?.data || [];
@@ -66,13 +68,15 @@ export default function StudioPage() {
     }
   }, [studio]);
 
-  // New studio → reset and load page 1.
+  // New studio or tab → reset and load page 1 of that type.
   useEffect(() => {
     setItems([]); setPage(1); setTotalPages(1);
-    if (studio) load(1);
+    if (studio) load(1, tab);
     window.scrollTo(0, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, tab]);
+
+  const TABS = [["all", "All"], ["movie", "Movies"], ["tv", "Series"]];
 
   if (!studio) {
     return (
@@ -96,13 +100,24 @@ export default function StudioPage() {
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: studio.color }}>{studio.name}</h1>
           </div>
         </div>
+
+        {/* Movies / Series tabs */}
+        <div className="max-w-[1600px] mx-auto mt-4 flex items-center gap-2">
+          {TABS.map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                tab === key ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/20"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-6">
         {items.length === 0 && loading ? (
           <div className="flex justify-center py-24"><Loader2 className="w-10 h-10 animate-spin text-white/50" /></div>
         ) : items.length === 0 ? (
-          <p className="text-center text-white/50 py-24">No titles found for {studio.name} right now.</p>
+          <p className="text-center text-white/50 py-24">No {tab === "movie" ? "movies" : tab === "tv" ? "series" : "titles"} found for {studio.name} right now.</p>
         ) : (
           <>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5">
@@ -131,7 +146,7 @@ export default function StudioPage() {
 
             {page < totalPages && (
               <div className="flex justify-center mt-8">
-                <button onClick={() => { const n = page + 1; setPage(n); load(n); }} disabled={loading}
+                <button onClick={() => { const n = page + 1; setPage(n); load(n, tab); }} disabled={loading}
                   className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 font-semibold transition-all disabled:opacity-50 flex items-center gap-2">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />} Load more
                 </button>
