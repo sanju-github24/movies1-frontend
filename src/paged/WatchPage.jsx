@@ -1774,6 +1774,7 @@ if (!alive) return;
                    description={movieMeta?.description || ""}
                    recommendations={recommendations}
                    onSelectRecommendation={(m) => { setShowOverlay(false); navigate(`/movie/${m.slug}`); }}
+                   maturityRating={movieMeta?.certification || tmdbMeta?.certification || ""}
                    episodes={movieMeta?.content_type === "tv" ? numberedEpisodes : []}
                    currentEpisodeIndex={currentEpIndex}
                    onEpisodeClick={(ep) => (ep.direct_url || ep.hls_url)

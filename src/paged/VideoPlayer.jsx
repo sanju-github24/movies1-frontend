@@ -4,10 +4,23 @@ import PausedOverlay from "../components/PausedOverlay";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, ChevronLeft, Zap,
-  Volume1, Loader2, Check, Music, Layers, Activity, Languages, 
+  Volume1, Loader2, Check, Music, Layers, Activity, Languages,
   Timer, Captions, X as CloseIcon, UploadCloud, ListVideo, ChevronRight,
-  SkipForward, Clock, Layers3
+  SkipForward, Clock, Layers3, Sparkles, MonitorPlay, MessageSquare, ChevronUp, Plus
 } from "lucide-react";
+
+/* Hotstar-style content advisory from the title's genres, when the parent
+   hasn't supplied one — a cosmetic line under the rating badge on start. */
+const deriveAdvisory = (gs = []) => {
+  const g = gs.map((x) => String(x).toLowerCase()).join(" ");
+  const out = [];
+  if (/action|war|adventure/.test(g)) out.push("Action Sequences");
+  if (/crime|thriller|mystery/.test(g)) out.push("Some Violence");
+  if (/horror/.test(g)) out.push("Scary Scenes");
+  if (/comedy/.test(g)) out.push("Mild Language");
+  if (/romance|drama/.test(g) && out.length < 2) out.push("Mature Themes");
+  return (out.length ? out.slice(0, 3) : ["Moderate Themes"]).join(", ");
+};
 
 const formatTime = (seconds) => {
   if (isNaN(seconds) || seconds === Infinity) return "00:00";
@@ -136,6 +149,8 @@ const VideoPlayer = ({
   onSourceSelect,     // optional (source, atSeconds) → parent switches to it
   recommendations = [],       // optional titles for the paused overlay's "More Like This"
   onSelectRecommendation,     // optional (movie) → parent navigates to it
+  maturityRating = "",        // e.g. "U/A 13+" — shown as a Hotstar-style badge on start
+  contentAdvisory = "",       // e.g. "Some Violence, Action Sequences" — derived from genres if blank
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -201,6 +216,9 @@ const VideoPlayer = ({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);  // hide black until a frame decodes
   const [showLangBar, setShowLangBar] = useState(false);   // Hotstar-style audio-language chooser on load
   const [langIntro, setLangIntro] = useState(false);       // intro phase: only the bar shows, controls stay hidden
+  const [showRating, setShowRating] = useState(false);     // Hotstar-style rating/advisory card on start
+  const [showMoreLike, setShowMoreLike] = useState(false); // "More Like This" grid overlay
+  const ratingShownRef = useRef(false);
   const [selectedSeason, setSelectedSeason] = useState(null); // season tab in the episodes panel
   const [seekFlash, setSeekFlash] = useState(null);   // {side:'back'|'fwd', secs} double-tap ripple
   const [speedBoost, setSpeedBoost] = useState(false);// long-press 2x indicator
@@ -775,6 +793,20 @@ const VideoPlayer = ({
     }
   }, [audioTracks]);
 
+  // Hotstar-style rating/advisory card: top-left on start, auto-dismiss. Once per source.
+  const maturityLabel = maturityRating || "U/A 13+";
+  const advisoryLabel = contentAdvisory || deriveAdvisory(genres);
+  useEffect(() => {
+    if (!isPlaying || ratingShownRef.current) return;
+    ratingShownRef.current = true;
+    setShowRating(true);
+    const t = setTimeout(() => setShowRating(false), 5500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying]);
+  // New source → show the card again for the next title/episode.
+  useEffect(() => { ratingShownRef.current = false; setShowRating(false); }, [src]);
+
   /* Stream languages: the bar once per title — switching language loads a new
      stream, and offering the bar again after every pick would be noise. The
      title is known by its first version. The viewer's saved language plays
@@ -1030,8 +1062,15 @@ const VideoPlayer = ({
     e.target.value = "";   // allow re-uploading the same filename
   };
 
+  /* Short label beside the top-right Quality button — the level playing now. */
+  const qualityLabel = (() => {
+    if (levels.length > 1) return currentLevel === -1 ? "Auto" : `${levels[currentLevel]?.height || ""}p`;
+    if (streamQualities.length > 1) { const cur = streamQualities.find((v) => v.url === src); return cur?.height ? `${cur.height}p` : (quality || "HD"); }
+    return quality || "HD";
+  })();
+
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`${cssFullScreen ? "fixed z-[10000]" : inline ? "relative w-full h-full" : "fixed inset-0 w-full h-[100dvh]"} bg-black group overflow-hidden font-sans text-white select-none transition-all ${showControls || langIntro ? "" : "cursor-none"}`}
       style={{
@@ -1080,6 +1119,18 @@ const VideoPlayer = ({
       >
         {externalSubUrl && <track key={externalSubUrl} kind="subtitles" src={externalSubUrl} srcLang="en" label="Uploaded" default />}
       </video>
+
+      {/* --- RATING / ADVISORY CARD (Hotstar-style, on start) --- */}
+      <div className={`absolute top-0 inset-x-0 p-5 sm:p-8 md:p-10 flex items-start justify-between z-[80] pointer-events-none transition-opacity duration-700 ${showRating ? "opacity-100" : "opacity-0"}`}>
+        <div className="flex items-stretch gap-3">
+          <span className="w-[3px] rounded-full bg-blue-500 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-lg sm:text-2xl font-semibold text-white leading-tight">Rated {maturityLabel}</p>
+            <p className="mt-1 text-[11px] sm:text-sm text-white/55 truncate">{advisoryLabel}</p>
+          </div>
+        </div>
+        <Sparkles className="w-7 h-7 sm:w-9 sm:h-9 text-white/90 shrink-0" strokeWidth={1.25} />
+      </div>
 
       {/* --- INTEGRATED DATABASE PAUSED OVERLAY --- */}
       <PausedOverlay
@@ -1189,10 +1240,44 @@ const VideoPlayer = ({
           <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
           <div className="absolute bottom-24 right-6 z-[100] w-64 max-w-[80vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in slide-in-from-bottom-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", quality: "Quality", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
+              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", audiosubs: "Audio & Subtitles", quality: "Quality", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
               <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
             </div>
             <div className="max-h-72 overflow-y-auto custom-scrollbar py-1">
+              {showSettings === 'audiosubs' && (
+                <>
+                  <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-[0.15em] text-white/40">Audio</p>
+                  {streamLangs
+                    ? langOptions.map((v) => (
+                        <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                          <span className="text-sm font-medium">{v.lang}</span>{v.lang === playingVersion.lang && <Check size={16} className="text-blue-400"/>}
+                        </button>
+                      ))
+                    : (audioTracks.length ? audioTracks.map((t, i) => (
+                        <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                          <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
+                        </button>
+                      )) : <p className="px-4 py-2 text-xs text-white/40">One audio track.</p>)}
+                  <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-[0.15em] text-white/40 border-t border-white/10 mt-1">Subtitles</p>
+                  <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                    <span className="text-sm font-medium">Off</span>{currentSubtitleId === -1 && <Check size={16} className="text-blue-400"/>}
+                  </button>
+                  {subtitleTracks.map((t, i) => (
+                    <button key={i} onClick={() => changeSubtitles(i)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                      <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentSubtitleId === i && <Check size={16} className="text-blue-400"/>}
+                    </button>
+                  ))}
+                  {externalSubUrl && (
+                    <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                      <span className="text-sm font-medium">Uploaded subtitle</span>{currentSubtitleId === 999 && <Check size={16} className="text-blue-400"/>}
+                    </button>
+                  )}
+                  <label className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 cursor-pointer text-white/70 hover:text-white transition-all">
+                    <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.srt / .vtt)</span>
+                    <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
+                  </label>
+                </>
+              )}
               {showSettings === 'subs' && (
                 <>
                   <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
@@ -1254,6 +1339,42 @@ const VideoPlayer = ({
         </>
       )}
 
+      {/* --- MORE LIKE THIS — full grid overlay (Hotstar-style) --- */}
+      {showMoreLike && (
+        <div className="absolute inset-0 z-[160] bg-black/92 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
+          <div className="relative flex items-center justify-center px-6 py-5 sm:py-6 shrink-0">
+            <h2 className="text-lg sm:text-2xl font-semibold text-white">More Like This</h2>
+            <button onClick={() => setShowMoreLike(false)} aria-label="Close"
+              className="absolute right-5 sm:right-8 top-1/2 -translate-y-1/2 p-2 text-white/70 hover:text-white transition-colors"><CloseIcon size={26}/></button>
+          </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-5 sm:px-10 pb-10">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5 max-w-[1500px] mx-auto">
+              {recommendations.map((m, i) => (
+                <button key={m.id || m.slug || i} onClick={() => { setShowMoreLike(false); onSelectRecommendation?.(m); }}
+                  title={m.title || m.slug}
+                  className="group/rec relative rounded-xl overflow-hidden ring-1 ring-white/10 hover:ring-white/40 transition-all hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <span className="block aspect-[2/3] bg-white/5">
+                    <img src={m.poster || m.poster_url || m.cover_poster || "/default-poster.jpg"} alt=""
+                      loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover/rec:scale-105"
+                      onError={(e) => { e.currentTarget.src = "/default-poster.jpg"; }} />
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover/rec:opacity-100 transition-opacity" />
+                    <span className="absolute inset-x-0 bottom-0 p-2.5 flex items-center gap-1.5 opacity-0 group-hover/rec:opacity-100 transition-opacity">
+                      <span className="flex-1 flex items-center justify-center gap-1 bg-white text-black text-[11px] font-bold py-1.5 rounded-md">
+                        <Play size={12} fill="currentColor" /> Watch Now
+                      </span>
+                      <span className="p-1.5 bg-white/15 border border-white/25 rounded-md text-white"><Plus size={13} /></span>
+                    </span>
+                  </span>
+                  <span className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent group-hover/rec:opacity-0 transition-opacity">
+                    <span className="block text-[11px] sm:text-xs font-semibold text-white truncate">{m.title || m.slug}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- HUD: TOP --- */}
       <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
@@ -1268,6 +1389,21 @@ const VideoPlayer = ({
               </span>
             )}
           </div>
+        </div>
+
+        {/* Top-right: Quality + Audio & Subtitles, Hotstar-style labelled buttons. */}
+        <div className="flex items-center gap-4 sm:gap-7 shrink-0">
+          <button onClick={() => setShowSettings('quality')} aria-label="Quality"
+            className={`flex items-center gap-2 transition-colors active:scale-95 ${showSettings === 'quality' ? 'text-blue-400' : 'text-white hover:text-white/80'}`}>
+            <MonitorPlay className="w-5 h-5 sm:w-[22px] sm:h-[22px]" strokeWidth={1.75} />
+            <span className="text-sm sm:text-base font-medium">Quality</span>
+            <span className="text-[11px] sm:text-xs font-semibold text-white/50">{qualityLabel}</span>
+          </button>
+          <button onClick={() => setShowSettings('audiosubs')} aria-label="Audio & Subtitles"
+            className={`flex items-center gap-2 transition-colors active:scale-95 ${showSettings === 'audiosubs' ? 'text-blue-400' : 'text-white hover:text-white/80'}`}>
+            <MessageSquare className="w-5 h-5 sm:w-[22px] sm:h-[22px]" strokeWidth={1.75} />
+            <span className="text-sm sm:text-base font-medium whitespace-nowrap">Audio &amp; Subtitles</span>
+          </button>
         </div>
       </div>
 
@@ -1353,7 +1489,14 @@ const VideoPlayer = ({
             </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="relative flex items-center justify-between gap-2">
+          {onSelectRecommendation && recommendations.length > 0 && (
+            <button onClick={() => setShowMoreLike(true)} aria-label="More like this"
+              className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1.5 text-white/85 hover:text-white transition-colors active:scale-95">
+              <span className="text-sm md:text-base font-semibold">More Like This</span>
+              <ChevronUp className="w-4 h-4" />
+            </button>
+          )}
           <div className="flex items-center gap-3 sm:gap-6 md:gap-10 min-w-0">
             {/* ±10s: desktop only. On a phone the double-tap gesture does this,
                 and a series needs the width for Episodes / Next Episode. */}
@@ -1394,12 +1537,6 @@ const VideoPlayer = ({
             )}
             <button onClick={() => setShowSettings('speed')} aria-label="Playback speed"
               className={`px-2 py-2 sm:px-2.5 sm:py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-[11px] sm:text-xs font-black leading-none min-w-[32px] sm:min-w-[34px] active:scale-90 ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
-            <button onClick={() => setShowSettings('subs')} aria-label="Subtitles"
-              className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${currentSubtitleId !== -1 ? 'text-blue-400' : 'text-white'}`}><Captions className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
-            <button onClick={() => setShowSettings('audio')} aria-label="Audio language"
-              className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90 ${showSettings === 'audio' ? 'text-blue-400' : 'text-white'}`}><Music className="w-[18px] h-[18px] sm:w-5 sm:h-5" /></button>
-            <button onClick={() => setShowSettings('quality')} aria-label="Quality"
-              className={`hidden sm:inline-flex p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all ${showSettings === 'quality' ? 'text-blue-400' : 'text-white'}`}><Layers className="w-5 h-5" /></button>
             <button onClick={handleFullscreen} aria-label={isFullScreen || cssFullScreen ? "Exit fullscreen" : "Fullscreen"}
               className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white active:scale-90">{isFullScreen || cssFullScreen
                 ? <Minimize className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
