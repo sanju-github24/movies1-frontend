@@ -2126,6 +2126,28 @@ const Header = () => {
             {r === 1 && trending.length >= 4 && (
               <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
             )}
+            {/* Studios — right after the first two rows (Trending in India + the
+                next), each brand's own logo; opens its TMDB shows + movies. */}
+            {r === 1 && (
+              <div className="mb-7 sm:mb-9">
+                <div className="mb-2.5 sm:mb-3 px-0.5">
+                  <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">Studios</h2>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Browse by streaming brand</p>
+                </div>
+                <ScrollRow gap="gap-3 sm:gap-4" label="Studios">
+                  {STUDIOS.map((s) => (
+                    <Link key={s.slug} to={`/studio/${s.slug}`}
+                      className="flex-shrink-0 w-[150px] sm:w-[190px] aspect-[16/9] rounded-2xl bg-white/[0.05] border border-white/10
+                                 flex items-center justify-center p-5 sm:p-6 hover:bg-white/[0.09] hover:border-white/25 transition-all
+                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                      <img src={s.logo} alt={s.name} loading="lazy"
+                        className="max-h-full max-w-full object-contain drop-shadow"
+                        onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createElement("span"), { textContent: s.name, className: "text-lg font-black", style: `color:${s.color}` })); }} />
+                    </Link>
+                  ))}
+                </ScrollRow>
+              </div>
+            )}
             {/* MX Player shelves (K-drama / anime / new releases) ride in just
                 below the second genre row. Cards open /mx-watch via handleCardClick. */}
             {r === secondGenreIdx && mxShelves.map(renderMxRow)}
@@ -2135,24 +2157,6 @@ const Header = () => {
 
         {/* Fewer than two genre rows this pass — show the MX shelves at the end. */}
         {secondGenreIdx < 0 && mxShelves.map(renderMxRow)}
-
-        {/* ── STUDIOS ── Streaming brands; each opens that studio's TMDB shows + movies. */}
-        <div className="mb-7 sm:mb-9">
-          <div className="mb-2.5 sm:mb-3 px-0.5">
-            <h2 className="text-[17px] sm:text-xl font-bold text-white tracking-[-0.01em]">Studios</h2>
-            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Browse by streaming brand</p>
-          </div>
-          <ScrollRow gap="gap-3 sm:gap-4" label="Studios">
-            {STUDIOS.map((s) => (
-              <Link key={s.slug} to={`/studio/${s.slug}`}
-                className="flex-shrink-0 w-[150px] sm:w-[190px] aspect-[16/9] rounded-2xl bg-white/[0.04] border border-white/10
-                           flex items-center justify-center hover:bg-white/[0.08] hover:border-white/25 transition-all
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                <span className="text-lg sm:text-xl font-black tracking-tight" style={{ color: s.color }}>{s.name}</span>
-              </Link>
-            ))}
-          </ScrollRow>
-        </div>
 
         {shelves.length > 0 && (
           <div className="flex items-center justify-between mb-2.5 sm:mb-3 px-0.5">
