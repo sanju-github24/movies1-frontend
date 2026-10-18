@@ -800,7 +800,11 @@ const VideoPlayer = ({
     if (!isPlaying || ratingShownRef.current) return;
     ratingShownRef.current = true;
     setShowRating(true);
-    const t = setTimeout(() => setShowRating(false), 5500);
+    // Clean start, like Hotstar: the card alone, controls tucked away so it never
+    // sits on top of the title or the Quality/Audio icons.
+    setShowControls(false);
+    showControlsRef.current = false;
+    const t = setTimeout(() => setShowRating(false), 5000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying]);
@@ -1062,6 +1066,11 @@ const VideoPlayer = ({
     e.target.value = "";   // allow re-uploading the same filename
   };
 
+  /* Quality & Audio menus open from the top-right buttons, so their panel drops
+     down from there (not the bottom) — otherwise the menu lands far from the
+     click. Speed/legacy menus stay bottom-right. */
+  const topAnchoredMenu = showSettings === 'quality' || showSettings === 'audiosubs';
+
   /* Short label beside the top-right Quality button — the level playing now. */
   const qualityLabel = (() => {
     if (levels.length > 1) return currentLevel === -1 ? "Auto" : `${levels[currentLevel]?.height || ""}p`;
@@ -1121,7 +1130,10 @@ const VideoPlayer = ({
       </video>
 
       {/* --- RATING / ADVISORY CARD (Hotstar-style, on start) --- */}
-      <div className={`absolute top-0 inset-x-0 p-5 sm:p-8 md:p-10 flex items-start justify-between z-[80] pointer-events-none transition-opacity duration-700 ${showRating ? "opacity-100" : "opacity-0"}`}>
+      {/* Only while the HUD is hidden, so it never overlaps the title or the
+          top-right Quality / Audio icons — moving the mouse brings the controls
+          up and fades the card out, exactly like Hotstar. */}
+      <div className={`absolute top-0 inset-x-0 p-5 sm:p-8 md:p-10 flex items-start justify-between z-[80] pointer-events-none transition-opacity duration-700 ${showRating && !showControls ? "opacity-100" : "opacity-0"}`}>
         <div className="flex items-stretch gap-3">
           <span className="w-[3px] rounded-full bg-blue-500 shrink-0" />
           <div className="min-w-0">
@@ -1238,40 +1250,51 @@ const VideoPlayer = ({
       {showSettings && showSettings !== 'episodes' && (
         <>
           <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
-          <div className="absolute bottom-24 right-6 z-[100] w-64 max-w-[80vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in slide-in-from-bottom-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", audiosubs: "Audio & Subtitles", quality: "Quality", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
-              <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
-            </div>
-            <div className="max-h-72 overflow-y-auto custom-scrollbar py-1">
+          <div className={`absolute z-[100] max-w-[88vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in fade-in duration-200 ${
+              topAnchoredMenu
+                ? `top-[68px] sm:top-[84px] right-3 sm:right-8 slide-in-from-top-2 ${showSettings === 'audiosubs' ? 'w-[330px]' : 'w-60'}`
+                : 'bottom-24 right-6 w-64 slide-in-from-bottom-2'}`} onClick={(e) => e.stopPropagation()}>
+            {!topAnchoredMenu && (
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-sm font-semibold text-white">{{ subs: "Subtitles", audio: "Audio", speed: "Playback Speed" }[showSettings] || showSettings}</h3>
+                <button onClick={() => setShowSettings(null)} className="p-1 text-white/60 hover:text-white transition-colors"><CloseIcon size={18}/></button>
+              </div>
+            )}
+            <div className="max-h-[62vh] overflow-y-auto custom-scrollbar py-1">
               {showSettings === 'audiosubs' && (
                 <>
-                  <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-[0.15em] text-white/40">Audio</p>
-                  {streamLangs
-                    ? langOptions.map((v) => (
-                        <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                          <span className="text-sm font-medium">{v.lang}</span>{v.lang === playingVersion.lang && <Check size={16} className="text-blue-400"/>}
+                  <div className="grid grid-cols-2">
+                    <div className="border-r border-white/10">
+                      <p className="px-4 pt-3 pb-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-white/40">Audio</p>
+                      {streamLangs
+                        ? langOptions.map((v) => (
+                            <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                              {v.lang === playingVersion.lang ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{v.lang}</span>
+                            </button>
+                          ))
+                        : (audioTracks.length ? audioTracks.map((t, i) => (
+                            <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${currentAudioTrackId === i ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                              {currentAudioTrackId === i ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{getLanguageName(t)}</span>
+                            </button>
+                          )) : <p className="px-4 py-2 text-xs text-white/40">One track</p>)}
+                    </div>
+                    <div>
+                      <p className="px-4 pt-3 pb-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-white/40">Subtitles</p>
+                      <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${currentSubtitleId === -1 ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                        {currentSubtitleId === -1 ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium">Off</span>
+                      </button>
+                      {subtitleTracks.map((t, i) => (
+                        <button key={i} onClick={() => changeSubtitles(i)} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${currentSubtitleId === i ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                          {currentSubtitleId === i ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{getLanguageName(t)}</span>
                         </button>
-                      ))
-                    : (audioTracks.length ? audioTracks.map((t, i) => (
-                        <button key={i} onClick={() => { changeAudio(i); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentAudioTrackId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                          <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
+                      ))}
+                      {externalSubUrl && (
+                        <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
+                          {currentSubtitleId === 999 ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium">Uploaded</span>
                         </button>
-                      )) : <p className="px-4 py-2 text-xs text-white/40">One audio track.</p>)}
-                  <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-[0.15em] text-white/40 border-t border-white/10 mt-1">Subtitles</p>
-                  <button onClick={() => changeSubtitles(-1)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === -1 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                    <span className="text-sm font-medium">Off</span>{currentSubtitleId === -1 && <Check size={16} className="text-blue-400"/>}
-                  </button>
-                  {subtitleTracks.map((t, i) => (
-                    <button key={i} onClick={() => changeSubtitles(i)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === i ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                      <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentSubtitleId === i && <Check size={16} className="text-blue-400"/>}
-                    </button>
-                  ))}
-                  {externalSubUrl && (
-                    <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                      <span className="text-sm font-medium">Uploaded subtitle</span>{currentSubtitleId === 999 && <Check size={16} className="text-blue-400"/>}
-                    </button>
-                  )}
+                      )}
+                    </div>
+                  </div>
                   <label className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 cursor-pointer text-white/70 hover:text-white transition-all">
                     <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.srt / .vtt)</span>
                     <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
