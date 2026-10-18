@@ -51,7 +51,7 @@ export default function StudioPage() {
     setLoading(true);
     try {
       const r = await axios.get(`${backendUrl}/api/tmdb-network`, {
-        params: { network: studio.network, provider: studio.provider, region: studio.region, page: p,
+        params: { network: studio.network, provider: studio.provider, providerIn: studio.providerIn, region: studio.region, page: p,
           ...(type && type !== "all" ? { type } : {}) },
         timeout: 20000,
       });
