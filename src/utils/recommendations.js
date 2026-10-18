@@ -127,6 +127,7 @@ export function useRecommendations(movie, pool = [], tmdbExtra = null, limit = 1
         contentType,
         ...(genreKey ? { genres: genreKey } : {}),
         ...(LANG_CODE[langName] ? { lang: LANG_CODE[langName] } : {}),
+        indian: 1,            // mix in same-genre Indian titles, not only global hits
         limit,
       },
     })
