@@ -2142,6 +2142,7 @@ const Header = () => {
                                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                       <img src={s.logo} alt={s.name} loading="lazy"
                         className="max-h-full max-w-full object-contain drop-shadow"
+                        style={s.invert ? { filter: "brightness(0) invert(1)" } : undefined}
                         onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createElement("span"), { textContent: s.name, className: "text-lg font-black", style: `color:${s.color}` })); }} />
                     </Link>
                   ))}
