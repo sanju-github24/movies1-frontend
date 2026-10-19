@@ -151,7 +151,7 @@ const india4movies = (o) => async () => {
       if (seen.has(k) || seen.has(f.code)) continue;
       seen.add(k); seen.add(f.code);
       out.push({ name: `India4Movies • ${lang} ${f.quality || ""}${p.print ? ` · ${p.print}` : ""}`.replace(/\s+/g, " "),
-        url: `${o.backendUrl}/api/i4m/play?v=${encodeURIComponent(f.code)}`, own: true, file: true });
+        url: `${o.backendUrl}/api/i4m/play?v=${encodeURIComponent(f.code)}`, own: true, file: true, lang });
     }
   }
   return out.length ? out : null;
@@ -260,6 +260,8 @@ export const canPlayMkv = MKV_OK;
 
 export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
   if (!backendUrl || !MKV_OK()) return;
+  // India4Movies' language posts are asked beside, for a language 1TamilMV lacks.
+  const i4m = india4movies({ type, backendUrl, title, year: String(year || "").slice(0, 4) })().catch(() => null);
   const { releaseLabel } = await import("../components/TamilmvDownloads.jsx");
   const qs = new URLSearchParams({ tmdb: `${type === "tv" ? "tv" : "movie"}:${tmdbId}`, title: title || "", year: String(year || "") });
   const d = await getJson(`${backendUrl}/api/fresh/files?${qs}`, 60000).catch(() => null);
@@ -292,4 +294,10 @@ export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, epis
   files.filter((x) => x.l.langs.length > 1 && !covered.has(x.l.langs[0])).forEach((x) => take(x, x.l.langs[0]));
   // The title's own language first (the first single-language one listed), then the rest.
   for (const c of out) yield c;
+  /* Then India4Movies, for a language 1TamilMV does not have at all: every
+     quality of it, in the same player, offered in its language menu. */
+  for (const c of (await i4m) || []) {
+    if (covered.has(c.lang)) continue;
+    yield { name: c.name, url: c.url };
+  }
 }

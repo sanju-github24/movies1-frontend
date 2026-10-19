@@ -876,9 +876,11 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setVideoTitle(TV ? `${movieMeta.title || routeSlug} — S${s}E${e}` : (movieMeta.title || routeSlug));
     setShowOverlay(true);
     setTmdbSources(search.items.filter((x) => !x.bad));
-    // Keep collecting while it plays, so the language and quality choices fill in.
+    /* Keep collecting while it plays, so the language and quality choices
+       fill in — as far as India4Movies, the last source, whose language
+       posts each add a choice. */
     (async () => {
-      while (tmdbIterRef.current === search && search.items.length < 24) {
+      while (tmdbIterRef.current === search && search.items.length < 64) {
         if (!(await pullTmdbStream(search))) break;
         if (tmdbIterRef.current === search) setTmdbSources(search.items.filter((x) => !x.bad));
       }
