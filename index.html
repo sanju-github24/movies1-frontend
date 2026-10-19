@@ -11,7 +11,11 @@
 
     <!-- Title & Description -->
     <title>1AnchorMovies – Watch &amp; Download Latest HD Movies</title>
-    <meta name="description" content="Download the latest Tamil, Telugu, Hindi, Malayalam, and Kannada movies free on 1AnchorMovies. Fast updates, HD prints, multiple formats, direct links." />
+    <!-- description is deliberately NOT set here, for the same reason as og:title
+         below: react-helmet appends rather than replaces, so a static one sits
+         first and Google reads it on every page — making each title page look
+         like it has the home page's description. Every page (home, watch, movie,
+         collection) sets its own via Helmet; that is the one Google should see. -->
 
     <!-- Keywords for SEO -->
     <meta name="keywords" content="anchormovies, watch movies online, latest HD movies, Tamil movie download, Telugu HD movies, Hindi movies online, Kannada new releases, Malayalam movies, South Indian movies, web series online, dubbed movies, 1080p 720p download, live cricket streaming, watch online free" />
@@ -29,14 +33,14 @@
          1anchormovies.live, a domain that no longer resolves at all. A page that
          sets its own now owns them; one that does not falls back to <title> and
          the URL that was fetched, both of which are already right. -->
-    <meta property="og:description" content="HD downloads for Tamil, Telugu, Kannada, Malayalam & Hindi movies. Get fast links & quality prints on 1AnchorMovies." />
+    <!-- og:description / twitter:title / twitter:description are also left to each
+         page's Helmet, so a title page shows its own summary in a shared link or
+         tweet instead of the home page's. -->
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/preview-image.jpg" /> <!-- Replace with your actual image path -->
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="1AnchorMovies – Watch &amp; Download Latest HD Movies" />
-    <meta name="twitter:description" content="Latest Indian movie downloads in HD. Tamil, Telugu, Hindi, Kannada, Malayalam – Stream or download instantly from 1AnchorMovies." />
     <meta name="twitter:image" content="/preview-image.jpg" /> <!-- Replace with actual banner -->
 
     <!-- Crawler directives: index everything, and allow large image/video/snippet
