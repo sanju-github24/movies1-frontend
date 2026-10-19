@@ -3,16 +3,25 @@ import { Download, Loader2, Server, ChevronDown, ExternalLink } from "lucide-rea
 import { backendUrl as apiBase } from "../utils/api";
 
 /* VITE_DL_RELAY, when set, saves the file under a clean name: India4Movies
-   stamps "…-india4Movies.ORG" on every file. Only MultiCloudLinks' Turbo
-   (R2) link is a file the relay can stream; the relay reads the name from
-   the host itself, tag off. The mirrors are landing pages and open as they
-   are. */
+   stamps "…-india4Movies.ORG" on every file, its older posts
+   "www.1Full4Movies.com - …". Only links that are the file itself go
+   through the relay — MultiCloudLinks' Turbo (R2), an older file's Direct
+   Download (a …workers.dev/download/ link) and HubCloud's 10Gbps — and it
+   reads the name from the host, tag off. The mirrors are landing pages and
+   open as they are. */
 const RELAY = import.meta.env.VITE_DL_RELAY || "";
 const viaRelay = (url) => {
   if (!RELAY) return url;
-  try { if (!/(^|\.)multidownload\.lol$/i.test(new URL(url).hostname)) return url; } catch { return url; }
+  try {
+    const u = new URL(url);
+    const file = /(^|\.)(multidownload\.lol|googleusercontent\.com|pixeldrain\.dev)$/i.test(u.hostname)
+      || (/\.workers\.dev$/i.test(u.hostname) && /^\/download\//.test(u.pathname));
+    if (!file) return url;
+  } catch { return url; }
   return `${RELAY}?u=${encodeURIComponent(url)}`;
 };
+// An older post's file: a full4drive page, followed by the backend to its file.
+const FULL4DRIVE = /^https:\/\/(?:[a-z0-9-]+\.)?full4drive\.[a-z]+\/file\//i;
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, "").split(".").slice(-2, -1)[0] || "host"; } catch { return "host"; } };
 
 /* More downloads for a title, from India4Movies: one post per language, each
@@ -54,18 +63,21 @@ const rowsOf = (files) => {
   return rows;
 };
 
-/* One quality. A MultiCloudLinks file's servers are asked for when it is
-   opened — their links carry tokens that run out, so not before. */
+/* One quality. Its servers are asked for when it is opened — their links
+   carry tokens that run out, so not before: a MultiCloudLinks file's list,
+   or an older file's full4drive page, followed to the file. */
 function FileRow({ file }) {
+  const f4d = file.code ? "" : (file.links.find((l) => FULL4DRIVE.test(l.url))?.url || "");
   const [open, setOpen] = useState(false);
-  const [servers, setServers] = useState(file.code ? null : file.links);   // null = not asked yet
+  const [servers, setServers] = useState(file.code || f4d ? null : file.links);   // null = not asked yet
   const [error, setError] = useState("");
 
   const toggle = () => {
     setOpen((o) => !o);
-    if (servers || !file.code) return;
+    if (servers || (!file.code && !f4d)) return;
     setServers("loading");
-    fetch(`${apiBase}/api/i4m/servers?code=${encodeURIComponent(file.code)}`)
+    const q = file.code ? `code=${encodeURIComponent(file.code)}` : `url=${encodeURIComponent(f4d)}`;
+    fetch(`${apiBase}/api/i4m/servers?${q}`)
       .then((r) => r.json())
       .then((d) => { setServers(d.servers || []); if (!d.servers?.length) setError(d.error || "No servers answered for this file."); })
       .catch(() => { setServers([]); setError("Couldn't reach the file host."); });
@@ -99,10 +111,10 @@ function FileRow({ file }) {
             </a>
           ))}
           {Array.isArray(servers) && !servers.length && <p className="text-xs text-gray-500 py-1">{error}</p>}
-          {file.code && Array.isArray(servers) && (
-            <a href={file.url} target="_blank" rel="noopener noreferrer nofollow"
+          {(file.code || f4d) && Array.isArray(servers) && (
+            <a href={file.code ? file.url : f4d} target="_blank" rel="noopener noreferrer nofollow"
               className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 pt-1">
-              <ExternalLink size={12} /> Open on MultiCloudLinks
+              <ExternalLink size={12} /> Open on {file.code ? "MultiCloudLinks" : "full4drive"}
             </a>
           )}
         </div>
