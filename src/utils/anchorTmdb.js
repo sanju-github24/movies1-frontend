@@ -258,6 +258,7 @@ const MKV_OK = () => {
 };
 export const canPlayMkv = MKV_OK;
 
+const I4M_WAIT = 8000;
 export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
   if (!backendUrl || !MKV_OK()) return;
   // India4Movies' language posts are asked beside, for a language 1TamilMV lacks.
@@ -292,12 +293,14 @@ export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, epis
   };
   files.filter((x) => x.l.langs.length === 1).forEach((x) => take(x, x.l.langs[0]));
   files.filter((x) => x.l.langs.length > 1 && !covered.has(x.l.langs[0])).forEach((x) => take(x, x.l.langs[0]));
+  /* Then India4Movies, for a language 1TamilMV does not have at all: every
+     quality of it, in the same player. Waited for (a while) before anything
+     plays, so the language bar the player shows on start, and the saved
+     language it starts in, include them. Later than that, they still reach
+     the Audio menu when they come. */
+  const extra = (c) => !covered.has(c.lang);
+  const early = await withTimeout(i4m, I4M_WAIT);
   // The title's own language first (the first single-language one listed), then the rest.
   for (const c of out) yield c;
-  /* Then India4Movies, for a language 1TamilMV does not have at all: every
-     quality of it, in the same player, offered in its language menu. */
-  for (const c of (await i4m) || []) {
-    if (covered.has(c.lang)) continue;
-    yield { name: c.name, url: c.url };
-  }
+  for (const c of (early || (await i4m) || []).filter(extra)) yield { name: c.name, url: c.url };
 }
