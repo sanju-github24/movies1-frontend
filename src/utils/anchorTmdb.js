@@ -125,6 +125,38 @@ const moviBox = (o) => async () => {
   return out.length ? out.sort((a, b) => Number(/original/.test(b.name)) - Number(/original/.test(a.name))) : null;
 };
 
+/* India4Movies, last of all: when nobody above has a title — a regional
+   film often is only there. Each language is its own post, and every file
+   plays off MultiCloudLinks' CDN (an MKV, with CORS) through
+   /api/i4m/play, which finds the file's link at play time; the links last
+   hours. Only x264 + AAC (the backend marks them); the post's own "Watch
+   Online" file first, then its other qualities. Named "India4Movies •
+   Kannada 720p · HDTC", so the player offers each language. Films only. */
+const I4M_CAM = /HDTC|HDTS|HDCAM|CAMRip|PreDVD|Pre-?HD|DVDScr/i;
+const india4movies = (o) => async () => {
+  if (o.type !== "movie" || !o.backendUrl || !o.title || !MKV_OK()) return null;   // MKV: not on Safari/iPhone
+  const qs = new URLSearchParams({ q: o.title, year: o.year || "" });
+  const d = await getJson(`${o.backendUrl}/api/i4m/files?${qs}`, 30000);
+  const posts = (d?.posts || []).slice()
+    // Clean prints first: a WEB-DL post, then the cam print it replaced.
+    .sort((a, b) => Number(I4M_CAM.test(a.print)) - Number(I4M_CAM.test(b.print)));
+  const out = [], seen = new Set();
+  for (const p of posts) {
+    const lang = String(p.lang || "").split(/\s*[+&,]\s*/)[0] || "Original";
+    const files = p.files.filter((f) => f.playable)
+      .sort((a, b) => Number(b.code === p.watch) - Number(a.code === p.watch));
+    if (p.watch && !files.some((f) => f.code === p.watch)) files.unshift({ code: p.watch, quality: "720p" });
+    for (const f of files) {
+      const k = `${lang}|${f.quality}`;
+      if (seen.has(k) || seen.has(f.code)) continue;
+      seen.add(k); seen.add(f.code);
+      out.push({ name: `India4Movies • ${lang} ${f.quality || ""}${p.print ? ` · ${p.print}` : ""}`.replace(/\s+/g, " "),
+        url: `${o.backendUrl}/api/i4m/play?v=${encodeURIComponent(f.code)}`, own: true, file: true });
+    }
+  }
+  return out.length ? out : null;
+};
+
 /* Each provider returns a candidate, a list of them, or null. In FilmU's own
    order of preference: Singularity's masters carry the most languages; the
    extractors behind it are what FilmU's page falls back to. */
@@ -140,6 +172,7 @@ const providers = (o) => [
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
   scrape("VidRock", o),        // Nova · Orion
+  india4movies(o),             // when none of the above has it
 ];
 
 

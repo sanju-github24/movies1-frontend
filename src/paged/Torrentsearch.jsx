@@ -24,6 +24,7 @@ import { loadCatalog } from "../utils/catalog";
 import { LIST_SHELL } from "../utils/posterGrid";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
+import India4moviesDownloads, { useIndia4movies } from "../components/India4moviesDownloads";
 
 /* One fallback index, not a menu. The picker used to offer a choice between
    two, which promised the reader control over something that changes nothing
@@ -431,6 +432,7 @@ const TorrentSearch = () => {
   // Google Drive files from BollyFlix for what was searched, after our own.
   const bolly = useBollyflix(submitted);
   const hdhub = useHdhub(submitted);
+  const i4m = useIndia4movies(submitted);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-8 py-10">
@@ -508,6 +510,11 @@ const TorrentSearch = () => {
         {submitted && (hdhub.loading || hdhub.files.length > 0) && (
           <section className="mb-10">
             <HdhubDownloads state={hdhub} />
+          </section>
+        )}
+        {submitted && (i4m.loading || i4m.posts.length > 0) && (
+          <section className="mb-10">
+            <India4moviesDownloads state={i4m} />
           </section>
         )}
 

@@ -19,6 +19,7 @@ import { recordTrendingHit } from "../utils/trending";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
+import India4moviesDownloads, { useIndia4movies } from "../components/India4moviesDownloads";
 import TamilmvDownloads, { useTamilmv } from "../components/TamilmvDownloads";
 import MoviboxFrame from "../components/MoviboxFrame";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
@@ -570,6 +571,8 @@ const WatchHtmlPage = () => {
   const bolly = useBollyflix(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
   // And HDHub4u's, matched by IMDb id where we have it.
   const hdhub = useHdhub(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", bollyTitle ? (movieMeta?.imdb_id || "") : "");
+  // And India4Movies', one post per language.
+  const i4m = useIndia4movies(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
   // And 1TamilMV's own files: by TMDB id for a title in the latest releases,
   // by name and year for any other.
   const tmv = useTamilmv(bollyTitle ? movieMeta?.tmdb_id : null, movieMeta?.content_type,
@@ -2513,9 +2516,11 @@ if (!alive) return;
             {hasOwnDownloads && (tmv.loading || tmv.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
             <TamilmvDownloads state={tmv} />
             {(hasOwnDownloads || tmv.files.length > 0) && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || tmv.loading || tmv.files.length || hdhub.loading || hdhub.files.length ? "" : "No downloads for this title yet."} />
+            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || tmv.loading || tmv.files.length || hdhub.loading || hdhub.files.length || i4m.loading || i4m.posts.length ? "" : "No downloads for this title yet."} />
             {(hasOwnDownloads || bolly.loading || bolly.files.length > 0) && (hdhub.loading || hdhub.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
             <HdhubDownloads state={hdhub} />
+            {(hasOwnDownloads || bolly.files.length > 0 || hdhub.loading || hdhub.files.length > 0) && (i4m.loading || i4m.posts.length > 0) && <div className="h-px bg-white/[0.06]" />}
+            <India4moviesDownloads state={i4m} />
           </div>
             </div>
           </div>
