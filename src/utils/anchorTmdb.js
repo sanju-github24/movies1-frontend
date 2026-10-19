@@ -131,21 +131,37 @@ const moviBox = (o) => async () => {
    /api/i4m/play, which finds the file's link at play time; the links last
    hours. Only x264 + AAC (the backend marks them); the post's own "Watch
    Online" file first, then its other qualities. Named "India4Movies •
-   Kannada 720p · HDTC", so the player offers each language. Films only. */
+   Kannada 720p · HDTC", so the player offers each language.
+
+   A series is posted a season at a time, each quality a list of episodes
+   with a file each: the episode picked is taken from every quality's list
+   of the post for its season. */
 const I4M_CAM = /HDTC|HDTS|HDCAM|CAMRip|PreDVD|Pre-?HD|DVDScr/i;
 const india4movies = (o) => async () => {
-  if (o.type !== "movie" || !o.backendUrl || !o.title || !MKV_OK()) return null;   // MKV: not on Safari/iPhone
-  const qs = new URLSearchParams({ q: o.title, year: o.year || "" });
-  const d = await getJson(`${o.backendUrl}/api/i4m/files?${qs}`, 30000);
-  const posts = (d?.posts || []).slice()
+  if (!o.backendUrl || !o.title || !MKV_OK()) return null;   // MKV: not on Safari/iPhone
+  const tv = o.type === "tv";
+  const qs = new URLSearchParams({ q: o.title, year: o.year || "", ...(tv ? { type: "tv" } : {}) });
+  // A season's lists are read one page at a time the first time it is asked.
+  const d = await getJson(`${o.backendUrl}/api/i4m/files?${qs}`, tv ? 45000 : 30000);
+  const ep = Number(o.episode) || 1;
+  const posts = (d?.posts || []).filter((p) => !tv || (p.season || 1) === (Number(o.season) || 1))
     // Clean prints first: a WEB-DL post, then the cam print it replaced.
     .sort((a, b) => Number(I4M_CAM.test(a.print)) - Number(I4M_CAM.test(b.print)));
   const out = [], seen = new Set();
   for (const p of posts) {
     const lang = String(p.lang || "").split(/\s*[+&,]\s*/)[0] || "Original";
-    const files = p.files.filter((f) => f.playable)
-      .sort((a, b) => Number(b.code === p.watch) - Number(a.code === p.watch));
-    if (p.watch && !files.some((f) => f.code === p.watch)) files.unshift({ code: p.watch, quality: "720p" });
+    let files, watch;
+    if (tv) {
+      watch = (p.watchEpisodes || []).find((x) => x.ep === ep)?.code || "";
+      files = p.files.filter((f) => f.playable)
+        .map((f) => ({ quality: f.quality, code: (f.episodes || []).find((x) => x.ep === ep)?.code || "" }))
+        .filter((f) => f.code);
+    } else {
+      watch = p.watch;
+      files = p.files.filter((f) => f.playable);
+    }
+    files.sort((a, b) => Number(b.code === watch) - Number(a.code === watch));
+    if (watch && !files.some((f) => f.code === watch)) files.unshift({ code: watch, quality: "720p" });
     for (const f of files) {
       const k = `${lang}|${f.quality}`;
       if (seen.has(k) || seen.has(f.code)) continue;
@@ -172,7 +188,13 @@ const providers = (o) => [
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
   scrape("VidRock", o),        // Nova · Orion
-  india4movies(o),             // when none of the above has it
+  // When none of the above has it: 1TamilMV's language posts, then India4Movies'.
+  async () => {
+    if (!o.backendUrl || !MKV_OK()) return null;           // MKV: not on Safari/iPhone
+    const { out } = await tamilmvFiles(o);
+    return out.length ? out.map((c) => ({ ...c, own: true, file: true })) : null;
+  },
+  india4movies(o),
 ];
 
 
@@ -259,10 +281,10 @@ const MKV_OK = () => {
 export const canPlayMkv = MKV_OK;
 
 const I4M_WAIT = 8000;
-export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
-  if (!backendUrl || !MKV_OK()) return;
-  // India4Movies' language posts are asked beside, for a language 1TamilMV lacks.
-  const i4m = india4movies({ type, backendUrl, title, year: String(year || "").slice(0, 4) })().catch(() => null);
+/* 1TamilMV's playable files for a title (or the one episode picked), one
+   per language and quality: { out: [{ name, url, lang }], covered } —
+   covered being the languages it has. Shared by AnchorTMV and AnchorHD. */
+async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
   const { releaseLabel } = await import("../components/TamilmvDownloads.jsx");
   const qs = new URLSearchParams({ tmdb: `${type === "tv" ? "tv" : "movie"}:${tmdbId}`, title: title || "", year: String(year || "") });
   const d = await getJson(`${backendUrl}/api/fresh/files?${qs}`, 60000).catch(() => null);
@@ -289,10 +311,18 @@ export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, epis
     if (seen.has(k)) return;
     seen.add(k); covered.add(lang);
     out.push({ name: `1TamilMV • ${lang} ${q}${x.l.print ? ` · ${x.l.print}` : ""}`,
-      url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}` });
+      url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}`, lang });
   };
   files.filter((x) => x.l.langs.length === 1).forEach((x) => take(x, x.l.langs[0]));
   files.filter((x) => x.l.langs.length > 1 && !covered.has(x.l.langs[0])).forEach((x) => take(x, x.l.langs[0]));
+  return { out, covered };
+}
+
+export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
+  if (!backendUrl || !MKV_OK()) return;
+  // India4Movies' language posts are asked beside, for a language 1TamilMV lacks.
+  const i4m = india4movies({ type, season, episode, backendUrl, title, year: String(year || "").slice(0, 4) })().catch(() => null);
+  const { out, covered } = await tamilmvFiles({ tmdbId, type, season, episode, title, year, backendUrl });
   /* Then India4Movies, for a language 1TamilMV does not have at all: every
      quality of it, in the same player. Waited for (a while) before anything
      plays, so the language bar the player shows on start, and the saved
