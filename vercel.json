@@ -22,6 +22,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/sitemap.xml", "destination": "https://api.1anchormovies.buzz/sitemap.xml" },
     { "source": "/assets/:path*", "destination": "/assets/:path*" },
     { "source": "/:path((?!.*\\..*).*)", "destination": "/index.html" }
   ]
