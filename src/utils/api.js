@@ -49,6 +49,19 @@ if (BACKENDS.length > 1 && typeof window !== 'undefined' && !window.__backendFai
     console.warn(`[api] ${from} ${why}; using ${to}`);
     return to;
   };
+  /* A 502 is not always the gateway. Our own routes answer 502 when the site
+     they ask (MoviBox, HDHub4u, bingr…) fails, and taking that for the main
+     server being down moved the rest of the visit to the standby — the
+     slower Render copy, without the newest routes. Down behind the gateway
+     looks like the gateway's own page: Cloudflare's HTML, or nothing. Our
+     server's answer is JSON or a line of text. */
+  const serverAnswered = async (res) => {
+    if (/json/i.test(res.headers.get('content-type') || '')) return true;
+    try {
+      const text = (await res.clone().text()).slice(0, 4000);
+      return !!text.trim() && !/^\s*</.test(text);
+    } catch { return false; }
+  };
   window.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url;
     const from = url && BACKENDS.find((b) => b && url.startsWith(b + '/'));
@@ -64,7 +77,7 @@ if (BACKENDS.length > 1 && typeof window !== 'undefined' && !window.__backendFai
       if (!to) throw err;
       return nativeFetch(to + url.slice(from.length), init);
     }
-    if (repeatable && GATEWAY_DOWN.has(res.status)) {
+    if (repeatable && GATEWAY_DOWN.has(res.status) && !(await serverAnswered(res))) {
       const to = moveOn(from, `answered ${res.status} (down behind its gateway)`);
       if (to) return nativeFetch(to + url.slice(from.length), init);
     }

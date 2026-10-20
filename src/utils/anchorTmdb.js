@@ -110,15 +110,25 @@ const HEVC_OK = () => {
       .some((c) => MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`));
   } catch { return false; }
 };
+/* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
+   Malayalam) comes as its own stream after it, offered in the language
+   menu beside the stream's tracks; on a browser without HEVC every language
+   comes that way. The MP4s too play straight off MoviBox's CDN. */
 const moviboxHls = (o) => async () => {
-  if (!o.backendUrl || !o.tmdbId || !HEVC_OK()) return null;
+  if (!o.backendUrl || !o.tmdbId) return null;
+  const hevc = HEVC_OK();
   const tv = o.type === "tv";
   const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: tv ? "tv" : "movie",
     ...(tv ? { se: String(o.season), ep: String(o.episode) } : {}) });
   const d = await getJson(`${o.backendUrl}/api/mbhls/title?${qs}`, 30000);
-  const out = (d?.streams || []).map((s) => ({
+  const out = hevc ? (d?.streams || []).map((s) => ({
     url: `${o.backendUrl}${s.url}`, own: true,
     name: `MoviBox • ${(s.languages || []).map((l) => l.name).join(", ")} ${s.height ? `${s.height}p` : ""}`.trim(),
+  })) : [];
+  (d?.mp4 || []).filter((m) => !hevc || !m.inStream).forEach((m, i) => out.push({
+    url: m.url, own: true, file: true,
+    name: `MoviBox • ${m.name} ${m.resolution ? `${m.resolution}p` : ""}`.trim(),
+    score: 1 - i / 1000,   // after the multi-audio stream, which the manifest scores above 1
   }));
   return out.length ? out : null;
 };
@@ -302,9 +312,10 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
     const fresh = (Array.isArray(got) ? got : [got])
       .filter((c) => c?.url && !seen.has(c.url) && seen.add(c.url))
       .slice(0, 16)
-      .map((c) => ({ name: c.name, file: c.file, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
+      .map((c) => ({ name: c.name, file: c.file, score: c.score, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
     // A plain file has no manifest to read; it keeps its provider's order.
-    const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.file ? 100 - i : await manifestScore(c.url) })));
+    // A provider may rank its own (MoviBox puts its MP4 dubs after its multi-audio stream).
+    const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.score ?? (c.file ? 100 - i : await manifestScore(c.url)) })));
     for (const c of scored.filter((c) => c.score >= 0).sort((a, b) => b.score - a.score)) {
       yield { url: c.url, name: c.name };
     }

@@ -264,6 +264,19 @@ const VideoPlayer = ({
     }
   }
   const streamLangs = langOptions.length > 1;
+  /* A stream with several audio tracks can still be missing languages that
+     other streams of the title have — MoviBox's Tamil dub as an MP4 beside
+     its Telugu+Hindi stream. Those are offered after the tracks; picking one
+     switches stream at the same second. One per language, the best quality. */
+  const extraLangs = [];
+  if (audioTracks.length > 1) {
+    for (const v of versions) {
+      if (v.url === src || extraLangs.some((o) => o.lang === v.lang)) continue;
+      if (audioTracks.some((t) => audioMatchesLang(t, v.lang))) continue;
+      extraLangs.push(versions.filter((x) => x.lang === v.lang && x.url !== src).reduce((a, b) => (b.height > a.height ? b : a)));
+    }
+  }
+  const extraLangName = (v) => getLanguageName({ name: v.lang, lang: NAME_TO_CODE[v.lang.toLowerCase()] || "" });
   const streamQualities = streamLangs
     ? versions.filter((v) => v.lang === playingVersion.lang)
         .filter((v, i, a) => a.findIndex((x) => x.height === v.height) === i)
@@ -1335,6 +1348,11 @@ const VideoPlayer = ({
                               {currentAudioTrackId === i ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{getLanguageName(t)}</span>
                             </button>
                           )) : <p className="px-4 py-2 text-xs text-white/40">One track</p>)}
+                      {!streamLangs && extraLangs.map((v) => (
+                        <button key={`x-${v.lang}`} onClick={() => { switchVersion(v); setShowSettings(null); }} className="w-full flex items-center gap-2 px-4 py-2 transition-colors text-white/85 hover:text-white hover:bg-white/5">
+                          <span className="w-[15px] shrink-0" /><span className="text-sm font-medium truncate">{extraLangName(v)}</span>
+                        </button>
+                      ))}
                     </div>
                     <div>
                       <p className="px-4 pt-3 pb-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-white/40">Subtitles</p>
@@ -1404,6 +1422,11 @@ const VideoPlayer = ({
                   <span className="text-sm font-medium">{getLanguageName(t)}</span>{currentAudioTrackId === i && <Check size={16} className="text-blue-400"/>}
                 </button>
               )) : <p className="px-4 py-3 text-sm text-white/40">Not available</p>)}
+              {showSettings === 'audio' && !streamLangs && extraLangs.map((v) => (
+                <button key={`x-${v.lang}`} onClick={() => { switchVersion(v); setShowSettings(null); }} className="w-full flex items-center justify-between px-4 py-2.5 transition-colors text-white/85 hover:text-white hover:bg-white/5">
+                  <span className="text-sm font-medium">{extraLangName(v)}</span>
+                </button>
+              ))}
               {/* One language per stream: the languages are the other streams. */}
               {showSettings === 'audio' && streamLangs && langOptions.map((v) => (
                 <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
@@ -1545,6 +1568,12 @@ const VideoPlayer = ({
               <button key={i} onClick={() => { changeAudio(i); scheduleEndLangIntro(1200); }}
                 className={`px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 ${currentAudioTrackId === i ? "bg-white text-black" : "text-white/80 hover:bg-white/10"}`}>
                 {getLanguageName(t)}
+              </button>
+            ))}
+            {extraLangs.map((v) => (
+              <button key={`x-${v.lang}`} onClick={() => { switchVersion(v); scheduleEndLangIntro(1200); }}
+                className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 text-white/80 hover:bg-white/10">
+                {extraLangName(v)}
               </button>
             ))}
             <button onClick={endLangIntro}
