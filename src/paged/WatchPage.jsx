@@ -16,6 +16,7 @@ import { sanitizeEmbed } from "../utils/sanitizeHtml";
 import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv } from "../utils/anchorTmdb";
 import { useRecommendations } from "../utils/recommendations";
 import { recordTrendingHit } from "../utils/trending";
+import { freshEntry } from "../utils/freshCatalog";
 import { useMp4Trailer } from "../utils/useMp4Trailer";
 import BollyflixDownloads, { useBollyflix } from "../components/BollyflixDownloads";
 import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
@@ -1261,7 +1262,22 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
            Handles both buildTmdbMovie().tmdbPayload objects
            AND raw TMDB search-result objects from SearchResults page.
            content_type is now reliable — set by detectContentType() in WatchListPage.  */
-        const stateMovie = location.state?.movie;
+        let stateMovie = location.state?.movie;
+        /* A link with nothing passed along — the Top 10, a story, a shared
+           or refreshed address — to a title that is not ours: if the latest
+           releases have it by this slug, it opens from them, as it would
+           have from the home page, instead of "Content Not Found". */
+        if (!stateMovie) {
+          const [w, m] = await Promise.all([
+            supabase.from("watch_html").select("slug").eq("slug", routeSlug).limit(1),
+            supabase.from("movies").select("slug").eq("slug", routeSlug).limit(1),
+          ]);
+          if (!w.data?.length && !m.data?.length) {
+            const d = await fetch(`${backendUrl}/api/fresh`).then((r) => r.json()).catch(() => null);
+            const f = (d?.items || []).find((x) => x.slug === routeSlug);
+            if (f) stateMovie = freshEntry(f).linkState.movie;
+          }
+        }
         if (stateMovie) {
           const tmdbId      = stateMovie.tmdb_id || stateMovie.id   || null;
           const imdbId      = stateMovie.imdb_id                     || null;

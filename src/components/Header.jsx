@@ -24,6 +24,7 @@ import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBigg
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
 import LiveViewer from "./LiveViewer";
+import StoriesViewer, { storyFromFresh, storyFromManual } from "./StoriesViewer";
 import { backendUrl } from "../utils/api";
 // ─── MATCH HASH ENCODER ───────────────────────────────────────────────────────
 function encodeMatchHash(payload) {
@@ -1426,6 +1427,14 @@ function readViewedStories() {
     return new Set(Array.isArray(raw) ? raw : []);
   } catch { return new Set(); }
 }
+function writeViewedStory(id) {
+  try {
+    const seen = [...readViewedStories()].filter((x) => x !== id);
+    localStorage.setItem("viewedStories", JSON.stringify([id, ...seen].slice(0, 300)));
+  } catch { /* a blocked store only loses the ring's colour */ }
+}
+// A release from the sites is a story for this long after it is posted.
+const STORY_WINDOW = 48 * 3600e3;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const Header = () => {
@@ -1435,8 +1444,10 @@ const Header = () => {
 
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
-  const [activeStory, setActiveStory] = useState(null);
-  const [activeStoryIndex, setActiveStoryIndex] = useState(null);
+  // The stories viewer: the list as it was when opened (the rail reorders as
+  // stories are seen), and where in it to start.
+  const [storyViewer, setStoryViewer] = useState(null);   // { list, at } | null
+  const [seenTick, setSeenTick] = useState(0);
   const [progress, setProgress] = useState(0);
 
   const [showSharePopup, setShowSharePopup] = useState(false);
@@ -1790,7 +1801,21 @@ const Header = () => {
   }, []);
 
   // One read per render pass, not one per card.
-  const viewedStories = useMemo(() => readViewedStories(), [stories]);
+  const viewedStories = useMemo(() => readViewedStories(), [stories, seenTick]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const markStorySeen = useCallback((id) => { writeViewedStory(id); setSeenTick((t) => t + 1); }, []);
+  /* The rail: what the sites have just posted, as stories made on their own
+     (newest first, from the latest releases), after the ones added by hand —
+     those not yet seen ahead of those that have been. */
+  const railStories = useMemo(() => {
+    const now = Date.now();
+    const auto = fresh
+      .filter((f) => f.poster && f.slug && now - (Date.parse(f.first_seen) || 0) < STORY_WINDOW)
+      .sort((a, b) => Date.parse(b.first_seen) - Date.parse(a.first_seen))
+      .slice(0, 24)
+      .map(storyFromFresh);
+    const all = [...stories.filter((s) => s.poster_url).map(storyFromManual), ...auto];
+    return [...all.filter((s) => !viewedStories.has(s.id)), ...all.filter((s) => viewedStories.has(s.id))];
+  }, [fresh, stories, viewedStories]);
 
   const handleCopy = async () => {
     try {
@@ -2025,7 +2050,7 @@ const Header = () => {
           the same thing twice. */}
 
       {/* ── STORIES ─────────────────────────────────────────────────────── */}
-      {(storiesLoading || stories.length > 0) && (
+      {(storiesLoading || railStories.length > 0) && (
         <div className="w-full max-w-[1800px] mt-6">
           <div className="bg-white/[0.03] backdrop-blur-md rounded-2xl p-5 border border-white/[0.06]">
             <h2 className="text-xs font-black text-gray-300 mb-4 flex items-center gap-2 uppercase tracking-[0.2em]">
@@ -2034,18 +2059,18 @@ const Header = () => {
             <ScrollRow className="py-1" label="Featured stories">
               {storiesLoading
                 ? Array.from({ length: 6 }, (_, i) => <StorySkeleton key={i} />)
-                : stories.map((story, idx) => (
+                : railStories.map((story, idx) => (
                   <button key={story.id} type="button"
-                    onClick={() => { setActiveStory(story); setActiveStoryIndex(idx); }}
+                    onClick={() => setStoryViewer({ list: railStories, at: idx })}
                     aria-label={`Open story: ${story.title || "untitled"}`}
                     className="flex-shrink-0 flex flex-col items-center group cursor-pointer rounded-xl
                                focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950">
                     <span className={`block w-16 h-16 sm:w-20 sm:h-20 rounded-full p-[2px] transition-transform duration-200 group-hover:scale-105 motion-reduce:transform-none ${
                       viewedStories.has(story.id)
-                        ? "bg-white/15" : "bg-gradient-to-tr from-blue-500 to-cyan-400"
+                        ? "bg-white/15" : "bg-gradient-to-tr from-amber-400 via-rose-500 to-fuchsia-600 shadow-[0_0_14px_rgba(244,63,94,.35)]"
                     }`}>
                       <span className="block bg-gray-950 rounded-full w-full h-full p-1 overflow-hidden">
-                        <img src={story.poster_url} loading="lazy"
+                        <img src={story.poster} loading="lazy"
                           className="w-full h-full object-cover rounded-full"
                           alt={story.title ? `${story.title} poster` : ""} />
                       </span>
@@ -2056,6 +2081,10 @@ const Header = () => {
             </ScrollRow>
           </div>
         </div>
+      )}
+      {storyViewer && (
+        <StoriesViewer stories={storyViewer.list} startIndex={storyViewer.at}
+          onClose={() => setStoryViewer(null)} onSeen={markStorySeen} />
       )}
 
       {/* ── CATALOGUE ───────────────────────────────────────────────────── */}
