@@ -104,10 +104,14 @@ const singularity = (o) => async () => {
    differently (a shorter dub) come as their own stream, named by their
    languages so the player can still offer them. HEVC only: a browser that
    cannot decode it skips this and goes on to Singularity. */
+/* Exactly the codec MoviBox's DASH carries — hev1, parameters in band.
+   Safari and iPhones decode HEVC only as hvc1, so asking for either let them
+   pick a stream they then failed on, and fall to a one-language source; now
+   they take the per-language MP4s, every language still offered. */
 const HEVC_OK = () => {
   try {
-    return typeof MediaSource !== "undefined" && ["hev1.1.6.L93.90", "hvc1.1.6.L93.90"]
-      .some((c) => MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`));
+    const MS = globalThis.ManagedMediaSource || globalThis.MediaSource || null;   // iPhone has the managed one
+    return !!MS && MS.isTypeSupported('video/mp4; codecs="hev1.1.6.L93.90"');
   } catch { return false; }
 };
 /* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
