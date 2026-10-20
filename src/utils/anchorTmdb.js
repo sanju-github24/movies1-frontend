@@ -96,6 +96,33 @@ const singularity = (o) => async () => {
   return list.length ? list : null;
 };
 
+/* MoviBox, first after our own CDN: every language of a title as audio
+   tracks of ONE HLS stream, built by our backend (/api/mbhls) from MoviBox's
+   DASH. Each segment comes straight from MoviBox's CDN to the viewer — the
+   playlists carry its CloudFront signature — so nothing heavy passes through
+   our servers, and switching language does not reload. Versions cut
+   differently (a shorter dub) come as their own stream, named by their
+   languages so the player can still offer them. HEVC only: a browser that
+   cannot decode it skips this and goes on to Singularity. */
+const HEVC_OK = () => {
+  try {
+    return typeof MediaSource !== "undefined" && ["hev1.1.6.L93.90", "hvc1.1.6.L93.90"]
+      .some((c) => MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`));
+  } catch { return false; }
+};
+const moviboxHls = (o) => async () => {
+  if (!o.backendUrl || !o.tmdbId || !HEVC_OK()) return null;
+  const tv = o.type === "tv";
+  const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: tv ? "tv" : "movie",
+    ...(tv ? { se: String(o.season), ep: String(o.episode) } : {}) });
+  const d = await getJson(`${o.backendUrl}/api/mbhls/title?${qs}`, 30000);
+  const out = (d?.streams || []).map((s) => ({
+    url: `${o.backendUrl}${s.url}`, own: true,
+    name: `MoviBox • ${(s.languages || []).map((l) => l.name).join(", ")} ${s.height ? `${s.height}p` : ""}`.trim(),
+  }));
+  return out.length ? out : null;
+};
+
 /* Bingr's direct servers, right after Singularity, in bingr's own order.
    Asked through our backend (/api/bingr/stream): bingr's API answers only
    bingr.one's origin. They match a title by its name and year as well as its
@@ -211,6 +238,7 @@ const providers = (o) => [
     const d = await getJson(`${o.backendUrl}/api/own-stream?${qs}`);
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
+  moviboxHls(o),               // MoviBox, all languages in one stream, straight off its CDN
   singularity(o),
   ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
   scrape("Bastion", o),        // FilmU's, after those
