@@ -96,6 +96,34 @@ const singularity = (o) => async () => {
   return list.length ? list : null;
 };
 
+/* Bingr's direct servers, right after Singularity, in bingr's own order.
+   Asked through our backend (/api/bingr/stream): bingr's API answers only
+   bingr.one's origin. They match a title by its name and year as well as its
+   TMDB id. Polaris and Bastion send one stream per language and quality
+   ("Hindi — 1080p"), the others a single master; each is named "Polaris •
+   Hindi 1080p", so the player's language menu offers them. The streams play
+   through our worker with bingr.one as the Referer — their hosts refuse any
+   other site. MP4 copies and foreign subbed versions ("Arabic sub") are left
+   out: the player wants HLS, and the menu is for audio languages. */
+const BINGR_REF = "https://bingr.one/";
+const BINGR = [["s40", "Aphelion"], ["s70", "Polaris"], ["s80", "Moscow"], ["s81", "Novo"],
+  ["s62", "Bastion"], ["s30", "Nova"], ["s61", "Corvus"], ["s31", "Orion"]];
+const bingr = (o, srv, name) => async () => {
+  if (!o.backendUrl || !o.title) return null;
+  const tv = o.type === "tv";
+  const qs = new URLSearchParams({ srv, t: tv ? "tv" : "movie", id: String(o.tmdbId), title: o.title, year: o.year || "",
+    ...(tv ? { season: String(o.season), episode: String(o.episode) } : {}) });
+  const d = await getJson(`${o.backendUrl}/api/bingr/stream?${qs}`, 45000);
+  const out = (d?.sources || []).filter((x) => !x.isMP4 && !/\bsub\b/i.test(x.language || "")).map((x) => {
+    // "Hindi" / "1080p", or Corvus's language "Original" with quality "720p | English"
+    const [qPart, qLang] = String(x.quality || "").split("|").map((t) => t.trim());
+    const lang = String(x.language || "").replace(/^original$/i, "").trim() || qLang || "";
+    const q = qPart && !/^auto$/i.test(qPart) ? qPart : "";
+    return { url: x.url, ref: BINGR_REF, name: `${name} • ${[lang, q].filter(Boolean).join(" ") || "Auto"}` };
+  });
+  return out.length ? out : null;
+};
+
 /* MoviBox posts each language of a film as its own title, each with h264
    MP4s (and an HEVC DASH manifest, which hls.js cannot play and most
    browsers cannot decode, so it is left to anchor-ingest). Our backend finds
@@ -184,7 +212,8 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   singularity(o),
-  scrape("Bastion", o),        // right after Singularity, as FilmU's page does
+  ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
+  scrape("Bastion", o),        // FilmU's, after those
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
   scrape("VidRock", o),        // Nova · Orion
