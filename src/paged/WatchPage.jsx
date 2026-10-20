@@ -4,7 +4,6 @@ import VideoPlayer from "./VideoPlayer";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
 import { saveProgress, getResumeTime, readOne, readContinueList, removeProgress, progressPercent, timeLeft, hasNextEpisode } from "../utils/continueWatching";
-import Navbar from "../components/Navbar";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
@@ -404,10 +403,13 @@ const WatchHtmlPage = () => {
   const [heroTrailerOn,     setHeroTrailerOn    ] = useState(true);
   const [heroTrailerReady,  setHeroTrailerReady ] = useState(false);
   const [heroHover,         setHeroHover        ] = useState(false);
-  // The top bar is see-through over the hero and solid once scrolled past it.
+  /* The top bar is see-through over the hero and solid once the page moves.
+     A phone's hero is short and its title sits right under the bar, so it
+     turns solid as soon as the page scrolls; a wider screen waits until the
+     hero is half gone. */
   const [headerSolid,       setHeaderSolid      ] = useState(false);
   useEffect(() => {
-    const onScroll = () => setHeaderSolid(window.scrollY > window.innerHeight * 0.5);
+    const onScroll = () => setHeaderSolid(window.scrollY > (window.innerWidth < 640 ? 24 : window.innerHeight * 0.5));
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -1985,10 +1987,13 @@ if (!alive) return;
       {/* Clear of the site's rail on desktop, which carries the logo there.
           See-through over the trailer, as the home page's is over its hero,
           and given its own ground once the page scrolls past it. */}
-      <header className="fixed top-0 left-0 right-0 sm:left-[72px] z-[110] h-16 flex items-center px-4">
-        <div className={`absolute inset-0 transition-all duration-300 ${headerSolid
-          ? "bg-[#070709]/85 backdrop-blur-xl border-b border-white/[0.04]"
-          : "bg-gradient-to-b from-black/60 to-transparent"}`} />
+      <header className="fixed top-0 left-0 right-0 sm:left-[72px] z-[110] flex items-center px-4"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)", height: "calc(4rem + env(safe-area-inset-top, 0px))" }}>
+        {/* Both grounds are always there and cross-fade, so the bar never
+            jumps between them as the page moves. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 to-transparent" />
+        <div className={`absolute inset-0 bg-[#070709]/90 backdrop-blur-xl border-b border-white/[0.06] shadow-[0_8px_24px_rgba(0,0,0,0.35)]
+          transition-opacity duration-300 ease-out ${headerSolid ? "opacity-100" : "opacity-0"}`} />
         <div className="relative max-w-[1800px] mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)}
@@ -1996,7 +2001,10 @@ if (!alive) return;
               className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md hover:bg-white/10 active:bg-white/15 border border-white/10 hover:border-white/20 transition-all group touch-manipulation">
               <ArrowLeft size={18} className="text-gray-200 group-hover:text-white transition-colors" />
             </button>
-            <Link to="/" className="sm:hidden"><img src="/logo_39.png" className="h-7" alt="logo" /></Link>
+            {/* Fixed size and place, so the mark does not shift as it loads. */}
+            <Link to="/" aria-label="Home" className="sm:hidden flex items-center h-11 shrink-0">
+              <img src="/logo_39.png" width="112" height="28" className="h-7 w-auto object-contain" alt="AnchorMovies" />
+            </Link>
           </div>
           <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -2547,7 +2555,6 @@ if (!alive) return;
       </main>
       </div>
 
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-[110]"><Navbar /></div>
     </div>
   );
 };

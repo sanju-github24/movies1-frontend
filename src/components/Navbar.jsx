@@ -68,6 +68,9 @@ const railLabel = (open) =>
 const labelDelay = (open, i) => ({ transitionDelay: open ? `${50 + i * 22}ms` : "0ms" });
 
 
+// Pages with a phone top bar of their own (the watch page, not its search).
+const OWN_TOP = /^\/watch\/(?!search(?:\/|$))[^/]+/;
+
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -385,7 +388,9 @@ const Navbar = () => {
           No coloured bar: the back button where there is somewhere to go
           back to, the mark, and the full menu. It scrolls away with the page;
           the tab bar at the foot carries the navigation. */}
-      <div className="sm:hidden relative z-50 flex items-center justify-between px-3 h-14">
+      {/* A watch page draws its own top bar, fixed over its hero; this one
+          under it showed a second logo and menu through it at the top. */}
+      {!OWN_TOP.test(location.pathname) && <div className="sm:hidden relative z-50 flex items-center justify-between px-3 h-14">
         <div className="flex items-center gap-1">
           <MobileBackButton />
           <Link to="/" aria-label="Home" className="p-1.5">
@@ -396,7 +401,7 @@ const Navbar = () => {
           className="w-10 h-10 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition">
           <MdMenu size={24} />
         </button>
-      </div>
+      </div>}
 
       {/* ── Mobile Search Overlay ── */}
       {mobileSearchOpen && (
