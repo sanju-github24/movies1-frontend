@@ -388,7 +388,7 @@ const WatchHtmlPage = () => {
   const { slug: routeSlug } = useParams();
   const navigate   = useNavigate();
   const location   = useLocation();
-  const { backendUrl, movies } = useContext(AppContext);
+  const { backendUrl, movies, isAdmin } = useContext(AppContext);
 
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
@@ -443,6 +443,60 @@ const WatchHtmlPage = () => {
   const recommendations = useRecommendations(movieMeta, movies, tmdbMeta, 12);
   const [episodes,          setEpisodes         ] = useState([]);
   const [availableServers,  setAvailableServers ] = useState([]);
+  /* The admin's order for this title's servers (ids), saved on the backend
+     by page address. The page shows them in it, and Watch Now starts with the
+     first the title has. Servers it does not name keep their place after. */
+  const [serverOrder, setServerOrder] = useState([]);
+  const pickedServerRef = useRef(false);   // the viewer chose one: the order no longer moves it
+  useEffect(() => {
+    setServerOrder([]); pickedServerRef.current = false;
+    if (!routeSlug || !backendUrl) return;
+    let alive = true;
+    fetch(`${backendUrl}/api/server-order/${encodeURIComponent(routeSlug)}`)
+      .then((r) => r.json()).then((d) => { if (alive && Array.isArray(d?.order)) setServerOrder(d.order); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [routeSlug, backendUrl]);
+  const orderedServers = useMemo(() => {
+    if (!serverOrder.length) return availableServers;
+    const rank = (s) => { const i = serverOrder.indexOf(s.id); return i < 0 ? 1000 : i; };
+    return availableServers.map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
+  }, [availableServers, serverOrder]);
+  // Until the viewer picks one, the active server is the first in the order.
+  useEffect(() => {
+    if (!serverOrder.length || pickedServerRef.current || !orderedServers.length) return;
+    setActiveServer(orderedServers[0]);
+  }, [orderedServers, serverOrder]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── The admin's arranging: drag (or ◀ ▶ on a phone), then save. ── */
+  const [arranging, setArranging] = useState(null);   // ids being arranged, or null
+  const [orderNote, setOrderNote] = useState("");
+  const dragIdRef = useRef(null);
+  const moveServer = (id, toIndex) => setArranging((list) => {
+    if (!list) return list;
+    const from = list.indexOf(id);
+    if (from < 0 || toIndex < 0 || toIndex >= list.length) return list;
+    const next = list.slice(); next.splice(from, 1); next.splice(toIndex, 0, id);
+    return next;
+  });
+  const saveServerOrder = async (reset = false) => {
+    const token = (() => { try { return localStorage.getItem("token") || ""; } catch { return ""; } })();
+    setOrderNote("Saving…");
+    try {
+      const r = await fetch(`${backendUrl}/api/server-order/${encodeURIComponent(routeSlug)}`, {
+        method: reset ? "DELETE" : "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: reset ? undefined : JSON.stringify({ order: arranging }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.success) throw new Error(d.message || `HTTP ${r.status}`);
+      setServerOrder(d.order || []);
+      pickedServerRef.current = false;
+      setArranging(null);
+      setOrderNote(reset ? "Back to the default order" : "Order saved for this title");
+    } catch (e) { setOrderNote(`Not saved: ${e.message}`); }
+    setTimeout(() => setOrderNote(""), 4000);
+  };
   const [activeServer,      setActiveServer     ] = useState(null);
   const [activeSeason,      setActiveSeason     ] = useState("S1");
   const [openDropdown,      setOpenDropdown     ] = useState(null);
@@ -1223,6 +1277,13 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       ? (ep.direct_url || ep.hls_url)
       : (movieMeta.hls_url || movieMeta.video_url);
 
+    // The admin has ordered this title's servers: start with the first of them.
+    if (serverOrder.length && orderedServers[0]) {
+      setActiveServer(orderedServers[0]);
+      handlePlayAction(ep, orderedServers[0].id);
+      return;
+    }
+
     // No copy of ours, but a TMDB id: AnchorHD plays it in our player anyway.
     if (anchorHd || movieMeta.tmdb_id) {
       const srv = availableServers.find(s => s.id === "ourhls") ||
@@ -1249,6 +1310,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   }, [location.state, loading, movieMeta, episodes, availableServers, handlePlayAction, groupedEpisodes]);
 
   const handleServerSwitch = (server) => {
+    pickedServerRef.current = true;
     setActiveServer(server);
     handlePlayAction(currentOverlayEp, server.id);
   };
@@ -1778,7 +1840,7 @@ if (!alive) return;
           >
             <div className="flex items-center gap-2 min-w-max">
               <span className="text-[9px] text-gray-600 uppercase tracking-widest font-black shrink-0 mr-1">Server:</span>
-              {availableServers.map(s => (
+              {orderedServers.map(s => (
                 <ServerBadge key={s.id} server={s} isActive={activeServer?.id === s.id}
                   onClick={() => handleServerSwitch(s)} compact />
               ))}
@@ -1895,7 +1957,7 @@ if (!alive) return;
                 {activeTab === "servers" && (
                   <div className="p-4 space-y-2">
                     <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1 mb-3">Available Servers</p>
-                    {availableServers.map(sv => (
+                    {orderedServers.map(sv => (
                       <ServerBadge key={sv.id} server={sv} isActive={activeServer?.id === sv.id} onClick={() => handleServerSwitch(sv)} />
                     ))}
                   </div>
@@ -2183,14 +2245,56 @@ if (!alive) return;
               <div className="pt-2 scroll-mt-24" id="servers-section">
                 {/* Every server lives here now that the deployment grid is gone:
                     one swipeable row on a phone, wrapping from sm up. */}
-                <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mb-2 text-center lg:text-left">Available Servers</p>
+                <div className="flex items-center justify-center lg:justify-start gap-3 mb-2">
+                  <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">Available Servers</p>
+                  {/* Admin only: arrange this title's servers. */}
+                  {isAdmin && !arranging && (
+                    <button onClick={() => setArranging(orderedServers.map((x) => x.id))}
+                      className="text-[9px] font-black uppercase tracking-wider text-amber-400/90 hover:text-amber-300 border border-amber-400/30 rounded-md px-2 py-1">
+                      ⇅ Arrange{serverOrder.length ? " · saved" : ""}
+                    </button>
+                  )}
+                  {orderNote && <span className="text-[10px] text-amber-300/90">{orderNote}</span>}
+                </div>
+                {isAdmin && arranging ? (
+                  <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.04] p-3">
+                    <p className="text-[11px] text-amber-200/80 mb-2">Drag the servers into the order to try them for this title — the first one plays on Watch Now. (On a phone, use ◀ ▶.)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {arranging.map((id, i) => {
+                        const sv = availableServers.find((x) => x.id === id);
+                        if (!sv) return null;
+                        return (
+                          <div key={id} draggable
+                            onDragStart={() => { dragIdRef.current = id; }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => { e.preventDefault(); if (dragIdRef.current) moveServer(dragIdRef.current, i); dragIdRef.current = null; }}
+                            className="flex items-center gap-1 pl-1 pr-2 py-1.5 rounded-lg border border-white/15 bg-white/[0.06] cursor-grab active:cursor-grabbing select-none">
+                            <button onClick={() => moveServer(id, i - 1)} disabled={i === 0} aria-label={`Move ${sv.name} earlier`}
+                              className="px-1 text-gray-400 hover:text-white disabled:opacity-20">◀</button>
+                            <span className="text-[10px] font-black text-amber-300 w-4 text-center">{i + 1}</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-white">{sv.name}</span>
+                            <button onClick={() => moveServer(id, i + 1)} disabled={i === arranging.length - 1} aria-label={`Move ${sv.name} later`}
+                              className="px-1 text-gray-400 hover:text-white disabled:opacity-20">▶</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button onClick={() => saveServerOrder(false)} className="px-3 py-1.5 rounded-lg bg-amber-400 text-black text-[11px] font-black uppercase tracking-wider">Save order</button>
+                      <button onClick={() => setArranging(null)} className="px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 text-[11px] font-bold uppercase tracking-wider">Cancel</button>
+                      {serverOrder.length > 0 && (
+                        <button onClick={() => saveServerOrder(true)} className="px-3 py-1.5 rounded-lg border border-white/15 text-gray-400 text-[11px] font-bold uppercase tracking-wider">Reset to default</button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                 <div
                   className="flex gap-2 justify-start lg:justify-start max-w-full overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 scrollbar-hide"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  {availableServers.map(sv => (
+                  {orderedServers.map(sv => (
                     <button key={sv.id}
-                      onClick={() => { setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
+                      onClick={() => { pickedServerRef.current = true; setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
                       className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
                         ${activeServer?.id === sv.id ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30") : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"}`}>
                       <span className={`w-1 h-1 rounded-full ${activeServer?.id === sv.id ? "bg-current" : "bg-gray-700"}`}/>
@@ -2198,6 +2302,7 @@ if (!alive) return;
                     </button>
                   ))}
                 </div>
+                )}
               </div>
             )}
           </div>
