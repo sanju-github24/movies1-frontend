@@ -388,7 +388,14 @@ const WatchHtmlPage = () => {
   const { slug: routeSlug } = useParams();
   const navigate   = useNavigate();
   const location   = useLocation();
-  const { backendUrl, movies, isAdmin } = useContext(AppContext);
+  const { backendUrl, movies, isAdmin: isSiteAdmin } = useContext(AppContext);
+  /* The site has two sign-ins — its own and Supabase's (Google) — and the
+     admin may be in with either, as the home page already allows. */
+  const [supabaseEmail, setSupabaseEmail] = useState("");
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSupabaseEmail(data?.session?.user?.email || "")).catch(() => {});
+  }, []);
+  const isAdmin = isSiteAdmin || supabaseEmail.toLowerCase() === "sanjusanjay0444@gmail.com";
 
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
@@ -480,7 +487,9 @@ const WatchHtmlPage = () => {
     return next;
   });
   const saveServerOrder = async (reset = false) => {
-    const token = (() => { try { return localStorage.getItem("token") || ""; } catch { return ""; } })();
+    // Whichever sign-in the admin used: Supabase's session, else the site's own token.
+    const { data: sess } = await supabase.auth.getSession().catch(() => ({ data: null }));
+    const token = sess?.session?.access_token || (() => { try { return localStorage.getItem("token") || ""; } catch { return ""; } })();
     setOrderNote("Saving…");
     try {
       const r = await fetch(`${backendUrl}/api/server-order/${encodeURIComponent(routeSlug)}`, {
