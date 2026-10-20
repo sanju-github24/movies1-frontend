@@ -43,7 +43,7 @@ export default function LiveShowActions({ movie, episodes = [], onWatchLive, onW
       >
         <span className="flex items-center gap-2.5 min-w-0">
           <Radio className={`w-5 h-5 shrink-0 ${st.live ? "animate-pulse" : ""}`} />
-          <span className="truncate">{st.live ? "Watch Live" : `Live at ${show.startLabel}`}</span>
+          <span className="truncate">{st.live ? "Watch Live" : `Live at ${st.nextStartLabel}`}</span>
         </span>
         <span className="text-[11px] font-semibold opacity-80 text-right shrink-0 leading-tight">
           {show.name}

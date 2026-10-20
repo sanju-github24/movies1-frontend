@@ -22,6 +22,7 @@ import HdhubDownloads, { useHdhub } from "../components/HdhubDownloads";
 import India4moviesDownloads, { useIndia4movies } from "../components/India4moviesDownloads";
 import TamilmvDownloads, { useTamilmv } from "../components/TamilmvDownloads";
 import MoviboxFrame from "../components/MoviboxFrame";
+import LiveViewer from "../components/LiveViewer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
@@ -414,6 +415,8 @@ const WatchHtmlPage = () => {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+  // A telecast on air plays its channel in the Live TV player: { title, src, poster }.
+  const [liveChannel, setLiveChannel] = useState(null);
   const heroHideTimer = useRef(null);
   /* The same chrome-free trailer every other surface plays — a bare MP4, so it
      sits behind the text with no player furniture of its own. It arrives a
@@ -1027,9 +1030,9 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (!movieMeta) return;
     recordTrendingHit(movieMeta.slug || routeSlug);   // a play is a vote for the Top 10
 
-    /* Live telecast, WHILE IT IS ON AIR: one source, one window. The stream is a
-       player page carrying its own signed params, so it goes in as an embed —
-       not through hls.js, and never through the proxy.
+    /* Live telecast, WHILE IT IS ON AIR: the channel it goes out on, from our
+       Live TV list, in AnchorHD's live player (LiveViewer) — the one the Live
+       TV page opens, which resolves the channel's token as it starts.
 
        Off air we fall through to the ordinary path. This used to announce the
        start time and return, which meant that for the rest of the day every
@@ -1040,10 +1043,11 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (live) {
       const st = liveStatus(live);
       if (st.live) {
-        setFinalSource(live.streamUrl);
-        setSourceType(null);
-        setVideoTitle(`${movieMeta.title || live.name} — ${st.episodeLabel} · LIVE`);
-        setShowOverlay(true);
+        setLiveChannel({
+          title: `${movieMeta.title || live.name} — ${st.episodeLabel} · LIVE on ${live.channelName}`,
+          src: live.channelLink,
+          poster: movieMeta.background || movieMeta.poster || "",
+        });
         return;
       }
     }
@@ -2555,6 +2559,8 @@ if (!alive) return;
       </main>
       </div>
 
+      <LiveViewer open={!!liveChannel} title={liveChannel?.title || ""} src={liveChannel?.src || ""}
+        poster={liveChannel?.poster} onClose={() => setLiveChannel(null)} />
     </div>
   );
 };

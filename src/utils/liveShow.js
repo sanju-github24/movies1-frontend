@@ -3,7 +3,8 @@
 
    A handful of our titles aren't a library item at all — they're a live
    feed that only exists inside a fixed window every evening. Bigg Boss
-   Kannada 13 is the first: it goes out 9:30 PM – 10:30 PM IST, every day.
+   Kannada 13 is the first: it goes out 9:30 PM – 10:40 PM IST on weekdays,
+   and from 9:00 PM on Saturdays and Sundays.
 
    Two rules follow from that, and both live here so the watch page, the
    hero and the trending rows all agree:
@@ -30,16 +31,17 @@ export const LIVE_SHOWS = {
     slug: "bigg-boss-kannada-13",
     name: "Bigg Boss Kannada 13",
     language: "Kannada",
-    /* The player page we embed. It carries its own signed source/token
-       params, so it goes into the overlay as an iframe rather than through
-       hls.js — nothing here should try to rewrite or proxy it. */
-    streamUrl:
-      // The Kannada channel itself, solo: no launcher or list in our frame.
-      "https://m3u8-player-orcin.vercel.app/?tab=bb&id=bb-kannada&solo=1",
-    startMin: 21 * 60 + 30,          // 9:30 PM IST
-    endMin:   22 * 60 + 30,          // 10:30 PM IST
-    startLabel: "9:30 PM",
-    endLabel:   "10:30 PM",
+    /* What plays while it is on air: the channel it goes out on, from our
+       own Live TV list (JioTV's Colors Kannada HD, id 757), in AnchorHD's
+       player — the same one the Live TV page opens. Written as the link the
+       live pages pass, ?tab=&id=; LiveViewer resolves it at play time, so
+       the channel's token is always fresh. */
+    channelLink: "https://m3u8-player-orcin.vercel.app/?tab=live&id=757",
+    channelName: "Colors Kannada HD",
+    /* When it is on, in IST minutes after midnight: later on weekdays,
+       earlier at the weekend. */
+    weekday: { startMin: 21 * 60 + 30, endMin: 22 * 60 + 40, startLabel: "9:30 PM", endLabel: "10:40 PM" },
+    weekend: { startMin: 21 * 60,      endMin: 22 * 60 + 40, startLabel: "9:00 PM", endLabel: "10:40 PM" },
     /* One episode a night, so the number is derived from the date rather than
        stored: EP02 airs on the night of 2026-09-07 IST, EP03 the next night,
        and so on. Re-anchor these two if the show ever skips a day. */
@@ -68,11 +70,16 @@ const istMinutes = (now) =>
 const istDayIndex = (now) => Math.floor((now.getTime() + IST_OFFSET_MIN * 60000) / MS_PER_DAY);
 const dayIndexOfDate = (isoDate) => Math.floor(Date.parse(`${isoDate}T00:00:00Z`) / MS_PER_DAY);
 
-/* Which night's episode is the one in play. Before 10:30 PM that's tonight's —
-   whether it has started yet or not — and once tonight's has ended, attention
-   moves to tomorrow's. */
+/* The window for a given IST day (days since the epoch): Saturday and Sunday
+   have their own. 1970-01-01 was a Thursday, so day 0 is weekday 4. */
+const isWeekend = (dayIdx) => { const wd = (dayIdx + 4) % 7; return wd === 0 || wd === 6; };
+export const windowFor = (show, dayIdx) => (isWeekend(dayIdx) ? show.weekend : show.weekday) || show.weekday;
+
+/* Which night's episode is the one in play. Before tonight's end that's
+   tonight's — whether it has started yet or not — and once tonight's has
+   ended, attention moves to tomorrow's. */
 const airDayIndex = (show, now) =>
-  istDayIndex(now) + (istMinutes(now) >= show.endMin ? 1 : 0);
+  istDayIndex(now) + (istMinutes(now) >= windowFor(show, istDayIndex(now)).endMin ? 1 : 0);
 
 export const episodeNumber = (show, now = new Date()) => {
   if (!show?.epochDate) return null;
@@ -96,11 +103,16 @@ const formatCountdown = (mins) => {
 export const liveStatus = (show, now = new Date()) => {
   if (!show) return { isLiveShow: false, live: false };
   const mins = istMinutes(now);
-  const live = mins >= show.startMin && mins < show.endMin;
-  const minutesUntilStart = live
-    ? 0
-    : (show.startMin - mins + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-  const minutesLeft = live ? show.endMin - mins : 0;
+  const day = istDayIndex(now);
+  const today = windowFor(show, day);
+  const live = mins >= today.startMin && mins < today.endMin;
+  // The next start: tonight's if it is still ahead, else tomorrow's — which
+  // may be at another time (Friday night → Saturday's 9:00 PM).
+  const next = live || mins < today.startMin ? today : windowFor(show, day + 1);
+  const minutesUntilStart = live ? 0
+    : mins < today.startMin ? today.startMin - mins
+    : MINUTES_PER_DAY - mins + next.startMin;
+  const minutesLeft = live ? today.endMin - mins : 0;
   const episode = episodeNumber(show, now);
   const epLabel = episodeLabel(show, now);
   return {
@@ -110,12 +122,15 @@ export const liveStatus = (show, now = new Date()) => {
     minutesLeft,
     episode,
     episodeLabel: epLabel,
-    badge: live ? "LIVE NOW" : `LIVE AT ${show.startLabel}`,
+    nextStartLabel: next.startLabel,     // tonight's, or tomorrow's once tonight's is over
+    badge: live ? "LIVE NOW" : `LIVE AT ${next.startLabel}`,
     // The episode rides on the button in both states, so it's clear which
     // night's show is about to start — or is already running.
-    cta: live ? `WATCH LIVE · ${epLabel}` : `${epLabel} AT ${show.startLabel}`,
-    // e.g. "Live daily 9:30 PM – 10:30 PM IST"
-    window: `Live daily ${show.startLabel} – ${show.endLabel} IST`,
+    cta: live ? `WATCH LIVE · ${epLabel}` : `${epLabel} AT ${next.startLabel}`,
+    // e.g. "Live 9:30 PM – 10:40 PM IST · Sat–Sun from 9:00 PM"
+    window: show.weekend && show.weekend.startLabel !== show.weekday.startLabel
+      ? `Live ${show.weekday.startLabel} – ${show.weekday.endLabel} IST · Sat–Sun from ${show.weekend.startLabel}`
+      : `Live daily ${show.weekday.startLabel} – ${show.weekday.endLabel} IST`,
     countdown: formatCountdown(minutesUntilStart),
   };
 };
@@ -130,8 +145,8 @@ export const liveStatusFor = (movieOrSlug, now = new Date()) =>
 export const isLiveNow = (movieOrSlug, now = new Date()) =>
   liveStatusFor(movieOrSlug, now).live === true;
 
-/* A shared clock for anything that has to flip itself at 9:30 and again at
-   10:30 without the viewer reloading. 20s is fine — the badge only needs to
+/* A shared clock for anything that has to flip itself on and off air
+   without the viewer reloading. 20s is fine — the badge only needs to
    be right to within a card's worth of attention. */
 export const useLiveClock = (intervalMs = 20000) => {
   const [now, setNow] = useState(() => new Date());
