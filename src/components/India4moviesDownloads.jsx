@@ -20,8 +20,10 @@ const viaRelay = (url) => {
   } catch { return url; }
   return `${RELAY}?u=${encodeURIComponent(url)}`;
 };
-// An older post's file: a full4drive page, followed by the backend to its file.
-const FULL4DRIVE = /^https:\/\/(?:[a-z0-9-]+\.)?full4drive\.[a-z]+\/file\//i;
+/* An older post's file: a full4drive page and, beside it, a HubCloud copy —
+   each followed by the backend to the file itself. */
+const RESOLVABLE = /^https:\/\/(?:[a-z0-9-]+\.)?(?:full4drive\.[a-z]+\/file|hubcloud\.[a-z]+\/(?:drive|video))\//i;
+const hostLabel = (url) => (/full4drive/i.test(url) ? "full4drive" : /hubcloud/i.test(url) ? "HubCloud" : hostOf(url));
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, "").split(".").slice(-2, -1)[0] || "host"; } catch { return "host"; } };
 
 /* More downloads for a title, from India4Movies: one post per language, each
@@ -65,22 +67,26 @@ const rowsOf = (files) => {
 
 /* One quality. Its servers are asked for when it is opened — their links
    carry tokens that run out, so not before: a MultiCloudLinks file's list,
-   or an older file's full4drive page, followed to the file. */
+   or each copy an older post gives (full4drive, HubCloud), all asked at
+   once, whichever answer kept. */
 function FileRow({ file }) {
-  const f4d = file.code ? "" : (file.links.find((l) => FULL4DRIVE.test(l.url))?.url || "");
+  const pages = file.code ? [] : file.links.map((l) => l.url).filter((u) => RESOLVABLE.test(u));
   const [open, setOpen] = useState(false);
-  const [servers, setServers] = useState(file.code || f4d ? null : file.links);   // null = not asked yet
+  const [servers, setServers] = useState(file.code || pages.length ? null : file.links);   // null = not asked yet
   const [error, setError] = useState("");
 
   const toggle = () => {
     setOpen((o) => !o);
-    if (servers || (!file.code && !f4d)) return;
+    if (servers || (!file.code && !pages.length)) return;
     setServers("loading");
-    const q = file.code ? `code=${encodeURIComponent(file.code)}` : `url=${encodeURIComponent(f4d)}`;
-    fetch(`${apiBase}/api/i4m/servers?${q}`)
-      .then((r) => r.json())
-      .then((d) => { setServers(d.servers || []); if (!d.servers?.length) setError(d.error || "No servers answered for this file."); })
-      .catch(() => { setServers([]); setError("Couldn't reach the file host."); });
+    const asks = file.code ? [`code=${encodeURIComponent(file.code)}`] : pages.map((u) => `url=${encodeURIComponent(u)}`);
+    Promise.all(asks.map((q) => fetch(`${apiBase}/api/i4m/servers?${q}`).then((r) => r.json()).catch(() => null)))
+      .then((all) => {
+        const seen = new Set();
+        const list = all.flatMap((d) => d?.servers || []).filter((x) => x?.url && !seen.has(x.url) && seen.add(x.url));
+        setServers(list);
+        if (!list.length) setError(all.find((d) => d?.error)?.error || (all.every((d) => !d) ? "Couldn't reach the file host." : "No servers answered for this file."));
+      });
   };
 
   const extra = file.label.replace(/\[|\]|\b(480|540|720|1080|2160)p\b|[\d.]+\s*[GM]B|download now|direct-download|–|-/gi, " ").replace(/\s+/g, " ").trim();
@@ -111,12 +117,12 @@ function FileRow({ file }) {
             </a>
           ))}
           {Array.isArray(servers) && !servers.length && <p className="text-xs text-gray-500 py-1">{error}</p>}
-          {(file.code || f4d) && Array.isArray(servers) && (
-            <a href={file.code ? file.url : f4d} target="_blank" rel="noopener noreferrer nofollow"
-              className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 pt-1">
-              <ExternalLink size={12} /> Open on {file.code ? "MultiCloudLinks" : "full4drive"}
+          {Array.isArray(servers) && (file.code ? [file.url] : pages).map((u) => (
+            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow"
+              className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 pt-1 mr-4">
+              <ExternalLink size={12} /> Open on {file.code ? "MultiCloudLinks" : hostLabel(u)}
             </a>
-          )}
+          ))}
         </div>
       )}
     </div>

@@ -614,6 +614,7 @@ const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
               : `https://image.tmdb.org/t/p/w300${ep.still_path}`)
           : null,
         air_date: ep.air_date || null,
+        runtime:  ep.runtime || null,
       }));
 
       return { ...d, cast, episodes };

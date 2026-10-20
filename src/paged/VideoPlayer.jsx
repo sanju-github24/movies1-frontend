@@ -279,6 +279,32 @@ const VideoPlayer = ({
   // episode has no still, so we never fall back to the wrong series/movie poster.
   const epStill = (ep) => ep?.thumbnail
     || (ep?.still_path ? (ep.still_path.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`) : "");
+  /* An episode's line under its title, Hotstar-style: "S1 E2 • 25 Sep 2026 • 52m".
+     The date and length are left out when TMDB has none. */
+  const epNumber = (ep, i) => ep?.episodeNumberInSeason || ep?.episode || ep?.episode_number || (i + 1);
+  const epLine = (ep, i) => {
+    const parts = [`S${epSeason(ep, i)} E${epNumber(ep, i)}`];
+    const d = ep?.air_date ? new Date(`${String(ep.air_date).slice(0, 10)}T00:00:00`) : null;
+    if (d && !isNaN(d)) parts.push(d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }));
+    const m = Number(ep?.runtime) || 0;
+    if (m) parts.push(m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`);
+    return parts.join(" • ");
+  };
+  const [showNextCard, setShowNextCard] = useState(false);   // the next episode's card, on hovering Next Episode
+  const nextCardTimer = useRef(null);
+  const holdNextCard = (on) => {
+    clearTimeout(nextCardTimer.current);
+    if (on) setShowNextCard(true);
+    else nextCardTimer.current = setTimeout(() => setShowNextCard(false), 200);   // time to move onto the card
+  };
+  const playNext = () => { setShowNextCard(false); if (hasNextEpisode) onEpisodeClick(nextEpData, currentIndex + 1); };
+  // The episode playing is scrolled into view when the panel opens.
+  const currentEpRowRef = useRef(null);
+  useEffect(() => {
+    if (showSettings !== 'episodes') return;
+    const t = setTimeout(() => currentEpRowRef.current?.scrollIntoView({ block: "center" }), 50);
+    return () => clearTimeout(t);
+  }, [showSettings, activeSeason]);
 
   // New Feature: Auto-Play Logic
   const handleVideoEnd = useCallback(() => {
@@ -1194,54 +1220,86 @@ const VideoPlayer = ({
         </div>
       )}
 
-      {/* --- EPISODES PANEL — right-docked, season-separated (not full-screen) --- */}
+      {/* --- EPISODES PANEL — full screen, Hotstar-style: the seasons down the
+           left (a row of chips on a phone), the season's episodes beside them,
+           each with its still, title, "S1 E2 • date • length" and synopsis.
+           The one playing is marked and shows how far in it is. --- */}
       {showSettings === 'episodes' && (
-        <div className="absolute top-0 right-0 bottom-0 z-[150] w-full sm:w-[400px] bg-black/92 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-[-16px_0_48px_rgba(0,0,0,0.6)] animate-in slide-in-from-right duration-300">
-          <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
+        <div className="absolute inset-0 z-[150] bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in duration-200"
+          onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 sm:px-8 md:px-11 pt-4 sm:pt-8 pb-3 sm:pb-5 shrink-0">
             <div className="min-w-0">
-              <h2 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">Episodes</h2>
-              <span className="block text-gray-400 text-[10px] font-bold uppercase tracking-widest truncate mt-1">{title}</span>
+              <h2 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-white leading-tight">Episodes</h2>
+              <span className="block text-white/50 text-xs sm:text-sm truncate mt-0.5 sm:hidden">{title}</span>
             </div>
-            <button onClick={() => setShowSettings(null)} className="p-2 bg-white/5 border border-white/10 rounded-full hover:bg-red-600 transition-all shrink-0"><CloseIcon size={20}/></button>
+            <button onClick={() => setShowSettings(null)} aria-label="Close episodes"
+              className="p-2 -mr-2 text-white/90 hover:text-white transition-colors active:scale-90"><CloseIcon className="w-7 h-7 sm:w-9 sm:h-9" strokeWidth={1.5}/></button>
           </div>
+          <div className="mx-4 sm:mx-8 md:mx-11 h-px bg-white/15 shrink-0" />
 
-          {/* Season tabs (horizontal) */}
+          {/* A phone: the seasons as a row of chips. */}
           {seasonNumbers.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto p-3 border-b border-white/10 shrink-0 scrollbar-hide">
+            <div className="sm:hidden flex gap-2 overflow-x-auto px-4 py-3 shrink-0 scrollbar-hide">
               {seasonNumbers.map((sn) => (
-                <button
-                  key={sn}
-                  onClick={() => setSelectedSeason(sn)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all ${activeSeason === sn ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
-                >
+                <button key={sn} onClick={() => setSelectedSeason(sn)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${activeSeason === sn ? 'bg-white text-black' : 'bg-white/10 text-white/80'}`}>
                   Season {sn}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-            {episodes
-              .map((ep, i) => ({ ep, i }))
-              .filter(({ ep, i }) => epSeason(ep, i) === activeSeason)
-              .map(({ ep, i }) => (
-                <button
-                  key={i}
-                  onClick={() => { onEpisodeClick(ep, i); setShowSettings(null); }}
-                  className={`w-full group flex gap-3 p-2 rounded-xl text-left transition-all border ${currentIndex === i ? 'bg-blue-600/20 border-blue-500' : 'border-transparent hover:bg-white/5'}`}
-                >
-                  <div className="relative w-28 shrink-0 aspect-video rounded-lg overflow-hidden bg-gray-900 border border-white/10">
-                    {epStill(ep) && <img src={epStill(ep)} className="w-full h-full object-cover" alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />}
-                    <span className="absolute left-1 top-1 text-[9px] font-black bg-black/70 px-1.5 py-0.5 rounded">E{ep.episodeNumberInSeason || ep.episode || (i + 1)}</span>
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Play size={20} fill="white"/></div>
-                    {currentIndex === i && <div className="absolute inset-0 bg-blue-600/40 flex items-center justify-center"><Activity className="animate-pulse" size={18}/></div>}
-                  </div>
-                  <div className="flex-1 min-w-0 py-0.5">
-                    <h4 className={`text-sm font-bold line-clamp-1 ${currentIndex === i ? 'text-blue-400' : 'text-white'}`}>{ep.title || `Episode ${i + 1}`}</h4>
-                    <p className="text-gray-500 text-[11px] leading-snug line-clamp-2 mt-0.5">{ep.description || ''}</p>
-                  </div>
-                </button>
-              ))}
+          <div className="flex-1 min-h-0 flex">
+            {/* Wider: the seasons down the left, with their episode counts. */}
+            <div className="hidden sm:flex flex-col w-56 md:w-80 lg:w-[420px] shrink-0 pt-6 pl-8 md:pl-20 lg:pl-32 gap-1 overflow-y-auto">
+              {seasonNumbers.map((sn) => {
+                const n = episodes.filter((ep, i) => epSeason(ep, i) === sn).length;
+                return (
+                  <button key={sn} onClick={() => setSelectedSeason(sn)}
+                    className={`flex items-center justify-between gap-6 py-2.5 pr-6 text-left text-base md:text-xl transition-colors ${activeSeason === sn ? 'text-white font-semibold' : 'text-white/45 hover:text-white/75'}`}>
+                    <span>Season {sn}</span>
+                    <span className={`text-sm md:text-lg font-normal ${activeSeason === sn ? 'text-white/85' : ''}`}>{n} Ep{n === 1 ? '' : 's'}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-3 sm:px-0 sm:pr-8 md:pr-14 py-3 sm:py-6 space-y-1 sm:space-y-2">
+              {episodes
+                .map((ep, i) => ({ ep, i }))
+                .filter(({ ep, i }) => epSeason(ep, i) === activeSeason)
+                .map(({ ep, i }) => {
+                  const playing = currentIndex === i;
+                  const pct = playing && duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+                  return (
+                    <button key={i} ref={playing ? currentEpRowRef : null}
+                      onClick={() => { setShowSettings(null); if (!playing) onEpisodeClick(ep, i); }}
+                      className={`w-full group flex gap-3 sm:gap-6 md:gap-10 p-2 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl text-left transition-colors ${playing ? 'bg-white/[0.08]' : 'hover:bg-white/[0.05]'}`}>
+                      <div className="relative w-36 sm:w-56 md:w-72 lg:w-[300px] shrink-0 aspect-video rounded-md sm:rounded-lg overflow-hidden bg-white/5">
+                        {epStill(ep)
+                          ? <img src={epStill(ep)} className="w-full h-full object-cover" alt="" loading="lazy" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                          : <div className="w-full h-full flex items-center justify-center text-white/25 text-lg font-semibold">E{epNumber(ep, i)}</div>}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        <Play className="absolute left-2 bottom-2 sm:left-3 sm:bottom-3 w-4 h-4 sm:w-6 sm:h-6 text-white drop-shadow" fill="white" />
+                        {playing && (
+                          <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/25">
+                            <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 py-0.5 sm:py-1.5">
+                        <h4 className="text-sm sm:text-lg md:text-2xl font-semibold text-white line-clamp-2 sm:line-clamp-1">{ep.title || `Episode ${epNumber(ep, i)}`}</h4>
+                        <p className="text-[11px] sm:text-sm md:text-lg font-medium text-white/85 mt-0.5 sm:mt-1.5">
+                          {epLine(ep, i)}{playing && <span className="ml-2 text-blue-400 font-semibold">· Playing</span>}
+                        </p>
+                        {ep.description && (
+                          <p className="hidden sm:block text-sm md:text-lg text-white/55 leading-snug mt-1.5 md:mt-3 line-clamp-2 md:line-clamp-3">{ep.description}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         </div>
       )}
@@ -1419,14 +1477,40 @@ const VideoPlayer = ({
           <button onClick={() => setShowSettings('quality')} aria-label="Quality"
             className={`flex items-center gap-2 transition-colors active:scale-95 ${showSettings === 'quality' ? 'text-blue-400' : 'text-white hover:text-white/80'}`}>
             <MonitorPlay className="w-5 h-5 sm:w-[22px] sm:h-[22px]" strokeWidth={1.75} />
-            <span className="text-sm sm:text-base font-medium">Quality</span>
-            <span className="text-[11px] sm:text-xs font-semibold text-white/50">{qualityLabel}</span>
+            {/* A phone shows the icons only: the labels ran off its edge. */}
+            <span className="hidden sm:inline text-sm sm:text-base font-medium">Quality</span>
+            <span className="hidden sm:inline text-[11px] sm:text-xs font-semibold text-white/50">{qualityLabel}</span>
           </button>
           <button onClick={() => setShowSettings('audiosubs')} aria-label="Audio & Subtitles"
             className={`flex items-center gap-2 transition-colors active:scale-95 ${showSettings === 'audiosubs' ? 'text-blue-400' : 'text-white hover:text-white/80'}`}>
             <MessageSquare className="w-5 h-5 sm:w-[22px] sm:h-[22px]" strokeWidth={1.75} />
-            <span className="text-sm sm:text-base font-medium whitespace-nowrap">Audio &amp; Subtitles</span>
+            <span className="hidden sm:inline text-sm sm:text-base font-medium whitespace-nowrap">Audio &amp; Subtitles</span>
           </button>
+          {/* Next Episode, with the episode's card on hover, as Hotstar has it.
+              A phone has no room up here: it keeps the button in the bottom bar. */}
+          {hasNextEpisode && (
+            <div className="relative hidden sm:block" onMouseEnter={() => holdNextCard(true)} onMouseLeave={() => holdNextCard(false)}>
+              <button onClick={playNext} aria-label="Next episode"
+                className="flex items-center gap-2 text-white hover:text-white/80 transition-colors active:scale-95">
+                <SkipForward className="w-5 h-5 sm:w-[22px] sm:h-[22px]" strokeWidth={1.75} />
+                <span className="text-sm sm:text-base font-medium whitespace-nowrap">Next Episode</span>
+              </button>
+              {showNextCard && nextEpData && (
+                <button onClick={playNext}
+                  className="absolute right-0 top-full mt-4 w-[min(480px,calc(100vw-2rem))] flex gap-4 p-4 rounded-xl bg-[#16181f]/95 backdrop-blur-xl border border-white/10 shadow-2xl text-left animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="relative w-44 md:w-52 shrink-0 aspect-video rounded-md overflow-hidden bg-white/5">
+                    {epStill(nextEpData) && <img src={epStill(nextEpData)} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+                    <Play className="absolute left-2 bottom-2 w-5 h-5 text-white drop-shadow" fill="white" />
+                  </div>
+                  <div className="min-w-0 py-0.5">
+                    <h4 className="text-base md:text-lg font-semibold text-white line-clamp-1">{nextEpData.title || `Episode ${epNumber(nextEpData, currentIndex + 1)}`}</h4>
+                    <p className="text-xs md:text-sm font-medium text-white/85 mt-1">{epLine(nextEpData, currentIndex + 1)}</p>
+                    {nextEpData.description && <p className="text-xs md:text-sm text-white/55 leading-snug mt-1.5 line-clamp-3">{nextEpData.description}</p>}
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1512,14 +1596,10 @@ const VideoPlayer = ({
             </div>
         </div>
 
-        <div className="relative flex items-center justify-between gap-2">
-          {onSelectRecommendation && recommendations.length > 0 && (
-            <button onClick={() => setShowMoreLike(true)} aria-label="More like this"
-              className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1.5 text-white/85 hover:text-white transition-colors active:scale-95">
-              <span className="text-sm md:text-base font-semibold">More Like This</span>
-              <ChevronUp className="w-4 h-4" />
-            </button>
-          )}
+        {/* Three columns — playback, then Episodes (or More Like This) in the
+            middle as Hotstar has it, then settings — so the middle one can
+            never sit on top of the others on a narrow phone. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <div className="flex items-center gap-3 sm:gap-6 md:gap-10 min-w-0">
             {/* ±10s: desktop only. On a phone the double-tap gesture does this,
                 and a series needs the width for Episodes / Next Episode. */}
@@ -1532,11 +1612,11 @@ const VideoPlayer = ({
             <button onClick={() => nudgeSeek(10, "fwd")} aria-label="Forward 10 seconds"
               className="hidden sm:inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCw className="w-6 h-6"/></button>
 
+            {/* A phone's Next Episode; wider screens have it at the top right. */}
             {hasNextEpisode && (
-                <button onClick={() => onEpisodeClick(nextEpData, currentIndex + 1)} aria-label="Next episode"
-                  className="p-2 sm:p-2.5 bg-blue-600/20 border border-blue-500/40 rounded-lg hover:bg-blue-600 transition-all text-white flex items-center gap-2 shrink-0 active:scale-90">
-                    <SkipForward className="w-[18px] h-[18px] sm:w-5 sm:h-5" fill="currentColor" />
-                    <span className="hidden md:inline text-xs font-semibold">Next Episode</span>
+                <button onClick={playNext} aria-label="Next episode"
+                  className="sm:hidden p-2 bg-blue-600/20 border border-blue-500/40 rounded-lg hover:bg-blue-600 transition-all text-white flex items-center shrink-0 active:scale-90">
+                    <SkipForward className="w-[18px] h-[18px]" fill="currentColor" />
                 </button>
             )}
 
@@ -1549,15 +1629,23 @@ const VideoPlayer = ({
             </div>
           </div>
 
-          {/* One size for every secondary control so nothing overlaps once a
-              series adds Episodes + Next Episode to the row. */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {episodes.length > 0 && (
-                <button onClick={() => setShowSettings('episodes')} aria-label="Episodes"
-                  className={`p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-blue-600 transition-all flex items-center gap-2 active:scale-90 ${showSettings === 'episodes' ? 'text-blue-400' : 'text-white'}`}>
-                    <ListVideo className="w-[18px] h-[18px] sm:w-5 sm:h-5" /><span className="hidden md:inline text-xs font-semibold">Episodes</span>
-                </button>
-            )}
+          <div className="flex justify-center">
+            {episodes.length > 0 ? (
+              <button onClick={() => setShowSettings('episodes')} aria-label="Episodes"
+                className="flex items-center gap-1.5 text-white/85 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
+                <span className="text-sm md:text-base font-semibold">Episodes</span>
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            ) : onSelectRecommendation && recommendations.length > 0 ? (
+              <button onClick={() => setShowMoreLike(true)} aria-label="More like this"
+                className="hidden sm:flex items-center gap-1.5 text-white/85 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
+                <span className="text-sm md:text-base font-semibold">More Like This</span>
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-end gap-1.5 sm:gap-3 min-w-0">
             <button onClick={() => setShowSettings('speed')} aria-label="Playback speed"
               className={`px-2 py-2 sm:px-2.5 sm:py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-[11px] sm:text-xs font-black leading-none min-w-[32px] sm:min-w-[34px] active:scale-90 ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
             <button onClick={handleFullscreen} aria-label={isFullScreen || cssFullScreen ? "Exit fullscreen" : "Fullscreen"}
