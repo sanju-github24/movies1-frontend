@@ -458,6 +458,25 @@ const VideoPlayer = ({
     if (p && p.catch) p.catch(() => { v.muted = true; setIsMuted(true); v.play().catch(() => {}); });
   };
 
+  /* MoviBox's MP4 server refuses any request that carries a Referer — it
+     answers 429 with an HTML page, which the video element reports as a
+     format error, and the player retried it as "Reconnecting…" forever. A
+     <video> cannot set its own referrer policy, so while one of those files
+     is the source the page sends none, and the usual policy comes back after.
+     Declared before the source effect below, so it is in place first. */
+  useEffect(() => {
+    if (!src || /\.m3u8(\?|$)/i.test(src) || !/^https:\/\/[^/?#]*hakunaymatata\.com\//i.test(src)) return undefined;
+    const meta = document.createElement("meta");
+    meta.name = "referrer";
+    meta.content = "no-referrer";
+    document.head.appendChild(meta);
+    return () => {
+      // Removing the tag does not undo it; setting the default back does.
+      meta.setAttribute("content", "strict-origin-when-cross-origin");
+      meta.remove();
+    };
+  }, [src]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
