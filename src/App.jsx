@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, useLocation, useNavigate, useNavigationType, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
@@ -49,6 +49,7 @@ import TopLoader from './components/TopLoader';
 import CategoryBar from './components/CategoryBar';
 import SiteFooter from './components/SiteFooter';
 import BackBar from './components/BackBar';
+import ScrollMemory from './components/ScrollMemory';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -169,40 +170,6 @@ const AppContent = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const navType = useNavigationType();
-
-  /* Scroll restoration, site-wide. Opening a NEW page starts at the top; pressing
-     Back/Forward returns to exactly where the viewer was (where they clicked from)
-     instead of the browser's guess, which in an SPA lands mid-page before the new
-     content has rendered. We save each history entry's scroll as the viewer
-     scrolls, then restore it on a POP (Back/Forward). */
-  useEffect(() => {
-    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
-    const key = `scroll:${location.key}`;
-    let raf = 0;
-    const save = () => { raf = 0; try { sessionStorage.setItem(key, String(window.scrollY)); } catch { /* private mode */ } };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(save); };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => { save(); window.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, [location.key]);
-
-  useEffect(() => {
-    let saved = null;
-    try { saved = sessionStorage.getItem(`scroll:${location.key}`); } catch { /* private mode */ }
-    if (navType === "POP" && saved != null) {
-      // Content may still be rendering, so nudge the scroll over a few frames
-      // until the page is tall enough to actually sit at the saved position.
-      const y = parseInt(saved, 10) || 0;
-      let tries = 0;
-      const restore = () => {
-        window.scrollTo(0, y);
-        if (++tries < 12 && Math.abs(window.scrollY - y) > 2) requestAnimationFrame(restore);
-      };
-      requestAnimationFrame(restore);
-    } else {
-      window.scrollTo(0, 0);
-    }
-  }, [location.key, navType]);
 
   // ── Anti-Inspect Logic ──
   useEffect(() => {
@@ -292,6 +259,8 @@ const AppContent = () => {
       <LockoutOverlay />
       <ToastContainer position="top-center" autoClose={3000} theme="dark" />
 
+      {/* Back/Forward returns to where the viewer was, on every page. */}
+      <ScrollMemory />
       {/* Single Navbar — handles desktop + mobile internally */}
       {!hideNavbar && (
         <>

@@ -1042,7 +1042,14 @@ const VideoPlayer = ({
     }, 140);
   };
   const barTouchRef = useRef(0);   // when the progress bar was last touched
-  const seekTo = (pt) => { if (duration && videoRef.current) videoRef.current.currentTime = pctFromEvent(pt) * duration; };
+  const scrubbingRef = useRef(false);   // a finger (or button) is down on the progress bar
+  // Seek to that point and carry on playing from there.
+  const seekTo = (pt) => {
+    const v = videoRef.current;
+    if (!duration || !v) return;
+    v.currentTime = pctFromEvent(pt) * duration;
+    if (v.paused) v.play().catch(() => {});
+  };
 
   /* ── Where the subtitles sit ─────────────────────────────────────────────
      The browser puts cues at the very bottom of the VIDEO ELEMENT, which is
@@ -1619,25 +1626,37 @@ const VideoPlayer = ({
                 <span>{formatTime(duration)}</span>
             </div>
             {/* thin progress bar with a taller invisible hit area for easy hover/drag */}
-            <div ref={progressBarRef} className="relative py-2 cursor-pointer group/progress"
-                onClick={(e) => { if (Date.now() - barTouchRef.current < 700) return; seekTo(e); }}
-                onMouseMove={(e) => showScrubAt(e)}
-                onMouseLeave={() => setHoverTime(null)}
-                onTouchStart={(e) => showScrubAt(e.touches[0])}
-                onTouchMove={(e) => showScrubAt(e.touches[0])}
-                /* Seek to where the finger lifted, read off the touch itself.
-                   The position saved on touchstart lives in state, and a quick
-                   tap ends before React has re-rendered — this handler then saw
-                   no position and skipped the seek, so the video carried on
-                   from where it was. The click a phone fires after the touch
-                   is ignored, so one tap is one seek. */
-                onTouchEnd={(e) => {
+            {/* The bar takes the gesture for itself. On a phone a finger sliding
+                along it was being claimed by the browser — as a page scroll, or a
+                back-swipe — which cancels the touch: no "lifted" event came, and
+                no seek happened. touch-action:none keeps it ours, and the
+                pointer is captured so the release reaches the bar even off its
+                edge. Finger, pen and mouse alike: press, slide, let go — it
+                seeks where it was let go, the preview following the finger, the
+                controls held up meanwhile. A taller hit area on a phone. */}
+            <div ref={progressBarRef} className="relative py-3 sm:py-2 cursor-pointer group/progress"
+                style={{ touchAction: "none" }}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "mouse" && e.button !== 0) return;
+                  scrubbingRef.current = true;
+                  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+                  bumpControls(true);
+                  showScrubAt(e);
+                }}
+                onPointerMove={(e) => {
+                  if (scrubbingRef.current) bumpControls(true);
+                  if (scrubbingRef.current || e.pointerType === "mouse") showScrubAt(e);
+                }}
+                onPointerUp={(e) => {
+                  if (!scrubbingRef.current) return;
+                  scrubbingRef.current = false;
                   barTouchRef.current = Date.now();
-                  const touch = e.changedTouches?.[0];
-                  if (touch) seekTo(touch);
-                  setHoverTime(null);
-                }}>
-              <div className="relative h-1 group-hover/progress:h-1.5 w-full bg-white/25 rounded-full transition-all">
+                  seekTo(e);
+                  if (e.pointerType !== "mouse") setHoverTime(null);
+                }}
+                onPointerCancel={() => { scrubbingRef.current = false; setHoverTime(null); }}
+                onMouseLeave={() => { if (!scrubbingRef.current) setHoverTime(null); }}>
+              <div className="relative h-1.5 sm:h-1 group-hover/progress:h-1.5 w-full bg-white/25 rounded-full transition-all">
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
                 {hoverTime != null && <div className="absolute top-1/2 w-3 h-3 -mt-1.5 -ml-1.5 rounded-full bg-white shadow-lg" style={{ left: `${hoverPct}%` }} />}
               </div>

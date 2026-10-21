@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigationType } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import { ArrowLeft, Clock, BookOpen, ExternalLink, RefreshCw, Newspaper } from "lucide-react";
 import { sanitizeArticle } from "../utils/sanitizeHtml";
@@ -140,6 +140,7 @@ const MoreStories = ({ feedKey, meta, currentUrl }) => {
 // ─── Page ────────────────────────────────────────────────────────────────────
 const NewsReader = () => {
   const [params] = useSearchParams();
+  const navType = useNavigationType();
   const articleUrl = params.get("url") || "";
   const feedKey = detectFeed(articleUrl);
   const meta = FEEDS_META[feedKey] || FEEDS_META.bollywood;
@@ -172,7 +173,8 @@ const NewsReader = () => {
 
   // A new story — including one picked from "More news" — starts at the top.
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // …unless it is reached by Back, which keeps the viewer's place (ScrollMemory).
+    if (navType !== "POP") window.scrollTo(0, 0);
     fetchArticle();
   }, [fetchArticle]);
 

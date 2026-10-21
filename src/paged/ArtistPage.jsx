@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useNavigationType } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { toast } from "react-toastify";
 import { ArrowLeft, Play, Shuffle, Radio, Loader2, Music, BadgeCheck } from "lucide-react";
@@ -18,6 +18,7 @@ const followers = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(/\.0$/, "")
 export default function ArtistPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const navType = useNavigationType();
   const { playQueue, playStation, currentTrack } = useMusicPlayer();
 
   const [artist, setArtist] = useState(null);
@@ -31,7 +32,8 @@ export default function ArtistPage() {
     let alive = true;
     paging.current = { page: 0, more: false, busy: false, id };
     setArtist(null); setSongs([]); setError("");
-    window.scrollTo(0, 0);
+    // Arriving by Back keeps the viewer's place (ScrollMemory); a new artist starts at the top.
+    if (navType !== "POP") window.scrollTo(0, 0);
     fetchArtistPage(id, 0)
       .then((a) => {
         if (!alive) return;

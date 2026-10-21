@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useParams, useNavigate, useNavigationType } from "react-router-dom";
 import axios from "axios";
 import { ChevronLeft, Loader2, Star } from "lucide-react";
 import { backendUrl } from "../utils/api";
@@ -38,6 +38,8 @@ const toMovie = (t) => ({
 export default function StudioPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const navType = useNavigationType();
+  const firstLoadRef = useRef(true);   // the first load of this page, as against a later tab change
   const studio = studioBySlug(slug);
 
   const [tab, setTab] = useState("all");   // all | movie | tv
@@ -72,7 +74,9 @@ export default function StudioPage() {
   useEffect(() => {
     setItems([]); setPage(1); setTotalPages(1);
     if (studio) load(1, tab);
-    window.scrollTo(0, 0);
+    // A tab change starts at the top; arriving by Back keeps the viewer's place.
+    if (!(firstLoadRef.current && navType === "POP")) window.scrollTo(0, 0);
+    firstLoadRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, tab]);
 
