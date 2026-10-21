@@ -493,7 +493,9 @@ const WatchHtmlPage = () => {
     setOrderNote("Saving…");
     try {
       const r = await fetch(`${backendUrl}/api/server-order/${encodeURIComponent(routeSlug)}`, {
-        method: reset ? "DELETE" : "PUT", credentials: "include",
+        // No cookies: the sign-in goes as the Bearer token, and the backend answers
+        // this route with "*", which a request carrying credentials is refused.
+        method: reset ? "DELETE" : "PUT",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: reset ? undefined : JSON.stringify({ order: arranging }),
       });
