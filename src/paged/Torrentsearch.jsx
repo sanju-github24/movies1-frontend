@@ -432,7 +432,7 @@ const TorrentSearch = () => {
   // Google Drive files from BollyFlix for what was searched, after our own.
   const bolly = useBollyflix(submitted);
   const hdhub = useHdhub(submitted);
-  const i4m = useIndia4movies(submitted);
+  const i4m = useIndia4movies(submitted, "", "any");   // films and series both
 
   return (
     <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-8 py-10">

@@ -41,8 +41,10 @@ export function useIndia4movies(title, year = "", tv = false) {
     if (!title) { setState({ loading: false, posts: [] }); return; }
     let alive = true;
     setState({ loading: true, posts: [] });
-    // A series is asked for as one: its posts are "… Season 1", which a film's search leaves out.
-    const qs = new URLSearchParams({ q: title, year: String(year || ""), ...(tv ? { type: "tv" } : {}) });
+    /* A series is asked for as one: its posts are "… Season 1", which a
+       film's search leaves out. tv "any" — a search box, which cannot tell —
+       takes both. */
+    const qs = new URLSearchParams({ q: title, year: String(year || ""), ...(tv ? { type: tv === "any" ? "any" : "tv" } : {}) });
     fetch(`${apiBase}/api/i4m/files?${qs}`)
       .then((r) => r.json())
       .then((d) => alive && setState({ loading: false, posts: (d.posts || []).filter((p) => p.files?.length) }))
