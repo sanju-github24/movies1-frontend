@@ -643,7 +643,7 @@ const WatchHtmlPage = () => {
   // And HDHub4u's, matched by IMDb id where we have it.
   const hdhub = useHdhub(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", bollyTitle ? (movieMeta?.imdb_id || "") : "");
   // And India4Movies', one post per language.
-  const i4m = useIndia4movies(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "");
+  const i4m = useIndia4movies(bollyTitle, movieMeta?.year || titleForSearch(movieMeta?.title || "").year || "", movieMeta?.content_type === "tv");
   // And 1TamilMV's own files: by TMDB id for a title in the latest releases,
   // by name and year for any other.
   const tmv = useTamilmv(bollyTitle ? movieMeta?.tmdb_id : null, movieMeta?.content_type,
@@ -2062,13 +2062,11 @@ if (!alive) return;
 
       {/* ── NAVBAR ── */}
       {/* Clear of the site's rail on desktop, which carries the logo there.
-          See-through over the trailer, as the home page's is over its hero,
-          and given its own ground once the page scrolls past it. */}
+          Nothing but the back button over the trailer, so the picture runs to
+          the very top; given its own ground once the page scrolls past it. */}
       <header className="fixed top-0 left-0 right-0 sm:left-[72px] z-[110] flex items-center px-4"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)", height: "calc(4rem + env(safe-area-inset-top, 0px))" }}>
-        {/* Both grounds are always there and cross-fade, so the bar never
-            jumps between them as the page moves. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 to-transparent" />
+        {/* Faded in, so the bar never jumps into place as the page moves. */}
         <div className={`absolute inset-0 bg-[#070709]/90 backdrop-blur-xl border-b border-white/[0.06] shadow-[0_8px_24px_rgba(0,0,0,0.35)]
           transition-opacity duration-300 ease-out ${headerSolid ? "opacity-100" : "opacity-0"}`} />
         <div className="relative max-w-[1800px] mx-auto w-full flex items-center justify-between">
@@ -2083,10 +2081,6 @@ if (!alive) return;
               <img src="/logo_39.png" width="112" height="28" className="h-7 w-auto object-contain" alt="AnchorMovies" />
             </Link>
           </div>
-          <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest hidden sm:block">Global Source Active</span>
-          </div>
         </div>
       </header>
 
@@ -2095,21 +2089,30 @@ if (!alive) return;
         onMouseEnter={() => setHeroHover(true)}
         onMouseLeave={() => setHeroHover(false)}
         onTouchStart={peekHero}
-        className="relative w-full overflow-hidden min-h-[78vh] sm:min-h-[80vh] lg:min-h-[86vh] flex flex-col justify-end">
+        className={`relative w-full overflow-hidden min-h-[78vh] sm:min-h-[80vh] lg:min-h-[86vh] flex flex-col justify-end ${heroPlaying ? "max-sm:min-h-0" : ""}`}>
         {movieMeta.background && (
           <div className="absolute inset-0 z-0">
             <img src={movieMeta.background} alt=""
-              className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-110"}`}
+              className={`w-full h-full object-cover scale-110 transition-all duration-[2s] ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-110"}
+                ${heroPlaying ? "max-sm:!opacity-0" : ""}`}
               onLoad={() => setImgLoaded(true)} />
             {/* The trailer, once it has something to show. Muted and looping,
                 because a page that starts talking at you is a page people
-                leave; the controls to change that are bottom-right. */}
+                leave; the controls to change that are bottom-right.
+                Trailers come with black bars burnt into the picture (a 2:1
+                film in a 16:9 file), so it is drawn a little larger than its
+                box to cut them off. On a phone it is its own 16:9 strip across
+                the top, the poster giving way to it — stretched over the tall
+                hero it was cropped to a blur of faces; on a wider screen it
+                fills the hero, a fifth larger. */}
             {heroTrailer && heroTrailerOn && (
               <video
                 src={heroTrailer}
                 autoPlay muted={heroMuted} loop playsInline preload="none"
                 onCanPlay={() => setHeroTrailerReady(true)}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${heroTrailerReady ? "opacity-100" : "opacity-0"}`}
+                className={`absolute inset-x-0 top-0 w-full aspect-video object-cover scale-[1.12] origin-center
+                  [mask-image:linear-gradient(to_bottom,black_50%,transparent_88%)] sm:[mask-image:none]
+                  sm:inset-0 sm:h-full sm:aspect-auto sm:scale-[1.2] transition-opacity duration-1000 ${heroTrailerReady ? "opacity-100" : "opacity-0"}`}
               />
             )}
             <div className={`absolute inset-0 bg-gradient-to-r from-[#070709] to-transparent transition-all duration-700
@@ -2121,9 +2124,10 @@ if (!alive) return;
         )}
 
         {/* Where a streaming service puts them, and the only chrome the
-            trailer gets. Smaller on a phone, where the corner is tighter. */}
+            trailer gets. Smaller on a phone, and on the trailer strip there,
+            clear of the server buttons. */}
         {heroTrailer && (
-          <div className="absolute bottom-6 right-4 z-20 flex items-center gap-2 sm:bottom-10 sm:right-8 sm:gap-3">
+          <div className="absolute top-[calc(56.25vw-3rem)] right-3 z-20 flex items-center gap-2 sm:top-auto sm:bottom-10 sm:right-8 sm:gap-3">
             <button onClick={() => setHeroMuted((m) => !m)} aria-label={heroMuted ? "Unmute trailer" : "Mute trailer"}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white backdrop-blur-md transition hover:bg-black/70 sm:h-11 sm:w-11">
               {heroMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -2135,7 +2139,8 @@ if (!alive) return;
           </div>
         )}
 
-        <div className="relative z-10 w-full max-w-[1800px] mx-auto px-5 sm:px-8 lg:px-12 pt-28 sm:pt-32 pb-10 sm:pb-14">
+        {/* On a phone the title comes up to sit just under the trailer strip. */}
+        <div className={`relative z-10 w-full max-w-[1800px] mx-auto px-5 sm:px-8 lg:px-12 pt-28 sm:pt-32 pb-10 sm:pb-14 ${heroPlaying ? "max-sm:!pt-[calc(56.25vw-1.5rem)]" : ""}`}>
 
           {/* Meta */}
           <div className="w-full max-w-3xl space-y-4 sm:space-y-5 text-center lg:text-left mx-auto lg:mx-0">
@@ -2226,16 +2231,16 @@ if (!alive) return;
                   // back to the embed mirror when the active server can't play this.
                   handlePlayAction(firstEp);
                 }}
-                className={`group flex items-center gap-4 rounded-full py-1.5 pl-1.5 pr-7 transition active:scale-[0.98] touch-manipulation
+                className={`group flex items-center rounded-full py-1 pl-1 pr-5 sm:py-1.5 sm:pl-1.5 sm:pr-7 gap-3 sm:gap-4 transition active:scale-[0.98] touch-manipulation
                   ${live && live.live ? "bg-red-600 text-white hover:bg-red-500" : "bg-white text-black hover:bg-gray-200"}`}>
-                <span className={`flex h-12 w-12 items-center justify-center rounded-full ${live && live.live ? "bg-black/30" : "bg-black"}`}>
-                  <Play size={18} fill="currentColor" className={`ml-0.5 ${live && live.live ? "text-white" : "text-white"}`} />
+                <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full ${live && live.live ? "bg-black/30" : "bg-black"}`}>
+                  <Play size={16} fill="currentColor" className={`ml-0.5 ${live && live.live ? "text-white" : "text-white"}`} />
                 </span>
                 <span className="text-left leading-tight">
-                  <span className="block text-sm font-black tracking-tight">
+                  <span className="block text-[13px] sm:text-sm font-black tracking-tight">
                     {live && live.live ? live.cta : "Watch Now"}
                   </span>
-                  <span className={`block text-[10px] font-bold uppercase tracking-[0.18em] ${live && live.live ? "text-white/70" : "text-gray-600"}`}>
+                  <span className={`block text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.18em] ${live && live.live ? "text-white/70" : "text-gray-600"}`}>
                     {isTVShow ? "Series" : "Movie"}
                   </span>
                 </span>
@@ -2243,8 +2248,8 @@ if (!alive) return;
 
               {hasDownloads && (
                 <button onClick={() => setShowDownloads(true)} title="Download links"
-                  className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
-                  <Download size={22} />
+                  className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
+                  <Download size={19} />
                 </button>
               )}
             </div>
@@ -2306,7 +2311,7 @@ if (!alive) return;
                   {orderedServers.map(sv => (
                     <button key={sv.id}
                       onClick={() => { pickedServerRef.current = true; setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
-                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 min-h-[34px] sm:px-3.5 sm:py-2.5 sm:min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
                         ${activeServer?.id === sv.id ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30") : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"}`}>
                       <span className={`w-1 h-1 rounded-full ${activeServer?.id === sv.id ? "bg-current" : "bg-gray-700"}`}/>
                       {sv.name}

@@ -34,20 +34,21 @@ const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, "
    useIndia4movies() fetches; the parent holds it, beside useHdhub. */
 
 /** The title's posts: { loading, posts }. */
-export function useIndia4movies(title, year = "") {
+export function useIndia4movies(title, year = "", tv = false) {
   const [state, setState] = useState({ loading: !!title, posts: [] });
 
   useEffect(() => {
     if (!title) { setState({ loading: false, posts: [] }); return; }
     let alive = true;
     setState({ loading: true, posts: [] });
-    const qs = new URLSearchParams({ q: title, year: String(year || "") });
+    // A series is asked for as one: its posts are "… Season 1", which a film's search leaves out.
+    const qs = new URLSearchParams({ q: title, year: String(year || ""), ...(tv ? { type: "tv" } : {}) });
     fetch(`${apiBase}/api/i4m/files?${qs}`)
       .then((r) => r.json())
       .then((d) => alive && setState({ loading: false, posts: (d.posts || []).filter((p) => p.files?.length) }))
       .catch(() => alive && setState({ loading: false, posts: [] }));
     return () => { alive = false; };
-  }, [title, year]);
+  }, [title, year, tv]);
 
   return state;
 }
