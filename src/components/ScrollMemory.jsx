@@ -23,8 +23,14 @@ import { useLocation, useNavigationType } from "react-router-dom";
    the next page may already have moved the scroll. */
 
 const ROWS = ".overflow-x-auto";
-const keyOf = (k) => `scroll:${k}`;
-const read = (k) => { try { return JSON.parse(sessionStorage.getItem(keyOf(k)) || "null"); } catch { return null; } };
+// Its own key: the scroll code before this one kept a bare number under "scroll:".
+const keyOf = (k) => `scrollmem:${k}`;
+const read = (k) => {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(keyOf(k)) || "null");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : null;   // anything else is not ours
+  } catch { return null; }
+};
 const write = (k, v) => { try { sessionStorage.setItem(keyOf(k), JSON.stringify(v)); } catch { /* private mode */ } };
 const instant = (el, x, y) => {
   try { (el || window).scrollTo({ left: x, top: y, behavior: "instant" }); } catch { (el || window).scrollTo(x, y); }
