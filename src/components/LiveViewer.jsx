@@ -31,6 +31,16 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
   const [pick, setPick] = useState(null);     // { link, id }
   const pickedId = pick && pick.link === link ? pick.id : null;
 
+  /* Commentaries that would not play, by id, for this link. A feed can list a
+     language whose URL the CDN refuses outright — SonyLiv's Tamil and Telugu
+     did, from every address — so one that dies is taken off the menu, and if
+     it was the one being watched the next is started in its place. */
+  const [failed, setFailed] = useState({ link: "", ids: [] });
+  const failedIds = failed.link === link ? failed.ids : [];
+  const markFailed = (id) => setFailed((f) => ({
+    link, ids: [...(f.link === link ? f.ids : []), id],
+  }));
+
   // A new fixture starts at its first source.
   useEffect(() => { setIdx(0); }, [src, open]);
 
@@ -94,14 +104,33 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
     setSlots((prev) => prev.filter((x) => x.key === key));
   };
 
+  // The commentary a source plays, when it is one of several.
+  const langOf = (source) => source?.languages?.find((l) => l.code === source.lang);
+
   const stalled = (key, msg) => {
+    const source = slots.find((x) => x.key === key)?.source;
+    const lang = langOf(source);
     // A standby that dies is simply dropped; the picture on screen is fine.
     if (key !== liveRef.current) {
       setSlots((prev) => prev.filter((x) => x.key !== key));
-      setNote("");
+      if (lang) { markFailed(lang.id); setNote(`${lang.label} is not available right now`); }
+      else setNote("");
       return;
     }
-    if (revived.current >= 2) { setErr(msg); return; }
+    if (revived.current >= 2) {
+      /* Out of retries. If this match has another commentary nobody has seen
+         fail, play that rather than stopping on an error. */
+      const next = lang && source.languages.find((l) => l.id !== lang.id && !failedIds.includes(l.id));
+      if (next) {
+        markFailed(lang.id);
+        revived.current = 0;
+        setPick({ link, id: next.id });
+        setNote(`${lang.label} is not available — playing ${next.label}`);
+        return;
+      }
+      setErr(msg);
+      return;
+    }
     revived.current += 1;
     forgetFeeds();
     setGen((g) => g + 1);
@@ -209,7 +238,7 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
                     source={x.source}
                     title={title || x.source.title}
                     poster={poster || x.source.poster}
-                    languages={x.source.languages}
+                    languages={x.source.languages?.filter((l) => l.code === x.source.lang || !failedIds.includes(l.id))}
                     lang={x.source.lang}
                     standby={x.key !== live}
                     onPlaying={() => promote(x.key)}
