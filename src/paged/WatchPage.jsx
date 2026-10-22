@@ -1876,6 +1876,8 @@ if (!alive) return;
                    recommendations={recommendations}
                    onSelectRecommendation={(m) => { setShowOverlay(false); navigate(`/movie/${m.slug}`); }}
                    maturityRating={movieMeta?.certification || tmdbMeta?.certification || ""}
+                   tmdbId={movieMeta?.tmdb_id || tmdbMeta?.tmdb_id || ""}
+                   imdbId={movieMeta?.imdb_id || tmdbMeta?.imdb_id || ""}
                    episodes={movieMeta?.content_type === "tv" ? numberedEpisodes : []}
                    currentEpisodeIndex={currentEpIndex}
                    onEpisodeClick={(ep) => (ep.direct_url || ep.hls_url)

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import PausedOverlay from "../components/PausedOverlay";
+import { backendUrl as apiBase } from "../utils/api";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, ChevronLeft, Zap,
@@ -151,6 +152,8 @@ const VideoPlayer = ({
   onSelectRecommendation,     // optional (movie) → parent navigates to it
   maturityRating = "",        // e.g. "U/A 13+" — shown as a Hotstar-style badge on start
   contentAdvisory = "",       // e.g. "Some Violence, Action Sequences" — derived from genres if blank
+  tmdbId = "",                // for Skip Intro / Next Episode: the title's real timings
+  imdbId = "",
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -311,6 +314,56 @@ const VideoPlayer = ({
     else nextCardTimer.current = setTimeout(() => setShowNextCard(false), 200);   // time to move onto the card
   };
   const playNext = () => { setShowNextCard(false); if (hasNextEpisode) onEpisodeClick(nextEpData, currentIndex + 1); };
+
+  /* ── Skip Intro, and Next Episode at the credits ──────────────────────
+     Where this title's (or this episode's) intro, recap and credits really
+     are, from community timing databases (our /api/skip). The button shows
+     only while the intro or recap is on screen; the next episode's card
+     comes up bottom-right as the credits begin — or in the last half-minute
+     when nobody has timed them — and plays it when its count runs out. */
+  const [segments, setSegments] = useState(null);
+  useEffect(() => {
+    setSegments(null);
+    if (!tmdbId && !imdbId) return undefined;
+    let alive = true;
+    const qs = new URLSearchParams({ tmdb: String(tmdbId || ""), imdb: String(imdbId || "") });
+    if (isSeries) { qs.set("type", "tv"); qs.set("season", String(currentSeason)); qs.set("episode", String(currentEpNum)); }
+    fetch(`${apiBase}/api/skip/segments?${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.found) setSegments(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [tmdbId, imdbId, isSeries, currentSeason, currentEpNum]);
+
+  // The span playing now, if it is one worth skipping. Not in its last moment.
+  const skipSpan = (() => {
+    if (!segments || !duration) return null;
+    for (const [kind, label] of [["intro", "Skip Intro"], ["recap", "Skip Recap"]]) {
+      const sp = segments[kind];
+      const end = Math.min(sp?.end ?? 0, duration - 1);
+      if (sp && end > sp.start && currentTime >= sp.start && currentTime < end - 0.5) return { label, end };
+    }
+    return null;
+  })();
+  const skipTo = (t) => { const v = videoRef.current; if (v) { v.currentTime = t; if (v.paused) v.play().catch(() => {}); } };
+
+  // When the end card comes up: at the credits, if they are timed and fall inside this file.
+  const creditsAt = segments?.credits && duration && segments.credits.start < duration - 5 && segments.credits.start > duration * 0.5
+    ? segments.credits.start : (duration ? Math.max(0, duration - 30) : Infinity);
+  const [endCardDismissed, setEndCardDismissed] = useState(false);
+  useEffect(() => { setEndCardDismissed(false); }, [src, currentIndex]);
+  const showEndCard = hasNextEpisode && !!nextEpData && !!duration && currentTime >= creditsAt && !endCardDismissed;
+  const NEXT_COUNT = 10;
+  const [endCount, setEndCount] = useState(NEXT_COUNT);
+  useEffect(() => {
+    if (!showEndCard) { setEndCount(NEXT_COUNT); return undefined; }
+    if (!isPlaying) return undefined;   // paused: the count waits too
+    const id = setInterval(() => setEndCount((c) => c - 1), 1000);
+    return () => clearInterval(id);
+  }, [showEndCard, isPlaying]);
+  useEffect(() => {
+    if (showEndCard && endCount <= 0) { setEndCardDismissed(true); playNext(); }
+  }, [showEndCard, endCount]);   // eslint-disable-line react-hooks/exhaustive-deps
   // The episode playing is scrolled into view when the panel opens.
   const currentEpRowRef = useRef(null);
   useEffect(() => {
@@ -1569,6 +1622,42 @@ const VideoPlayer = ({
             {isPlaying ? <Pause size={40} fill="white" className="text-white" /> : <Play size={40} fill="white" className="text-white ml-1" />}
          </div>
       </div>
+
+      {/* Skip Intro / Skip Recap — bottom-right, there whether or not the
+          controls are, above them when they are. */}
+      {skipSpan && !showEndCard && (
+        <button onClick={(e) => { e.stopPropagation(); skipTo(skipSpan.end); }}
+          className={`absolute right-4 sm:right-8 z-[65] px-4 sm:px-6 py-2 sm:py-2.5 rounded-md bg-white/95 hover:bg-white text-black text-sm sm:text-base font-bold shadow-2xl transition-all duration-300 active:scale-95 animate-in fade-in slide-in-from-right-4
+            ${showControls ? "bottom-28 sm:bottom-36" : "bottom-8 sm:bottom-12"}`}>
+          {skipSpan.label}
+        </button>
+      )}
+
+      {/* The next episode, bottom-right as the credits roll: the same card as
+          Next Episode's on hover, with the count to it playing by itself. */}
+      {showEndCard && (
+        <div className={`absolute right-3 sm:right-8 z-[65] w-[min(440px,calc(100%-1.5rem))] rounded-xl bg-[#16181f]/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300
+          ${showControls ? "bottom-28 sm:bottom-36" : "bottom-6 sm:bottom-10"}`}
+          onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => { setEndCardDismissed(true); playNext(); }} className="w-full flex gap-3 sm:gap-4 p-3 sm:p-4 text-left">
+            <div className="relative w-32 sm:w-44 shrink-0 aspect-video rounded-md overflow-hidden bg-white/5">
+              {epStill(nextEpData) && <img src={epStill(nextEpData)} alt="" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+              <Play className="absolute left-2 bottom-2 w-5 h-5 text-white drop-shadow" fill="white" />
+            </div>
+            <div className="min-w-0 py-0.5 pr-6">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-white/60">Next episode in {Math.max(0, endCount)}s</p>
+              <h4 className="text-sm sm:text-base font-semibold text-white line-clamp-1 mt-0.5">{nextEpData.title || `Episode ${epNumber(nextEpData, currentIndex + 1)}`}</h4>
+              <p className="text-xs font-medium text-white/80 mt-0.5">{epLine(nextEpData, currentIndex + 1)}</p>
+              {nextEpData.description && <p className="hidden sm:block text-xs text-white/55 leading-snug mt-1 line-clamp-2">{nextEpData.description}</p>}
+            </div>
+          </button>
+          <button onClick={() => setEndCardDismissed(true)} aria-label="Keep watching the credits"
+            className="absolute top-2 right-2 p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10"><CloseIcon size={16} /></button>
+          <div className="h-1 bg-white/10">
+            <div className="h-full bg-white transition-[width] duration-1000 ease-linear" style={{ width: `${(1 - Math.max(0, endCount) / NEXT_COUNT) * 100}%` }} />
+          </div>
+        </div>
+      )}
 
       {/* Audio-language chooser — slides up on load (Hotstar-style), default highlighted */}
       {showLangBar && streamLangs && (
