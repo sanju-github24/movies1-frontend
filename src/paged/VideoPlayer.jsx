@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import PausedOverlay from "../components/PausedOverlay";
+import OnlineSubtitles from "../components/OnlineSubtitles";
+import SubtitleStyle, { loadSubStyle, saveSubStyle, subtitleCss } from "../components/SubtitleStyle";
 import { backendUrl as apiBase } from "../utils/api";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -212,6 +214,14 @@ const VideoPlayer = ({
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [currentSubtitleId, setCurrentSubtitleId] = useState(-1);
   const [externalSubUrl, setExternalSubUrl] = useState(null);
+  const [externalSubLabel, setExternalSubLabel] = useState("Uploaded");   // or the online one's language
+  const [onlineSubId, setOnlineSubId] = useState("");
+  // How subtitles look, sit and are timed — chosen in the Subtitles window, kept across visits.
+  const [subStyle, setSubStyleState] = useState(loadSubStyle);
+  const setSubStyle = (s) => { setSubStyleState(s); saveSubStyle(s); };
+  const subStyleRef = useRef(subStyle);
+  subStyleRef.current = subStyle;
+  const cueShift = useRef(new WeakMap());   // cue → the sync delay already applied to it
   const [showSettings, setShowSettings] = useState(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [hoverTime, setHoverTime] = useState(null);   // scrub preview time (null = hidden)
@@ -1120,11 +1130,20 @@ const VideoPlayer = ({
      leave everything after the first few seconds back at the bottom. */
   const positionCues = useCallback((track) => {
     if (!track || !track.cues) return;
+    const { line, delay } = subStyleRef.current;
     for (const cue of track.cues) {
       cue.snapToLines = false;
-      cue.line = 86;          // % from the top — clear of the bottom bar
+      cue.line = line;        // % from the top — 86 by default, clear of the bottom bar
       cue.align = "center";
       cue.position = 50;
+      /* Sync: each cue moved by the change since it was last moved, so a
+         cue is never shifted twice and new cues get the whole delay. */
+      const had = cueShift.current.get(cue) || 0;
+      if (had !== delay) {
+        const d = delay - had;
+        if (d > 0) { cue.endTime += d; cue.startTime += d; } else { cue.startTime = Math.max(0, cue.startTime + d); cue.endTime = Math.max(cue.startTime + 0.05, cue.endTime + d); }
+        cueShift.current.set(cue, delay);
+      }
     }
   }, []);
 
@@ -1153,7 +1172,7 @@ const VideoPlayer = ({
       tracks.removeEventListener?.("change", attach);
       for (let i = 0; i < tracks.length; i++) tracks[i].removeEventListener("cuechange", onCueChange);
     };
-  }, [currentSubtitleId, positionCues, externalSubUrl]);
+  }, [currentSubtitleId, positionCues, externalSubUrl, subStyle.line, subStyle.delay]);
 
   const changeSubtitles = (id) => {
     if (hlsRef.current) {
@@ -1176,6 +1195,7 @@ const VideoPlayer = ({
       const vtt = toVtt(raw);   // .srt → WebVTT (or pass a real .vtt through)
       const url = URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
       setExternalSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+      setExternalSubLabel("Uploaded"); setOnlineSubId("");
       setCurrentSubtitleId(999);
       setShowSettings(null);
     } catch {
@@ -1183,6 +1203,19 @@ const VideoPlayer = ({
     }
     e.target.value = "";   // allow re-uploading the same filename
   };
+  // A subtitle found online: VTT text from /api/subs, shown like an uploaded one.
+  const pickOnlineSubtitle = (vtt, label, id) => {
+    const url = URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
+    setExternalSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+    setExternalSubLabel(label); setOnlineSubId(id);
+    setCurrentSubtitleId(999);
+  };
+  // Another episode's subtitle does not fit this one.
+  useEffect(() => {
+    if (!onlineSubId) return;
+    setExternalSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setOnlineSubId(""); setCurrentSubtitleId(-1);
+  }, [src]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Quality & Audio menus open from the top-right buttons, so their panel drops
      down from there (not the bottom) — otherwise the menu lands far from the
@@ -1214,7 +1247,8 @@ const VideoPlayer = ({
     >
       {/* cursor-none while the HUD is hidden — otherwise the pointer sits on top
           of a fullscreen movie forever */}
-      <video ref={videoRef} className={`w-full h-full object-contain bg-black ${showControls ? "cursor-pointer" : "cursor-none"}`} playsInline autoPlay
+      <style>{subtitleCss("video.anchorhd-video", subStyle)}</style>
+      <video ref={videoRef} className={`anchorhd-video w-full h-full object-contain bg-black ${showControls ? "cursor-pointer" : "cursor-none"}`} playsInline autoPlay
         onTouchStart={(e) => { lastTouchRef.current = Date.now(); onVideoTouchStart(e); }}
         onTouchEnd={(e) => { lastTouchRef.current = Date.now(); onVideoTouchEnd(e); }}
         onTouchCancel={endHold}
@@ -1244,7 +1278,7 @@ const VideoPlayer = ({
         onPlaying={() => { setIsBuffering(false); setIsPlaying(true); }}
         onEnded={handleVideoEnd}
       >
-        {externalSubUrl && <track key={externalSubUrl} kind="subtitles" src={externalSubUrl} srcLang="en" label="Uploaded" default />}
+        {externalSubUrl && <track key={externalSubUrl} kind="subtitles" src={externalSubUrl} srcLang="en" label={externalSubLabel} default />}
       </video>
 
       {/* --- RATING / ADVISORY CARD (Hotstar-style, on start) --- */}
@@ -1397,7 +1431,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- SETTINGS — compact panel docked bottom-right (no full-screen overlay) --- */}
-      {showSettings && showSettings !== 'episodes' && (
+      {showSettings && showSettings !== 'episodes' && showSettings !== 'substyle' && (
         <>
           <div className="absolute inset-0 z-[95]" onClick={() => setShowSettings(null)} />
           <div className={`absolute z-[100] max-w-[88vw] bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl text-white animate-in fade-in duration-200 ${
@@ -1445,7 +1479,7 @@ const VideoPlayer = ({
                       ))}
                       {externalSubUrl && (
                         <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                          {currentSubtitleId === 999 ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium">Uploaded</span>
+                          {currentSubtitleId === 999 ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{externalSubLabel}</span>
                         </button>
                       )}
                     </div>
@@ -1454,6 +1488,12 @@ const VideoPlayer = ({
                     <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.srt / .vtt)</span>
                     <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
                   </label>
+                  <button type="button" onClick={() => setShowSettings('substyle')}
+                    className="flex w-[calc(100%-1.5rem)] items-center gap-2 mx-3 mb-2 px-3 py-2 rounded-lg border border-white/15 hover:border-blue-500/50 text-white/70 hover:text-white transition-all">
+                    <Captions size={16} /><span className="text-xs font-medium">Subtitle style &amp; sync</span>
+                  </button>
+                  <OnlineSubtitles tmdbId={tmdbId} imdbId={imdbId} isSeries={isSeries} season={currentSeason} episode={currentEpNum}
+                    activeId={currentSubtitleId === 999 ? onlineSubId : ""} onPick={pickOnlineSubtitle} />
                 </>
               )}
               {showSettings === 'subs' && (
@@ -1468,16 +1508,22 @@ const VideoPlayer = ({
                   ))}
                   {externalSubUrl && (
                     <button onClick={() => changeSubtitles(999)} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${currentSubtitleId === 999 ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                      <span className="text-sm font-medium">Uploaded subtitle</span>{currentSubtitleId === 999 && <Check size={16} className="text-blue-400"/>}
+                      <span className="text-sm font-medium truncate">{externalSubLabel === "Uploaded" ? "Uploaded subtitle" : externalSubLabel}</span>{currentSubtitleId === 999 && <Check size={16} className="text-blue-400"/>}
                     </button>
                   )}
                   {subtitleTracks.length === 0 && !externalSubUrl && (
-                    <p className="px-4 py-2 text-xs text-white/40">No subtitles in this video — upload one below.</p>
+                    <p className="px-4 py-2 text-xs text-white/40">No subtitles in this video — search online or upload one below.</p>
                   )}
                   <label className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg border border-dashed border-white/15 hover:border-blue-500/50 cursor-pointer text-white/70 hover:text-white transition-all">
                     <UploadCloud size={16}/><span className="text-xs font-medium">Upload subtitle (.srt / .vtt)</span>
                     <input type="file" accept=".vtt,.srt,text/vtt,application/x-subrip" className="hidden" onChange={handleSubtitleUpload} />
                   </label>
+                  <button type="button" onClick={() => setShowSettings('substyle')}
+                    className="flex w-[calc(100%-1.5rem)] items-center gap-2 mx-3 mb-2 px-3 py-2 rounded-lg border border-white/15 hover:border-blue-500/50 text-white/70 hover:text-white transition-all">
+                    <Captions size={16} /><span className="text-xs font-medium">Subtitle style &amp; sync</span>
+                  </button>
+                  <OnlineSubtitles tmdbId={tmdbId} imdbId={imdbId} isSeries={isSeries} season={currentSeason} episode={currentEpNum}
+                    activeId={currentSubtitleId === 999 ? onlineSubId : ""} onPick={pickOnlineSubtitle} />
                 </>
               )}
               {showSettings === 'quality' && streamQualities.length > 1 && levels.length <= 1 && streamQualities.map((v) => (
@@ -1622,6 +1668,11 @@ const VideoPlayer = ({
             {isPlaying ? <Pause size={40} fill="white" className="text-white" /> : <Play size={40} fill="white" className="text-white ml-1" />}
          </div>
       </div>
+
+      {showSettings === 'substyle' && (
+        <SubtitleStyle value={subStyle} onChange={setSubStyle} onClose={() => setShowSettings(null)}
+          preview={backdrop || poster || (currentEp && epStill(currentEp)) || ""} />
+      )}
 
       {/* Skip Intro / Skip Recap — bottom-right, there whether or not the
           controls are, above them when they are. */}
