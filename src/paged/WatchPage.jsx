@@ -1511,7 +1511,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
               // Prefer TMDB's clean title/poster over the messy upload title.
               title:        tData?.title || tData?.name || watchData.title || watchData.slug,
               tmdb_id:      watchData.tmdb_id || resolvedTmdbId || tData?.tmdb_id || null,
-              imdb_id:      watchData.imdb_id || null,
+              imdb_id:      watchData.imdb_id || tData?.imdb_id || null,   // TMDB's, when the upload has none
               content_type: (eps.length > 0 || ctype === "tv") ? "tv" : (watchData.content_type || tData?.content_type || "movie"),
               poster:       safeURI(tData?.poster_url || watchData.poster || "/default-poster.jpg"),
               background:   safeURI(tData?.cover_poster_url || watchData.cover_poster || watchData.poster),
