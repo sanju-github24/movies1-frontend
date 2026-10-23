@@ -581,14 +581,19 @@ const SearchResults = () => {
       ]);
       const mxP = axios.get(`${MX_WORKER}/`, { params: { search: query.trim() }, timeout: 8000 })
         .then((r) => r, () => null);
-      const tmdbP = (isImdbId || isTmdbId)
-        ? axios.get(`${backendUrl}/api/tmdb-details`, { params: isImdbId
-            ? { imdbId: query.trim() }
-            : { tmdbId: query.trim(), contentType: searchType === "all" ? undefined : searchType } })
-            .then((r) => (r.data.success ? (Array.isArray(r.data.data) ? r.data.data : [r.data.data]) : []), () => [])
-        : axios.get(`${backendUrl}/api/tmdb-search`, { params: {
-            query: query.trim(), type: searchType === "all" ? "multi" : searchType, lang: searchLang || undefined } })
-            .then((r) => (r.data.success ? r.data.results || [] : []), () => []);
+      const byId = (params) => axios.get(`${backendUrl}/api/tmdb-details`, { params })
+        .then((r) => (r.data.success ? (Array.isArray(r.data.data) ? r.data.data : [r.data.data]) : []), () => []);
+      const byText = () => axios.get(`${backendUrl}/api/tmdb-search`, { params: {
+          query: query.trim(), type: searchType === "all" ? "multi" : searchType, lang: searchLang || undefined } })
+        .then((r) => (r.data.success ? r.data.results || [] : []), () => []);
+      /* A number is a title first ("418", "96", "1917") and a TMDB id after:
+         the titles that are called it, then the title with that id. */
+      const tmdbP = isImdbId
+        ? byId({ imdbId: query.trim() })
+        : isTmdbId
+          ? Promise.all([byText(), byId({ tmdbId: query.trim(), contentType: searchType === "all" ? undefined : searchType })])
+              .then(([text, id]) => [...text, ...id.filter((x) => !text.some((t) => String(t.tmdb_id || t.id) === String(x.tmdb_id || x.id)))])
+          : byText();
 
       const [moviesRes, watchRes] = await localP;
 
@@ -650,45 +655,6 @@ const SearchResults = () => {
       if (run !== searchRun.current) return;
       if (resultsMap.size) { setResults(Array.from(resultsMap.values())); setLoading(false); }
 
-      // --- 2.5 MX Player (free/ad-supported) — movie + series results ---
-      // Search metadata works from any IP; the real stream is resolved on click
-      // by the backend Playwright resolver using the item's webUrl.
-      try {
-        const mxRes = await mxP;
-        if (!mxRes) throw new Error("MX unavailable");
-        const mxItems = (mxRes.data?.sections || []).flatMap((s) => s.items || []);
-        mxItems
-          .filter((it) => it && it.title && it.webUrl && (it.type === "movie" || it.type === "tvshow"))
-          .forEach((it) => {
-            const titleKey = it.title.toLowerCase().trim();
-            if (!resultsMap.has(titleKey)) {
-              const seasonMeta = it.type === "tvshow"
-                ? (it.seasons ? `MX Player · ${it.seasons} Season${it.seasons > 1 ? "s" : ""}` : "MX Player · Series")
-                : "MX Player";
-              resultsMap.set(titleKey, {
-                id: `mx-${it.id}`,
-                title: it.title,
-                slug: `mx-${it.id}`,
-                type: "streaming",
-                image: it.poster || it.thumb || "/default-cover.jpg", // portrait poster (card)
-                thumb: it.thumb || it.banner || it.poster || null,     // landscape thumbnail (backdrop)
-                link: null,
-                meta: seasonMeta,
-                year: it.year || "",
-                source: "mxplayer",
-                mxWebUrl: it.webUrl,
-                mxData: it,
-              });
-            } else {
-              // Same title already found via library/TMDB — attach the MX URL so it
-              // shows up as an "MX Player" server on the watch page (nothing missing).
-              const ex = resultsMap.get(titleKey);
-              if (ex && !ex.mxWebUrl) ex.mxWebUrl = it.webUrl;
-            }
-          });
-      } catch (e) {
-        console.warn("MX Player search unavailable");
-      }
 
       // --- 3. TMDB API Fallback & Discovery ---
       try {
@@ -744,6 +710,48 @@ const SearchResults = () => {
         }
       } catch (e) {
         console.warn("TMDB Discovery Linkage Failed");
+      }
+
+      // --- 4. MX Player (free/ad-supported) — movie + series results, LAST ---
+      // After the library and TMDB, so its long lists never push the real
+      // matches down; a title already found just gains MX as a server.
+      // Search metadata works from any IP; the real stream is resolved on click
+      // by the backend Playwright resolver using the item's webUrl.
+      try {
+        const mxRes = await mxP;
+        if (!mxRes) throw new Error("MX unavailable");
+        const mxItems = (mxRes.data?.sections || []).flatMap((s) => s.items || []);
+        mxItems
+          .filter((it) => it && it.title && it.webUrl && (it.type === "movie" || it.type === "tvshow"))
+          .forEach((it) => {
+            const titleKey = it.title.toLowerCase().trim();
+            if (!resultsMap.has(titleKey)) {
+              const seasonMeta = it.type === "tvshow"
+                ? (it.seasons ? `MX Player · ${it.seasons} Season${it.seasons > 1 ? "s" : ""}` : "MX Player · Series")
+                : "MX Player";
+              resultsMap.set(titleKey, {
+                id: `mx-${it.id}`,
+                title: it.title,
+                slug: `mx-${it.id}`,
+                type: "streaming",
+                image: it.poster || it.thumb || "/default-cover.jpg", // portrait poster (card)
+                thumb: it.thumb || it.banner || it.poster || null,     // landscape thumbnail (backdrop)
+                link: null,
+                meta: seasonMeta,
+                year: it.year || "",
+                source: "mxplayer",
+                mxWebUrl: it.webUrl,
+                mxData: it,
+              });
+            } else {
+              // Same title already found via library/TMDB — attach the MX URL so it
+              // shows up as an "MX Player" server on the watch page (nothing missing).
+              const ex = resultsMap.get(titleKey);
+              if (ex && !ex.mxWebUrl) ex.mxWebUrl = it.webUrl;
+            }
+          });
+      } catch (e) {
+        console.warn("MX Player search unavailable");
       }
 
       const finalResults = Array.from(resultsMap.values());

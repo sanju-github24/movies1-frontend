@@ -559,15 +559,20 @@ const SearchPage = () => {
   const performUnifiedSearch = async (query) => {
     setIsSearching(true);
     try {
-      // ── Exact lookup by IMDb ID (tt1234567) or TMDB ID (numeric) ──
-      if (IMDB_ID_RE.test(query) || TMDB_ID_RE.test(query)) {
-        const params = IMDB_ID_RE.test(query)
-          ? { imdbId: query }
-          : { tmdbId: query, contentType: searchType === "all" ? undefined : searchType };
-        const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params }).catch(() => null);
+      // ── Exact lookup by IMDb ID (tt1234567) ──
+      if (IMDB_ID_RE.test(query)) {
+        const res = await axios.get(`${backendUrl}/api/tmdb-details`, { params: { imdbId: query } }).catch(() => null);
         setSearchResults(res?.data?.success ? [tmdbDetailsToMovie(res.data.data)] : []);
         return;
       }
+      /* A number is a title first — "418", "96", "1917", "2018" are films —
+         and a TMDB id only after: searched as text, with the title of that
+         id added at the end. Taken as an id alone, "418" found some other
+         film and never the Telugu one. */
+      const idLookup = TMDB_ID_RE.test(query)
+        ? axios.get(`${backendUrl}/api/tmdb-details`, { params: { tmdbId: query, contentType: searchType === "all" ? undefined : searchType } })
+            .then((r) => (r.data?.success ? r.data.data : null), () => null)
+        : null;
 
       // ── Text search: local library + TMDB multi-result search ──
       const dbPromise = supabase
@@ -607,6 +612,12 @@ const SearchPage = () => {
         localTitles.add(key);
         finalResults.push(tmdbItemToMovie(t));
       });
+      const byId = idLookup && await idLookup;
+      if (byId) {
+        const key = (byId.title || "").toLowerCase().trim();
+        const dupe = (tmdbResponse?.data?.results || []).some((t) => String(t.tmdb_id || t.id) === String(byId.tmdb_id));
+        if (key && !dupe) { localTitles.add(key); finalResults.push(tmdbDetailsToMovie(byId)); }
+      }
 
       // ── MX Player (free) — movie + series results ──
       try {
