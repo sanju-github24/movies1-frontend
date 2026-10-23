@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Radio, Settings, Check, Languages } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Loader2, Check, Languages, ArrowLeft, MonitorPlay } from "lucide-react";
 
 /* AnchorHD's own live player.
  *
@@ -117,6 +117,7 @@ const TUNING = {
 
 export default function AnchorPlayer({
   source, title, poster, onPlaying, onError, onStall, languages, lang, onLanguage, standby = false,
+  onBack, note = "", topExtra = null, autoFull = false,
 }) {
   const wrap = useRef(null);
   const vid = useRef(null);
@@ -127,6 +128,7 @@ export default function AnchorPlayer({
   const [muted, setMuted] = useState(false);
   const [full, setFull] = useState(false);
   const [behind, setBehind] = useState(0);
+  const [win, setWin] = useState(0);              // how much of the stream can be gone back over
   const [chrome, setChrome] = useState(true);
   const [levels, setLevels] = useState([]);      // [{ ref, height, bitrate }]
   const [choice, setChoice] = useState("auto");  // "auto" or a height
@@ -400,6 +402,7 @@ export default function AnchorPlayer({
       const sk = v?.seekable;
       if (!sk || !sk.length) return;
       setBehind(Math.max(0, sk.end(sk.length - 1) - v.currentTime));
+      setWin(Math.max(0, sk.end(sk.length - 1) - sk.start(0)));
     }, 1000);
     return () => clearInterval(t);
   }, []);
@@ -448,22 +451,47 @@ export default function AnchorPlayer({
   const toggle = () => { const v = vid.current; if (v.paused) v.play().catch(() => {}); else v.pause(); };
   const mute = () => { vid.current.muted = !vid.current.muted; };
 
-  const fullscreen = async () => {
+  /* Full screen, the whole screen: the browser's own bars go, and a phone
+     turns on its side. Android and desktop take the player itself; an
+     iPhone, which has no element full screen, takes the video in its own
+     — the only way there to be rid of the address and tab bars. */
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const enterFull = async () => {
     const el = wrap.current;
-    try {
-      if (!document.fullscreenElement) { await el.requestFullscreen(); setFull(true); }
-      else { await document.exitFullscreen(); setFull(false); }
-    } catch {
-      // iPhone Safari has no element fullscreen; the video element does.
-      try { vid.current.webkitEnterFullscreen?.(); } catch { /* not available */ }
+    const req = el?.requestFullscreen || el?.webkitRequestFullscreen;
+    if (req) {
+      try {
+        await req.call(el, { navigationUI: "hide" });
+        try { await screen.orientation?.lock?.("landscape"); } catch { /* not allowed here */ }
+        return;
+      } catch { /* refused */ }
     }
+    try { vid.current?.webkitEnterFullscreen?.(); } catch { /* not available */ }
   };
+  const exitFull = async () => {
+    try { screen.orientation?.unlock?.(); } catch { /* nothing locked */ }
+    if (fsEl()) { try { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch { /* already out */ } }
+  };
+  const fullscreen = () => (fsEl() ? exitFull() : enterFull());
+  const back = async () => { await exitFull(); onBack?.(); };
 
   useEffect(() => {
-    const onFs = () => setFull(!!document.fullscreenElement);
+    const onFs = () => setFull(!!fsEl());
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
+    };
   }, []);
+
+  /* A phone opens straight into full screen, sideways, as the movie player
+     does — still inside the tap that opened it, which the browser needs. */
+  useEffect(() => {
+    if (!autoFull || standby) return;
+    const phone = window.matchMedia?.("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) < 600;
+    if (phone && wrap.current?.requestFullscreen) enterFull();
+  }, [autoFull, standby]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Controls fade after a few seconds of stillness, the way every player's
      do, and come back on any movement or touch. */
@@ -479,25 +507,39 @@ export default function AnchorPlayer({
   useEffect(() => () => clearTimeout(hideTimer.current), []);
 
   const atLive = behind <= LIVE_THRESH;
+  const shown = chrome || paused || qOpen || lOpen;
+  // Where we are in what can be gone back over: the end is live.
+  const pos = atLive || win <= 30 ? 1 : Math.max(0, Math.min(1, 1 - behind / win));
+  const seekBar = (e) => {
+    const v = vid.current, sk = v?.seekable;
+    if (!sk?.length || win <= 30) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    if (f > 0.985) return goLive();
+    v.currentTime = sk.start(0) + f * win;
+  };
+  const qText = choice === "auto" ? (playingH ? `Auto · ${qLabel(playingH)}` : "Auto") : qLabel(choice);
+  const menuCls = "absolute top-full right-0 mt-2 w-44 rounded-xl bg-gray-900/95 ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur overflow-y-auto overscroll-contain z-20";
+  const menuStyle = { maxHeight: MENU_MAX, touchAction: "pan-y", WebkitOverflowScrolling: "touch" };
 
   return (
     <div
       ref={wrap}
       onMouseMove={wake}
       onTouchStart={wake}
-      className="relative w-full h-full bg-black overflow-hidden select-none"
+      className="relative w-full h-full bg-black overflow-hidden select-none text-white"
       style={{ cursor: chrome ? "default" : "none" }}
     >
       <video
         ref={vid}
         playsInline
         poster={poster || undefined}
-        onClick={toggle}
+        onClick={() => { if (!chrome) wake(); else toggle(); }}
         className="absolute inset-0 w-full h-full object-contain bg-black"
       />
 
       {(state === "loading" || state === "reconnecting") && (
-        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3
+        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none
                          ${state === "loading" ? "bg-black/60" : "bg-black/30"}`}>
           <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">
@@ -512,78 +554,69 @@ export default function AnchorPlayer({
         </div>
       )}
 
-      {/* ── controls ── */}
-      <div
-        className={`absolute inset-x-0 bottom-0 transition-opacity duration-300
-                    ${chrome || paused || qOpen || lOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
-        <div className="relative flex flex-nowrap items-center gap-1 sm:gap-3 px-2 sm:px-5 pt-6 sm:pt-10">
-          <button type="button" onClick={toggle} aria-label={paused ? "Play" : "Pause"}
-            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-            {paused ? <Play className="w-6 h-6 fill-white" /> : <Pause className="w-6 h-6 fill-white" />}
-          </button>
+      {/* ── top: back and title; quality and language, Hotstar's way ── */}
+      <div className={`absolute inset-x-0 top-0 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
+        <div className="absolute inset-0 h-32 bg-gradient-to-b from-black/80 to-transparent pointer-events-none" />
+        <div className="relative flex items-start gap-2 sm:gap-4 px-3 sm:px-8 pt-2 sm:pt-4">
+          {onBack && (
+            <button type="button" onClick={back} aria-label="Back"
+              className="shrink-0 p-1.5 -ml-1 rounded-full hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <ArrowLeft className="w-6 h-6 sm:w-7 sm:h-7" />
+            </button>
+          )}
+          <div className="min-w-0 flex-1 pt-1">
+            <p className="text-base sm:text-2xl font-semibold leading-tight truncate">{title}</p>
+            {note && <p className="mt-0.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-white/60">{note}</p>}
+            {topExtra}
+          </div>
 
-          <button type="button" onClick={mute} aria-label={muted ? "Unmute" : "Mute"}
-            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-            {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-          </button>
-
-          {/* Live, or how far behind — and a way back when it is not. */}
-          <button type="button" onClick={goLive} disabled={atLive}
-            title={atLive ? "Watching live" : "Jump to live"}
-            className={`shrink-0 ml-1 inline-flex items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-black
-                        uppercase tracking-widest transition-colors
-                        ${atLive ? "bg-red-600 text-white cursor-default"
-                                 : "bg-white/15 text-white hover:bg-white/25"}`}>
-            <Radio className="w-3 h-3" aria-hidden="true" />
-            {atLive ? "Live" : "Go live"}
-          </button>
-          {!atLive && (
-            <span className="min-w-0 truncate text-[10px] sm:text-[11px] font-bold text-gray-300 tabular-nums">
-              {fmtBehind(behind)} behind
-            </span>
+          {levels.length > 1 && (
+            <div className="relative shrink-0">
+              <button type="button" onClick={() => { setLOpen(false); setQOpen((o) => !o); }}
+                aria-haspopup="menu" aria-expanded={qOpen} aria-label="Quality"
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <MonitorPlay className="w-5 h-5 sm:w-6 sm:h-6" />
+                <span className="hidden sm:inline text-base font-semibold">Quality</span>
+                <span className="hidden sm:inline text-base text-white/50 tabular-nums">{qText}</span>
+              </button>
+              {qOpen && (
+                <div role="menu" className={menuCls} style={menuStyle} onTouchMove={(e) => e.stopPropagation()}>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Quality</p>
+                  {[{ key: "auto" }, ...levels.map((l) => ({ key: l.height, l }))].map(({ key, l }) => (
+                    <button key={key} type="button" role="menuitemradio" aria-checked={choice === key}
+                      onClick={() => pickQuality(key)}
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-white/10">
+                      <span className="w-4 shrink-0">{choice === key && <Check className="w-4 h-4" />}</span>
+                      <span className="flex-1">
+                        {key === "auto" ? "Auto" : qLabel(key)}
+                        {key === "auto" && playingH ? <span className="ml-1.5 text-[11px] text-gray-400">({qLabel(playingH)})</span> : null}
+                      </span>
+                      {l?.bitrate ? <span className="text-[10px] text-gray-500 tabular-nums">{(l.bitrate / 1e6).toFixed(1)} Mb/s</span> : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Pushes the rest to the right edge. The title shares it only where
-              there is room; on a phone the buttons need every pixel. */}
-          <span className="flex-1 min-w-0 hidden sm:block text-right text-xs font-semibold text-white/80 truncate">
-            {title}
-          </span>
-          <span className="flex-1 sm:hidden" aria-hidden="true" />
-
-          {/* Commentary language. Each is a separate stream, so choosing one
-              loads it afresh — a live stream has no place to resume from, and
-              the new one starts at its own live edge. Shown only when the
-              match really is available in more than one. */}
           {languages?.length > 1 && (
             <div className="relative shrink-0">
               <button type="button" onClick={() => { setQOpen(false); setLOpen((o) => !o); }}
-                aria-haspopup="menu" aria-expanded={lOpen} aria-label="Commentary language"
-                className="inline-flex items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                <Languages className="w-5 h-5" aria-hidden="true" />
-                <span className="text-[11px] font-black">{lang}</span>
+                aria-haspopup="menu" aria-expanded={lOpen} aria-label="Audio language"
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <Languages className="w-5 h-5 sm:w-6 sm:h-6" />
+                <span className="hidden sm:inline text-base font-semibold">Audio Language</span>
+                <span className="sm:hidden text-[11px] font-black">{lang}</span>
               </button>
-
               {lOpen && (
-                <div role="menu"
-                  className="absolute bottom-full right-0 mb-2 w-40 sm:w-44 rounded-xl bg-gray-900/95
-                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur overflow-y-auto overscroll-contain"
-                  style={{ maxHeight: MENU_MAX, touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
-                  onTouchMove={(e) => e.stopPropagation()}>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
-                    Commentary
-                  </p>
+                <div role="menu" className={menuCls} style={menuStyle} onTouchMove={(e) => e.stopPropagation()}>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Audio language</p>
                   {languages.map((l) => (
                     <button key={l.code} type="button" role="menuitemradio" aria-checked={l.code === lang}
                       onClick={() => { setLOpen(false); if (l.code !== lang && onLanguage) onLanguage(l.id); }}
-                      className="w-full flex items-center gap-2 rounded-lg px-3 py-1.5 sm:py-2 text-left text-sm text-white
-                                 hover:bg-white/10">
-                      <span className="w-4 shrink-0">
-                        {l.code === lang && <Check className="w-4 h-4" aria-hidden="true" />}
-                      </span>
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-white/10">
+                      <span className="w-4 shrink-0">{l.code === lang && <Check className="w-4 h-4" />}</span>
                       <span className="flex-1">{l.label}</span>
                       <span className="text-[10px] text-gray-500">{l.code}</span>
                     </button>
@@ -592,61 +625,41 @@ export default function AnchorPlayer({
               )}
             </div>
           )}
+        </div>
+      </div>
 
-          {/* Only when there is a choice to make — a single-rung stream would
-              offer a menu with one entry in it. */}
-          {levels.length > 1 && (
-            <div className="relative shrink-0">
-              <button type="button" onClick={() => { setLOpen(false); setQOpen((o) => !o); }}
-                aria-haspopup="menu" aria-expanded={qOpen} aria-label="Quality"
-                className="inline-flex items-center gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                <Settings className="w-5 h-5" aria-hidden="true" />
-                <span className="hidden sm:inline text-[11px] font-black tabular-nums">
-                  {choice === "auto" ? (playingH ? `Auto · ${qLabel(playingH)}` : "Auto") : qLabel(choice)}
-                </span>
-              </button>
-
-              {/* Inside the player rather than on the body: in fullscreen only
-                  the player is on screen, and a menu drawn anywhere else would
-                  open where nobody can see it. */}
-              {qOpen && (
-                <div role="menu"
-                  className="absolute bottom-full right-0 mb-2 w-40 sm:w-44 rounded-xl bg-gray-900/95
-                             ring-1 ring-white/10 shadow-2xl p-1 backdrop-blur overflow-y-auto overscroll-contain"
-                  style={{ maxHeight: MENU_MAX, touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
-                  onTouchMove={(e) => e.stopPropagation()}>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Quality</p>
-                  {[{ key: "auto" }, ...levels.map((l) => ({ key: l.height, l }))].map(({ key, l }) => (
-                    <button key={key} type="button" role="menuitemradio" aria-checked={choice === key}
-                      onClick={() => pickQuality(key)}
-                      className="w-full flex items-center gap-2 rounded-lg px-3 py-1.5 sm:py-2 text-left text-sm text-white
-                                 hover:bg-white/10">
-                      <span className="w-4 shrink-0">
-                        {choice === key && <Check className="w-4 h-4" aria-hidden="true" />}
-                      </span>
-                      <span className="flex-1">
-                        {key === "auto" ? "Auto" : qLabel(key)}
-                        {key === "auto" && playingH ? (
-                          <span className="ml-1.5 text-[11px] text-gray-400">({qLabel(playingH)})</span>
-                        ) : null}
-                      </span>
-                      {l?.bitrate ? (
-                        <span className="text-[10px] text-gray-500 tabular-nums">
-                          {(l.bitrate / 1e6).toFixed(1)} Mb/s
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              )}
+      {/* ── bottom: the live bar, then play, sound and full screen ── */}
+      <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
+        <div className="relative px-3 sm:px-8 pt-10">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="relative flex-1 py-2 cursor-pointer group" onClick={seekBar}>
+              <div className="h-1 sm:h-[5px] rounded-full bg-white/25 overflow-hidden">
+                <div className="h-full bg-sky-500 rounded-full" style={{ width: `${pos * 100}%` }} />
+              </div>
             </div>
-          )}
-
-          <button type="button" onClick={fullscreen} aria-label={full ? "Exit full screen" : "Full screen"}
-            className="shrink-0 p-1.5 sm:p-2 rounded-full text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-            {full ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-          </button>
+            <button type="button" onClick={goLive} disabled={atLive} title={atLive ? "Watching live" : "Jump to live"}
+              className="shrink-0 flex items-center gap-1.5 text-sm sm:text-base font-semibold tracking-wide disabled:cursor-default">
+              <span className={`w-2 h-2 rounded-full ${atLive ? "bg-orange-500" : "bg-white/40"}`} />
+              {atLive ? "LIVE" : <span className="text-white/80">GO LIVE <span className="text-white/50 text-xs tabular-nums">−{fmtBehind(behind)}</span></span>}
+            </button>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 pb-1">
+            <button type="button" onClick={toggle} aria-label={paused ? "Play" : "Pause"}
+              className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              {paused ? <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white" /> : <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" />}
+            </button>
+            <button type="button" onClick={mute} aria-label={muted ? "Unmute" : "Mute"}
+              className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              {muted ? <VolumeX className="w-5 h-5 sm:w-6 sm:h-6" /> : <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />}
+            </button>
+            <span className="flex-1" />
+            <button type="button" onClick={fullscreen} aria-label={full ? "Exit full screen" : "Full screen"}
+              className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              {full ? <Minimize className="w-5 h-5 sm:w-6 sm:h-6" /> : <Maximize className="w-5 h-5 sm:w-6 sm:h-6" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>

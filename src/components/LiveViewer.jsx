@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Radio, X, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import AnchorPlayer from "./AnchorPlayer";
 import { parseSourceLink, resolveSource, forgetFeeds } from "../utils/liveSources";
 
@@ -82,8 +82,11 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
     (async () => {
       try {
         const ref = parseSourceLink(link);
-        if (!ref) throw new Error("This link does not say what to play.");
-        const source = await resolveSource(pickedId ? { ...ref, id: pickedId } : ref);
+        // A live added in the admin can be a stream's own address, played as it is.
+        const direct = !ref && /\.(m3u8|mpd)(\?|$)/i.test(link)
+          ? { kind: /\.mpd(\?|$)/i.test(link) ? "dash" : "hls", url: link, title } : null;
+        if (!ref && !direct) throw new Error("This link does not say what to play.");
+        const source = direct || await resolveSource(pickedId ? { ...ref, id: pickedId } : ref);
         if (dead) return;
         setSlots((prev) => [...prev.filter((x) => x.key === liveRef.current), { key, source }]);
         if (!liveRef.current) { liveRef.current = key; setLive(key); }
@@ -136,7 +139,6 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
     setGen((g) => g + 1);
   };
 
-  const shown = slots.find((x) => x.key === live)?.source;
 
   /* onClose is written inline by every caller, so it is a new function on
      each of their renders. Held in a ref so the listener below reads the
@@ -173,88 +175,57 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
       aria-modal="true"
       aria-label={title}
     >
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 sm:py-3 landscape:max-lg:py-1 shrink-0 bg-black">
-        <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5
-                         text-[10px] font-black uppercase tracking-widest text-white shrink-0">
-          <Radio className="w-3 h-3" aria-hidden="true" /> Live
-        </span>
-        <p className="text-xs sm:text-sm font-bold text-white truncate">{title || shown?.title}</p>
-        {note && (
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-white/60">{note}</span>
+      {/* The player is the whole screen, as Hotstar's is: its own top bar
+          carries the way back, the title and the menus — nothing sits over
+          the picture but them, and they fade with the rest of the controls. */}
+      <div className="flex-1 min-h-0 w-full h-full">
+        {err ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-6">
+            <p className="max-w-md text-center text-sm text-gray-200 leading-relaxed">{err}</p>
+            <button type="button" onClick={() => onCloseRef.current()} className="px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-bold text-white">Go back</button>
+          </div>
+        ) : slots.length ? (
+          <div className="relative w-full h-full">
+            {slots.map((x) => (
+              <div
+                key={x.key}
+                className={`absolute inset-0 ${x.key === live ? "" : "opacity-0 pointer-events-none"}`}
+                aria-hidden={x.key === live ? undefined : true}
+              >
+                <AnchorPlayer
+                  source={x.source}
+                  title={title || x.source.title}
+                  poster={poster || x.source.poster}
+                  languages={x.source.languages?.filter((l) => l.code === x.source.lang || !failedIds.includes(l.id))}
+                  lang={x.source.lang}
+                  standby={x.key !== live}
+                  onPlaying={() => promote(x.key)}
+                  onStall={(msg) => stalled(x.key, msg)}
+                  onLanguage={(id) => setPick({ link, id })}
+                  onBack={() => onCloseRef.current()}
+                  note={note}
+                  autoFull
+                  topExtra={(list.length > 1 ? (
+                    <div className="flex gap-2 overflow-x-auto mt-2 pointer-events-auto">
+                      {list.map((s, i) => (
+                        <button key={s.src} type="button" onClick={() => setIdx(i)}
+                          className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider transition-colors
+                            ${i === idx ? "bg-white text-black" : "bg-white/15 text-white hover:bg-white/25"}`}>
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Finding the stream</p>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => onCloseRef.current()}
-          aria-label="Close player"
-          className="ml-auto shrink-0 rounded-lg p-2 text-gray-300 hover:bg-white/10 hover:text-white
-                     focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-        >
-          <X className="w-5 h-5" aria-hidden="true" />
-        </button>
-      </div>
-
-      {list.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto px-3 sm:px-6 pb-2 shrink-0 bg-black">
-          {list.map((s, i) => (
-            <button
-              key={s.src}
-              type="button"
-              onClick={() => setIdx(i)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider
-                          transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white
-                          ${i === idx
-                            ? "bg-white text-black"
-                            : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* The frame takes the space left over and keeps a 16:9 picture centred
-          in it — pillarboxed on a wide screen — rather than stretching the
-          video to whatever shape the window is. On an upright phone it sits
-          at the top, under the title, the way every phone player does,
-          instead of floating in the middle of the screen. */}
-      <div className="flex-1 min-h-0 flex items-center portrait:max-lg:items-start justify-center bg-black">
-        {/* A phone on its side is short: a 16:9 box as wide as the screen is
-            taller than the space, and would be squeezed out of shape. There
-            the player fills the frame and the video letterboxes inside it. */}
-        <div className="w-full max-h-full aspect-video landscape:max-lg:aspect-auto landscape:max-lg:h-full">
-          {err ? (
-            <div className="w-full h-full flex items-center justify-center p-6">
-              <p className="max-w-md text-center text-sm text-gray-200 leading-relaxed">{err}</p>
-            </div>
-          ) : slots.length ? (
-            <div className="relative w-full h-full">
-              {slots.map((x) => (
-                <div
-                  key={x.key}
-                  className={`absolute inset-0 ${x.key === live ? "" : "opacity-0 pointer-events-none"}`}
-                  aria-hidden={x.key === live ? undefined : true}
-                >
-                  <AnchorPlayer
-                    source={x.source}
-                    title={title || x.source.title}
-                    poster={poster || x.source.poster}
-                    languages={x.source.languages?.filter((l) => l.code === x.source.lang || !failedIds.includes(l.id))}
-                    lang={x.source.lang}
-                    standby={x.key !== live}
-                    onPlaying={() => promote(x.key)}
-                    onStall={(msg) => stalled(x.key, msg)}
-                    onLanguage={(id) => setPick({ link, id })}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-              <Loader2 className="w-9 h-9 animate-spin text-white/85" aria-hidden="true" />
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Finding the stream</p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   ), document.body);

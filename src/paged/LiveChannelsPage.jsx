@@ -4,6 +4,7 @@ import AnchorPlayer from "../components/AnchorPlayer";
 import { resolveChannelSource } from "../utils/liveSources";
 import LiveTvBrowse from "../components/livetv/LiveTvBrowse";
 import LiveViewer from "../components/LiveViewer";
+import LiveNowRow from "../components/LiveNowRow";
 import { categoryOf, languageOf, displayName, isHD } from "../utils/channelMeta";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
@@ -630,6 +631,9 @@ const LiveChannelsPage = () => {
   return (
     <div className="lc-page" style={{ minHeight: "100dvh", background: tokens.bg.base, color: tokens.text.primary, fontFamily: "Inter, system-ui, sans-serif" }}>
       <style>{GLOBAL_CSS}</style>
+
+      {/* What the admin has on air, first. */}
+      <LiveNowRow className="pt-5 pb-2" />
 
       {/* ══ FEED ERROR BANNER ════════════════════════════════════════════════ */}
       {feedError && (

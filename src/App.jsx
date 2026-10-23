@@ -50,6 +50,8 @@ import CategoryBar from './components/CategoryBar';
 import SiteFooter from './components/SiteFooter';
 import BackBar from './components/BackBar';
 import ScrollMemory from './components/ScrollMemory';
+import { loadLiveNow } from './utils/liveConfig';
+import AdminLiveNow from './paged/AdminLiveNow';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -170,6 +172,9 @@ const AppContent = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  // What the admin has on air, and the nightly shows' times — before anything asks "is this live".
+  useEffect(() => { loadLiveNow(); }, []);
 
   // ── Anti-Inspect Logic ──
   useEffect(() => {
@@ -361,6 +366,7 @@ const AppContent = () => {
                 <Route path="members"          element={<AdminMembers />} />
                 <Route path="up4stream"        element={<AdminUp4streamFiles />} />
                 <Route path="live-channels"    element={<LiveChannelsUpload />} />
+                <Route path="live-now"         element={<AdminLiveNow />} />
               </Routes>
             </ProtectedAdminRoute>
           }

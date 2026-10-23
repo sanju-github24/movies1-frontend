@@ -968,7 +968,7 @@ const VideoPlayer = ({
 
   /* Fullscreen, sideways. Android and desktop get the real thing, and the
      screen is locked to landscape while it lasts (where the browser allows
-     it). iPhone gets the CSS version above. */
+     it). iPhone gets the video's own full screen. */
   const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement;
   const enterFullscreen = async () => {
     const el = containerRef.current;
@@ -981,6 +981,14 @@ const VideoPlayer = ({
         return true;
       } catch { /* refused — usually no tap behind it */ }
       return false;
+    }
+    /* iPhone: no element full screen, and the CSS version left Safari's and
+       Chrome's address and tab bars on screen — half a screen. The video's
+       own full screen is the only real one there, so that is used; the CSS
+       version stays only for a browser that has neither. */
+    const v = videoRef.current;
+    if (v?.webkitEnterFullscreen) {
+      try { v.webkitEnterFullscreen(); return true; } catch { /* not ready yet */ }
     }
     setCssFullScreen(true);
     return true;

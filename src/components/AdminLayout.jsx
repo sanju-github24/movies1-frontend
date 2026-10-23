@@ -36,6 +36,11 @@ const ADMIN_LINKS = [
     label: "Live Match Upload",
   },
   {
+    path: "/admin/live-now",
+    icon: Tv,
+    label: "Live Now",
+  },
+  {
     path: "/admin/upload-watch-html",
     icon: MonitorPlay,
     label: "Watch HTML (MV)",

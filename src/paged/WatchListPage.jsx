@@ -11,6 +11,7 @@ import Mp4Trailer from "../components/Mp4Trailer";
 import { useVideoMute } from "../utils/useVideoMute";
 import { getLiveShow, liveStatus, useLiveClock } from "../utils/liveShow";
 import TrendingNumbersRow from "../components/TrendingNumbersRow";
+import LiveNowRow from "../components/LiveNowRow";
 
 // Muted looping HLS trailer for the hero (MX trailers are .m3u8, not YouTube).
 // Mute is driven through useVideoMute for the same reason as the MP4 below:
@@ -1285,7 +1286,7 @@ const WatchListPage = () => {
                 else langRows.unshift([lang, [m]]);
               });
               let langIdx = 0;
-              const blocks = [];
+              const blocks = [<LiveNowRow key="live-now" className="mb-6" />];   // the admin's lives, above the rows
               const pushLangRow = () => {
                 const [langName, langMovies] = langRows[langIdx++];
                 blocks.push(

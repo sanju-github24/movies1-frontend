@@ -26,7 +26,10 @@ const IST_OFFSET_MIN = 330;          // Asia/Kolkata, no DST — safe as a const
 const MINUTES_PER_DAY = 1440;
 const MS_PER_DAY = 86400000;
 
-export const LIVE_SHOWS = {
+/* The shows as coded. LIVE_SHOWS is these with the admin's changes on top
+   (utils/liveConfig: switched off, other times, another channel, a new
+   show), and is what everything reads. */
+export const BASE_LIVE_SHOWS = {
   "bigg-boss-kannada-13": {
     slug: "bigg-boss-kannada-13",
     name: "Bigg Boss Kannada 13",
@@ -50,6 +53,7 @@ export const LIVE_SHOWS = {
     epochEpisode: 2,
   },
 };
+export const LIVE_SHOWS = JSON.parse(JSON.stringify(BASE_LIVE_SHOWS));
 
 /* Accepts a slug or any movie-ish object, so callers don't have to unwrap. */
 export const getLiveShow = (movieOrSlug) => {
@@ -152,7 +156,10 @@ export const useLiveClock = (intervalMs = 20000) => {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), intervalMs);
-    return () => clearInterval(id);
+    // The admin's schedule arriving changes what is live, as the clock does.
+    const onConfig = () => setNow(new Date());
+    window.addEventListener("anchor-live-config", onConfig);
+    return () => { clearInterval(id); window.removeEventListener("anchor-live-config", onConfig); };
   }, [intervalMs]);
   return now;
 };
