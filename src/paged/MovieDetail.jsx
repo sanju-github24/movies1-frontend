@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { personLink } from "../utils/person";
 import { absUrl, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo";
 import { displayTitle } from "../utils/cleanTitle";
 import { supabase } from "../utils/supabaseClient";
@@ -402,17 +403,17 @@ const MovieDetail = () => {
           <h2 className="text-2xl font-bold text-white mb-5">Actors</h2>
           <div className="flex gap-5 overflow-x-auto pb-3 -mx-1 px-1">
             {cast.map((c) => (
-              <div key={`${c.name}-${c.character || ""}`} className="shrink-0 w-28 text-center">
-                <div className="w-28 h-28 rounded-full overflow-hidden bg-white/5 border border-white/10 mb-2">
+              <Link key={`${c.name}-${c.character || ""}`} to={personLink(c) || "#"} title={`${c.name} — see their movies`} className="group shrink-0 w-28 text-center">
+                <div className="w-28 h-28 rounded-full overflow-hidden bg-white/5 border border-white/10 group-hover:border-white/40 transition-colors mb-2">
                   {c.profile_url
                     ? <img src={c.profile_url} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
                     : <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
                         {c.name.charAt(0)}
                       </div>}
                 </div>
-                <div className="text-xs font-semibold text-white truncate">{c.name}</div>
+                <div className="text-xs font-semibold text-white group-hover:text-blue-300 transition-colors truncate">{c.name}</div>
                 {c.character && <div className="text-[11px] text-gray-500 truncate">{c.character}</div>}
-              </div>
+              </Link>
             ))}
           </div>
         </section>

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useContext, useCallback, useMemo, useRef } from "react";
 import VideoPlayer from "./VideoPlayer";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
+import { personLink } from "../utils/person";
 import { supabase } from "../utils/supabaseClient";
 import { saveProgress, getResumeTime, readOne, readContinueList, removeProgress, progressPercent, timeLeft, hasNextEpisode } from "../utils/continueWatching";
 import { AppContext } from "../context/AppContext";
@@ -1982,7 +1983,7 @@ if (!alive) return;
                     {(tmdbMeta?.cast || []).length > 0 ? (
                       <div className="grid grid-cols-3 gap-3">
                         {tmdbMeta.cast.slice(0, 18).map((actor, i) => (
-                          <div key={i} className="group flex flex-col items-center gap-2 text-center">
+                          <Link key={i} to={personLink(actor) || "#"} className="group flex flex-col items-center gap-2 text-center">
                             <div className="w-full aspect-square rounded-xl overflow-hidden border border-white/5 group-hover:border-blue-500/30 transition-all bg-white/5">
                               <img
                                 src={actor.profile_path ? `https://image.tmdb.org/t/p/w185${actor.profile_path}` : "/default-avatar.jpg"}
@@ -1993,7 +1994,7 @@ if (!alive) return;
                             </div>
                             <span className="text-[9px] font-bold text-gray-500 group-hover:text-blue-400 transition-colors leading-tight line-clamp-2 uppercase tracking-tight">{actor.name}</span>
                             {actor.character && <span className="text-[8px] text-gray-700 line-clamp-1 w-full">{actor.character}</span>}
-                          </div>
+                          </Link>
                         ))}
                       </div>
                     ) : (
@@ -2551,7 +2552,7 @@ if (!alive) return;
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {tmdbMeta.cast.slice(0, 12).map((actor, i) => (
-                <div key={i} className="group w-[76px] sm:w-[92px] shrink-0 text-center">
+                <Link key={i} to={personLink(actor) || "#"} title={`${actor.name} — see their movies`} className="group block w-[76px] sm:w-[92px] shrink-0 text-center">
                   <div className="mx-auto w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] rounded-full overflow-hidden bg-white/[0.03] border border-white/[0.08] group-hover:border-blue-500/40 transition-colors">
                     <img
                       src={actor.profile_url || (actor.profile_path ? `https://image.tmdb.org/t/p/w300${actor.profile_path}` : "/default-avatar.jpg")}
@@ -2561,11 +2562,11 @@ if (!alive) return;
                       onError={e => { e.target.onerror = null; e.target.src = "/default-avatar.jpg"; }}
                     />
                   </div>
-                  <p className="mt-2 text-[11px] font-bold text-white leading-tight line-clamp-2">{actor.name}</p>
+                  <p className="mt-2 text-[11px] font-bold text-white group-hover:text-blue-300 transition-colors leading-tight line-clamp-2">{actor.name}</p>
                   {actor.character && (
                     <p className="mt-0.5 text-[10px] text-gray-500 leading-tight line-clamp-1">{actor.character}</p>
                   )}
-                </div>
+                </Link>
               ))}
             </div>
           </div>
