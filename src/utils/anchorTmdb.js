@@ -263,21 +263,27 @@ const india4movies = (o) => async () => {
   return out.length ? out : null;
 };
 
-/* India4Movies and HDHub4u, in the order this title deserves. Both are
-   multi-audio MKV sites, but not equally for every film: 418 is a Telugu-
-   only post on India4Movies and one five-language file on HDHub4u. So both
-   are asked together (each capped, so neither holds back the sources after
-   them) and the one offering more languages goes first; on a tie,
-   India4Movies — it is the more often multi-audio of the two. Two slots of
-   the provider list, sharing one lookup. */
+/* India4Movies, HDHub4u and 1TamilMV, in the order this title deserves.
+   All three are MKV sites whose multi-audio files the relay opens a language
+   at a time, but not equally rich for every film: 418 is a Telugu-only post
+   on India4Movies and one five-language file on HDHub4u. So all three are
+   asked together (each capped, so none holds back the sources after them)
+   and the one offering the most languages goes first, the rest after it in
+   the same way; on a tie, India4Movies, then HDHub4u, then 1TamilMV. Three
+   slots of the provider list, sharing one lookup. */
 const langCount = (list) => new Set((list || []).map((c) => c.lang).filter(Boolean)).size;
+const tamilmv = (o) => async () => {
+  if (!o.backendUrl || !MKV_OK()) return null;           // MKV: not on Safari/iPhone
+  const { out } = await tamilmvFiles(o);
+  return out.length ? out.map((c) => ({ ...c, own: true, file: true })) : null;
+};
 const byLanguages = (o) => {
-  let both = null;
-  const ranked = () => both || (both = Promise.all([
-    withTimeout(Promise.resolve().then(india4movies(o)).catch(() => null), 25000),
-    withTimeout(Promise.resolve().then(hdhub4u(o)).catch(() => null), 20000),
-  ]).then(([i4m, hd]) => (langCount(hd) > langCount(i4m) ? [hd, i4m] : [i4m, hd])));
-  return [() => ranked().then((r) => r[0]), () => ranked().then((r) => r[1])];
+  let all = null;
+  const ask = (provider, ms) => withTimeout(Promise.resolve().then(provider(o)).catch(() => null), ms);
+  const ranked = () => all || (all = Promise.all([ask(india4movies, 25000), ask(hdhub4u, 20000), ask(tamilmv, 25000)])
+    // Array.sort is stable, so a tie keeps the order asked in.
+    .then((lists) => lists.map((list, i) => ({ list, i })).sort((a, b) => langCount(b.list) - langCount(a.list) || a.i - b.i).map((x) => x.list)));
+  return [0, 1, 2].map((k) => () => ranked().then((r) => r[k]));
 };
 
 /* Each provider returns a candidate, a list of them, or null. In FilmU's own
@@ -291,19 +297,13 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   moviboxHls(o),               // MoviBox, all languages in one stream — always right after our own
-  ...byLanguages(o),           // then India4Movies and HDHub4u: whichever has more languages first
+  ...byLanguages(o),           // then India4Movies, HDHub4u and 1TamilMV: the most languages first
   singularity(o),
   ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
   scrape("Bastion", o),        // FilmU's, after those
   scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
   scrape("MeowTV", o),         // FilmU Hindi
   scrape("VidRock", o),        // Nova · Orion
-  // When none of the above has it: 1TamilMV's language posts.
-  async () => {
-    if (!o.backendUrl || !MKV_OK()) return null;           // MKV: not on Safari/iPhone
-    const { out } = await tamilmvFiles(o);
-    return out.length ? out.map((c) => ({ ...c, own: true, file: true })) : null;
-  },
 ];
 
 
