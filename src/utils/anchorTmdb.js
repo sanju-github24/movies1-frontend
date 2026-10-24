@@ -263,6 +263,23 @@ const india4movies = (o) => async () => {
   return out.length ? out : null;
 };
 
+/* India4Movies and HDHub4u, in the order this title deserves. Both are
+   multi-audio MKV sites, but not equally for every film: 418 is a Telugu-
+   only post on India4Movies and one five-language file on HDHub4u. So both
+   are asked together (each capped, so neither holds back the sources after
+   them) and the one offering more languages goes first; on a tie,
+   India4Movies — it is the more often multi-audio of the two. Two slots of
+   the provider list, sharing one lookup. */
+const langCount = (list) => new Set((list || []).map((c) => c.lang).filter(Boolean)).size;
+const byLanguages = (o) => {
+  let both = null;
+  const ranked = () => both || (both = Promise.all([
+    withTimeout(Promise.resolve().then(india4movies(o)).catch(() => null), 25000),
+    withTimeout(Promise.resolve().then(hdhub4u(o)).catch(() => null), 20000),
+  ]).then(([i4m, hd]) => (langCount(hd) > langCount(i4m) ? [hd, i4m] : [i4m, hd])));
+  return [() => ranked().then((r) => r[0]), () => ranked().then((r) => r[1])];
+};
+
 /* Each provider returns a candidate, a list of them, or null. In FilmU's own
    order of preference: Singularity's masters carry the most languages; the
    extractors behind it are what FilmU's page falls back to. */
@@ -273,12 +290,8 @@ const providers = (o) => [
     const d = await getJson(`${o.backendUrl}/api/own-stream?${qs}`);
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
-  moviboxHls(o),               // MoviBox, all languages in one stream, straight off its CDN
-  /* Then India4Movies, then HDHub4u — multi-audio MKVs, a choice per
-     language. Capped, so a slow one cannot hold back every source after it
-     (they are taken in this order). */
-  () => withTimeout(india4movies(o)(), 25000),
-  () => withTimeout(hdhub4u(o)(), 20000),
+  moviboxHls(o),               // MoviBox, all languages in one stream — always right after our own
+  ...byLanguages(o),           // then India4Movies and HDHub4u: whichever has more languages first
   singularity(o),
   ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
   scrape("Bastion", o),        // FilmU's, after those
