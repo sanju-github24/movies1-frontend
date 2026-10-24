@@ -18,11 +18,13 @@ import { langCode, baseId, langName } from "./langs";
 
 const WORKER = "https://jtv-proxy.sanjusanjay0444.workers.dev/";
 
-/* The Mumbai function. SonyLiv and Hotstar refuse any address outside India
-   and FanCode refuses one outside India that is not a home connection; this
-   runs in India and, for the two that want more, borrows an Indian consumer
-   address. Cross-origin from here is fine — it answers with CORS. */
-export const PROXY = "https://m3u8-player-orcin.vercel.app/api/live-proxy";
+/* The live relay on the Delhi VPS (m3u8-player/live-relay). SonyLiv and
+   Hotstar refuse every datacenter, that one included, so it borrows Indian
+   home addresses — but it keeps them proven in the background and shares one
+   fetch between viewers, which the old Vercel function (Mumbai, cold-started,
+   hunting a proxy per request: ~20 s to a first playlist) could not. FanCode
+   it serves direct. Same ?url=&cookie=&ref=&ua= as before, with CORS. */
+export const PROXY = "https://live.1anchormovies.buzz/";
 
 const isDash = (u) => /\.mpd(\?|$)/i.test(String(u || ""));
 
