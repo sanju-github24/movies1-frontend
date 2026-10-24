@@ -52,6 +52,7 @@ import BackBar from './components/BackBar';
 import ScrollMemory from './components/ScrollMemory';
 import { loadLiveNow } from './utils/liveConfig';
 import AdminLiveNow from './paged/AdminLiveNow';
+import AdminSourceDomains from './paged/AdminSourceDomains';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -367,6 +368,7 @@ const AppContent = () => {
                 <Route path="up4stream"        element={<AdminUp4streamFiles />} />
                 <Route path="live-channels"    element={<LiveChannelsUpload />} />
                 <Route path="live-now"         element={<AdminLiveNow />} />
+                <Route path="source-domains"   element={<AdminSourceDomains />} />
               </Routes>
             </ProtectedAdminRoute>
           }

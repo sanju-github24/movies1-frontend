@@ -15,6 +15,7 @@ import {
   UserCircle,
   LogOut,
   Tv, // Used for the Live Match Upload page
+  Globe,
 } from "lucide-react"; // Using lucide-react for modern icons
 
 // --- Sidebar Navigation Data ---
@@ -39,6 +40,11 @@ const ADMIN_LINKS = [
     path: "/admin/live-now",
     icon: Tv,
     label: "Live Now",
+  },
+  {
+    path: "/admin/source-domains",
+    icon: Globe,
+    label: "Source Domains",
   },
   {
     path: "/admin/upload-watch-html",
