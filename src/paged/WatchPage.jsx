@@ -26,7 +26,8 @@ import MoviboxFrame from "../components/MoviboxFrame";
 import LiveViewer from "../components/LiveViewer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
-  Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause
+  Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause,
+  Search, LayoutList, LayoutGrid, ArrowDownNarrowWide, ArrowUpNarrowWide
 } from "lucide-react";
 
 /* ===== Safe URI ===== */
@@ -512,6 +513,12 @@ const WatchHtmlPage = () => {
   const [activeServer,      setActiveServer     ] = useState(null);
   const [activeSeason,      setActiveSeason     ] = useState("S1");
   const [openDropdown,      setOpenDropdown     ] = useState(null);
+  // Episode list tools: a search, oldest/newest first, and list or grid —
+  // the view remembered per viewer.
+  const [epQuery,           setEpQuery          ] = useState("");
+  const [epSortDesc,        setEpSortDesc       ] = useState(false);
+  const [epView,            setEpViewState      ] = useState(() => { try { return localStorage.getItem("ep_view") === "grid" ? "grid" : "list"; } catch { return "list"; } });
+  const setEpView = (v) => { setEpViewState(v); try { localStorage.setItem("ep_view", v); } catch { /* private window */ } };
   const [imgLoaded,         setImgLoaded        ] = useState(false);
 
   const [showOverlay,       setShowOverlay      ] = useState(false);
@@ -2403,91 +2410,46 @@ if (!alive) return;
           </div>
         )}
 
-        {/* Episodes */}
-        {episodes.length > 0 && (
-          <div className="space-y-6 scroll-mt-24" id="episodes-section">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/10"><List size={18} className="text-blue-400"/></div>
-              <div>
-                <h2 className="text-base font-black uppercase tracking-[0.15em] text-white">Episodes</h2>
-                <p className="text-[10px] text-gray-600 font-bold">{episodes.length} episodes available</p>
-              </div>
-            </div>
-
-            {/* Season tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
-              {Object.keys(groupedEpisodes).map(sk => (
-                <button key={sk} onClick={() => setActiveSeason(sk)}
-                  className={`shrink-0 px-5 py-2.5 min-h-[40px] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border touch-manipulation
-                    ${activeSeason === sk ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" : "bg-white/[0.03] text-gray-500 border-white/5 hover:text-gray-300 hover:border-white/10"}`}>
-                  {groupedEpisodes[sk].name}
-                </button>
-              ))}
-            </div>
-
-            {/* Episode grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {groupedEpisodes[activeSeason]?.episodes?.map((ep, i) => (
-                <div key={i} className="relative">
-                  <div onClick={() => {
-                    if (openDropdown === i) { setOpenDropdown(null); return; }
-                    // AnchorMB chosen: every episode plays there, in whichever language.
-                    if (activeServer?.id === "movibox" || activeServer?.id === "tamilmv") { handlePlayAction(ep, activeServer.id); return; }
-                    // Priority: AnchorHD (our own HLS) → Multi Audio (embed) → Mirchi → Omega
-                    // Play immediately without showing the server list whenever possible.
-                    if (ep.hasDirect) {
-                      // Our own HLS/direct stream — best quality, play straight away.
-                      handlePlayAction(ep, "ourhls"); return;
-                    }
-                    if (ep.hasEmbed) {
-                      // Our uploaded embed mirror (Multi Audio).
-                      handlePlayAction(ep, "embed"); return;
-                    }
-                    // Not uploaded — AnchorHD still plays it in our player by
-                    // TMDB id; Omega (imdb or tmdb) when there is no TMDB id.
-                    if (movieMeta?.tmdb_id) {
-                      handlePlayAction(ep, "ourhls"); return;
-                    }
-                    handlePlayAction(ep, "imdb_reader"); // Omega
-                  }}
-                    className={`group flex gap-4 p-4 rounded-2xl border transition-all cursor-pointer touch-manipulation active:scale-[0.99]
-                      ${openDropdown === i ? "bg-blue-600/5 border-blue-500/20" : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04] hover:border-white/10"}`}>
-                    <div className={`relative shrink-0 w-28 sm:w-36 aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/5 flex items-center justify-center transition-all ${openDropdown === i ? "border-blue-500/30" : ""}`}>
-                      {(ep.thumbnail || ep.still_path) && (
-                        <img
-                          src={ep.thumbnail || (ep.still_path?.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`)}
-                          alt={ep.title || ep.name || ""}
-                          className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
-                          onError={e => { e.target.style.display = "none"; }}
-                        />
-                      )}
-                      <div className={`relative z-10 p-2.5 rounded-xl transition-all
-                        ${openDropdown === i
-                          ? "bg-blue-600 text-white"
-                          : (ep.thumbnail || ep.still_path)
-                            ? "bg-black/50 backdrop-blur-sm text-white"
-                            : "bg-white/10 text-gray-400 group-hover:bg-white/20"}`}>
-                        <Play size={16} fill="currentColor"/>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <p className="text-[9px] font-black uppercase text-blue-500 tracking-[0.15em] mb-1.5">S{ep.season} · E{ep.episodeNumberInSeason}</p>
-                      <h4 className="text-sm font-bold text-white truncate mb-1">{ep.title || ep.name || `Episode ${ep.episodeNumberInSeason}`}</h4>
-                      {ep.air_date && (
-                        <p className="text-[9px] text-gray-700 font-bold uppercase tracking-wider mb-1">
-                          {new Date(ep.air_date).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}
-                        </p>
-                      )}
-                      {(ep.description || ep.overview) && <p className="text-[11px] text-gray-600 line-clamp-2 leading-relaxed">{ep.description || ep.overview}</p>}
-                    </div>
-                    <div className="shrink-0 self-center p-2 -m-2">
-                      <ChevronDown size={16} className={`text-gray-600 transition-transform ${openDropdown === i ? "rotate-180 text-blue-400" : ""}`}/>
-                    </div>
-                  </div>
-
-                  {openDropdown === i && (
-                    <div className="mt-2 p-3 rounded-2xl bg-[#0a0a0d] border border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-2">
-                     {[
+        {/* Episodes — a list (thumbnail, number, title, synopsis) or a grid, with a
+            season picker, a search, and oldest/newest first. Clicking an episode
+            plays it as before; the ⌄ beside it opens every server for it, and
+            the arrow opens the downloads. The view is remembered per viewer. */}
+        {episodes.length > 0 && (() => {
+          const season = groupedEpisodes[activeSeason] || Object.values(groupedEpisodes)[0];
+          const q = epQuery.trim().toLowerCase();
+          const shown = (season?.episodes || [])
+            .filter((ep) => !q || String(ep.episodeNumberInSeason) === q
+              || `${ep.title || ep.name || ""} ${ep.description || ep.overview || ""}`.toLowerCase().includes(q))
+            .slice().sort((a, b) => (epSortDesc ? -1 : 1) * ((a.episodeNumberInSeason || 0) - (b.episodeNumberInSeason || 0)));
+          const keyOf = (ep) => `${ep.season || 1}-${ep.episodeNumberInSeason || ep.episode}`;
+          const thumbOf = (ep) => ep.thumbnail || (ep.still_path ? (ep.still_path.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`) : null);
+          const upcoming = (ep) => ep.air_date && new Date(ep.air_date) > new Date();
+          const hidden = (ep) => spoilerProtection && upcoming(ep);
+          const play = (ep) => {
+            setOpenDropdown(null);
+            // AnchorMB chosen: every episode plays there, in whichever language.
+            if (activeServer?.id === "movibox" || activeServer?.id === "tamilmv") { handlePlayAction(ep, activeServer.id); return; }
+            // Priority: AnchorHD (our own HLS) → Multi Audio (embed) → AnchorHD by TMDB id → Omega.
+            if (ep.hasDirect) { handlePlayAction(ep, "ourhls"); return; }
+            if (ep.hasEmbed) { handlePlayAction(ep, "embed"); return; }
+            if (movieMeta?.tmdb_id) { handlePlayAction(ep, "ourhls"); return; }
+            handlePlayAction(ep, "imdb_reader"); // Omega
+          };
+          const serverPicker = (ep) => {
+            const cc = {
+                          green: "bg-green-500/10 text-green-400 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/15",
+                          yellow:"bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:border-yellow-500/40 hover:bg-yellow-500/15",
+                          indigo:"bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/40 hover:bg-indigo-500/15",
+                          rose:  "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/15",
+                          purple:"bg-purple-500/10 text-purple-400 border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/15",
+                          blue:  "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15",
+                          cyan:  "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/15",
+                          orange:"bg-orange-500/10 text-orange-400 border-orange-500/20 hover:border-orange-500/40 hover:bg-orange-500/15",
+                          pink:  "bg-pink-500/10 text-pink-400 border-pink-500/20 hover:border-pink-500/40 hover:bg-pink-500/15",
+                        };
+            return (
+              <div className="mt-2 p-3 rounded-2xl bg-[#0a0a0d] border border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
                         ...(ep.hasDirect || movieMeta.tmdb_id ? [{ id:"ourhls", label:"AnchorHD", color:"green" }] : []),
                         ...(movieMeta.mx_web_url || movieMeta.mx_id ? [{ id:"mx", label:"MX Player", color:"green" }] : []),
                         { id:"imdb_reader", label:"Omega",      color:"yellow" },
@@ -2499,36 +2461,139 @@ if (!alive) return;
                         { id:"tmdb",        label:"Alpha",      color:"blue"   },
                         { id:"2embed",      label:"Prime",      color:"orange" },
                         { id:"modiplay",    label:"Nova",       color:"pink"   },
-                      ].filter(srv => {
-                        // Hide embed server button if this episode has no html embed
-                        if (srv.id === "embed") return !!(ep.html || ep.html_code);
-                        return true;
-                      }).map(srv => {
-                        const cc = {
-                          green: "bg-green-500/10 text-green-400 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/15",
-                          yellow:"bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:border-yellow-500/40 hover:bg-yellow-500/15",
-                          indigo:"bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/40 hover:bg-indigo-500/15",
-                          rose:  "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/15",
-                          purple:"bg-purple-500/10 text-purple-400 border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/15",
-                          blue:  "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15",
-                          cyan:  "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/15",
-                          orange:"bg-orange-500/10 text-orange-400 border-orange-500/20 hover:border-orange-500/40 hover:bg-orange-500/15",
-                          pink:  "bg-pink-500/10 text-pink-400 border-pink-500/20 hover:border-pink-500/40 hover:bg-pink-500/15",
-                        };
-                        return (
-                          <button key={srv.id} onClick={() => handlePlayAction(ep, srv.id)}
-                            className={`py-3 px-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation ${cc[srv.color]}`}>
-                            {srv.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
+                ].filter((srv) => srv.id !== "embed" || !!(ep.html || ep.html_code)).map((srv) => (
+                  <button key={srv.id} onClick={() => handlePlayAction(ep, srv.id)}
+                    className={`py-3 px-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation ${cc[srv.color]}`}>
+                    {srv.label}
+                  </button>
+                ))}
+              </div>
+            );
+          };
+          const thumb = (ep, className = "") => (
+            <div className={`relative shrink-0 aspect-video rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10 ${className}`}>
+              {thumbOf(ep) && (
+                <img src={thumbOf(ep)} alt="" loading="lazy"
+                  className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${hidden(ep) ? "blur-md scale-110" : ""}`}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }} />
+              )}
+              <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                <span className="p-2.5 rounded-full bg-white/90 text-black"><Play size={16} fill="currentColor" /></span>
+              </span>
+              <span className="absolute left-2 bottom-2 min-w-[26px] h-[26px] px-1.5 rounded-md bg-black/80 text-white text-[13px] font-bold flex items-center justify-center">
+                {ep.episodeNumberInSeason}
+              </span>
             </div>
+          );
+          const actions = (ep, k) => (
+            <div className="flex items-center gap-1 shrink-0">
+              {hasDownloads && (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setShowDownloads(true); }} aria-label="Downloads" title="Download"
+                  className="p-2.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><Download size={18} /></button>
+              )}
+              <button type="button" onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === k ? null : k); }}
+                aria-label="All servers for this episode" title="All servers"
+                className={`p-2.5 rounded-full transition-colors ${openDropdown === k ? "text-blue-400 bg-blue-500/10" : "text-gray-400 hover:text-white hover:bg-white/10"}`}>
+                <ChevronDown size={18} className={`transition-transform ${openDropdown === k ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+          );
+          const synopsis = (ep) => hidden(ep)
+            ? `Coming ${new Date(ep.air_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : (ep.description || ep.overview || "");
+
+          return (
+          <div className="space-y-5 scroll-mt-24" id="episodes-section">
+            <div className="flex items-baseline gap-3">
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">Episodes</h2>
+              <span className="text-sm text-gray-500">{episodes.length}</span>
+            </div>
+
+            {/* Season · search · sort · list/grid */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="relative">
+                <select value={activeSeason} onChange={(e) => { setActiveSeason(e.target.value); setOpenDropdown(null); }}
+                  aria-label="Season"
+                  className="appearance-none h-11 pl-4 pr-10 rounded-xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-white/30 cursor-pointer">
+                  {Object.keys(groupedEpisodes).map((sk) => (
+                    <option key={sk} value={sk} className="bg-gray-900">{groupedEpisodes[sk].name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              </div>
+              <label className="relative flex-1 min-w-[160px] max-w-md order-last sm:order-none basis-full sm:basis-auto">
+                <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input value={epQuery} onChange={(e) => setEpQuery(e.target.value)} placeholder="Search episode..."
+                  className="w-full h-11 pl-10 pr-3 rounded-xl bg-white/[0.04] border border-white/10 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30" />
+              </label>
+              <button type="button" onClick={() => setEpSortDesc((d) => !d)} aria-label={epSortDesc ? "Newest first" : "Oldest first"}
+                title={epSortDesc ? "Newest first" : "Oldest first"}
+                className="h-11 w-11 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/10 text-gray-300 hover:text-white">
+                {epSortDesc ? <ArrowUpNarrowWide size={18} /> : <ArrowDownNarrowWide size={18} />}
+              </button>
+              <div className="flex h-11 p-1 rounded-xl bg-white/[0.04] border border-white/10">
+                {[["list", LayoutList, "List"], ["grid", LayoutGrid, "Grid"]].map(([v, Icon, label]) => (
+                  <button key={v} type="button" onClick={() => setEpView(v)} aria-label={label} aria-pressed={epView === v}
+                    className={`w-10 flex items-center justify-center rounded-lg transition-colors ${epView === v ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-200"}`}>
+                    <Icon size={17} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {shown.length === 0 && <p className="text-sm text-gray-500 py-6">No episode matches “{epQuery}”.</p>}
+
+            {epView === "list" ? (
+              <div className="space-y-3">
+                {shown.map((ep) => {
+                  const k = keyOf(ep);
+                  return (
+                    <div key={k}>
+                      <div onClick={() => play(ep)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") play(ep); }}
+                        className={`group flex items-center gap-3 sm:gap-5 p-2.5 sm:p-3 rounded-2xl border cursor-pointer transition-colors touch-manipulation
+                          ${openDropdown === k ? "bg-white/[0.05] border-white/15" : "bg-white/[0.02] border-white/[0.07] hover:bg-white/[0.05] hover:border-white/15"}`}>
+                        {thumb(ep, "w-32 sm:w-52 md:w-60")}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-[15px] sm:text-lg font-semibold text-white line-clamp-1">{ep.title || ep.name || `Episode ${ep.episodeNumberInSeason}`}</h4>
+                          {ep.air_date && !hidden(ep) && (
+                            <p className="text-[11px] text-gray-500 mt-0.5">{new Date(ep.air_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{ep.runtime ? ` · ${ep.runtime} min` : ""}</p>
+                          )}
+                          {synopsis(ep) && <p className="mt-1 sm:mt-2 text-[12px] sm:text-[15px] text-gray-400 leading-relaxed line-clamp-2">{synopsis(ep)}</p>}
+                        </div>
+                        {actions(ep, k)}
+                      </div>
+                      {openDropdown === k && serverPicker(ep)}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-4 gap-y-6">
+                {shown.map((ep) => {
+                  const k = keyOf(ep);
+                  return (
+                    <div key={k} className="min-w-0">
+                      <div onClick={() => play(ep)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") play(ep); }} className="group cursor-pointer">
+                        {thumb(ep, "w-full")}
+                        <div className="flex items-start gap-2 mt-2.5">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[15px] font-semibold text-white line-clamp-1">{ep.title || ep.name || `Episode ${ep.episodeNumberInSeason}`}</h4>
+                            {synopsis(ep) && <p className="mt-1 text-[13px] text-gray-400 leading-relaxed line-clamp-2">{synopsis(ep)}</p>}
+                          </div>
+                          {actions(ep, k)}
+                        </div>
+                      </div>
+                      {openDropdown === k && serverPicker(ep)}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Top Cast ──
              The genre/origin strip and the second copy of the server grid used
