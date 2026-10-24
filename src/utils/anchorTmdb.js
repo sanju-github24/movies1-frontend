@@ -391,7 +391,9 @@ export async function mkvLanguages(link, label = "AnchorHD", quality = "", { ori
    relay. /api/hdhub/play finds the file's current link on its file servers
    each time it is opened. x264 only — HEVC and remux labels are left out
    before anything is asked, and the track list has the last word. */
-const HD_RANK = { "2160p": 4, "1080p": 3, "720p": 2, "540p": 1, "480p": 1 };
+/* 720p first: half 1080p's bitrate, so it keeps ahead on a file server
+   having a slow minute. 1080p is still in the quality menu. */
+const HD_RANK = { "720p": 4, "1080p": 3, "540p": 2, "480p": 1 };
 const hdhub4u = (o) => async () => {
   if (!o.backendUrl || !RELAY || !o.title || o.type === "tv" || !MKV_OK()) return null;
   const qs = new URLSearchParams({ q: o.title, year: o.year || "", ...(o.imdbId ? { imdb: o.imdbId } : {}) });
