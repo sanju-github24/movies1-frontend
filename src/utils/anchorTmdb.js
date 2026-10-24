@@ -253,6 +253,7 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   moviboxHls(o),               // MoviBox, all languages in one stream, straight off its CDN
+  hdhub4u(o),                  // HDHub4u's multi-audio MKVs, a choice per language (after MoviBox)
   singularity(o),
   ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
   scrape("Bastion", o),        // FilmU's, after those
@@ -301,9 +302,9 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((res) => setTimeout(
  * checked together and the richest master goes first.
  *   { url, name } — url is ready for hls.js (worker-wrapped where needed)
  */
-export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
+export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season = 1, episode = 1, title = "", year = "", original = "", backendUrl }) {
   const seen = new Set();
-  const o = { tmdbId, imdbId: /^tt\d+$/.test(imdbId || "") ? imdbId : "", type, season, episode, title, year: String(year || "").slice(0, 4), backendUrl };
+  const o = { tmdbId, imdbId: /^tt\d+$/.test(imdbId || "") ? imdbId : "", type, season, episode, title, year: String(year || "").slice(0, 4), original, backendUrl };
   /* All asked at once, taken in order. One after another, their round trips
      added up before the player had anything; now the wait is only as long as
      the slowest provider ahead of the one that answers. */
@@ -346,6 +347,66 @@ export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, epis
    Named "1TamilMV • Tamil 720p", so the player's language menu offers them,
    and a switch carries on from the same second. The link behind each is
    found when it plays (/api/fresh/play redirects to it): they last hours. */
+/* ── A multi-audio MKV, one choice per language ─────────────────────────
+   A browser plays an MKV's first audio track and nothing else. The download
+   relay can serve the same file with any one of its tracks as the only audio
+   (?a=k — it edits a byte per track in the header, nothing is converted), so
+   a five-language file becomes five choices in the player's language menu,
+   named "<label> • Tamil 720p", and a switch carries on from the same second.
+   null when the file has fewer than two named languages, or no relay is set. */
+const MKV_LANG = { hi: "Hindi", hin: "Hindi", te: "Telugu", tel: "Telugu", ta: "Tamil", tam: "Tamil",
+  ml: "Malayalam", mal: "Malayalam", kn: "Kannada", kan: "Kannada", en: "English", eng: "English",
+  bn: "Bengali", ben: "Bengali", mr: "Marathi", mar: "Marathi", pa: "Punjabi", pan: "Punjabi",
+  gu: "Gujarati", guj: "Gujarati", ur: "Urdu", urd: "Urdu", or: "Odia", ori: "Odia", ory: "Odia" };
+export const isMkvLink = (u) => { try { return /\.mkv$/i.test(new URL(u).pathname); } catch { return false; } };
+/* What a browser decodes. A file's Dolby (AC3 / E-AC3 / TrueHD) or DTS
+   tracks play silent — 1TamilMV's Moana 1080p carries its Tamil, Telugu and
+   Hindi as E-AC3 and only its English as AAC — so those are not offered; and
+   HEVC video plays on few devices, so such a file is skipped altogether. */
+const PLAYABLE_AUDIO = /^A_(AAC|OPUS|VORBIS|MPEG\/L3|FLAC)/i;
+/* opts: quality ("720p", else read from the link), original (the title's
+   ISO 639-1 language, e.g. "ta" — that track is named "(original)" and
+   listed first, as MoviBox's are), min (fewest languages worth listing). */
+export async function mkvLanguages(link, label = "AnchorHD", quality = "", { original = "", min = 2 } = {}) {
+  if (!RELAY || !link) return null;
+  const d = await getJson(`${RELAY}?u=${encodeURIComponent(link)}&play=1&tracks=1`, 20000).catch(() => null);
+  if ((d?.video || []).some((c) => /HEVC|MPEGH|V_AV1/i.test(c))) return null;
+  const q = quality || (decodeURIComponent(link).match(/\b(2160|1080|720|576|480)p\b/i) || [])[0] || "";
+  const orig = MKV_LANG[String(original || "").toLowerCase()] || "";
+  const seen = new Set();
+  const out = (d?.audio || []).map((t) => {
+    if (!PLAYABLE_AUDIO.test(t.codec || "")) return null;
+    const lang = MKV_LANG[String(t.lang || "").toLowerCase().split("-")[0]];
+    if (!lang || seen.has(lang)) return null;
+    seen.add(lang);
+    return { name: `${label} • ${lang}${q ? ` ${q}` : ""}${lang === orig ? " (original)" : ""}`,
+      url: `${RELAY}?u=${encodeURIComponent(link)}&play=1&a=${t.a}`, lang, original: lang === orig };
+  }).filter(Boolean).sort((a, b) => Number(b.original) - Number(a.original));
+  return out.length >= min ? out : null;
+}
+
+/* HDHub4u's files, in AnchorHD after MoviBox: its posts are one MKV per
+   quality with every language inside ("418 (2026) [Hindi-Telugu-Tamil-
+   Malay-Kannada]"), so each file becomes a choice per language through the
+   relay. /api/hdhub/play finds the file's current link on its file servers
+   each time it is opened. x264 only — HEVC and remux labels are left out
+   before anything is asked, and the track list has the last word. */
+const HD_RANK = { "2160p": 4, "1080p": 3, "720p": 2, "540p": 1, "480p": 1 };
+const hdhub4u = (o) => async () => {
+  if (!o.backendUrl || !RELAY || !o.title || o.type === "tv" || !MKV_OK()) return null;
+  const qs = new URLSearchParams({ q: o.title, year: o.year || "", ...(o.imdbId ? { imdb: o.imdbId } : {}) });
+  const d = await getJson(`${o.backendUrl}/api/hdhub/files?${qs}`, 30000);
+  const files = (d?.files || [])
+    .filter((f) => !f.series && f.links?.[0]?.url && !/HEVC|x265|10\s*bit|HQ-?Rip|REMUX|\b4K\b|2160p/i.test(f.label || ""))
+    .sort((a, b) => (HD_RANK[b.quality] || 0) - (HD_RANK[a.quality] || 0))
+    .slice(0, 3);
+  const lists = await Promise.all(files.map((f) => mkvLanguages(
+    `${o.backendUrl}/api/hdhub/play?link=${encodeURIComponent(f.links[0].url)}`, "HDHub4u", f.quality || "",
+    { original: o.original, min: 1 }).catch(() => null)));
+  const out = lists.flatMap((l) => l || []);
+  return out.length ? out.map((c) => ({ ...c, own: true, file: true })) : null;
+};
+
 const MKV_OK = () => {
   try { return !!document.createElement("video").canPlayType('video/x-matroska; codecs="avc1.64001f, mp4a.40.2"'); }
   catch { return false; }
@@ -356,7 +417,7 @@ const I4M_WAIT = 8000;
 /* 1TamilMV's playable files for a title (or the one episode picked), one
    per language and quality: { out: [{ name, url, lang }], covered } —
    covered being the languages it has. Shared by AnchorTMV and AnchorHD. */
-async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
+async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", original = "", backendUrl }) {
   const { releaseLabel } = await import("../components/TamilmvDownloads.jsx");
   const qs = new URLSearchParams({ tmdb: `${type === "tv" ? "tv" : "movie"}:${tmdbId}`, title: title || "", year: String(year || "") });
   const d = await getJson(`${backendUrl}/api/fresh/files?${qs}`, 60000).catch(() => null);
@@ -364,7 +425,12 @@ async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, t
     && /\bAAC\b/i.test(n) && !/\bDD\+?|\bAC-?3\b|ATMOS|\bDTS\b|EAC3|E-AC-3/i.test(n);
   const CAM = /PreDVD|PreHD|HDTC|HDTS|HDCAM|DVDScr/i;
   const rank = { "2160p": 4, "1080p": 3, "720p": 2, "480p": 1 };
-  const files = (d?.files || []).filter((f) => f.direct && playable(f.name)).map((f) => {
+  /* A multi-language file's name often leaves its audio out ("[Tam + Tel +
+     Hin] - HQ Clean"); its real track list is read below, so only its video
+     is judged by name. */
+  const videoOk = (n) => /\b(x264|AVC|H\.?264)\b/i.test(n) && !/\b(HEVC|x265|H\.?265|10\s*bit)\b/i.test(n);
+  const multiName = (n) => /\[[^\]]*\+[^\]]*\]/.test(n);
+  const files = (d?.files || []).filter((f) => f.direct && (playable(f.name) || (RELAY && multiName(f.name) && videoOk(f.name)))).map((f) => {
     const l = releaseLabel(f.name);
     const m = l.episode.match(/^S(\d+) EP(\d+)$/);   // a single episode, not a range
     return { f, l, se: m ? Number(m[1]) : 0, ep: m ? Number(m[2]) : 0 };
@@ -386,15 +452,32 @@ async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, t
       url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}`, lang });
   };
   files.filter((x) => x.l.langs.length === 1).forEach((x) => take(x, x.l.langs[0]));
-  files.filter((x) => x.l.langs.length > 1 && !covered.has(x.l.langs[0])).forEach((x) => take(x, x.l.langs[0]));
+  /* A multi-language file: each of its languages no single file covers, as
+     its own choice — the relay serves it with that track as the audio. Its
+     real track list decides, not the release name. If the relay cannot read
+     it, the file still plays its first language, as before. */
+  const multi = files.filter((x) => x.l.langs.length > 1 && x.l.langs.some((l) => !covered.has(l))).slice(0, 4);
+  const expanded = await Promise.all(multi.map((x) => mkvLanguages(
+    `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}`, "1TamilMV", x.f.quality || "", { original, min: 1 }).catch(() => null)));
+  multi.forEach((x, i) => {
+    const langs = expanded[i];
+    if (!langs) { if (!covered.has(x.l.langs[0]) && playable(x.f.name)) take(x, x.l.langs[0]); return; }
+    for (const c of langs) {
+      if (CAM.test(x.l.print) && cleanLangs.has(c.lang)) continue;
+      const k = `${c.lang}|${x.f.quality || "480p"}`;
+      if (seen.has(k)) continue;
+      seen.add(k); covered.add(c.lang);
+      out.push({ ...c, name: `${c.name}${x.l.print ? ` · ${x.l.print}` : ""}` });
+    }
+  });
   return { out, covered };
 }
 
-export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", backendUrl }) {
+export async function* tamilmvStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", year = "", original = "", backendUrl }) {
   if (!backendUrl || !MKV_OK()) return;
   // India4Movies' language posts are asked beside, for a language 1TamilMV lacks.
   const i4m = india4movies({ type, season, episode, backendUrl, title, year: String(year || "").slice(0, 4) })().catch(() => null);
-  const { out, covered } = await tamilmvFiles({ tmdbId, type, season, episode, title, year, backendUrl });
+  const { out, covered } = await tamilmvFiles({ tmdbId, type, season, episode, title, year, original, backendUrl });
   /* Then India4Movies, for a language 1TamilMV does not have at all: every
      quality of it, in the same player. Waited for (a while) before anything
      plays, so the language bar the player shows on start, and the saved

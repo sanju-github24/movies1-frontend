@@ -13,7 +13,7 @@ import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveS
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
-import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv } from "../utils/anchorTmdb";
+import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv, isMkvLink, mkvLanguages } from "../utils/anchorTmdb";
 import { useRecommendations } from "../utils/recommendations";
 import { recordTrendingHit } from "../utils/trending";
 import { freshEntry } from "../utils/freshCatalog";
@@ -791,6 +791,20 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   // (m3u8) field or a Direct URL — both go through the same player (m3u8 via
   // hls.js, direct .mp4/.mkv natively). A full http(s)/blob link plays as-is;
   // an R2 path (movies/<slug>/master.m3u8) is signed via the backend.
+  /* A direct MKV with several audio tracks: one choice per language in the
+     player's menu, through the relay (see mkvLanguages), starting in the
+     viewer's language. Returns the URL to play, or null for any other link. */
+  const mkvChoices = useCallback(async (url) => {
+    if (!isMkvLink(url) || !canPlayMkv()) return null;
+    const langs = await mkvLanguages(url, "AnchorHD", "", { original: tmdbMeta?.original_language || movieMeta?.original_language || "" }).catch(() => null);
+    if (!langs) return null;
+    const want = String(preferredAudioLang || "").toLowerCase();
+    const at = Math.max(0, langs.findIndex((l) => want && l.lang.toLowerCase().startsWith(want.slice(0, 3))));
+    tmdbIterRef.current = { key: `mkv:${url}`, items: langs, at };
+    setTmdbSources(langs);
+    return langs[at].url;
+  }, [preferredAudioLang, tmdbMeta?.original_language, movieMeta?.original_language]);
+
   const playOurHls = useCallback(async (preferLink = null) => {
     const link = preferLink || movieMeta?.hls_url || movieMeta?.video_url;
     if (!link) return;
@@ -798,15 +812,16 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     try {
       const url = await resolveStreamLink(link);   // usually already signed on page load
       if (url) {
+        const multi = await mkvChoices(url);
         setResumeStart(getResumeTime(movieMeta.slug || routeSlug));   // resume movie
-        setFinalSource(maybeProxy(url));   // signed m3u8 / direct URL / proxied 3rd-party HLS
+        setFinalSource(multi || maybeProxy(url));   // signed m3u8 / direct URL / proxied 3rd-party HLS
         setSourceType("hls");
         setVideoTitle(movieMeta.title || routeSlug);
         setShowOverlay(true);
       }
     } catch { /* ignore — user can pick another server */ }
     setMxResolving(false);
-  }, [movieMeta, routeSlug, maybeProxy, resolveStreamLink]);
+  }, [movieMeta, routeSlug, maybeProxy, resolveStreamLink, mkvChoices]);
 
   /* ── Play one episode's stream link in our rich VideoPlayer (episode-wise). ── */
   /* Every play request takes a number; an async one that finishes after a
@@ -828,13 +843,15 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (!url) return false;
     setResumeStart(sameEp ? (saved.time || 0) : 0);
     setCurrentOverlayEp(ep);
-    setFinalSource(maybeProxy(url));    // proxy 3rd-party HLS; our own streams pass through
+    const multi = await mkvChoices(url);   // a multi-audio MKV: a choice per language
+    if (seq !== playSeqRef.current) return false;
+    setFinalSource(multi || maybeProxy(url));    // proxy 3rd-party HLS; our own streams pass through
     setSourceType("hls");               // → the rich VideoPlayer (with episode switcher)
     setVideoTitle(`${movieMeta?.title || routeSlug} — S${ep.season || 1}E${epNo || 1}`);
     setShowOverlay(true);
     prefetchRef.current?.(nextEpisodeRef.current?.(ep));   // the next one, ready when it is wanted
     return true;
-  }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy]);
+  }, [resolveStreamLink, movieMeta, routeSlug, maybeProxy, mkvChoices]);
 
   /* ── AnchorHD by TMDB id, for a title not on our CDN. The stream is found
      the way the StreamX player finds it (our CDN first, then FilmU's sources)
@@ -899,12 +916,14 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
         // FilmU's scrapers match on the bare name and year, not our display title.
         title: titleForSearch(movieMeta.title || "").name || movieMeta.title || "",
         year: movieMeta.year || titleForSearch(movieMeta.title || "").year || "",
+        // The title's own language: a multi-audio file names that track "(original)" and lists it first.
+        original: tmdbMeta?.original_language || movieMeta.original_language || "",
         backendUrl,
       }),
     };
     tmdbCacheRef.current.set(key, search);
     return search;
-  }, [movieMeta, episodes, backendUrl]);
+  }, [movieMeta, episodes, backendUrl, tmdbMeta?.original_language]);
   // The viewer picked one from the player's Sources menu.
   const selectTmdbSource = useCallback((src, atSeconds) => {
     const search = tmdbIterRef.current;
