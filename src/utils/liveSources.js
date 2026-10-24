@@ -215,14 +215,37 @@ async function findFixture(tabKey, id) {
    live fixtures that share everything before it. Worked out here rather than
    by whoever opened the player, so a hero slide, a card and a saved link all
    offer the same choice without any of them knowing there was one. */
+/* A feed can list a commentary whose link is dead at the source — SonyLiv's
+   Tamil answered 400 from every address, home lines included. Picked from the
+   menu, it spent half a minute in retries before the player gave up. So each
+   sibling's playlist is asked for once, through the relay (which also warms
+   it), and one the CDN refuses outright is left off the menu. A slow or
+   unreachable answer keeps it: only a definite no hides a language. */
+const probed = new Map();                    // url -> { ok, at }
+async function alive(url) {
+  const hit = probed.get(url);
+  if (hit && Date.now() - hit.at < 2 * 60_000) return hit.ok;
+  let ok = true;
+  try {
+    const r = await fetch(`${PROXY}?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(6000) });
+    if (r.status >= 400 && r.status < 500) ok = false;
+  } catch { /* slow is not dead */ }
+  probed.set(url, { ok, at: Date.now() });
+  return ok;
+}
+
 async function siblingLanguages(tabKey, id) {
   if (!langCode(id)) return [];
   const base = baseId(id);
   const seen = new Set();
-  return (await liveFixtures(tabKey))
+  const rows = (await liveFixtures(tabKey))
     .filter((m) => baseId(m.id) === base && langCode(m.id))
-    .map((m) => ({ code: langCode(m.id), label: langName(langCode(m.id)), id: m.id }))
-    .filter((l) => (seen.has(l.code) ? false : (seen.add(l.code), true)));
+    .filter((m) => (seen.has(langCode(m.id)) ? false : (seen.add(langCode(m.id)), true)));
+  const live = tabKey === "sony"
+    ? await Promise.all(rows.map((m) => (m.url ? alive(m.url) : true)))
+    : rows.map(() => true);
+  return rows.filter((_, i) => live[i])
+    .map((m) => ({ code: langCode(m.id), label: langName(langCode(m.id)), id: m.id }));
 }
 
 /* The links the site already builds point at the player page with the tab
@@ -283,14 +306,20 @@ export async function resolveSource({ tabKey, id, item }) {
     case "prime": {
       /* Willow and Prime fixtures now carry real stream URLs when the match is live.
          Upcoming ones have no URL; the proxy will still be warmed up. */
-      const fx = item?.url ? item : await findFixture(tabKey, id);
-      const src = fixtureSource(tabKey, fx);
+      let fx = item?.url ? item : await findFixture(tabKey, id);
       /* Language siblings only apply to Sony/FanCode feeds. */
       if (tabKey !== "willow" && tabKey !== "prime") {
         const languages = await siblingLanguages(tabKey, fx.id).catch(() => []);
+        /* Opened on a commentary that is dead at the source (a card for the
+           Tamil feed): start on one that plays instead of retrying a 400. */
+        if (langCode(fx.id) && languages.length && !languages.some((l) => l.id === fx.id)) {
+          const pick = languages.find((l) => l.code === "ENG") || languages[0];
+          fx = await findFixture(tabKey, pick.id).catch(() => fx);
+        }
+        const src = fixtureSource(tabKey, fx);
         return languages.length > 1 ? { ...src, lang: langCode(fx.id), languages } : src;
       }
-      return src;
+      return fixtureSource(tabKey, fx);
     }
     case "bb":
       return hotstarSource(id || item?.id);
