@@ -548,7 +548,7 @@ const WatchHtmlPage = () => {
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [autoNextEpisode,   setAutoNextEpisode  ] = useState(true);
   const [spoilerProtection, setSpoilerProtection] = useState(true);
-  const [activeTab,         setActiveTab        ] = useState("servers");
+  const [activeTab,         setActiveTab        ] = useState("cast");
 
   const groupedEpisodes = useMemo(() => groupEpisodesBySeason(episodes), [episodes]);
   /* The same episodes, numbered the way the page lists them (season, number
@@ -1343,8 +1343,8 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       return;
     }
 
-    setCurrentOverlayEp(ep);          // servers picked below apply to this episode
-    setActiveTab("servers");
+    setCurrentOverlayEp(ep);
+    setActiveTab("cast");
     if (ep) {
       // Open this episode's own server menu, like tapping it on this page does.
       const key = `S${ep.season || 1}`;
@@ -2024,7 +2024,7 @@ if (!alive) return;
                   </button>
                 </div>
                 <div className="flex px-3 sm:px-5 gap-1 pb-3">
-                  {["servers","cast","settings"].map(tab => (
+                  {["cast","settings"].map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`flex-1 py-2.5 min-h-[40px] rounded-lg text-[10px] font-black uppercase tracking-widest transition-all touch-manipulation
                         ${activeTab === tab ? "bg-white/10 text-white border border-white/10" : "text-gray-600 hover:text-gray-400"}`}>
@@ -2035,14 +2035,6 @@ if (!alive) return;
               </div>
 
               <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-                {activeTab === "servers" && (
-                  <div className="p-4 space-y-2">
-                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] px-1 mb-3">Available Servers</p>
-                    {orderedServers.map(sv => (
-                      <ServerBadge key={sv.id} server={sv} isActive={activeServer?.id === sv.id} onClick={() => handleServerSwitch(sv)} />
-                    ))}
-                  </div>
-                )}
 
                 {activeTab === "cast" && (
                   <div className="p-4 space-y-4">
@@ -2331,73 +2323,6 @@ if (!alive) return;
 
 
             {/* Quick server select */}
-            {/* Servers are not offered to viewers any more — our player starts by
-                itself and falls back to Omega. The admin still sees them here, to
-                arrange a title's order. */}
-            {isAdmin && availableServers.length > 0 && (
-              <div className="pt-2 scroll-mt-24" id="servers-section">
-                {/* Every server lives here now that the deployment grid is gone:
-                    one swipeable row on a phone, wrapping from sm up. */}
-                <div className="flex items-center justify-center lg:justify-start gap-3 mb-2">
-                  <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">Available Servers</p>
-                  {/* Admin only: arrange this title's servers. */}
-                  {isAdmin && !arranging && (
-                    <button onClick={() => setArranging(orderedServers.map((x) => x.id))}
-                      className="text-[9px] font-black uppercase tracking-wider text-amber-400/90 hover:text-amber-300 border border-amber-400/30 rounded-md px-2 py-1">
-                      ⇅ Arrange{serverOrder.length ? " · saved" : ""}
-                    </button>
-                  )}
-                  {orderNote && <span className="text-[10px] text-amber-300/90">{orderNote}</span>}
-                </div>
-                {isAdmin && arranging ? (
-                  <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.04] p-3">
-                    <p className="text-[11px] text-amber-200/80 mb-2">Drag the servers into the order to try them for this title — the first one plays on Watch Now. (On a phone, use ◀ ▶.)</p>
-                    <div className="flex flex-wrap gap-2">
-                      {arranging.map((id, i) => {
-                        const sv = availableServers.find((x) => x.id === id);
-                        if (!sv) return null;
-                        return (
-                          <div key={id} draggable
-                            onDragStart={() => { dragIdRef.current = id; }}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => { e.preventDefault(); if (dragIdRef.current) moveServer(dragIdRef.current, i); dragIdRef.current = null; }}
-                            className="flex items-center gap-1 pl-1 pr-2 py-1.5 rounded-lg border border-white/15 bg-white/[0.06] cursor-grab active:cursor-grabbing select-none">
-                            <button onClick={() => moveServer(id, i - 1)} disabled={i === 0} aria-label={`Move ${sv.name} earlier`}
-                              className="px-1 text-gray-400 hover:text-white disabled:opacity-20">◀</button>
-                            <span className="text-[10px] font-black text-amber-300 w-4 text-center">{i + 1}</span>
-                            <span className="text-[10px] font-black uppercase tracking-wider text-white">{sv.name}</span>
-                            <button onClick={() => moveServer(id, i + 1)} disabled={i === arranging.length - 1} aria-label={`Move ${sv.name} later`}
-                              className="px-1 text-gray-400 hover:text-white disabled:opacity-20">▶</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button onClick={() => saveServerOrder(false)} className="px-3 py-1.5 rounded-lg bg-amber-400 text-black text-[11px] font-black uppercase tracking-wider">Save order</button>
-                      <button onClick={() => setArranging(null)} className="px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 text-[11px] font-bold uppercase tracking-wider">Cancel</button>
-                      {serverOrder.length > 0 && (
-                        <button onClick={() => saveServerOrder(true)} className="px-3 py-1.5 rounded-lg border border-white/15 text-gray-400 text-[11px] font-bold uppercase tracking-wider">Reset to default</button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                <div
-                  className="flex gap-2 justify-start lg:justify-start max-w-full overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 scrollbar-hide"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  {orderedServers.map(sv => (
-                    <button key={sv.id}
-                      onClick={() => { pickedServerRef.current = true; setActiveServer(sv); handlePlayAction(currentOverlayEp, sv.id); }}
-                      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 min-h-[34px] sm:px-3.5 sm:py-2.5 sm:min-h-[40px] rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation
-                        ${activeServer?.id === sv.id ? (SRV_COLOR[sv.id] || "text-blue-400 bg-blue-500/10 border-blue-500/30") : "text-gray-600 bg-white/[0.02] border-white/5 hover:text-gray-400 hover:border-white/10"}`}>
-                      <span className={`w-1 h-1 rounded-full ${activeServer?.id === sv.id ? "bg-current" : "bg-gray-700"}`}/>
-                      {sv.name}
-                    </button>
-                  ))}
-                </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>
