@@ -211,6 +211,14 @@ const VideoPlayer = ({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  /* On a phone the slider closes itself 3 s after the last touch on it; with a
+     mouse it follows hover instead, so this only runs from touch paths. */
+  const volumeHideRef = useRef(0);
+  const armVolumeHide = () => {
+    if (!window.matchMedia?.("(hover: none)").matches) return;
+    clearTimeout(volumeHideRef.current);
+    volumeHideRef.current = setTimeout(() => setShowVolumeSlider(false), 3000);
+  };
 
   // HLS/Track State
   const [levels, setLevels] = useState([]);
@@ -1668,9 +1676,9 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: TOP --- */}
-      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/95 via-black/20 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
+      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/70 via-black/15 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
-          <button onClick={onBackClick} className="p-2 sm:p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all active:scale-90"><ChevronLeft size={26} /></button>
+          <button onClick={onBackClick} className="p-2 sm:p-2.5 rounded-full hover:bg-white/10 transition-all active:scale-90"><ChevronLeft size={26} /></button>
           <div className="flex flex-col text-left min-w-0">
             {logoUrl
               ? <img src={logoUrl} alt={title} className="h-8 md:h-11 max-w-[220px] md:max-w-md object-contain drop-shadow-2xl" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
@@ -1812,7 +1820,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
-      <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-5 md:p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-0 inset-x-0 p-3 pt-16 sm:p-5 sm:pt-24 md:p-8 md:pt-28 bg-gradient-to-t from-black/75 via-black/30 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="relative mb-2 sm:mb-4">
             {/* Scrub thumbnail preview (like Netflix/Hotstar) */}
             <div className="absolute bottom-7 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-100" style={{ left: `${hoverPct}%`, opacity: hoverTime != null ? 1 : 0 }}>
@@ -1859,9 +1867,13 @@ const VideoPlayer = ({
                 }}
                 onPointerCancel={() => { scrubbingRef.current = false; setHoverTime(null); }}
                 onMouseLeave={() => { if (!scrubbingRef.current) setHoverTime(null); }}>
-              <div className="relative h-1.5 sm:h-1 group-hover/progress:h-1.5 w-full bg-white/25 rounded-full transition-all">
-                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
-                {hoverTime != null && <div className="absolute top-1/2 w-3 h-3 -mt-1.5 -ml-1.5 rounded-full bg-white shadow-lg" style={{ left: `${hoverPct}%` }} />}
+              {/* As JioHotstar draws it: a thin grey track, blue up to the playhead,
+                  a white knob on it — shown always, not only on hover. */}
+              <div className="relative h-[3px] group-hover/progress:h-[5px] w-full bg-white/30 rounded-full transition-all">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#1f80e0] to-[#2ba4ff]" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+                {hoverTime != null && <div className="absolute inset-y-0 w-px bg-white/70" style={{ left: `${hoverPct}%` }} />}
+                <div className="absolute top-1/2 w-3.5 h-3.5 -mt-[7px] -ml-[7px] rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.5)] group-hover/progress:scale-110 transition-transform"
+                  style={{ left: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
               </div>
             </div>
         </div>
@@ -1892,16 +1904,28 @@ const VideoPlayer = ({
                 </button>
             )}
 
-            <div className="relative flex items-center group/volume shrink-0" onMouseEnter={() => setShowVolumeSlider(true)} onMouseLeave={() => setShowVolumeSlider(false)}>
-                <button onClick={() => setIsMuted(!isMuted)} aria-label={isMuted ? "Unmute" : "Mute"}
+            <div className="relative flex items-center group/volume shrink-0" onPointerEnter={(e) => { if (e.pointerType === "mouse") setShowVolumeSlider(true); }}
+              onPointerLeave={(e) => { if (e.pointerType === "mouse") setShowVolumeSlider(false); }}>
+                <button aria-label={isMuted ? "Unmute" : "Mute"}
+                  onClick={() => {
+                    /* A phone has no hover: the first tap opens the slider, a tap
+                       while it is open mutes / unmutes. It tucks away on its own. */
+                    const touch = window.matchMedia?.("(hover: none)").matches;
+                    if (touch && !showVolumeSlider) { setShowVolumeSlider(true); armVolumeHide(); return; }
+                    setIsMuted(!isMuted);
+                    if (touch) armVolumeHide();
+                  }}
                   className="hover:text-blue-500 transition-colors active:scale-90">{isMuted ? <VolumeX className="w-[22px] h-[22px] sm:w-7 sm:h-7"/> : <Volume2 className="w-[22px] h-[22px] sm:w-7 sm:h-7"/>}</button>
-                {/* Always shown beside the speaker on a wide screen, as JioHotstar's
-                    is: a thin track filled blue up to the level, a white knob.
-                    Dragging it up unmutes; dragging it to nothing mutes. */}
-                <div className="hidden sm:flex items-center ml-3 w-24 md:w-32">
+                {/* Slides out beside the speaker — on hover with a mouse, on a tap
+                    on a phone — drawn as JioHotstar's: a thin track filled blue up
+                    to the level, a white knob. Up unmutes; to nothing mutes. */}
+                {/* h-6 and inner padding: overflow-hidden (for the slide) would
+                    otherwise crop the round knob to the 4px track's height. */}
+                <div className={`flex items-center h-6 overflow-hidden transition-all duration-300 ${
+                  showVolumeSlider ? "ml-2 w-28 md:w-36 opacity-100 px-2" : "w-0 opacity-0 px-0"}`}>
                     <input type="range" min="0" max="1" step="0.01" aria-label="Volume"
                       value={isMuted ? 0 : volume}
-                      onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); setIsMuted(v === 0); }}
+                      onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); setIsMuted(v === 0); armVolumeHide(); }}
                       className="hs-volume w-full cursor-pointer"
                       style={{ "--fill": `${Math.round((isMuted ? 0 : volume) * 100)}%` }} />
                 </div>
@@ -1926,9 +1950,9 @@ const VideoPlayer = ({
 
           <div className="flex items-center justify-end gap-1.5 sm:gap-3 min-w-0">
             <button onClick={() => setShowSettings('speed')} aria-label="Playback speed"
-              className={`px-2 py-2 sm:px-2.5 sm:py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-[11px] sm:text-xs font-black leading-none min-w-[32px] sm:min-w-[34px] active:scale-90 ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
+              className={`px-2 py-2 sm:px-2.5 sm:py-2 rounded-full hover:bg-white/10 transition-all text-[11px] sm:text-xs font-black leading-none min-w-[32px] sm:min-w-[34px] active:scale-90 ${showSettings === 'speed' ? 'text-blue-400' : 'text-white'}`}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
             <button onClick={handleFullscreen} aria-label={isFullScreen || cssFullScreen ? "Exit fullscreen" : "Fullscreen"}
-              className="p-2 sm:p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/15 transition-all text-white active:scale-90">{isFullScreen || cssFullScreen
+              className="p-2 sm:p-2.5 rounded-full hover:bg-white/10 transition-all text-white active:scale-90">{isFullScreen || cssFullScreen
                 ? <Minimize className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
                 : <Maximize className="w-[18px] h-[18px] sm:w-5 sm:h-5" />}</button>
           </div>
