@@ -5,12 +5,15 @@ import OnlineSubtitles from "../components/OnlineSubtitles";
 import SubtitleStyle, { loadSubStyle, saveSubStyle, subtitleCss } from "../components/SubtitleStyle";
 import { backendUrl as apiBase } from "../utils/api";
 import {
-  Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  RotateCcw, RotateCw, Settings, ChevronLeft, Zap,
+  Settings, Zap,
   Volume1, Loader2, Check, Music, Layers, Activity, Languages,
   Timer, Captions, X as CloseIcon, UploadCloud, ListVideo, ChevronRight,
-  SkipForward, Clock, Layers3, Sparkles, MonitorPlay, MessageSquare, ChevronUp, Plus
+  Clock, Layers3, Sparkles, MonitorPlay, MessageSquare, ChevronUp, Plus
 } from "lucide-react";
+// The main controls in JioHotstar's style (our own drawings, same names and props).
+import {
+  Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw, RotateCw, SkipForward, ChevronLeft,
+} from "../components/playerIcons";
 
 /* Hotstar-style content advisory from the title's genres, when the parent
    hasn't supplied one — a cosmetic line under the rating badge on start. */
