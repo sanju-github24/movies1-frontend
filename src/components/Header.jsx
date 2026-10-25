@@ -616,6 +616,19 @@ const hit = u.match(/\/watch\/([^/?#]+)/);
   return shortSlug(m?.slug) || m?.slug || null;
 };
 
+
+/* Where a hero card sits when snapped (its left edge, less the track's
+   scroll-padding), and which card is nearest that line now. */
+const cardLeft = (track, card) => card.offsetLeft - (parseFloat(getComputedStyle(track).scrollPaddingLeft) || 0);
+const nearestCard = (track) => {
+  let best = 0, gap = Infinity;
+  Array.from(track.children).forEach((c, i) => {
+    const d = Math.abs(cardLeft(track, c) - track.scrollLeft);
+    if (d < gap) { gap = d; best = i; }
+  });
+  return best;
+};
+
 function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
   const trackRef = useRef(null);
   const [active, setActive] = useState(0);
@@ -634,10 +647,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const card = el.firstElementChild;
-      if (!card) return;
-      const step = card.getBoundingClientRect().width + 12;   // card + gap-3
-      setActive(Math.min(slides.length - 1, Math.max(0, Math.round(el.scrollLeft / step))));
+      setActive(nearestCard(el));
     };
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(measure); };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -685,14 +695,11 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
 
     const tick = setInterval(() => {
       if (heldRef.current || document.hidden || pageScrolling || !visible) return;
-      const card = el.firstElementChild;
-      if (!card) return;
-      const step = card.getBoundingClientRect().width + 12;
-      const next = Math.round(el.scrollLeft / step) + 1;
-      el.scrollTo({
-        left: next >= slides.length ? 0 : next * step,
-        behavior: "smooth",
-      });
+      const cards = el.children;
+      if (!cards.length) return;
+      // To where the next card really sits, not a computed step that drifts.
+      const next = nearestCard(el) + 1;
+      el.scrollTo({ left: next >= cards.length ? 0 : cardLeft(el, cards[next]), behavior: "smooth" });
     }, 4000);
 
     return () => {
@@ -708,9 +715,16 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
   }, [slides.length]);
 
   return (
-    <div className="sm:hidden -mx-4">
+    <div className="sm:hidden">
+      {/* No negative margin: the page has no side padding on a phone, so the
+          old -mx-4 pushed the deck 16px off the left edge — every card, and the
+          title on it, sat under the screen's edge. */}
+      {/* A 16px gutter each side, as JioHotstar's hero has: a card snaps 16px
+          in from the left edge (scroll-padding), so its rounded corner and the
+          title over it never sit on — or under — the screen's edge, and the next
+          card peeks in on the right. */}
       <div ref={trackRef}
-        className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth"
+        className="relative flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth px-4 scroll-px-4"
         aria-roledescription="carousel" aria-label="Newest releases">
         {slides.map((movie, n) => {
           const a = pickArt(art, movie);
@@ -727,7 +741,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
 
           return (
             <article key={movie.id || movie.slug}
-              className="snap-start shrink-0 w-[86%] first:ml-0 last:mr-4 relative rounded-2xl overflow-hidden
+              className="snap-start shrink-0 w-[86%] relative rounded-2xl overflow-hidden
                          bg-gray-900 ring-1 ring-white/10">
               <button type="button" onClick={() => onOpen(movie)}
                 aria-label={`${movie.title} — open details`}
@@ -768,7 +782,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                       kept clear of the artwork's top two thirds. */}
                   <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/70 to-transparent" />
 
-                  <span className="absolute inset-x-0 bottom-0 p-4 pr-24 flex flex-col items-start gap-2">
+                  <span className="absolute inset-x-0 bottom-0 px-5 pb-5 pr-24 flex flex-col items-start gap-2">
                     {logo
                       ? <img src={logo} alt={movie.title} className="h-14 w-auto max-w-[85%] object-contain object-left drop-shadow-2xl" />
                       : <span className="block text-3xl font-black text-white uppercase italic tracking-tighter leading-[0.95] line-clamp-2">
@@ -791,7 +805,7 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
               {/* Stacked at the trailing edge, clear of the title. Download sits
                   where a watchlist "+" would on other apps — on this site the
                   second thing anyone wants beside Play is the file. */}
-              <div className="absolute right-4 bottom-4 flex flex-col items-center gap-3">
+              <div className="absolute right-5 bottom-5 flex flex-col items-center gap-3">
                 {!isCricketSlide && (
                 <Link to={`/search-torrent?q=${encodeURIComponent(movie.title || "")}`}
                   aria-label={`Download links for ${movie.title}`}
