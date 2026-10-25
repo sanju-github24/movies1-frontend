@@ -19,6 +19,7 @@ import TrendingNumbersRow from "./TrendingNumbersRow";
 import { fetchTrending } from "../utils/trending";
 import { enrichMovies, buildShelves, mxRowName } from "../utils/homeShelves";
 import { STUDIOS } from "../utils/studios";
+import { CATEGORY_STUDIOS, hsImg } from "../utils/categories";
 import { readContinueList } from "../utils/continueWatching";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
 import { codeForTeam } from "../utils/teamCrest";
@@ -2156,7 +2157,10 @@ const Header = () => {
               <TrendingNumbersRow movies={trending} onSelect={openMobileSheet} title="Top 10 Today" />
             )}
             {/* Studios — right after the first two rows (Trending in India + the
-                next), each brand's own logo; opens its TMDB shows + movies. */}
+                next); opens its TMDB shows + movies. The same tiles as the
+                Categories page: JioHotstar's studio art where it has one
+                (hotstar specials, Disney+, HBO Max, Peacock, Paramount+),
+                else the brand's own logo. */}
             {r === 1 && (
               <div className="mb-7 sm:mb-9">
                 <div className="mb-2.5 sm:mb-3 px-0.5">
@@ -2164,17 +2168,24 @@ const Header = () => {
                   <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Browse by streaming brand</p>
                 </div>
                 <ScrollRow gap="gap-3 sm:gap-4" label="Studios">
-                  {STUDIOS.map((s) => (
-                    <Link key={s.slug} to={`/studio/${s.slug}`}
-                      className="flex-shrink-0 w-[150px] sm:w-[190px] aspect-[16/9] rounded-2xl bg-white/[0.05] border border-white/10
-                                 flex items-center justify-center p-5 sm:p-6 hover:bg-white/[0.09] hover:border-white/25 transition-all
-                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  {STUDIOS.map((s) => {
+                    const art = CATEGORY_STUDIOS.find((c) => c.slug === s.slug)?.art;
+                    return (
+                    <Link key={s.slug} to={`/studio/${s.slug}`} title={s.name}
+                      className={`relative overflow-hidden flex-shrink-0 w-[150px] sm:w-[190px] aspect-[16/9] rounded-2xl bg-white/[0.05] border border-white/10
+                                 flex items-center justify-center hover:bg-white/[0.09] hover:border-white/25 transition-all
+                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${art ? "" : "p-5 sm:p-6"}`}>
+                      {art ? (
+                        <img src={hsImg(art, 400)} alt={s.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
                       <img src={s.logo} alt={s.name} loading="lazy"
                         className="max-h-full max-w-full object-contain drop-shadow"
                         style={s.invert ? { filter: "brightness(0) invert(1)" } : undefined}
                         onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createElement("span"), { textContent: s.name, className: "text-lg font-black", style: `color:${s.color}` })); }} />
+                      )}
                     </Link>
-                  ))}
+                    );
+                  })}
                 </ScrollRow>
               </div>
             )}

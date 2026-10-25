@@ -61,6 +61,7 @@ const MovieDetail = safeLazy(() => import('./paged/MovieDetail'));
 const CollectionPage = safeLazy(() => import('./paged/CollectionPage'));
 const StudioPage = safeLazy(() => import('./paged/StudioPage'));
 const PersonPage = safeLazy(() => import('./paged/PersonPage'));
+const CategoriesPage = safeLazy(() => import('./paged/CategoriesPage'));
 const SearchResults = safeLazy(() => import('./paged/SearchResults'));
 const SearchPage = safeLazy(() => import('./paged/SearchPage'));
 import CategoryPage from './components/CategoryPage';
@@ -298,7 +299,9 @@ const AppContent = () => {
         <Route path="/studio/:slug"           element={<StudioPage />} />
         <Route path="/person/:key"            element={<PersonPage />} />
         <Route path="/search"                 element={<SearchResults searchTerm={searchTerm} />} />
+        <Route path="/categories"             element={<CategoriesPage />} />
         <Route path="/category/:name"         element={<CategoryPage />} />
+        <Route path="/genre/:name"            element={<CategoryPage kind="genre" />} />
         <Route path="/latest"                 element={<LatestUploads />} />
         <Route path="/blogs"                  element={<BlogList />} />
         <Route path="/news"              element={<NewsViewer />} />

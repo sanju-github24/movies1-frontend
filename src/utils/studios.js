@@ -8,7 +8,8 @@ const LOGO = (p) => `https://image.tmdb.org/t/p/w500${p}`;
 // `providerIn` = the brand's India watch-provider id, used for the India slice so
 // each studio also surfaces Indian films & shows (not only global popularity).
 export const STUDIOS = [
-  { slug: "jiohotstar",     name: "JioHotstar",  color: "#38bdf8", network: 8036, provider: 2336, providerIn: 2336, region: "IN", logo: LOGO("/f4UwAB8E6DEQfFhyKEH4NEvwYRt.png") },
+  // TMDB's JioHotstar logo is dark lettering: shown white on our dark tiles.
+  { slug: "jiohotstar",     name: "JioHotstar",  color: "#38bdf8", network: 8036, provider: 2336, providerIn: 2336, region: "IN", logo: LOGO("/f4UwAB8E6DEQfFhyKEH4NEvwYRt.png"), invert: true },
   { slug: "netflix",        name: "Netflix",     color: "#e50914", network: 213,  provider: 8,   providerIn: 8,    region: "US", logo: LOGO("/wwemzKWzjKYJFfCeiB57q3r4Bcm.png") },
   { slug: "disney-plus",    name: "Disney+",     color: "#2ea0ff", network: 2739, provider: 337, providerIn: 2336, region: "US", logo: LOGO("/1edZOYAfoyZyZ3rklNSiUpXX30Q.png") },
   { slug: "hbo-max",        name: "HBO Max",     color: "#a855f7", network: 3186, provider: 1899, region: "US", logo: LOGO("/xbYyhmzn6oq3RoV6MT03ZUMMo7L.png") },

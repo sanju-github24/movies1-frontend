@@ -13,13 +13,20 @@ import { LANDSCAPE_GRID, POSTER_SHELL } from "../utils/posterGrid";
 import { loadCatalog } from "../utils/catalog";
 import { absUrl, jsonLd } from "../utils/seo";
 import CatalogCard from "./CatalogCard";
+import { genreByName } from "../utils/categories";
 import { loadFresh, mergeFresh } from "../utils/freshCatalog";
 
 const PAGE_SIZE = 60;
 
-const CategoryPage = () => {
+/* kind: "language" (/category/Kannada) or "genre" (/genre/Comedy) — the same
+   page, filtering the catalogue by an entry's languages or its genres. A genre
+   is matched by every name it goes by in TMDB ("Action & Adventure" for a
+   series), from utils/categories. */
+const CategoryPage = ({ kind = "language" }) => {
   const { name } = useParams();
   const pageName = decodeURIComponent(name || "");
+  const genre = kind === "genre" ? genreByName(pageName) : null;
+  const base = kind === "genre" ? "/genre" : "/category";
 
   const [entries, setEntries] = useState([]);
   const [fresh, setFresh] = useState([]);
@@ -68,9 +75,12 @@ const CategoryPage = () => {
      already uploaded keeps our card (it has our links); its twin is dropped. */
   const inLanguage = useMemo(() => {
     const want = pageName.toLowerCase();
-    const inLang = (e) => e.language.some((l) => l.toLowerCase() === want);
-    return mergeFresh(entries.filter(inLang), fresh.filter(inLang));
-  }, [entries, fresh, pageName]);
+    const names = new Set((genre?.match || [pageName]).map((g) => g.toLowerCase()));
+    const keep = kind === "genre"
+      ? (e) => (e.genres || []).some((g) => names.has(String(g).toLowerCase()))
+      : (e) => e.language.some((l) => l.toLowerCase() === want);
+    return mergeFresh(entries.filter(keep), fresh.filter(keep));
+  }, [entries, fresh, pageName, kind, genre]);
 
   const subCategories = useMemo(() => {
     const subs = new Set();
@@ -106,17 +116,17 @@ const CategoryPage = () => {
           content={`${filtered.length || ""} ${pageName} movies and web series to watch online in HD`
             + ` — new releases added daily, with download links.`}
         />
-        <link rel="canonical" href={absUrl(`/category/${encodeURIComponent(pageName)}`)} />
+        <link rel="canonical" href={absUrl(`${base}/${encodeURIComponent(pageName)}`)} />
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${pageName} Movies & Web Series in HD`} />
-        <meta property="og:url" content={absUrl(`/category/${encodeURIComponent(pageName)}`)} />
+        <meta property="og:url" content={absUrl(`${base}/${encodeURIComponent(pageName)}`)} />
         {/* The first screenful, so the collection can show as a list result
             rather than a single blue link. */}
         <script type="application/ld+json">{jsonLd({
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           name: `${pageName} Movies & Web Series`,
-          url: absUrl(`/category/${encodeURIComponent(pageName)}`),
+          url: absUrl(`${base}/${encodeURIComponent(pageName)}`),
           mainEntity: {
             "@type": "ItemList",
             numberOfItems: filtered.length,

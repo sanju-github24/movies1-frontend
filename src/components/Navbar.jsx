@@ -5,7 +5,7 @@ import { AppContext } from "../context/AppContext";
 import { MobileBackButton } from "./BackBar";
 import { supabase } from "../utils/supabaseClient";
 import { useMusicPlayer } from "../context/MusicPlayerContext";
-import { X, ChevronDown, LogOut, Settings } from "lucide-react";
+import { X, LogOut, Settings } from "lucide-react";
 import { Avatar } from "../utils/avatars";
 import { readProfiles } from "../utils/profiles";
 /* The rail runs on Material icons rather than Lucide, because it needs a
@@ -22,7 +22,7 @@ import {
   MdLiveTv, MdOutlineLiveTv,
   MdMusicNote, MdOutlineMusicNote,
   MdPublic, MdOutlinePublic,
-  MdLanguage, MdOutlineLanguage,
+  MdCategory, MdOutlineCategory,
   MdPerson, MdOutlinePerson,
   MdSearch, MdMenu,
 } from "react-icons/md";
@@ -95,14 +95,11 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [langOpen, setLangOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);   // desktop: rail is hovered
 
   const profileRef = useRef(null);
-  const langRef = useRef(null);
   const mobileSearchRef = useRef(null);
 
-  const languages = ["Tamil", "Telugu", "Kannada", "Hindi", "Malayalam", "English"];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -113,7 +110,6 @@ const Navbar = () => {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
-      if (langRef.current && !langRef.current.contains(e.target)) setLangOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -129,7 +125,6 @@ const Navbar = () => {
   useEffect(() => {
     setMobileOpen(false);
     setRailOpen(false);
-    setLangOpen(false);
     setProfileOpen(false);
   }, [location.pathname]);
 
@@ -216,7 +211,7 @@ const Navbar = () => {
           window, and it has room to grow: hovering it slides the labels out over
           a dimmed page, which is the pattern the big streaming apps settled on
           because it reads as an overlay rather than as a layout shift. */}
-      <div className="hidden sm:block" onMouseLeave={() => { setRailOpen(false); setLangOpen(false); }}>
+      <div className="hidden sm:block" onMouseLeave={() => setRailOpen(false)}>
         {/* The wash that puts the page behind the open rail. Click-through is
             deliberate: it is scenery, and closing is a matter of moving away. */}
         {/* Not a flat wash. A single opacity across the whole window mutes the
@@ -305,39 +300,16 @@ const Navbar = () => {
               );
             })}
 
-            {/* Languages. Collapsed it is a plain link to the rail's own row;
-                open, it unfolds in place rather than flying out as a popover,
-                which would hang off a 72px rail with nothing to anchor it. */}
-            <li ref={langRef}>
-              <button type="button"
-                onClick={() => { setRailOpen(true); setLangOpen(o => !o); }}
-                aria-expanded={langOpen}
-                className={railItem(location.pathname.startsWith("/category"))}>
-                {location.pathname.startsWith("/category")
-                  ? <MdLanguage size={26} className="shrink-0" />
-                  : <MdOutlineLanguage size={26} className="shrink-0" />}
-                <span className={railLabel(railOpen)} style={labelDelay(railOpen, RAIL_LINKS.length)}>Languages</span>
-                <ChevronDown size={14}
-                  className={`ml-auto shrink-0 transition-all duration-200
-                              ${railOpen ? "opacity-60" : "opacity-0"} ${langOpen ? "rotate-180" : ""}`} />
-              </button>
-              {railOpen && langOpen && (
-                <ul className="pl-[38px] py-1 space-y-0.5">
-                  {/* Links, not buttons: an onClick-navigate renders no href,
-                      so a crawler could not follow this menu and the language
-                      collections had nothing pointing at them. It also restores
-                      middle-click and open-in-new-tab. */}
-                  {languages.map(lang => (
-                    <li key={lang}>
-                      <Link to={`/category/${encodeURIComponent(lang)}`}
-                        onClick={() => setLangOpen(false)}
-                        className="block py-2 text-base font-normal text-gray-400 hover:text-white whitespace-nowrap transition-colors">
-                        {lang}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            {/* Categories: languages, genres and studios on one page
+                (/categories), which replaced the languages fly-out. */}
+            <li>
+              <NavLink to="/categories"
+                className={() => railItem(/^\/(categories|category|genre|studio)(\/|$)/.test(location.pathname))}>
+                {/^\/(categories|category|genre|studio)(\/|$)/.test(location.pathname)
+                  ? <MdCategory size={26} className="shrink-0" />
+                  : <MdOutlineCategory size={26} className="shrink-0" />}
+                <span className={railLabel(railOpen)} style={labelDelay(railOpen, RAIL_LINKS.length)}>Categories</span>
+              </NavLink>
             </li>
           </ul>
 
@@ -459,6 +431,11 @@ const Navbar = () => {
               <li>
                 <Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
                   <MdOutlineMovie size={22} className="text-blue-600" /> Watch Movies
+                </Link>
+              </li>
+              <li>
+                <Link to="/categories" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
+                  <MdOutlineCategory size={22} className="text-blue-600" /> Categories
                 </Link>
               </li>
               <li>
