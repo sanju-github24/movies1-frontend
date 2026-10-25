@@ -332,18 +332,23 @@ const fetchLangs = async (slug, title) => {
    Match order: exact slug → exact tmdb_id → fuzzy title (+ year).
 =================================================================== */
 const localNorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const LOCAL_COLS = "slug,title,hls_url,video_url,html_code,episodes,download_links";
+const LOCAL_COLS = "slug,title,tmdb_id,hls_url,video_url,html_code,episodes,download_links";
 /* Any of these makes a row worth attaching: our own HLS, a direct file, the
    uploaded embed (which is what "Multi Audio" plays), per-episode stream links —
    or downloads. An embed-only row used to be discarded here, which is why Multi
    Audio went missing for titles we had definitely uploaded; a DOWNLOAD-only row
    was discarded for the same reason, which is why a title opened from global
    search showed none of the downloads it plainly has. */
-const localUsable = (r) => !!(r && (r.hls_url || r.video_url || r.html_code ||
+const localUsableRow = (r) => !!(r && (r.hls_url || r.video_url || r.html_code ||
   (Array.isArray(r.episodes) && r.episodes.length) ||
   (Array.isArray(r.download_links) && r.download_links.length)));
 
 const attachLocalHls = async (m) => {
+  /* A row tagged with a different TMDB id is a different title, however close
+     its name — "Prince of Mollywood" (a series) is not "Prince" (a film), and
+     attaching it gave the film that series' 16 episodes. */
+  const otherTitle = (r) => !!(m.tmdb_id && r?.tmdb_id && String(r.tmdb_id) !== String(m.tmdb_id));
+  const localUsable = (r) => localUsableRow(r) && !otherTitle(r);
   try {
     /* 1) exact slug — what our own rows arrive under, and the only match that
           works for an upload carrying no tmdb_id. */
@@ -375,10 +380,13 @@ const attachLocalHls = async (m) => {
     const wantYear = m.year ? String(m.year) : null;
     let best = null, bestScore = 0, bestShared = 0;
     for (const r of rows) {
+      if (otherTitle(r)) continue;
       const rToks = new Set(toks(r.title));
       if (!rToks.size) continue;
       let shared = 0; wantToks.forEach((t) => { if (rToks.has(t)) shared++; });
       if (!shared) continue;
+      /* A one-word title must be the row's whole title, not one word of it. */
+      if (wantToks.size === 1 && rToks.size !== 1) continue;
       let score = shared / Math.min(wantToks.size, rToks.size);
       if (wantYear && r.year && String(r.year) === wantYear) score += 0.15;   // year agreement boost
       if (score > bestScore) { bestScore = score; best = r; bestShared = shared; }
