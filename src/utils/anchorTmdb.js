@@ -108,7 +108,20 @@ const singularity = (o) => async () => {
    Safari and iPhones decode HEVC only as hvc1, so asking for either let them
    pick a stream they then failed on, and fall to a one-language source; now
    they take the per-language MP4s, every language still offered. */
+/* iPhone, iPad and Safari answer yes for hev1 all the same, then play the
+   sound over a black picture: Apple's decoder renders HEVC only as hvc1. So
+   an Apple device is never offered an hev1 stream, whatever it says. Every
+   iPhone browser is Safari underneath (CriOS, FxiOS…). */
+const APPLE = () => {
+  try {
+    const ua = navigator.userAgent || "";
+    return /iPhone|iPad|iPod/.test(ua)
+      || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+      || (/Macintosh/.test(ua) && /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(ua));
+  } catch { return false; }
+};
 const HEVC_OK = () => {
+  if (APPLE()) return false;
   try {
     const MS = globalThis.ManagedMediaSource || globalThis.MediaSource || null;   // iPhone has the managed one
     return !!MS && MS.isTypeSupported('video/mp4; codecs="hev1.1.6.L93.90"');
@@ -320,6 +333,8 @@ const manifestScore = async (url) => {
     const m = await r.text();
     if (!m.trimStart().startsWith("#EXTM3U")) return -1;
     const variants = m.match(/#EXT-X-STREAM-INF[^\n]*\n[^\n]+/g) || [];
+    // Every picture hev1: black on an Apple device (see APPLE) — the next server instead.
+    if (APPLE() && variants.length && variants.every((v) => /CODECS="[^"]*\bhev1\./i.test(v))) return -1;
     const audio = (m.match(/#EXT-X-MEDIA:TYPE=AUDIO/g) || []).length;
     if (variants.length === 1 && !/#EXT-X-MEDIA:/.test(m)) {
       const h = Number((variants[0].match(/RESOLUTION=\d+x(\d+)/) || [])[1]) || 0;

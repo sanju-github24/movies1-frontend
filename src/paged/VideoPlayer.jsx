@@ -991,7 +991,7 @@ const VideoPlayer = ({
 
   /* Fullscreen, sideways. Android and desktop get the real thing, and the
      screen is locked to landscape while it lasts (where the browser allows
-     it). iPhone gets the video's own full screen. */
+     it). iPhone gets ours, made with CSS — never Apple's player. */
   const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement;
   const enterFullscreen = async () => {
     const el = containerRef.current;
@@ -1005,14 +1005,10 @@ const VideoPlayer = ({
       } catch { /* refused — usually no tap behind it */ }
       return false;
     }
-    /* iPhone: no element full screen, and the CSS version left Safari's and
-       Chrome's address and tab bars on screen — half a screen. The video's
-       own full screen is the only real one there, so that is used; the CSS
-       version stays only for a browser that has neither. */
-    const v = videoRef.current;
-    if (v?.webkitEnterFullscreen) {
-      try { v.webkitEnterFullscreen(); return true; } catch { /* not ready yet */ }
-    }
+    /* iPhone: no element full screen. Apple's own (the video's) is never
+       used — it swaps our controls, languages and episodes for Apple's player,
+       and closing it is how viewers lost the picture. The player fills the
+       screen with CSS instead, turned sideways while the phone is upright. */
     setCssFullScreen(true);
     return true;
   };
@@ -1052,12 +1048,13 @@ const VideoPlayer = ({
     const phone = Math.min(window.innerWidth, window.innerHeight) <= 820
       && (/Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1);
     if (!phone) return;
-    /* Only where the page itself can go fullscreen (Android). On iPhone the
-       only fullscreen is Apple's own player, and being thrown into it the
-       moment a film starts — then closing it — is how viewers lost the
-       picture and the sound (see the webkitendfullscreen recovery below).
-       There, fullscreen waits for the fullscreen button. */
-    if (!(el.requestFullscreen || el.webkitRequestFullscreen)) return;
+    /* iPhone: no tap needed for the CSS fullscreen, so it simply goes in
+       when playback starts, as Android does. */
+    if (!(el.requestFullscreen || el.webkitRequestFullscreen)) {
+      const onPlayingIos = () => { if (autoFsRef.current) return; autoFsRef.current = true; setCssFullScreen(true); };
+      v.addEventListener("playing", onPlayingIos);
+      return () => v.removeEventListener("playing", onPlayingIos);
+    }
     let armed = false;
     const onTap = () => { el.removeEventListener("touchend", onTap); if (!fullscreenEl()) enterFullscreen(); };
     const onPlaying = async () => {
@@ -1320,7 +1317,7 @@ const VideoPlayer = ({
       {/* cursor-none while the HUD is hidden — otherwise the pointer sits on top
           of a fullscreen movie forever */}
       <style>{subtitleCss("video.anchorhd-video", subStyle)}</style>
-      <video ref={videoRef} className={`anchorhd-video w-full h-full object-contain bg-black ${showControls ? "cursor-pointer" : "cursor-none"}`} playsInline autoPlay
+      <video ref={videoRef} webkit-playsinline="true" className={`anchorhd-video w-full h-full object-contain bg-black ${showControls ? "cursor-pointer" : "cursor-none"}`} playsInline autoPlay
         onTouchStart={(e) => { lastTouchRef.current = Date.now(); onVideoTouchStart(e); }}
         onTouchEnd={(e) => { lastTouchRef.current = Date.now(); onVideoTouchEnd(e); }}
         onTouchCancel={endHold}
