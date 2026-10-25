@@ -381,3 +381,35 @@ video::cue {
 @media (max-width: 639px) {
   .article-body { font-size: 1rem; line-height: 1.75; }
 }
+
+/* The player's volume slider, as JioHotstar draws it: a thin rounded track,
+   blue up to the level (--fill, set by the player), a round white knob. */
+input[type="range"].hs-volume {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #1f80e0 0, #2ba4ff var(--fill, 100%), rgba(255, 255, 255, 0.28) var(--fill, 100%));
+  outline: none;
+}
+input[type="range"].hs-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 120ms;
+}
+input[type="range"].hs-volume:hover::-webkit-slider-thumb { transform: scale(1.12); }
+input[type="range"].hs-volume::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+input[type="range"].hs-volume::-moz-range-track { height: 4px; border-radius: 999px; background: transparent; }
+input[type="range"].hs-volume:focus-visible { box-shadow: 0 0 0 3px rgba(43, 164, 255, 0.45); }

@@ -88,3 +88,15 @@ export const ChevronLeft = (p) => (
     <path d="M15 5l-7 7 7 7" />
   </Svg>
 );
+
+/* Double chevrons, for the «10 and 10» skip buttons on the control bar. */
+export const ChevronsLeft = (p) => (
+  <Svg {...solid(p)} strokeWidth={2}>
+    <path d="M12 6l-6 6 6 6M19 6l-6 6 6 6" />
+  </Svg>
+);
+export const ChevronsRight = (p) => (
+  <Svg {...solid(p)} strokeWidth={2}>
+    <path d="M5 6l6 6-6 6M12 6l6 6-6 6" />
+  </Svg>
+);

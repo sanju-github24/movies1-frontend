@@ -13,6 +13,7 @@ import {
 // The main controls in JioHotstar's style (our own drawings, same names and props).
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, RotateCcw, RotateCw, SkipForward, ChevronLeft,
+  ChevronsLeft, ChevronsRight,
 } from "../components/playerIcons";
 
 /* Hotstar-style content advisory from the title's genres, when the parent
@@ -1873,13 +1874,15 @@ const VideoPlayer = ({
             {/* ±10s: desktop only. On a phone the double-tap gesture does this,
                 and a series needs the width for Episodes / Next Episode. */}
             <button onClick={() => nudgeSeek(-10, "back")} aria-label="Back 10 seconds"
-              className="hidden sm:inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCcw className="w-6 h-6"/></button>
+              className="hidden sm:inline-flex items-center gap-1 text-white hover:text-blue-400 active:scale-90 transition-all">
+              <ChevronsLeft className="w-7 h-7" /><span className="text-lg font-medium tabular-nums">10</span></button>
             <button onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"}
               className="hover:scale-110 transition-transform active:scale-90 shrink-0">
               {isPlaying ? <Pause className="w-8 h-8 text-white" /> : <Play className="w-8 h-8 text-white ml-0.5" fill="white" />}
             </button>
             <button onClick={() => nudgeSeek(10, "fwd")} aria-label="Forward 10 seconds"
-              className="hidden sm:inline-flex hover:text-blue-500 active:scale-90 transition-all"><RotateCw className="w-6 h-6"/></button>
+              className="hidden sm:inline-flex items-center gap-1 text-white hover:text-blue-400 active:scale-90 transition-all">
+              <span className="text-lg font-medium tabular-nums">10</span><ChevronsRight className="w-7 h-7" /></button>
 
             {/* A phone's Next Episode; wider screens have it at the top right. */}
             {hasNextEpisode && (
@@ -1892,8 +1895,15 @@ const VideoPlayer = ({
             <div className="relative flex items-center group/volume shrink-0" onMouseEnter={() => setShowVolumeSlider(true)} onMouseLeave={() => setShowVolumeSlider(false)}>
                 <button onClick={() => setIsMuted(!isMuted)} aria-label={isMuted ? "Unmute" : "Mute"}
                   className="hover:text-blue-500 transition-colors active:scale-90">{isMuted ? <VolumeX className="w-[22px] h-[22px] sm:w-7 sm:h-7"/> : <Volume2 className="w-[22px] h-[22px] sm:w-7 sm:h-7"/>}</button>
-                <div className={`hidden sm:flex items-center transition-all duration-300 overflow-hidden ${showVolumeSlider ? 'w-24 opacity-100 ml-2' : 'w-0 opacity-0'}`}>
-                    <input type="range" min="0" max="1" step="0.1" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-full h-1 bg-white/20 accent-blue-500 cursor-pointer" />
+                {/* Always shown beside the speaker on a wide screen, as JioHotstar's
+                    is: a thin track filled blue up to the level, a white knob.
+                    Dragging it up unmutes; dragging it to nothing mutes. */}
+                <div className="hidden sm:flex items-center ml-3 w-24 md:w-32">
+                    <input type="range" min="0" max="1" step="0.01" aria-label="Volume"
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); setIsMuted(v === 0); }}
+                      className="hs-volume w-full cursor-pointer"
+                      style={{ "--fill": `${Math.round((isMuted ? 0 : volume) * 100)}%` }} />
                 </div>
             </div>
           </div>
