@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Loader2, Settings, Pencil, Plus, Check, Play, X, ChevronRight, User } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
@@ -7,6 +7,7 @@ import { Avatar } from "../utils/avatars";
 import { readProfiles, saveProfiles, newProfileId, MAX_PROFILES } from "../utils/profiles";
 import { readContinueList, removeProgress, progressPercent, timeLeft } from "../utils/continueWatching";
 import ProfileEditor from "../components/ProfileEditor";
+import { readWatchlist, removeFromWatchlist } from "../utils/watchlist";
 
 /* The viewer's own page: who is watching, and what they were in the middle
    of. Account details, languages and help live one level in, under Help &
@@ -81,6 +82,17 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [continueList, setContinueList] = useState(() => readContinueList());
   const [cwEdit, setCwEdit] = useState(false);
+  /* The titles "+" added, newest first — kept per profile, so it is read
+     again when the profile changes or another page edits the list. */
+  const [watchlist, setWatchlist] = useState(() => readWatchlist());
+  const [wlEdit, setWlEdit] = useState(false);
+  const navigate = useNavigate();
+  useEffect(() => {
+    const read = () => setWatchlist(readWatchlist());
+    window.addEventListener("watchlist-change", read);
+    window.addEventListener("focus", read);
+    return () => { window.removeEventListener("watchlist-change", read); window.removeEventListener("focus", read); };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -206,6 +218,39 @@ export default function Profile() {
             )}
           </div>
         </section>
+
+        {/* ── Watchlist ── */}
+        {watchlist.length > 0 && (
+          <section className="mt-12 sm:mt-16">
+            <div className="flex items-center gap-4 mb-5">
+              <h2 className="text-lg sm:text-[26px] font-semibold tracking-tight">Watchlist</h2>
+              <button type="button" onClick={() => setWlEdit((v) => !v)} aria-pressed={wlEdit} aria-label="Edit watchlist"
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition ${wlEdit ? "bg-white text-black" : "bg-white/[0.06] hover:bg-white/[0.12] text-gray-300"}`}>
+                {wlEdit ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar pb-2 -mx-5 px-5 sm:mx-0 sm:px-0">
+              {watchlist.map((w) => (
+                <div key={w.slug} className="relative shrink-0 w-32 sm:w-44">
+                  <button type="button" title={w.title}
+                    onClick={() => !wlEdit && navigate(`/watch/${w.slug}`, { state: { movie: { ...w, poster: w.poster } } })}
+                    className="block w-full aspect-[2/3] rounded-lg overflow-hidden bg-white/[0.04] ring-1 ring-white/10 hover:ring-white/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                    {w.poster
+                      ? <img src={w.poster} alt={w.title} loading="lazy" className="w-full h-full object-cover" />
+                      : <span className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-semibold text-white/60">{w.title}</span>}
+                  </button>
+                  {wlEdit && (
+                    <button type="button" aria-label={`Remove ${w.title} from watchlist`}
+                      onClick={() => removeFromWatchlist(w.slug)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/80 border border-white/20 text-white flex items-center justify-center hover:bg-red-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Continue watching ── */}
         {continueList.length > 0 && (

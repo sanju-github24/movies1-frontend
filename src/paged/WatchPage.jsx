@@ -4,7 +4,8 @@ import VideoPlayer from "./VideoPlayer";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { personLink } from "../utils/person";
 import { supabase } from "../utils/supabaseClient";
-import { saveProgress, getResumeTime, readOne, readContinueList, removeProgress, progressPercent, timeLeft, hasNextEpisode } from "../utils/continueWatching";
+import { saveProgress, getResumeTime, readOne, readContinueList, removeProgress, progressPercent, timeLeft, hasNextEpisode, isFinished } from "../utils/continueWatching";
+import { inWatchlist, toggleWatchlist } from "../utils/watchlist";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
@@ -27,7 +28,7 @@ import LiveViewer from "../components/LiveViewer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause,
-  Search, LayoutList, LayoutGrid, ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronUp
+  Search, LayoutList, LayoutGrid, ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronUp, Plus, Check
 } from "lucide-react";
 
 /* ===== Safe URI ===== */
@@ -516,6 +517,11 @@ const WatchHtmlPage = () => {
   };
   const [activeServer,      setActiveServer     ] = useState(null);
   const [embedMenu,         setEmbedMenu        ] = useState(false);
+  /* This title's saved progress, for the Resume button. Read again whenever
+     the player closes (it saves as it plays) and when the tab comes back, so
+     coming back from watching shows Resume at once — not Watch Now. */
+  const [progressRec, setProgressRec] = useState(null);
+  const [listed, setListed] = useState(false);
   const [activeSeason,      setActiveSeason     ] = useState("S1");
   const [openDropdown,      setOpenDropdown     ] = useState(null);
   // Episode list tools: a search, oldest/newest first, and list or grid —
@@ -527,6 +533,20 @@ const WatchHtmlPage = () => {
   const [imgLoaded,         setImgLoaded        ] = useState(false);
 
   const [showOverlay,       setShowOverlay      ] = useState(false);
+  const progressSlug = movieMeta?.slug || routeSlug;
+  useEffect(() => {
+    const read = () => { setProgressRec(readOne(progressSlug)); setListed(inWatchlist(progressSlug)); };
+    read();
+    const onVis = () => { if (!document.hidden) read(); };
+    window.addEventListener("focus", read);
+    window.addEventListener("watchlist-change", read);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", read);
+      window.removeEventListener("watchlist-change", read);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [progressSlug, showOverlay]);
   /* While the player is open, the floating In-Page Push ad (index.html) is
      hidden: it sat on the player's corner switcher and controls. */
   useEffect(() => {
@@ -2285,40 +2305,96 @@ if (!alive) return;
             {/* What to do with the film, in the order a person wants it: play
                 it, keep it, take it. The circles are deliberately quiet — one
                 thing on this page is the action, and it is not the download. */}
-            <div className="flex items-center gap-3 sm:gap-4 pt-2 justify-center lg:justify-start">
-              <button
-                onClick={() => {
-                  const firstEp = isTVShow && episodes.length > 0 ? episodes[0] : null;
-                  if (live && live.live) { handlePlayAction(firstEp); return; }
-                  /* Always our player first; it hands over to Omega only when it
-                     cannot find the title. Viewers no longer pick servers. */
-                  const ours = availableServers.find((x) => x.id === "ourhls");
-                  const start = ours || availableServers.find((x) => x.id === "imdb_reader");
-                  if (start) setActiveServer(start);
-                  handlePlayAction(firstEp, start?.id);
-                }}
-                className={`group flex items-center rounded-full py-1 pl-1 pr-5 sm:py-1.5 sm:pl-1.5 sm:pr-7 gap-3 sm:gap-4 transition active:scale-[0.98] touch-manipulation
-                  ${live && live.live ? "bg-red-600 text-white hover:bg-red-500" : "bg-white text-black hover:bg-gray-200"}`}>
-                <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full ${live && live.live ? "bg-black/30" : "bg-black"}`}>
-                  <Play size={16} fill="currentColor" className={`ml-0.5 ${live && live.live ? "text-white" : "text-white"}`} />
-                </span>
-                <span className="text-left leading-tight">
-                  <span className="block text-[13px] sm:text-sm font-black tracking-tight">
-                    {live && live.live ? live.cta : "Watch Now"}
-                  </span>
-                  <span className={`block text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.18em] ${live && live.live ? "text-white/70" : "text-gray-600"}`}>
-                    {isTVShow ? "Series" : "Movie"}
-                  </span>
-                </span>
-              </button>
+            {(() => {
+              const isLive = !!(live && live.live);
+              /* Our player first; Omega only when it cannot find the title. */
+              const playFrom = (ep) => {
+                if (isLive) { handlePlayAction(ep); return; }
+                const ours = availableServers.find((x) => x.id === "ourhls");
+                const start = ours || availableServers.find((x) => x.id === "imdb_reader");
+                if (start) setActiveServer(start);
+                handlePlayAction(ep, start?.id);
+              };
+              const rec = progressRec;
+              /* The saved episode in this page's list — or, if the list no longer
+                 has it, the bare season/episode, which the player still resolves. */
+              const findEp = (se, en) => numberedEpisodes.find((x) => String(x.season || 1) === String(se)
+                && String(x.episodeNumberInSeason || x.episode) === String(en))
+                || { season: Number(se) || 1, episodeNumberInSeason: Number(en) || 1, episode: Number(en) || 1 };
+              const latestEp = isTVShow && numberedEpisodes.length ? numberedEpisodes[numberedEpisodes.length - 1] : null;
+              // Where to pick up: a half-watched title; for a series, a finished
+              // episode with the next one queued counts too.
+              let resume = null;
+              if (!isLive && rec && (rec.time || 0) > 10 && !isFinished(rec)) {
+                const ep = isTVShow && rec.season ? findEp(rec.season, rec.episode) : null;
+                if (!isTVShow || ep) resume = { ep, pct: progressPercent(rec),
+                  label: isTVShow ? `Resume S${rec.season} E${rec.episode}` : "Resume" };
+              } else if (!isLive && isTVShow && rec && hasNextEpisode(rec)) {
+                const ep = findEp(rec.next.season, rec.next.episode);
+                if (ep) resume = { ep, pct: 0, label: `Watch S${rec.next.season} E${rec.next.episode}` };
+              }
+              const showLatest = !!(resume && latestEp && resume.ep !== latestEp);
+              const latestDate = latestEp?.air_date
+                ? new Date(latestEp.air_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+              const primaryLabel = isLive ? live.cta : resume ? resume.label : "Watch Now";
+              return (
+                <div className="flex flex-col gap-3 pt-2 items-center lg:items-start">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <button
+                      onClick={() => playFrom(resume ? resume.ep : (isTVShow && episodes.length > 0 ? episodes[0] : null))}
+                      className={`group relative overflow-hidden flex items-center rounded-full py-1 pl-1 pr-5 sm:py-1.5 sm:pl-1.5 sm:pr-7 gap-3 sm:gap-4 transition active:scale-[0.98] touch-manipulation
+                        ${isLive ? "bg-red-600 text-white hover:bg-red-500" : "bg-white text-black hover:bg-gray-200"}`}>
+                      <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full ${isLive ? "bg-black/30" : "bg-black"}`}>
+                        <Play size={16} fill="currentColor" className="ml-0.5 text-white" />
+                      </span>
+                      <span className="text-left leading-tight">
+                        <span className="block text-[13px] sm:text-sm font-black tracking-tight">{primaryLabel}</span>
+                        <span className={`block text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.18em] ${isLive ? "text-white/70" : "text-gray-600"}`}>
+                          {resume && rec?.duration ? `${Math.max(1, Math.round(timeLeft(rec) / 60))} min left` : isTVShow ? "Series" : "Movie"}
+                        </span>
+                      </span>
+                      {/* How much is watched: the bar runs exactly that far. */}
+                      {resume && resume.pct > 0 && (
+                        <span className="absolute left-0 right-0 bottom-0 h-[3px] bg-black/10" aria-hidden="true">
+                          <span className="block h-full bg-gradient-to-r from-[#1f80e0] to-[#2ba4ff]" style={{ width: `${resume.pct}%` }} />
+                        </span>
+                      )}
+                    </button>
 
-              {hasDownloads && (
-                <button onClick={() => setShowDownloads(true)} title="Download links"
-                  className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
-                  <Download size={19} />
-                </button>
-              )}
-            </div>
+                    {/* A series has a download beside every episode, so its spare
+                        circle adds it to the watchlist instead; a film keeps its
+                        downloads here. */}
+                    {isTVShow ? (
+                      <button type="button" title={listed ? "In your watchlist" : "Add to watchlist"} aria-pressed={listed}
+                        onClick={() => {
+                          const added = toggleWatchlist({ ...movieMeta, slug: progressSlug, poster: movieMeta?.poster || tmdbMeta?.poster || "", content_type: "tv" });
+                          setListed(added);
+                          toast.success(added ? "Added to your watchlist" : "Removed from your watchlist");
+                        }}
+                        className={`flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border backdrop-blur-xl transition active:scale-95
+                          ${listed ? "border-white bg-white text-black" : "border-white/20 bg-white/10 text-white hover:bg-white/20"}`}>
+                        {listed ? <Check size={20} /> : <Plus size={20} />}
+                      </button>
+                    ) : hasDownloads && (
+                      <button onClick={() => setShowDownloads(true)} title="Download links"
+                        className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
+                        <Download size={19} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* A series half-watched gets a second way in: the newest episode. */}
+                  {showLatest && (
+                    <button type="button" onClick={() => playFrom(latestEp)}
+                      className="flex items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.06] hover:bg-white/[0.12] px-5 py-2.5 text-white text-[13px] sm:text-sm font-bold transition active:scale-[0.98]">
+                      <Play size={14} fill="currentColor" />
+                      Watch Latest Episode
+                      {latestDate && <span className="font-medium text-white/60">{latestDate}</span>}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
 
 
