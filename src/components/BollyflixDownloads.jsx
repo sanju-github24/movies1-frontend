@@ -64,7 +64,7 @@ export function useBollyflix(title, year = "") {
 
 /* `empty` is what to say when nothing turned up — given only when there is
    nothing else in the dialog either. */
-export default function BollyflixDownloads({ state, empty = "" }) {
+export default function BollyflixDownloads({ state, empty = "", serverNo = 1 }) {
   // Still looking: say so, in the shape of what is coming.
   if (state.loading) return (
     <div className="space-y-3" aria-busy="true">
@@ -87,8 +87,8 @@ export default function BollyflixDownloads({ state, empty = "" }) {
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-xl bg-sky-600/10 border border-sky-500/10"><HardDrive size={18} className="text-sky-400" /></div>
         <div className="min-w-0">
-          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">{state.files.every((f) => f.kind === "Google Drive") ? "Google Drive" : "More downloads"}</h3>
-          <p className="text-[11px] text-gray-500 font-semibold truncate">{state.post?.title}</p>
+          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">Server {serverNo}</h3>
+          <p className="text-[11px] text-gray-500 font-semibold truncate">{(state.post?.title || "").replace(/\s*[|\-–]?\s*\b(bollyflix|hdhub4u|india4movies|1?tamilmv)\b(\.\w+)?/gi, "")}</p>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

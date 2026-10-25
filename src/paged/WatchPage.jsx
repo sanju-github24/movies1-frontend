@@ -415,6 +415,8 @@ const WatchHtmlPage = () => {
   const [loading,           setLoading          ] = useState(true);
   const [movieMeta,         setMovieMeta        ] = useState(null);
   const [showDownloads,     setShowDownloads    ] = useState(false);
+  // Opened from an episode's own button: { season, ep } — that episode's links only.
+  const [downloadEp,        setDownloadEp       ] = useState(null);
   // Hold the page still behind the downloads dialog, so only the dialog scrolls.
   useEffect(() => {
     if (!showDownloads) return;
@@ -699,6 +701,17 @@ const WatchHtmlPage = () => {
   /* The button is there from the start for any title that is not on air: the
      dialog opens on our own files at once, and the rest load in beneath. */
   const hasDownloads = hasOwnDownloads || !!bollyTitle;
+  /* Each outside source is "Server N" in the downloads dialog, numbered in
+     the order they show — a source with nothing (for this episode) skipped. */
+  const serverNos = (() => {
+    let n = 1;
+    const tmvNo = n; if (tmv.files.length) n++;
+    const bollyNo = n; if (bolly.files.length) n++;
+    const hdhubNo = n;
+    const hdEp = hdhub.files.some((f) => f.episode > 0);
+    if (hdhub.files.some((f) => !hdEp || (f.episode > 0 && (!downloadEp?.ep || f.episode === downloadEp.ep)))) n++;
+    return { tmv: tmvNo, bolly: bollyNo, hdhub: hdhubNo, i4m: n };
+  })();
 
   /* ── fetch full TMDB detail (cast + episodes + runtime etc.) ── */
 const fetchFullTmdb = useCallback(async (tmdbId, imdbId, contentType) => {
@@ -2384,7 +2397,7 @@ if (!alive) return;
                         {listed ? <Check size={20} /> : <Plus size={20} />}
                       </button>
                     ) : hasDownloads && (
-                      <button onClick={() => setShowDownloads(true)} title="Download links"
+                      <button onClick={() => { setDownloadEp(null); setShowDownloads(true); }} title="Download links"
                         className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition hover:bg-white/20 active:scale-95">
                         <Download size={19} />
                       </button>
@@ -2631,7 +2644,7 @@ if (!alive) return;
           const actions = (ep, k) => (
             <div className="flex items-center gap-1 shrink-0">
               {hasDownloads && (
-                <button type="button" onClick={(e) => { e.stopPropagation(); setShowDownloads(true); }} aria-label="Downloads" title="Download"
+                <button type="button" onClick={(e) => { e.stopPropagation(); setDownloadEp({ season: Number(ep.season) || 1, ep: Number(ep.episodeNumberInSeason) || null }); setShowDownloads(true); }} aria-label="Downloads" title="Download"
                   className="p-2.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><Download size={18} /></button>
               )}
               <button type="button" onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === k ? null : k); }}
@@ -2798,7 +2811,13 @@ if (!alive) return;
               <div className="sticky top-0 z-20 -mx-5 sm:-mx-7 px-5 sm:px-7 py-3.5 mb-4 flex items-center justify-between
                               bg-[#0f0f14]/95 backdrop-blur-md border-b border-white/[0.06]">
                 <span className="sm:hidden mx-auto absolute left-1/2 -translate-x-1/2 top-1.5 h-1 w-10 rounded-full bg-white/15" aria-hidden="true" />
-                <span className="text-sm font-black uppercase tracking-[0.15em] text-white">Downloads</span>
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="text-sm font-black uppercase tracking-[0.15em] text-white">Downloads{downloadEp?.ep ? ` · S${downloadEp.season} E${downloadEp.ep}` : ""}</span>
+                  {downloadEp?.ep && (
+                    <button type="button" onClick={() => setDownloadEp(null)}
+                      className="text-[11px] font-bold text-gray-400 hover:text-white underline underline-offset-2">All episodes</button>
+                  )}
+                </span>
                 <button onClick={() => setShowDownloads(false)} aria-label="Close"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/15 hover:text-white">
                   <X size={16} />
@@ -2877,13 +2896,15 @@ if (!alive) return;
                 post's Google Drive files, loading in beneath while the dialog
                 is already open. */}
             {hasOwnDownloads && (tmv.loading || tmv.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <TamilmvDownloads state={tmv} />
+            {/* Every source past our own is "Server N", numbered down the
+                dialog as each one shows. */}
+            <TamilmvDownloads state={tmv} serverNo={serverNos.tmv} />
             {(hasOwnDownloads || tmv.files.length > 0) && (bolly.loading || bolly.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <BollyflixDownloads state={bolly} empty={hasOwnDownloads || tmv.loading || tmv.files.length || hdhub.loading || hdhub.files.length || i4m.loading || i4m.posts.length ? "" : "No downloads for this title yet."} />
+            <BollyflixDownloads state={bolly} serverNo={serverNos.bolly} empty={hasOwnDownloads || tmv.loading || tmv.files.length || hdhub.loading || hdhub.files.length || i4m.loading || i4m.posts.length ? "" : "No downloads for this title yet."} />
             {(hasOwnDownloads || bolly.loading || bolly.files.length > 0) && (hdhub.loading || hdhub.files.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <HdhubDownloads state={hdhub} />
+            <HdhubDownloads state={hdhub} serverNo={serverNos.hdhub} episode={downloadEp?.ep || null} />
             {(hasOwnDownloads || bolly.files.length > 0 || hdhub.loading || hdhub.files.length > 0) && (i4m.loading || i4m.posts.length > 0) && <div className="h-px bg-white/[0.06]" />}
-            <India4moviesDownloads state={i4m} />
+            <India4moviesDownloads state={i4m} serverNo={serverNos.i4m} episode={downloadEp?.ep || null} season={downloadEp?.season || null} />
           </div>
             </div>
           </div>

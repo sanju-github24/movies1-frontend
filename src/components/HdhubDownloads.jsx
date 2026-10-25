@@ -66,9 +66,9 @@ function FileRow({ file }) {
         <span className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20"><Download size={14} /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-gray-200 group-hover:text-white">
-            {file.quality || "Download"}{/10\s*bit/i.test(file.label) ? " · 10-bit" : ""}{/hevc|x265/i.test(file.label) ? " · HEVC" : ""}
+            {file.quality || "Download"}{!file.episode && file.series === false && /pack|zip/i.test(file.label) ? " · ZIP" : ""}{/10\s*bit/i.test(file.label) ? " · 10-bit" : ""}{/hevc|x265/i.test(file.label) ? " · HEVC" : ""}
           </span>
-          <span className="block text-[11px] text-gray-500 truncate">{[file.size, file.series ? "Episodes" : "", file.label.replace(/\[.*?\]|\b(480|540|720|1080|2160)p\b|\b10\s*bit\b|\bhevc\b|\bx265\b|⚡/gi, " ").replace(/\s+/g, " ").trim()].filter(Boolean).join(" · ")}</span>
+          <span className="block text-[11px] text-gray-500 truncate">{[file.size, file.series && !file.episode ? "Episodes" : "", file.episode ? `Episode ${file.episode}` : "", file.label.replace(/[–-]\s*drive\s*\|\s*instant/i, "").replace(/\[.*?\]|\b(480|540|720|1080|2160)p\b|\b10\s*bit\b|\bhevc\b|\bx265\b|⚡/gi, " ").replace(/\s+/g, " ").trim()].filter(Boolean).join(" · ")}</span>
         </span>
         <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -90,7 +90,7 @@ function FileRow({ file }) {
           {link && Array.isArray(servers) && (
             <a href={link} target="_blank" rel="noopener noreferrer nofollow"
               className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 pt-1">
-              <ExternalLink size={12} /> Open on {file.kind}
+              <ExternalLink size={12} /> Open file page
             </a>
           )}
         </div>
@@ -99,31 +99,51 @@ function FileRow({ file }) {
   );
 }
 
-export default function HdhubDownloads({ state }) {
+/* The site's name is never shown — a source is "Server N", N its place in
+   the dialog. Its post title can carry the name too, so that is taken out. */
+const SITE_NAMES = /\s*[|\-–]?\s*\b(hdhub4u|india4movies|1?tamilmv|bollyflix|multicloudlinks)\b(\.\w+)?/gi;
+
+/* A series is downloaded an episode at a time: a post that lists its episodes
+   gives only those (its season packs left out), grouped under each episode —
+   or just the one asked for, from that episode's own download button. */
+export default function HdhubDownloads({ state, serverNo = 1, episode = null }) {
   if (state.loading) return (
     <div className="space-y-3" aria-busy="true">
       <div className="flex items-center gap-2.5 text-sm font-semibold text-gray-400">
-        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> Loading HDHub4u links…
+        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> Loading more servers…
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {[0, 1].map((i) => <div key={i} className="h-[66px] rounded-xl border border-white/[0.05] bg-white/[0.03] animate-pulse" />)}
       </div>
     </div>
   );
-  if (!state.files.length) return null;
+  const perEpisode = state.files.some((f) => f.episode > 0);
+  const files = perEpisode ? state.files.filter((f) => f.episode > 0 && (!episode || f.episode === episode)) : state.files;
+  if (!files.length) return null;
+  // The season's packs — what the post lists before its episodes — go last, as the full season.
+  const packs = perEpisode ? state.files.filter((f) => !f.episode) : [];
+  const groups = perEpisode
+    ? [...[...new Set(files.map((f) => f.episode))].sort((a, b) => a - b).map((ep) => ({ ep, files: files.filter((f) => f.episode === ep) })),
+       ...(packs.length ? [{ ep: "zip", files: packs }] : [])]
+    : [{ ep: 0, files }];
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-xl bg-emerald-600/10 border border-emerald-500/10"><Server size={18} className="text-emerald-400" /></div>
         <div className="min-w-0">
-          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">HDHub4u</h3>
-          <p className="text-[11px] text-gray-500 font-semibold truncate">{state.post?.title}</p>
+          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">Server {serverNo}</h3>
+          <p className="text-[11px] text-gray-500 font-semibold truncate">{(state.post?.title || "").replace(SITE_NAMES, "")}</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
-        {state.files.map((f, i) => <FileRow key={i} file={f} />)}
-      </div>
+      {groups.map((g) => (
+        <div key={g.ep} className="space-y-2">
+          {g.ep !== 0 && <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 pt-1">{g.ep === "zip" ? "Full season · ZIP" : `Episode ${g.ep}`}</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
+            {g.files.map((f, i) => <FileRow key={i} file={f} />)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

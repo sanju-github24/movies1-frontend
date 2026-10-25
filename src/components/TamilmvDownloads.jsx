@@ -144,7 +144,7 @@ function orderFiles(files) {
       || sizeInMB(b.f.size) - sizeInMB(a.f.size));
 }
 
-export default function TamilmvDownloads({ state }) {
+export default function TamilmvDownloads({ state, serverNo = 1 }) {
   if (state.loading) return (
     <div className="flex items-center gap-2.5 text-sm font-semibold text-gray-400" aria-busy="true">
       <Loader2 className="w-4 h-4 animate-spin text-violet-400" /> Loading direct downloads…
@@ -156,7 +156,7 @@ export default function TamilmvDownloads({ state }) {
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-xl bg-violet-600/10 border border-violet-500/10"><Zap size={18} className="text-violet-300" /></div>
         <div>
-          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">Direct downloads</h3>
+          <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">Server {serverNo}</h3>
           <p className="text-[11px] text-gray-500 font-semibold">{state.files.length} file{state.files.length === 1 ? "" : "s"} · newest release</p>
         </div>
       </div>

@@ -23,7 +23,6 @@ const viaRelay = (url) => {
 /* An older post's file: a full4drive page and, beside it, a HubCloud copy —
    each followed by the backend to the file itself. */
 const RESOLVABLE = /^https:\/\/(?:[a-z0-9-]+\.)?(?:full4drive\.[a-z]+\/file|hubcloud\.[a-z]+\/(?:drive|video))\//i;
-const hostLabel = (url) => (/full4drive/i.test(url) ? "full4drive" : /hubcloud/i.test(url) ? "HubCloud" : hostOf(url));
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, "").split(".").slice(-2, -1)[0] || "host"; } catch { return "host"; } };
 
 /* More downloads for a title, from India4Movies: one post per language, each
@@ -123,7 +122,7 @@ function FileRow({ file }) {
           {Array.isArray(servers) && (file.code ? [file.url] : pages).map((u) => (
             <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow"
               className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 pt-1 mr-4">
-              <ExternalLink size={12} /> Open on {file.code ? "MultiCloudLinks" : hostLabel(u)}
+              <ExternalLink size={12} /> Open file page
             </a>
           ))}
         </div>
@@ -132,35 +131,75 @@ function FileRow({ file }) {
   );
 }
 
-export default function India4moviesDownloads({ state }) {
+/* A series post's quality is a list page — a Batch/Zip and "Episode 1",
+   "Episode 2"… each its own MultiCloudLinks file. Opened as it was, that
+   list came back as the "servers", and an episode sent the viewer off to
+   MultiCloudLinks. So a series is shown an episode at a time instead: each
+   episode with its qualities, every one its own code whose servers are
+   asked for when opened, like a film's file — and the Batch/Zip after,
+   as the full season. */
+const MCL = "https://new3.multicloudlinks.com";
+const episodeGroups = (files, only) => {
+  const by = new Map();
+  for (const f of files) for (const e of f.episodes || []) {
+    if (only && e.ep !== only) continue;
+    if (!by.has(e.ep)) by.set(e.ep, []);
+    by.get(e.ep).push({ ...f, label: f.quality || "", size: "", code: e.code, url: `${MCL}/view/${e.code}`, episodes: [] });
+  }
+  return [...by.keys()].sort((a, b) => a - b).map((ep) => ({ ep, files: by.get(ep) }));
+};
+/* The season in one file per quality — each list page's Batch/Zip. */
+const zipFiles = (files) => files.filter((f) => f.zip?.code).map((f) => ({
+  ...f, label: `${f.quality || ""} ZIP`, size: f.zip.size || "", info: "Full season", code: f.zip.code,
+  url: `${MCL}/view/${f.zip.code}`, episodes: [], links: [{ name: "", url: `${MCL}/view/${f.zip.code}` }],
+}));
+
+/* The site's name is never shown — each post is "Server N", N its place. */
+export default function India4moviesDownloads({ state, serverNo = 1, episode = null, season = null }) {
   if (state.loading) return (
     <div className="space-y-3" aria-busy="true">
       <div className="flex items-center gap-2.5 text-sm font-semibold text-gray-400">
-        <Loader2 className="w-4 h-4 animate-spin text-orange-400" /> Loading India4Movies links…
+        <Loader2 className="w-4 h-4 animate-spin text-orange-400" /> Loading more servers…
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {[0, 1].map((i) => <div key={i} className="h-[66px] rounded-xl border border-white/[0.05] bg-white/[0.03] animate-pulse" />)}
       </div>
     </div>
   );
-  if (!state.posts.length) return null;
+  /* From an episode's button: that season's posts only, and in each, that
+     episode — a post with no episode list (an older one) has nothing for it. */
+  const posts = state.posts
+    .filter((p) => !season || !p.season || Number(p.season) === Number(season))
+    .filter((p) => !episode || p.files.some((f) => f.episodes?.length));
+  if (!posts.length) return null;
 
   return (
     <div className="space-y-5">
-      {state.posts.map((p) => (
+      {posts.map((p, n) => (
         <div key={p.url} className="space-y-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-orange-600/10 border border-orange-500/10"><Server size={18} className="text-orange-400" /></div>
             <div className="min-w-0">
               <h3 className="text-base font-black uppercase tracking-[0.15em] text-white">
-                India4Movies{p.lang ? <span className="text-orange-400"> · {p.lang}</span> : null}
+                Server {serverNo + n}{p.lang ? <span className="text-orange-400"> · {p.lang}</span> : null}
               </h3>
-              <p className="text-[11px] text-gray-500 font-semibold truncate">{p.title}</p>
+              <p className="text-[11px] text-gray-500 font-semibold truncate">{p.title.replace(/\s*[|\-–]?\s*\b(india4movies|full4movies)\b(\.\w+)?/gi, "")}</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
-            {rowsOf(p.files).map((f, i) => <FileRow key={i} file={f} />)}
-          </div>
+          {p.files.some((f) => f.episodes?.length)
+            ? [...episodeGroups(p.files, episode), ...(zipFiles(p.files).length ? [{ ep: "zip", files: zipFiles(p.files) }] : [])].map((g) => (
+              <div key={g.ep} className="space-y-2">
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 pt-1">{g.ep === "zip" ? "Full season · ZIP" : `Episode ${g.ep}`}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
+                  {g.files.map((f) => <FileRow key={f.code} file={{ ...f, links: [{ name: "", url: f.url }] }} />)}
+                </div>
+              </div>
+            ))
+            : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
+                {rowsOf(p.files).map((f, i) => <FileRow key={i} file={f} />)}
+              </div>
+            )}
         </div>
       ))}
     </div>
