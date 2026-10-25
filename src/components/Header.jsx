@@ -617,70 +617,74 @@ const hit = u.match(/\/watch\/([^/?#]+)/);
 };
 
 
-/* Where a hero card sits when snapped (its left edge, less the track's
-   scroll-padding), and which card is nearest that line now. */
-const cardLeft = (track, card) => card.offsetLeft - (parseFloat(getComputedStyle(track).scrollPaddingLeft) || 0);
-const nearestCard = (track) => {
-  let best = 0, gap = Infinity;
-  Array.from(track.children).forEach((c, i) => {
-    const d = Math.abs(cardLeft(track, c) - track.scrollLeft);
-    if (d < gap) { gap = d; best = i; }
-  });
-  return best;
-};
+/* A deck of cards, the way JioHotstar's phone app shows its hero: the card in
+   front, and the next two tucked behind it — each a little smaller and
+   peeking out further to the right — so the stack reads as more to come.
+   A swipe left or right moves through it (the front card follows the
+   finger), and it advances on its own every four seconds, wrapping at the
+   end; never while a finger is down, the page is scrolling, or the deck is
+   mostly off screen. */
+const DECK_WIDTH = "calc(100% - 52px)";        // 16px gutter left, room for the stack on the right
+const STACK = [                                 // front, then the two behind it
+  { x: 0,  scale: 1,    z: 30, opacity: 1 },
+  { x: 16, scale: 0.92, z: 20, opacity: 0.9 },
+  { x: 30, scale: 0.84, z: 10, opacity: 0.7 },
+];
 
 function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
-  const trackRef = useRef(null);
+  const deckRef = useRef(null);
   const [active, setActive] = useState(0);
-  /* Set while a finger is down, and for a moment after the flick settles.
-     Auto-advance is suspended throughout: nothing is more irritating than a
-     carousel that yanks itself along while you are reading a card. */
+  const [drag, setDrag] = useState(0);          // px the front card is being dragged
   const heldRef = useRef(false);
   const releaseRef = useRef(0);
+  const touch = useRef(null);
+  const n = slides.length;
 
-  /* Which card is under the viewport's centre. Derived from scrollLeft rather
-     than from an IntersectionObserver per card: one listener, and it stays
-     correct mid-flick instead of only at rest. */
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      setActive(nearestCard(el));
+  useEffect(() => { if (active >= n) setActive(0); }, [n, active]);
+  const go = (step) => setActive((a) => (n ? (a + step + n) % n : 0));
+
+  /* Where each card sits: d = how far behind the front it is (0 = front),
+     and -1 = the one that just left, slid out to the left. */
+  const place = (d) => {
+    if (d === -1) return { transform: "translateX(-115%) scale(0.95)", zIndex: 40, opacity: 0, transformOrigin: "right center",
+      transition: "transform 450ms cubic-bezier(.2,.8,.2,1), opacity 450ms" };
+    const p = STACK[d];
+    if (!p) return { transform: `translateX(${STACK[2].x}px) scale(0.8)`, zIndex: 0, opacity: 0, transformOrigin: "right center", pointerEvents: "none" };
+    const dx = d === 0 ? drag : 0;
+    return {
+      transform: `translateX(${p.x + dx}px) scale(${p.scale})`,
+      zIndex: p.z, opacity: p.opacity, transformOrigin: "right center",
+      transition: drag && d === 0 ? "none" : "transform 450ms cubic-bezier(.2,.8,.2,1), opacity 450ms",
     };
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(measure); };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => { el.removeEventListener("scroll", onScroll); if (frame) cancelAnimationFrame(frame); };
-  }, [slides.length]);
+  };
 
-  /* Advance every four seconds, wrapping at the end.
+  /* A horizontal swipe moves the deck; a vertical one is left to the page. */
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY, axis: null };
+    heldRef.current = true; clearTimeout(releaseRef.current);
+  };
+  const onTouchMove = (e) => {
+    const s = touch.current; if (!s) return;
+    const t = e.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (!s.axis && Math.abs(dx) + Math.abs(dy) > 8) s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    if (s.axis === "x") setDrag(dx);
+  };
+  const onTouchEnd = () => {
+    const s = touch.current; touch.current = null;
+    if (s?.axis === "x") {
+      if (drag < -50) go(1); else if (drag > 50) go(-1);
+    }
+    setDrag(0);
+    clearTimeout(releaseRef.current);
+    releaseRef.current = setTimeout(() => { heldRef.current = false; }, 2500);
+  };
 
-     It scrolls the track rather than moving an index, because the deck's
-     position is the scroll position — the dots read from it, and a swipe and a
-     tick have to leave it in the same state or the two fight each other. */
   useEffect(() => {
-    if (slides.length < 2) return;
+    if (n < 2) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-
-    const el = trackRef.current;
+    const el = deckRef.current;
     if (!el) return;
-
-    const hold = () => { heldRef.current = true; clearTimeout(releaseRef.current); };
-    // A flick keeps scrolling after the finger lifts; let it land before
-    // taking the wheel back.
-    const release = () => {
-      clearTimeout(releaseRef.current);
-      releaseRef.current = setTimeout(() => { heldRef.current = false; }, 2500);
-    };
-    el.addEventListener("touchstart", hold, { passive: true });
-    el.addEventListener("touchend", release, { passive: true });
-    el.addEventListener("touchcancel", release, { passive: true });
-
-    /* Never while the page itself is moving, nor while the deck is mostly off
-       screen. It used to advance on its own clock regardless — a sideways
-       glide, snapping, in the middle of a vertical scroll, which on a phone
-       reads as the top of the page lurching back and forth. */
     let pageScrolling = false, pageTimer = 0, visible = true;
     const onPageScroll = () => {
       pageScrolling = true;
@@ -692,41 +696,26 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
       ? new IntersectionObserver(([e]) => { visible = e.intersectionRatio >= 0.6; }, { threshold: [0, 0.6, 1] })
       : null;
     io?.observe(el);
-
     const tick = setInterval(() => {
       if (heldRef.current || document.hidden || pageScrolling || !visible) return;
-      const cards = el.children;
-      if (!cards.length) return;
-      // To where the next card really sits, not a computed step that drifts.
-      const next = nearestCard(el) + 1;
-      el.scrollTo({ left: next >= cards.length ? 0 : cardLeft(el, cards[next]), behavior: "smooth" });
+      go(1);
     }, 4000);
-
     return () => {
-      clearInterval(tick);
-      clearTimeout(releaseRef.current);
-      clearTimeout(pageTimer);
-      window.removeEventListener("scroll", onPageScroll);
-      io?.disconnect();
-      el.removeEventListener("touchstart", hold);
-      el.removeEventListener("touchend", release);
-      el.removeEventListener("touchcancel", release);
+      clearInterval(tick); clearTimeout(pageTimer); clearTimeout(releaseRef.current);
+      window.removeEventListener("scroll", onPageScroll); io?.disconnect();
     };
-  }, [slides.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n]);
 
   return (
     <div className="sm:hidden">
-      {/* No negative margin: the page has no side padding on a phone, so the
-          old -mx-4 pushed the deck 16px off the left edge — every card, and the
-          title on it, sat under the screen's edge. */}
-      {/* A 16px gutter each side, as JioHotstar's hero has: a card snaps 16px
-          in from the left edge (scroll-padding), so its rounded corner and the
-          title over it never sit on — or under — the screen's edge, and the next
-          card peeks in on the right. */}
-      <div ref={trackRef}
-        className="relative flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth px-4 scroll-px-4"
-        aria-roledescription="carousel" aria-label="Newest releases">
-        {slides.map((movie, n) => {
+      <div ref={deckRef} className="relative mx-4 select-none" style={{ width: DECK_WIDTH, touchAction: "pan-y" }}
+        aria-roledescription="carousel" aria-label="Newest releases"
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+        {/* Holds the deck's height: the cards inside are stacked absolutely. */}
+        <div className="aspect-[3/4]" aria-hidden="true" />
+        {slides.map((movie, i) => {
+          const d = n < 2 ? 0 : (() => { const k = (i - active + n) % n; return k === n - 1 ? -1 : k; })();
           const a = pickArt(art, movie);
           const isCricketSlide = movie.liveKind === LIVE_CRICKET;
           const isLiveSlide    = !!movie.liveKind;
@@ -741,8 +730,10 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
 
           return (
             <article key={movie.id || movie.slug}
-              className="snap-start shrink-0 w-[86%] relative rounded-2xl overflow-hidden
-                         bg-gray-900 ring-1 ring-white/10">
+              aria-hidden={d !== 0 || undefined} inert={d !== 0 ? "" : undefined}
+              className="absolute top-0 left-0 w-full rounded-2xl overflow-hidden bg-gray-900 ring-1 ring-white/10
+                         shadow-[0_18px_40px_rgba(0,0,0,0.55)] will-change-transform"
+              style={place(d)}>
               <button type="button" onClick={() => onOpen(movie)}
                 aria-label={`${movie.title} — open details`}
                 className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
@@ -762,14 +753,14 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
                       <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async"
                         className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-60 saturate-150" />
                       <img src={src} alt="" aria-hidden="true"
-                        fetchPriority={n === 0 ? "high" : "auto"}
-                        loading={n === 0 ? "eager" : "lazy"} decoding="async"
+                        fetchPriority={i === 0 ? "high" : "auto"}
+                        loading={i === 0 ? "eager" : "lazy"} decoding="async"
                         className="absolute inset-x-0 top-12 w-full h-auto object-contain shadow-2xl shadow-black/60" />
                     </>
                   ) : src ? (
                     <img src={src} alt="" aria-hidden="true"
-                      fetchPriority={n === 0 ? "high" : "auto"}
-                      loading={n === 0 ? "eager" : "lazy"} decoding="async"
+                      fetchPriority={i === 0 ? "high" : "auto"}
+                      loading={i === 0 ? "eager" : "lazy"} decoding="async"
                       className="absolute inset-0 w-full h-full object-cover object-top" />
                   ) : null}
 
@@ -826,12 +817,12 @@ function MobileHeroDeck({ slides, art, extra = {}, heroSlug, onOpen }) {
         })}
       </div>
 
-      {slides.length > 1 && (
+      {n > 1 && (
         <div className="flex justify-center gap-1.5 mt-3" aria-hidden="true">
-          {slides.map((m, n) => (
+          {slides.map((m, k) => (
             <span key={m.id || m.slug}
               className={`h-1 rounded-full transition-all duration-300 ${
-                n === active ? "w-5 bg-white" : "w-1.5 bg-white/30"}`} />
+                k === active ? "w-5 bg-white" : "w-1.5 bg-white/30"}`} />
           ))}
         </div>
       )}
