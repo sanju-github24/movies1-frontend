@@ -289,7 +289,13 @@ const VideoPlayer = ({
       extraLangs.push(versions.filter((x) => x.lang === v.lang && x.url !== src).reduce((a, b) => (b.height > a.height ? b : a)));
     }
   }
-  const extraLangName = (v) => getLanguageName({ name: v.lang, lang: NAME_TO_CODE[v.lang.toLowerCase()] || "" });
+  /* A per-language stream (MoviBox's MP4s, India4Movies' / HDHub4u's /
+     1TamilMV's MKVs) is named by an English word ("Tamil"). Shown everywhere
+     in the language's own script — தமிழ், తెలుగు, हिंदी — exactly as an audio
+     track inside a stream is, so every menu reads the same whatever the
+     source. */
+  const versionLangName = (v) => getLanguageName({ name: v.lang, lang: NAME_TO_CODE[v.lang.toLowerCase()] || "" });
+  const extraLangName = versionLangName;
   const streamQualities = streamLangs
     ? versions.filter((v) => v.lang === playingVersion.lang)
         .filter((v, i, a) => a.findIndex((x) => x.height === v.height) === i)
@@ -1461,7 +1467,7 @@ const VideoPlayer = ({
                       {streamLangs
                         ? langOptions.map((v) => (
                             <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center gap-2 px-4 py-2 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                              {v.lang === playingVersion.lang ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{v.lang}</span>
+                              {v.lang === playingVersion.lang ? <Check size={15} className="text-blue-400 shrink-0"/> : <span className="w-[15px] shrink-0" />}<span className="text-sm font-medium truncate">{versionLangName(v)}</span>
                             </button>
                           ))
                         : (audioTracks.length ? audioTracks.map((t, i) => (
@@ -1563,7 +1569,7 @@ const VideoPlayer = ({
               {/* One language per stream: the languages are the other streams. */}
               {showSettings === 'audio' && streamLangs && langOptions.map((v) => (
                 <button key={v.lang} onClick={() => { switchVersion(v); setShowSettings(null); }} className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors ${v.lang === playingVersion.lang ? 'text-blue-400 bg-blue-500/10' : 'text-white/85 hover:text-white hover:bg-white/5'}`}>
-                  <span className="text-sm font-medium">{v.lang}</span>{v.lang === playingVersion.lang && <Check size={16} className="text-blue-400"/>}
+                  <span className="text-sm font-medium">{versionLangName(v)}</span>{v.lang === playingVersion.lang && <Check size={16} className="text-blue-400"/>}
                 </button>
               ))}
               {showSettings === 'speed' && [0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => (
@@ -1726,7 +1732,7 @@ const VideoPlayer = ({
             {langOptions.map((v) => (
               <button key={v.lang} onClick={() => { switchVersion(v); scheduleEndLangIntro(1200); }}
                 className={`px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 ${v.lang === playingVersion.lang ? "bg-white text-black" : "text-white/80 hover:bg-white/10"}`}>
-                {v.lang}
+                {versionLangName(v)}
               </button>
             ))}
             <button onClick={endLangIntro}
