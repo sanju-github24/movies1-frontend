@@ -189,6 +189,9 @@ const VideoPlayer = ({
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
+  /* Up while the paused details screen is showing: every control hides then,
+     leaving the details and a progress strip (PausedOverlay). */
+  const [pausedDetails, setPausedDetails] = useState(false);
   isPlayingRef.current = isPlaying;
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
@@ -1379,8 +1382,9 @@ const VideoPlayer = ({
         poster={poster}
         backdrop={backdrop}
         description={description}
-        recommendations={recommendations}
-        onSelect={onSelectRecommendation}
+        currentTime={currentTime}
+        duration={duration}
+        onShowChange={setPausedDetails}
       />
 
       {isBuffering && (
@@ -1676,7 +1680,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: TOP --- */}
-      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/70 via-black/15 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
+      <div className={`absolute top-0 inset-x-0 p-3 sm:p-5 md:p-8 flex items-center justify-between bg-gradient-to-b from-black/70 via-black/15 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro && !pausedDetails ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2 sm:gap-4 md:gap-5">
           <button onClick={onBackClick} className="p-2 sm:p-2.5 rounded-full hover:bg-white/10 transition-all active:scale-90"><ChevronLeft size={26} /></button>
           <div className="flex flex-col text-left min-w-0">
@@ -1734,7 +1738,7 @@ const VideoPlayer = ({
       </div>
 
       {/* Center Play Indicator */}
-      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-all duration-500 z-30 ${!isPlaying && !isBuffering ? 'opacity-100 scale-100' : 'opacity-0 scale-125'}`}>
+      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-all duration-500 z-30 ${!isPlaying && !isBuffering && !pausedDetails ? 'opacity-100 scale-100' : 'opacity-0 scale-125'}`}>
          <div className="p-8 rounded-full border border-white/10 bg-black/30 backdrop-blur-md shadow-2xl">
             {isPlaying ? <Pause size={40} fill="white" className="text-white" /> : <Play size={40} fill="white" className="text-white ml-1" />}
          </div>
@@ -1820,7 +1824,7 @@ const VideoPlayer = ({
       )}
 
       {/* --- HUD: BOTTOM (CLEAN HUD) --- */}
-      <div className={`absolute bottom-0 inset-x-0 p-3 pt-16 sm:p-5 sm:pt-24 md:p-8 md:pt-28 bg-gradient-to-t from-black/75 via-black/30 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-0 inset-x-0 p-3 pt-16 sm:p-5 sm:pt-24 md:p-8 md:pt-28 bg-gradient-to-t from-black/75 via-black/30 to-transparent transition-all duration-500 z-50 ${showControls && !langIntro && !pausedDetails ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="relative mb-2 sm:mb-4">
             {/* Scrub thumbnail preview (like Netflix/Hotstar) */}
             <div className="absolute bottom-7 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-100" style={{ left: `${hoverPct}%`, opacity: hoverTime != null ? 1 : 0 }}>

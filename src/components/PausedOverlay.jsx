@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ShieldCheck, PlayCircle, Star, Layers3 } from "lucide-react";
+import { ShieldCheck, PlayCircle, Star } from "lucide-react";
+
+const fmt = (t) => {
+  const s = Math.max(0, Math.floor(t || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+};
 
 const PausedOverlay = ({
   isVisible,
@@ -9,8 +15,9 @@ const PausedOverlay = ({
   logoUrl,
   imdbRating,
   year,
-  recommendations = [],
-  onSelect,
+  currentTime = 0,
+  duration = 0,
+  onShowChange,
 }) => {
   const [shouldRender, setShouldRender] = useState(false);
   const timerRef = useRef(null);
@@ -58,7 +65,14 @@ const PausedOverlay = ({
     };
   }, [isVisible]);
 
-  if (!shouldRender || !isVisible) return null;
+  /* The player hides its own controls while this is up — the screen is the
+     details and the progress strip, nothing else — and brings them back the
+     moment it goes. */
+  const shown = shouldRender && isVisible;
+  useEffect(() => { onShowChange?.(shown); }, [shown]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onShowChange?.(false), []);        // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!shown) return null;
 
   const genreList = Array.isArray(genres) 
     ? genres 
@@ -110,31 +124,17 @@ const PausedOverlay = ({
         </div>
       </div>
 
-      {/* More Like This — the OTT move: while paused, a row of what to watch
-          next, straight from the overlay. Only this row takes pointer events
-          (the rest of the overlay stays click-through so a tap resumes). */}
-      {onSelect && recommendations.length > 0 && (
-        <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-auto px-4 sm:px-8 md:px-16 lg:px-24 pb-5 sm:pb-8">
-          <p className="text-[10px] sm:text-xs font-bold tracking-[0.2em] uppercase text-white/60 mb-2 sm:mb-3">More like this</p>
-          <div className="flex gap-2.5 sm:gap-3 overflow-x-auto scrollbar-hide snap-x pb-1"
-            onClick={(e) => e.stopPropagation()}>
-            {recommendations.slice(0, 12).map((m) => (
-              <button key={m.id || m.slug} type="button"
-                onClick={() => onSelect(m)}
-                title={m.title || m.slug}
-                className="group/rec relative shrink-0 w-24 sm:w-32 md:w-36 snap-start rounded-lg overflow-hidden
-                           ring-1 ring-white/10 hover:ring-white/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                <span className="block aspect-[2/3] bg-gray-900">
-                  <img src={m.poster || m.poster_url || "/default-poster.jpg"} alt=""
-                    loading="lazy" decoding="async"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover/rec:scale-105"
-                    onError={(e) => { e.currentTarget.src = "/default-poster.jpg"; }} />
-                </span>
-                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pt-4 pb-1.5">
-                  <span className="block text-[10px] sm:text-[11px] font-semibold text-white truncate">{m.title || m.slug}</span>
-                </span>
-              </button>
-            ))}
+      {/* How far in, how much is left — the only control-like thing on screen
+          while paused, as on JioHotstar. */}
+      {duration > 0 && (
+        <div className="absolute inset-x-0 bottom-0 z-20 px-4 sm:px-8 md:px-16 lg:px-24 pb-5 sm:pb-8">
+          <div className="flex items-center gap-3 sm:gap-4 text-[11px] sm:text-sm font-medium tabular-nums text-white/85">
+            <span>{fmt(currentTime)}</span>
+            <span className="relative flex-1 h-[3px] rounded-full bg-white/30 overflow-hidden">
+              <span className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#1f80e0] to-[#2ba4ff]"
+                style={{ width: `${Math.min(100, (currentTime / duration) * 100)}%` }} />
+            </span>
+            <span className="text-white/60">-{fmt(Math.max(0, duration - currentTime))}</span>
           </div>
         </div>
       )}
