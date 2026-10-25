@@ -51,6 +51,42 @@
     <meta property="og:locale" content="en_IN" />
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
 
+    <!-- Mbidadm's In-Page Push ad (a floating "offer" iframe pinned near the
+         bottom) sat on top of the phone bottom navbar, which shows below 640px
+         (Navbar.jsx, sm:hidden). It is hidden on phones only. Its box carries
+         class names that change on every load, so it is found by what it holds:
+         an iframe titled "offer", directly inside a box on <body>. The observer
+         covers phone browsers without :has(). -->
+    <style>
+      @media (max-width: 639px) {
+        body > div:has(> iframe[title="offer"]) { display: none !important; }
+      }
+    </style>
+    <script>
+      (function () {
+        if (!window.matchMedia || !window.MutationObserver) return;
+        var phone = window.matchMedia("(max-width: 639px)");
+        var sweep = function () {
+          if (!phone.matches) return;
+          var frames = document.querySelectorAll('body > div > iframe[title="offer"]');
+          for (var i = 0; i < frames.length; i++) frames[i].parentNode.style.setProperty("display", "none", "important");
+        };
+        // The box can arrive empty and get its iframe a moment later, so the
+        // whole tree is watched; the check runs at most once a frame.
+        var queued = false;
+        var later = function () {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(function () { queued = false; sweep(); });
+        };
+        var start = function () {
+          sweep();
+          new MutationObserver(later).observe(document.body, { childList: true, subtree: true });
+        };
+        if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+      })();
+    </script>
+
     <!-- Mbidadm Ad System -->
     <script async src="https://js.mbidadm.com/static/scripts.js" data-admpid="446919"></script>
   </head>
