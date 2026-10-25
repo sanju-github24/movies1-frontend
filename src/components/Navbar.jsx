@@ -14,18 +14,21 @@ import { readProfiles } from "../utils/profiles";
    globe collapses into a solid blob — so the active state had nowhere to go
    except the translucent pill this replaces. Lucide stays for the mobile
    chrome, which is unchanged. */
-import {
-  MdHome, MdOutlineHome,
-  MdWatchLater, MdOutlineWatchLater,
-  MdMovie, MdOutlineMovie,
-  MdSportsCricket, MdOutlineSportsCricket,
-  MdLiveTv, MdOutlineLiveTv,
-  MdMusicNote, MdOutlineMusicNote,
-  MdPublic, MdOutlinePublic,
-  MdCategory, MdOutlineCategory,
-  MdPerson, MdOutlinePerson,
-  MdSearch, MdMenu,
-} from "react-icons/md";
+import { MdMenu } from "react-icons/md";
+import { NAV_ICONS } from "./navIcons";
+
+/* JioHotstar-style outline icons (see navIcons.jsx); the On form is the
+   heavier stroke shown for the open page. */
+const { Icon: HomeIcon, IconOn: HomeIconOn } = NAV_ICONS.home;
+const { Icon: SearchNavIcon } = NAV_ICONS.search;
+const { Icon: LatestIcon, IconOn: LatestIconOn } = NAV_ICONS.latest;
+const { Icon: MoviesIcon, IconOn: MoviesIconOn } = NAV_ICONS.movies;
+const { Icon: SportsIcon, IconOn: SportsIconOn } = NAV_ICONS.sports;
+const { Icon: TvIcon, IconOn: TvIconOn } = NAV_ICONS.tv;
+const { Icon: MusicIcon, IconOn: MusicIconOn } = NAV_ICONS.music;
+const { Icon: BlogsIcon, IconOn: BlogsIconOn } = NAV_ICONS.blogs;
+const { Icon: CategoriesIcon, IconOn: CategoriesIconOn } = NAV_ICONS.categories;
+const { Icon: ProfileIcon, IconOn: ProfileIconOn } = NAV_ICONS.profile;
 
 /* ── Desktop rail ──────────────────────────────────────────────────────────
    The rail's destinations, in one place, because each one is three pieces of
@@ -37,14 +40,14 @@ import {
    "you are here"; a green music note and a red sports icon were each shouting
    the same thing as the active state and drowning it out. */
 const RAIL_LINKS = [
-  { to: "/",            label: "Home",        Icon: MdOutlineHome,          IconOn: MdHome, end: true },
-  { action: "search",   label: "Search",      Icon: MdSearch,               IconOn: MdSearch },
-  { to: "/latest",      label: "Latest",      Icon: MdOutlineWatchLater,    IconOn: MdWatchLater },
-  { to: "/watch",       label: "Movies",      Icon: MdOutlineMovie,         IconOn: MdMovie },
-  { to: "/sports",      label: "Live Sports", Icon: MdOutlineSportsCricket, IconOn: MdSportsCricket },
-  { to: "/live-stream", label: "Live TV",     Icon: MdOutlineLiveTv,        IconOn: MdLiveTv },
-  { to: "/music",       label: "Music",       Icon: MdOutlineMusicNote,     IconOn: MdMusicNote },
-  { to: "/blogs",       label: "Blogs",       Icon: MdOutlinePublic,        IconOn: MdPublic },
+  { to: "/",            label: "Home",        Icon: HomeIcon,          IconOn: HomeIconOn, end: true },
+  { action: "search",   label: "Search",      Icon: SearchNavIcon,               IconOn: SearchNavIcon },
+  { to: "/latest",      label: "Latest",      Icon: LatestIcon,    IconOn: LatestIconOn },
+  { to: "/watch",       label: "Movies",      Icon: MoviesIcon,         IconOn: MoviesIconOn },
+  { to: "/sports",      label: "Live Sports", Icon: SportsIcon, IconOn: SportsIconOn },
+  { to: "/live-stream", label: "Live TV",     Icon: TvIcon,        IconOn: TvIconOn },
+  { to: "/music",       label: "Music",       Icon: MusicIcon,     IconOn: MusicIconOn },
+  { to: "/blogs",       label: "Blogs",       Icon: BlogsIcon,        IconOn: BlogsIconOn },
 ];
 
 /* A rail row is a fixed 72px of icon gutter with the label hanging off its
@@ -306,8 +309,8 @@ const Navbar = () => {
               <NavLink to="/categories"
                 className={() => railItem(/^\/(categories|category|genre|studio)(\/|$)/.test(location.pathname))}>
                 {/^\/(categories|category|genre|studio)(\/|$)/.test(location.pathname)
-                  ? <MdCategory size={26} className="shrink-0" />
-                  : <MdOutlineCategory size={26} className="shrink-0" />}
+                  ? <CategoriesIconOn size={26} className="shrink-0" />
+                  : <CategoriesIcon size={26} className="shrink-0" />}
                 <span className={railLabel(railOpen)} style={labelDelay(railOpen, RAIL_LINKS.length)}>Categories</span>
               </NavLink>
             </li>
@@ -347,8 +350,8 @@ const Navbar = () => {
             ) : (
               <button type="button" onClick={() => navigate("/auth")} className={railItem(false)}>
                 {location.pathname === "/profile"
-                  ? <MdPerson size={26} className="shrink-0" />
-                  : <MdOutlinePerson size={26} className="shrink-0" />}
+                  ? <ProfileIconOn size={26} className="shrink-0" />
+                  : <ProfileIcon size={26} className="shrink-0" />}
                 <span className={railLabel(railOpen)} style={labelDelay(railOpen, RAIL_LINKS.length + 1)}>Log in</span>
               </button>
             )}
@@ -395,7 +398,7 @@ const Navbar = () => {
                 className="w-full bg-white/10 border border-white/10 rounded-2xl py-5 px-6 text-xl outline-none focus:border-blue-500 transition-all text-white font-bold"
               />
               <button type="submit" aria-label="Search" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 p-3 rounded-xl shadow-lg">
-                <MdSearch size={22} />
+                <SearchNavIcon size={22} />
               </button>
             </form>
             <div className="mt-10">
@@ -420,32 +423,32 @@ const Navbar = () => {
             <ul className="space-y-2 font-bold text-gray-700 mb-8">
               <li>
                 <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <MdOutlineHome size={22} className="text-blue-600" /> Home
+                  <HomeIcon size={22} className="text-blue-600" /> Home
                 </Link>
               </li>
               <li>
                 <Link to="/latest" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <MdOutlineWatchLater size={22} className="text-blue-600" /> Latest Uploads
+                  <LatestIcon size={22} className="text-blue-600" /> Latest Uploads
                 </Link>
               </li>
               <li>
                 <Link to="/watch" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <MdOutlineMovie size={22} className="text-blue-600" /> Watch Movies
+                  <MoviesIcon size={22} className="text-blue-600" /> Watch Movies
                 </Link>
               </li>
               <li>
                 <Link to="/categories" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <MdOutlineCategory size={22} className="text-blue-600" /> Categories
+                  <CategoriesIcon size={22} className="text-blue-600" /> Categories
                 </Link>
               </li>
               <li>
                 <Link to="/live-stream" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-purple-50 rounded-xl transition">
-                  <MdOutlineLiveTv size={22} className="text-purple-600" /> Live TV
+                  <TvIcon size={22} className="text-purple-600" /> Live TV
                 </Link>
               </li>
               <li>
                 <Link to="/music" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-green-50 rounded-xl transition">
-                  <MdOutlineMusicNote size={22} className="text-green-600" /> Music
+                  <MusicIcon size={22} className="text-green-600" /> Music
                 </Link>
               </li>
               <li>
@@ -454,14 +457,14 @@ const Navbar = () => {
                   className="w-full flex items-center justify-between p-3 bg-red-50 text-red-600 rounded-xl transition"
                 >
                   <div className="flex items-center gap-4">
-                    <MdOutlineSportsCricket size={22} />
+                    <SportsIcon size={22} />
                     <span>Live Sports</span>
                   </div>
                 </button>
               </li>
               <li>
                 <Link to="/blogs" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 p-3 hover:bg-blue-50 rounded-xl transition">
-                  <MdOutlinePublic size={22} className="text-blue-600" /> Blogs
+                  <BlogsIcon size={22} className="text-blue-600" /> Blogs
                 </Link>
               </li>
             </ul>
@@ -503,12 +506,12 @@ const Navbar = () => {
           className="pointer-events-auto w-full max-w-md flex items-center justify-between gap-1 rounded-[26px]
                      bg-[#111116]/85 backdrop-blur-xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.55)] px-2.5 py-2.5">
           {[
-            { to: "/", end: true, label: "Home", Icon: MdOutlineHome, IconOn: MdHome },
-            { action: "search", label: "Search", Icon: MdSearch, IconOn: MdSearch },
-            { to: "/watch", label: "Movies", Icon: MdOutlineMovie, IconOn: MdMovie },
-            { to: "/sports", label: "Live Sports", Icon: MdOutlineSportsCricket, IconOn: MdSportsCricket },
-            { to: "/live-stream", label: "Live TV", Icon: MdOutlineLiveTv, IconOn: MdLiveTv },
-            { to: "/music", label: "Music", Icon: MdOutlineMusicNote, IconOn: MdMusicNote },
+            { to: "/", end: true, label: "Home", Icon: HomeIcon, IconOn: HomeIconOn },
+            { action: "search", label: "Search", Icon: SearchNavIcon, IconOn: SearchNavIcon },
+            { to: "/watch", label: "Movies", Icon: MoviesIcon, IconOn: MoviesIconOn },
+            { to: "/sports", label: "Live Sports", Icon: SportsIcon, IconOn: SportsIconOn },
+            { to: "/live-stream", label: "Live TV", Icon: TvIcon, IconOn: TvIconOn },
+            { to: "/music", label: "Music", Icon: MusicIcon, IconOn: MusicIconOn },
           ].map((item) => {
             const Icon = item.Icon;
             const IconOn = item.IconOn;
@@ -535,7 +538,7 @@ const Navbar = () => {
                         ${session && activeProfile ? "" : "bg-white/[0.07] text-white/85"}`}>
             {session && activeProfile
               ? <Avatar id={activeProfile.avatar} size={40} />
-              : <MdOutlinePerson size={23} />}
+              : <ProfileIcon size={23} />}
           </button>
         </nav>
       </div>
