@@ -1862,8 +1862,11 @@ if (!alive) return;
           }}
         >
 
-          {/* Top bar */}
-          <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-black/60 backdrop-blur-xl border-b border-white/[0.04] shrink-0 z-20">
+          {/* Top bar — only over an embed server, floating, so the picture fills
+              the whole screen. Our player has its own back button and title. */}
+          {sourceType !== "hls" && (
+          <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-b from-black/70 to-transparent z-20 pointer-events-none [&>*]:pointer-events-auto"
+            style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}>
             <button onClick={closeOverlay}
               aria-label="Close player and go back"
               className="flex items-center gap-2 px-3 py-2.5 min-h-[44px] min-w-[44px] justify-center rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 text-gray-400 hover:text-white transition-all border border-white/5 touch-manipulation">
@@ -1883,12 +1886,14 @@ if (!alive) return;
             </button>
           </div>
 
+          )}
+
           {/* The server bar is gone: our player starts on its own, and an embed
               server, when one is playing, has the switcher in its corner. */}
 
           {/* Player + settings */}
           <div className="flex flex-1 overflow-hidden relative min-h-0">
-            <div className={`flex-1 bg-black transition-all duration-300 relative ${showSettingsPanel ? "lg:mr-[320px]" : ""}`}>
+            <div className="flex-1 bg-black relative">
               {sourceType === "hls" ? (
                  <VideoPlayer
                    inline
@@ -1999,7 +2004,7 @@ if (!alive) return;
 
             {/* Settings panel */}
             <div
-              className={`absolute lg:relative top-0 right-0 h-full w-full sm:w-[340px] lg:w-[320px]
+              className={`absolute top-0 right-0 h-full w-full sm:w-[340px] lg:w-[320px]
               bg-[#0a0a0c] border-l border-white/[0.04] flex flex-col overflow-hidden
               transition-transform duration-300 ease-in-out z-20
               ${showSettingsPanel ? "translate-x-0" : "translate-x-full lg:translate-x-full"}`}
