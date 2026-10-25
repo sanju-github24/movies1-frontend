@@ -1666,7 +1666,10 @@ if (!alive) return;
               //    with no number fall through to the position/title lookups. ──
               const dbEpNo = (dbEp) => {
                 const n = Number(dbEp?.episode ?? dbEp?.episode_number ?? dbEp?.episodeNumberInSeason);
-                return Number.isFinite(n) && n > 0 ? n : null;
+                if (Number.isFinite(n) && n > 0) return n;
+                // An upload titled "EP07" / "Episode 7" carries its number in the title.
+                const t = Number((String(dbEp?.title || "").match(/^\s*(?:EP|E|Episode)\s*0*(\d{1,4})\s*$/i) || [])[1]);
+                return t > 0 ? t : null;
               };
               const dbByExactEp = {};
               const dbEpNumsBySeason = {};   // season → Set of explicit episode numbers
@@ -1696,7 +1699,13 @@ if (!alive) return;
                  do not host. An episode yet to air is left off; one without a
                  date is kept. */
               const today = new Date().toISOString().slice(0, 10);
-              const filteredTmdbEps = tmdbEps.filter((tmdbEp) => !tmdbEp.air_date || String(tmdbEp.air_date).slice(0, 10) <= today);
+              /* Only the seasons we hold. A title matched to TMDB by its name
+                 can land on a different entry of the same show — Bigg Boss
+                 Kannada 13 found one listing Seasons 9 and 10, which then came
+                 first, beside our Season 13. Our seasons are the show here. */
+              const ourSeasons = new Set(Object.keys(dbGrouped));
+              const filteredTmdbEps = tmdbEps.filter((tmdbEp) => (!tmdbEp.air_date || String(tmdbEp.air_date).slice(0, 10) <= today)
+                && (!eps.length || ourSeasons.has(String(tmdbEp.season || 1))));
 
               // ── Merge: attach DB html/direct_url onto matching TMDB episode ──
               const usedDb = new Set();
@@ -1743,7 +1752,8 @@ if (!alive) return;
           const srv = buildServers(meta, eps);
           setAvailableServers(srv);
           setActiveServer(srv[0] || null);
-          if (eps.length > 0) setActiveSeason(`S${eps[0]?.season || 1}`);
+          // Open on the newest season — the one still airing, for a running show.
+          if (eps.length > 0) setActiveSeason(`S${Math.max(...eps.map((e) => Number(e.season) || 1))}`);
         }
       } catch (err) {
         console.error("[WatchHtmlPage]", err);
@@ -2578,7 +2588,11 @@ if (!alive) return;
               || `${ep.title || ep.name || ""} ${ep.description || ep.overview || ""}`.toLowerCase().includes(q))
             .slice().sort((a, b) => (epSortDesc ? -1 : 1) * ((a.episodeNumberInSeason || 0) - (b.episodeNumberInSeason || 0)));
           const keyOf = (ep) => `${ep.season || 1}-${ep.episodeNumberInSeason || ep.episode}`;
-          const thumbOf = (ep) => ep.thumbnail || (ep.still_path ? (ep.still_path.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`) : null);
+          /* An episode TMDB has no picture for (a season it has not added, a
+             nightly show's latest) takes the show's own cover — the same art
+             its live card shows — rather than an empty box. */
+          const showArt = [movieMeta.background, movieMeta.cover_poster, movieMeta.poster].find((u) => u && !/default-(cover|poster)/.test(u)) || null;
+          const thumbOf = (ep) => ep.thumbnail || (ep.still_path ? (ep.still_path.startsWith("http") ? ep.still_path : `https://image.tmdb.org/t/p/w300${ep.still_path}`) : null) || showArt;
           const upcoming = (ep) => ep.air_date && new Date(ep.air_date) > new Date();
           const hidden = (ep) => spoilerProtection && upcoming(ep);
           const play = (ep) => {
@@ -2631,7 +2645,7 @@ if (!alive) return;
               {thumbOf(ep) && (
                 <img src={thumbOf(ep)} alt="" loading="lazy"
                   className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${hidden(ep) ? "blur-md scale-110" : ""}`}
-                  onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  onError={(e) => { const i = e.currentTarget; if (showArt && i.src !== showArt) i.src = showArt; else i.style.display = "none"; }} />
               )}
               <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                 <span className="p-2.5 rounded-full bg-white/90 text-black"><Play size={16} fill="currentColor" /></span>
