@@ -27,7 +27,7 @@ import LiveViewer from "../components/LiveViewer";
 import { absUrl, jsonLd, titleForSearch, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo.js";
 import {
   Loader2, Star, Play, ShieldCheck, ArrowLeft, List, MonitorPlay, Video, Zap, Database, Clock, Globe, AlertCircle, ChevronDown, Monitor, Cpu, Download, X, Languages, Settings, Eye, Film, Tv2, Shield, Signal, Users, VolumeX, Volume2, Pause,
-  Search, LayoutList, LayoutGrid, ArrowDownNarrowWide, ArrowUpNarrowWide
+  Search, LayoutList, LayoutGrid, ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronUp
 } from "lucide-react";
 
 /* ===== Safe URI ===== */
@@ -91,6 +91,10 @@ const sortDownloadBlocks = (blocks) => {
     .sort((x, y) => seasonOf(x.b.quality) - seasonOf(y.b.quality) || firstEp(x.b) - firstEp(y.b) || x.i - y.i)
     .map(({ b }) => b);
 };
+
+/* Servers that play in someone else's embedded player — what the corner
+   switcher offers once our own player has handed over. */
+const EMBED_IDS = new Set(["imdb_reader", "embed", "mirchi", "modiplay", "vidify", "videasy", "vidup", "tmdb", "2embed"]);
 
 /* ===== Group episodes by season ===== */
 const groupEpisodesBySeason = (episodes) => {
@@ -511,6 +515,7 @@ const WatchHtmlPage = () => {
     setTimeout(() => setOrderNote(""), 4000);
   };
   const [activeServer,      setActiveServer     ] = useState(null);
+  const [embedMenu,         setEmbedMenu        ] = useState(false);
   const [activeSeason,      setActiveSeason     ] = useState("S1");
   const [openDropdown,      setOpenDropdown     ] = useState(null);
   // Episode list tools: a search, oldest/newest first, and list or grid —
@@ -522,6 +527,12 @@ const WatchHtmlPage = () => {
   const [imgLoaded,         setImgLoaded        ] = useState(false);
 
   const [showOverlay,       setShowOverlay      ] = useState(false);
+  /* While the player is open, the floating In-Page Push ad (index.html) is
+     hidden: it sat on the player's corner switcher and controls. */
+  useEffect(() => {
+    document.body.classList.toggle("player-open", !!showOverlay);
+    return () => document.body.classList.remove("player-open");
+  }, [showOverlay]);
   const [finalSource,       setFinalSource      ] = useState(null);
   const [mxResolving,       setMxResolving      ] = useState(false);
   const [resolvingLabel,    setResolvingLabel   ] = useState("");
@@ -962,10 +973,11 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     if (!found) {
       tmdbIterRef.current = null;
       tmdbCacheRef.current.delete(search.key);   // ask again next time
-      // Nobody has it — hand over to Mirchi rather than leave a dead button.
-      const next = availableServers.find(sv => sv.id === "mirchi");
-      toast.info(next ? `${who} couldn't find this one — trying Mirchi` : `${who} couldn't find this one`);
-      if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "mirchi"); }
+      // Nobody has it — hand over to Omega, the first embed server, rather
+      // than leave a dead button. (Its corner switcher offers the others.)
+      const next = availableServers.find(sv => sv.id === "imdb_reader");
+      toast.info(next ? `${who} couldn't find this one — trying Omega` : `${who} couldn't find this one`);
+      if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "imdb_reader"); }
       return;
     }
     if (ep) setCurrentOverlayEp(ep);
@@ -1871,19 +1883,8 @@ if (!alive) return;
             </button>
           </div>
 
-          {/* Quick server bar */}
-          <div
-            className="px-3 sm:px-4 py-2 bg-black/40 backdrop-blur-md border-b border-white/[0.03] shrink-0 z-10 overflow-x-auto"
-            style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
-          >
-            <div className="flex items-center gap-2 min-w-max">
-              <span className="text-[9px] text-gray-600 uppercase tracking-widest font-black shrink-0 mr-1">Server:</span>
-              {orderedServers.map(s => (
-                <ServerBadge key={s.id} server={s} isActive={activeServer?.id === s.id}
-                  onClick={() => handleServerSwitch(s)} compact />
-              ))}
-            </div>
-          </div>
+          {/* The server bar is gone: our player starts on its own, and an embed
+              server, when one is playing, has the switcher in its corner. */}
 
           {/* Player + settings */}
           <div className="flex flex-1 overflow-hidden relative min-h-0">
@@ -1960,6 +1961,41 @@ if (!alive) return;
                  />
                )}
             </div>
+
+            {/* Corner switcher, only while an embed server is playing (never in
+                our own player): the server's name, opening a list of the other
+                embed servers, and Direct | Embed — Direct goes back to ours. */}
+            {sourceType !== "hls" && activeServer && EMBED_IDS.has(activeServer.id) && (() => {
+              const embeds = availableServers.filter((x) => EMBED_IDS.has(x.id));
+              const ours = availableServers.find((x) => x.id === "ourhls");
+              return (
+                <div className="absolute right-3 sm:right-5 bottom-20 sm:bottom-24 z-30 flex flex-col items-end gap-2">
+                  <div className="relative">
+                    <button type="button" onClick={() => setEmbedMenu((o) => !o)} aria-expanded={embedMenu}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-black/70 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider backdrop-blur-md hover:bg-black/85">
+                      {activeServer.name}
+                      <ChevronUp size={14} className={`transition-transform ${embedMenu ? "" : "rotate-180"}`} />
+                    </button>
+                    {embedMenu && (
+                      <div className="absolute right-0 bottom-full mb-2 w-44 max-h-72 overflow-y-auto rounded-xl bg-[#16181f]/95 border border-white/10 shadow-2xl backdrop-blur-xl py-1">
+                        {embeds.map((x) => (
+                          <button key={x.id} type="button"
+                            onClick={() => { setEmbedMenu(false); handleServerSwitch(x); }}
+                            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${x.id === activeServer.id ? "text-blue-400 bg-blue-500/10" : "text-white/85 hover:bg-white/5"}`}>
+                            {x.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex p-1 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-[11px] font-bold uppercase tracking-wider">
+                    <button type="button" disabled={!ours} onClick={() => { setEmbedMenu(false); if (ours) handleServerSwitch(ours); }}
+                      className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white disabled:opacity-40">Direct</button>
+                    <span className="px-3.5 py-1.5 rounded-full bg-white text-black">Embed</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Settings panel */}
             <div
@@ -2256,9 +2292,13 @@ if (!alive) return;
               <button
                 onClick={() => {
                   const firstEp = isTVShow && episodes.length > 0 ? episodes[0] : null;
-                  // Respect the currently-selected server (e.g. AnchorHD). Only fall
-                  // back to the embed mirror when the active server can't play this.
-                  handlePlayAction(firstEp);
+                  if (live && live.live) { handlePlayAction(firstEp); return; }
+                  /* Always our player first; it hands over to Omega only when it
+                     cannot find the title. Viewers no longer pick servers. */
+                  const ours = availableServers.find((x) => x.id === "ourhls");
+                  const start = ours || availableServers.find((x) => x.id === "imdb_reader");
+                  if (start) setActiveServer(start);
+                  handlePlayAction(firstEp, start?.id);
                 }}
                 className={`group flex items-center rounded-full py-1 pl-1 pr-5 sm:py-1.5 sm:pl-1.5 sm:pr-7 gap-3 sm:gap-4 transition active:scale-[0.98] touch-manipulation
                   ${live && live.live ? "bg-red-600 text-white hover:bg-red-500" : "bg-white text-black hover:bg-gray-200"}`}>
@@ -2286,7 +2326,10 @@ if (!alive) return;
 
 
             {/* Quick server select */}
-            {availableServers.length > 0 && (
+            {/* Servers are not offered to viewers any more — our player starts by
+                itself and falls back to Omega. The admin still sees them here, to
+                arrange a title's order. */}
+            {isAdmin && availableServers.length > 0 && (
               <div className="pt-2 scroll-mt-24" id="servers-section">
                 {/* Every server lives here now that the deployment grid is gone:
                     one swipeable row on a phone, wrapping from sm up. */}

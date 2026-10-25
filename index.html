@@ -64,6 +64,8 @@
       @media (max-width: 639px) {
         body > div:has(> iframe[title="offer"]) { display: none !important; }
       }
+      /* Nor over the video player, on any screen (WatchPage sets the class). */
+      body.player-open > div:has(> iframe[title="offer"]) { display: none !important; }
     </style>
     <script>
       (function () {
