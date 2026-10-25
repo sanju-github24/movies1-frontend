@@ -485,6 +485,23 @@ export default function AnchorPlayer({
     };
   }, []);
 
+  /* iPhone: closing Apple's fullscreen player can leave the page's video
+     detached from its picture and sound (a black frame, the clock running) —
+     an iOS Safari fault, worst with hls.js on iOS 17+. On webkitendfullscreen
+     the stream is reconnected and playback carried on: hls.js re-attaches its
+     media, Shaka (or a native stream) is simply played again. */
+  useEffect(() => {
+    const v = vid.current;
+    if (!v) return;
+    const onEnd = () => setTimeout(() => {
+      const e = engine.current;
+      if (e?.kind === "hls") { try { e.inst.recoverMediaError(); } catch { /* destroyed */ } }
+      v.play().catch(() => {});
+    }, 250);
+    v.addEventListener("webkitendfullscreen", onEnd);
+    return () => v.removeEventListener("webkitendfullscreen", onEnd);
+  }, []);
+
   /* A phone opens straight into full screen, sideways, as the movie player
      does — still inside the tap that opened it, which the browser needs. */
   useEffect(() => {

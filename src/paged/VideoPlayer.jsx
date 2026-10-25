@@ -184,6 +184,8 @@ const VideoPlayer = ({
   
   // Basic State
   const [isPlaying, setIsPlaying] = useState(false);
+  const isPlayingRef = useRef(false);
+  isPlayingRef.current = isPlaying;
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1035,6 +1037,12 @@ const VideoPlayer = ({
     const phone = Math.min(window.innerWidth, window.innerHeight) <= 820
       && (/Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1);
     if (!phone) return;
+    /* Only where the page itself can go fullscreen (Android). On iPhone the
+       only fullscreen is Apple's own player, and being thrown into it the
+       moment a film starts — then closing it — is how viewers lost the
+       picture and the sound (see the webkitendfullscreen recovery below).
+       There, fullscreen waits for the fullscreen button. */
+    if (!(el.requestFullscreen || el.webkitRequestFullscreen)) return;
     let armed = false;
     const onTap = () => { el.removeEventListener("touchend", onTap); if (!fullscreenEl()) enterFullscreen(); };
     const onPlaying = async () => {
@@ -1047,6 +1055,41 @@ const VideoPlayer = ({
       v.removeEventListener("playing", onPlaying);
       if (armed) el.removeEventListener("touchend", onTap);
     };
+  }, []);
+
+  /* iPhone: when Apple's fullscreen player closes, Safari can leave the page's
+     video detached from its picture and sound — a black frame with the clock
+     still running, worst with hls.js on iOS 17+ (ManagedMediaSource). So on
+     webkitendfullscreen the stream is reconnected at the same second: hls.js
+     re-attaches its media; a plain file or native HLS reloads from there.
+     Then playback resumes if it was playing. */
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onEnd = () => {
+      const at = v.currentTime || 0;
+      const wasPlaying = !v.paused || isPlayingRef.current;
+      setTimeout(() => {
+        const h = hlsRef.current;
+        if (h) {
+          try { h.recoverMediaError(); } catch { /* destroyed */ }
+        } else if (v.currentSrc && !v.currentSrc.startsWith("blob:")) {
+          const base = v.currentSrc.split("#")[0];
+          v.src = at > 1 ? `${base}#t=${Math.floor(at)}` : base;
+          v.load();
+        }
+        let done = false;
+        const resume = () => {
+          if (done) return; done = true;
+          try { if (Math.abs((v.currentTime || 0) - at) > 2) v.currentTime = at; } catch { /* not seekable yet */ }
+          if (wasPlaying) v.play().catch(() => {});
+        };
+        v.addEventListener("loadedmetadata", resume, { once: true });
+        setTimeout(resume, 900);
+      }, 250);
+    };
+    v.addEventListener("webkitendfullscreen", onEnd);
+    return () => v.removeEventListener("webkitendfullscreen", onEnd);
   }, []);
 
   const applySpeed = (rate) => {
@@ -1290,6 +1333,8 @@ const VideoPlayer = ({
         }}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => { setIsBuffering(false); setIsPlaying(true); }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         onEnded={handleVideoEnd}
       >
         {externalSubUrl && <track key={externalSubUrl} kind="subtitles" src={externalSubUrl} srcLang="en" label={externalSubLabel} default />}
