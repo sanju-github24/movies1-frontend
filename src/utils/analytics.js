@@ -14,6 +14,8 @@ import { supabase } from "./supabaseClient";
 const VID_KEY = "anc_vid";
 const SID_KEY = "anc_sid";
 const LAST_KEY = "anc_last";
+const ADMIN_KEY = "anc_admin";
+const ADMIN_EMAILS = ["sanjusanjay0444@gmail.com"];
 const IDLE_MS = 30 * 60e3;
 const PING_MS = 30e3;
 
@@ -21,6 +23,11 @@ const rid = () => (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, "") : 
 const store = (s) => { try { return s(); } catch { return null; } };
 
 let vid = "", newVisitor = false, sid = "", email = "";
+/* The admin is never counted: not as online, not in any number. A browser
+   that has opened an admin page is marked for good (markAdmin), and a
+   signed-in admin email is caught too — even browsing the site logged out
+   of the admin pages. */
+let isAdmin = store(() => localStorage.getItem(ADMIN_KEY) === "1") || false;
 let visibleSince = 0, banked = 0, started = false, lastPath = "";
 
 function ids() {
@@ -42,6 +49,7 @@ function takeActive() {
 }
 
 function send(body, beacon = false) {
+  if (isAdmin && body.t !== "forget") return;
   const base = liveBackend();
   if (!base) return;
   const url = `${base}/api/analytics/collect`;
@@ -66,7 +74,10 @@ function start() {
   started = true;
   ids();
   visibleSince = document.visibilityState === "visible" ? Date.now() : 0;
-  supabase?.auth?.getSession?.().then(({ data }) => { email = data?.session?.user?.email || ""; }).catch(() => {});
+  supabase?.auth?.getSession?.().then(({ data }) => {
+    email = data?.session?.user?.email || "";
+    if (ADMIN_EMAILS.includes(email.toLowerCase())) markAdmin();
+  }).catch(() => {});
 
   setInterval(() => {
     if (document.visibilityState !== "visible" || !counted(location.pathname)) return;
@@ -89,6 +100,20 @@ function start() {
   addEventListener("pagehide", () => {
     if (counted(location.pathname)) send({ t: "leave", d: takeActive() }, true);
   });
+}
+
+/** This browser is the admin's: stop counting it, and have the backend forget
+    every visit it already sent. */
+export function markAdmin() {
+  try {
+    store(() => localStorage.setItem(ADMIN_KEY, "1"));
+    if (isAdmin && store(() => localStorage.getItem(ADMIN_KEY + "_forgot")) === "1") return;
+    isAdmin = true;
+    if (pending) { clearTimeout(pending.timer); pending = null; }
+    if (!vid) ids();
+    send({ t: "forget" });
+    store(() => localStorage.setItem(ADMIN_KEY + "_forgot", "1"));
+  } catch { /* never break the page */ }
 }
 
 /** Call on every route change. The title is read a moment later, once the page has set it. */

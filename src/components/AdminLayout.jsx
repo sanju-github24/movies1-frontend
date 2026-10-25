@@ -2,6 +2,7 @@
 import React, { useContext, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
+import { markAdmin } from "../utils/analytics";
 import {
   LayoutDashboard,
   UploadCloud,
@@ -86,6 +87,8 @@ const ADMIN_LINKS = [
 ];
 
 const AdminLayout = ({ children }) => {
+  // Whoever gets this far is the admin: their browser is never counted in Analytics.
+  React.useEffect(() => { markAdmin(); }, []);
   const path = useLocation().pathname;
   const { userData } = useContext(AppContext);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for mobile menu
