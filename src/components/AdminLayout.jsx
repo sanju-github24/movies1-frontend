@@ -16,10 +16,16 @@ import {
   LogOut,
   Tv, // Used for the Live Match Upload page
   Globe,
+  Activity,
 } from "lucide-react"; // Using lucide-react for modern icons
 
 // --- Sidebar Navigation Data ---
 const ADMIN_LINKS = [
+  {
+    path: "/admin/analytics",
+    icon: Activity,
+    label: "Analytics",
+  },
   {
     path: "/admin/dashboard",
     icon: LayoutDashboard,

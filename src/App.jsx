@@ -53,6 +53,8 @@ import ScrollMemory from './components/ScrollMemory';
 import { loadLiveNow } from './utils/liveConfig';
 import AdminLiveNow from './paged/AdminLiveNow';
 import AdminSourceDomains from './paged/AdminSourceDomains';
+import AdminAnalytics from './paged/AdminAnalytics';
+import { trackPage } from './utils/analytics';
 import Home from './paged/Home';
 import Login from './paged/Login';
 import EmailVerify from './paged/EmailVerify';
@@ -178,6 +180,9 @@ const AppContent = () => {
 
   // What the admin has on air, and the nightly shows' times — before anything asks "is this live".
   useEffect(() => { loadLiveNow(); }, []);
+
+  // Every page a visitor opens, for Admin → Analytics.
+  useEffect(() => { trackPage(); }, [location.pathname, location.search]);
 
   // ── Anti-Inspect Logic ──
   useEffect(() => {
@@ -374,6 +379,7 @@ const AppContent = () => {
                 <Route path="live-channels"    element={<LiveChannelsUpload />} />
                 <Route path="live-now"         element={<AdminLiveNow />} />
                 <Route path="source-domains"   element={<AdminSourceDomains />} />
+                <Route path="analytics"        element={<AdminAnalytics />} />
               </Routes>
             </ProtectedAdminRoute>
           }
