@@ -1085,6 +1085,17 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       tmdbCacheRef.current.delete(search.key);   // ask again next time
       // Nobody has it — hand over to Omega, the first embed server, rather
       // than leave a dead button. (Its corner switcher offers the others.)
+      // Our own uploaded mirror for THIS item, if we have one, before a
+      // third-party server — a title we hold only as an embed (a movie uploaded
+      // in parts) still plays from our upload instead of dropping to Omega.
+      const ownEmbed = ep ? (ep.html || ep.html_code) : movieMeta.html_code;
+      if (!mb && ownEmbed) {
+        const em = availableServers.find(sv => sv.id === "embed");
+        toast.info(`${who} couldn't find this one — playing Multi Audio`);
+        if (em) setActiveServer(em);
+        handlePlayActionRef.current?.(ep, "embed");
+        return;
+      }
       const next = availableServers.find(sv => sv.id === "imdb_reader");
       toast.info(next ? `${who} couldn't find this one — trying Omega` : `${who} couldn't find this one`);
       if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "imdb_reader"); }
@@ -2686,10 +2697,13 @@ if (!alive) return;
             setOpenDropdown(null);
             // AnchorMB chosen: every episode plays there, in whichever language.
             if (activeServer?.id === "movibox" || activeServer?.id === "tamilmv") { handlePlayAction(ep, activeServer.id); return; }
-            // Priority: AnchorHD (our own HLS) → Multi Audio (embed) → AnchorHD by TMDB id → Omega.
+            // Priority: AnchorHD (our own HLS) → AnchorHD by TMDB id → Multi Audio
+            // (our uploaded embed) → Omega. Our player opens first; the embed is
+            // the fallback when we have no stream, not the default (clicking an
+            // episode used to open the uploaded iframe straight away).
             if (ep.hasDirect) { handlePlayAction(ep, "ourhls"); return; }
-            if (ep.hasEmbed) { handlePlayAction(ep, "embed"); return; }
             if (movieMeta?.tmdb_id) { handlePlayAction(ep, "ourhls"); return; }
+            if (ep.hasEmbed) { handlePlayAction(ep, "embed"); return; }
             handlePlayAction(ep, "imdb_reader"); // Omega
           };
           const serverPicker = (ep) => {
