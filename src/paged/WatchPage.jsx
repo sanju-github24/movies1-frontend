@@ -1085,17 +1085,6 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       tmdbCacheRef.current.delete(search.key);   // ask again next time
       // Nobody has it — hand over to Omega, the first embed server, rather
       // than leave a dead button. (Its corner switcher offers the others.)
-      // Our own uploaded mirror for THIS item, if we have one, before a
-      // third-party server — a title we hold only as an embed (a movie uploaded
-      // in parts) still plays from our upload instead of dropping to Omega.
-      const ownEmbed = ep ? (ep.html || ep.html_code) : movieMeta.html_code;
-      if (!mb && ownEmbed) {
-        const em = availableServers.find(sv => sv.id === "embed");
-        toast.info(`${who} couldn't find this one — playing Multi Audio`);
-        if (em) setActiveServer(em);
-        handlePlayActionRef.current?.(ep, "embed");
-        return;
-      }
       const next = availableServers.find(sv => sv.id === "imdb_reader");
       toast.info(next ? `${who} couldn't find this one — trying Omega` : `${who} couldn't find this one`);
       if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "imdb_reader"); }
@@ -2697,14 +2686,15 @@ if (!alive) return;
             setOpenDropdown(null);
             // AnchorMB chosen: every episode plays there, in whichever language.
             if (activeServer?.id === "movibox" || activeServer?.id === "tamilmv") { handlePlayAction(ep, activeServer.id); return; }
-            // Priority: AnchorHD (our own HLS) → AnchorHD by TMDB id → Multi Audio
-            // (our uploaded embed) → Omega. Our player opens first; the embed is
-            // the fallback when we have no stream, not the default (clicking an
-            // episode used to open the uploaded iframe straight away).
+            // Priority: AnchorHD (our own HLS) → AnchorHD by TMDB id → Omega.
+            // The uploaded embed (Multi Audio) is never opened automatically — it
+            // is the very last resort, only when there is no stream and no id for
+            // a server at all (clicking an episode used to open the raw iframe).
             if (ep.hasDirect) { handlePlayAction(ep, "ourhls"); return; }
             if (movieMeta?.tmdb_id) { handlePlayAction(ep, "ourhls"); return; }
-            if (ep.hasEmbed) { handlePlayAction(ep, "embed"); return; }
-            handlePlayAction(ep, "imdb_reader"); // Omega
+            if (movieMeta?.imdb_id) { handlePlayAction(ep, "imdb_reader"); return; } // Omega
+            if (ep.hasEmbed) { handlePlayAction(ep, "embed"); return; }  // last resort
+            handlePlayAction(ep, "imdb_reader");
           };
           const serverPicker = (ep) => {
             const cc = {
@@ -2724,7 +2714,6 @@ if (!alive) return;
                         ...(ep.hasDirect || movieMeta.tmdb_id ? [{ id:"ourhls", label:"AnchorHD", color:"green" }] : []),
                         ...(movieMeta.mx_web_url || movieMeta.mx_id ? [{ id:"mx", label:"MX Player", color:"green" }] : []),
                         { id:"imdb_reader", label:"Omega",      color:"yellow" },
-                        { id:"embed",       label:"Multi Audio", color:"indigo" },
                         { id:"mirchi",      label:"Mirchi",      color:"rose"   },
                         { id:"vidify",      label:"Vidify",     color:"purple" },
                         { id:"videasy",     label:"VidEasy",    color:"blue"   },
@@ -2732,6 +2721,8 @@ if (!alive) return;
                         { id:"tmdb",        label:"Alpha",      color:"blue"   },
                         { id:"2embed",      label:"Prime",      color:"orange" },
                         { id:"modiplay",    label:"Nova",       color:"pink"   },
+                        // Our uploaded embed, dead last — never the default, chosen only on purpose.
+                        { id:"embed",       label:"Multi Audio", color:"indigo" },
                 ].filter((srv) => srv.id !== "embed" || !!(ep.html || ep.html_code)).map((srv) => (
                   <button key={srv.id} onClick={() => handlePlayAction(ep, srv.id)}
                     className={`py-3 px-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 touch-manipulation ${cc[srv.color]}`}>
