@@ -396,6 +396,74 @@ const attachLocalHls = async (m) => {
   } catch { return null; }
 };
 
+/* ===== A /watch/<slug> we hold nothing for, found on TMDB =====
+   The slug is the title ("prince", "the-family-man"), perhaps with its year
+   ("prince-2022"). It is searched as a film and as a series, and only a
+   title whose own slug is this one is taken — never merely the top hit.
+   Several titles can share a name: the year in the slug decides; without
+   one, an Indian-language title first (this site's audience), then one
+   people have actually voted on, then the newest. Returns router-state for Branch A, or null. */
+const INDIAN_LANGS = new Set(["ta", "te", "hi", "ml", "kn", "bn", "mr", "pa", "gu", "or", "ur"]);
+const slugOf = (t) => String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const slugState = (h, routeSlug) => ({
+  id: h.tmdb_id || h.id, tmdb_id: h.tmdb_id || h.id, source: "tmdb", isTmdbOnly: true,
+  slug: routeSlug, title: h.title, content_type: h.content_type === "tv" ? "tv" : "movie",
+  poster: h.poster_url || "", cover_poster: h.cover_poster_url || h.poster_url || "",
+  year: h.year || "", release_date: h.release_date || "", description: h.description || "",
+  genres: h.genres || [], imdb_rating: h.imdb_rating ?? null, title_logo: h.title_logo || null,
+});
+async function findSlugOnTmdb(backendUrl, routeSlug) {
+  if (!backendUrl || !routeSlug) return null;
+  /* The backend reads five pages deep (/api/tmdb-slug); a backend without
+     that route yet is searched from here, three pages deep. */
+  try {
+    const r = await fetch(`${backendUrl}/api/tmdb-slug?slug=${encodeURIComponent(routeSlug)}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d?.success) return d.result ? slugState(d.result, routeSlug) : null;
+    }
+  } catch { /* fall back to searching here */ }
+  const want = routeSlug.toLowerCase().replace(/-{2,}/g, "-");   // older slugs have "---" for " - "
+  const ym = want.match(/^(.+?)-((?:19|20)\d{2})$/);
+  const base = ym ? ym[1] : routeSlug;
+  const year = ym ? ym[2] : "";
+  const query = base.replace(/-+/g, " ").trim();
+  if (!query) return null;
+  /* TMDB lists a search by popularity, not by how exact the name is: the
+     Tamil "Prince" (2022) sits on page 2 behind The Little Prince and the
+     rest. So three pages of each, not one. */
+  const search = (type, page) => fetch(`${backendUrl}/api/tmdb-search?${new URLSearchParams({ query, type, page: String(page) })}`)
+    .then((r) => r.json()).then((d) => (d?.success ? d.results || [] : [])).catch(() => []);
+  const hits = (await Promise.all(["movie", "tv"].flatMap((t) => [1, 2, 3].map((pg) => search(t, pg))))).flat()
+    .filter((h, i, a) => a.findIndex((x) => (x.tmdb_id || x.id) === (h.tmdb_id || h.id) && x.content_type === h.content_type) === i);
+  const slugs = (h) => [slugOf(h.title), generateSlug(h.title), String(h.slug || "").replace(/-{2,}/g, "-")];
+  const same = (h) => slugs(h).some((x) => x === base || x === want);
+  let pool = hits.filter(same);
+  /* Nothing named exactly so: a title holding every word of the slug, in
+     order, and little else — "kantara-chapter-1" is TMDB's
+     "Kantara - A Legend: Chapter 1". */
+  if (!pool.length) {
+    const words = base.split("-").filter(Boolean);
+    const inOrder = (sl) => { let i = 0; for (const w of sl.split("-")) if (w === words[i]) i++; return i === words.length; };
+    pool = hits.filter((h) => { const sl = slugOf(h.title); return inOrder(sl) && sl.split("-").length <= words.length + 3; });
+  }
+  if (year) {
+    const ofYear = pool.filter((h) => String(h.year) === year);
+    if (ofYear.length) pool = ofYear;
+    else if (!pool.length) pool = hits.filter((h) => String(h.year) === year && slugs(h).some((x) => x.startsWith(base)));
+  }
+  if (!pool.length) return null;
+  // A placeholder with no votes (a 2026 Spanish "Prince") never beats a title people have seen.
+  const seen = (h) => ((h.vote_count || 0) >= 5 ? 1 : 0);
+  pool.sort((a, b) =>
+    (INDIAN_LANGS.has(b.original_language) - INDIAN_LANGS.has(a.original_language))
+    || seen(b) - seen(a)
+    || (Number(b.year) || 0) - (Number(a.year) || 0)
+    || (b.vote_count || 0) - (a.vote_count || 0));
+  return slugState(pool[0], routeSlug);
+}
+
 /* ===================================================================
    WatchHtmlPage
 =================================================================== */
@@ -1435,6 +1503,10 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
             const d = await fetch(`${backendUrl}/api/fresh`).then((r) => r.json()).catch(() => null);
             const f = (d?.items || []).find((x) => x.slug === routeSlug);
             if (f) stateMovie = freshEntry(f).linkState.movie;
+            /* Not ours and not just out: any title TMDB knows, found from the
+               address itself — typed, shared or bookmarked — rather than
+               "Content Not Found". */
+            if (!stateMovie) stateMovie = await findSlugOnTmdb(backendUrl, routeSlug);
           }
         }
         if (stateMovie) {
