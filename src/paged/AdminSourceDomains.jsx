@@ -26,7 +26,7 @@ async function call(method, path, body) {
   return d;
 }
 
-const PLACEHOLDER = { tamilmv: "www.1tamilmv.example", hdhub: "new9.hdhub4u.example", i4m: "go7.india4movies.example" };
+const PLACEHOLDER = { tamilmv: "www.1tamilmv.example", hdhub: "new9.hdhub4u.example", i4m: "go7.india4movies.example", movibox: "movibox.example" };
 
 function CheckLine({ check, onUse }) {
   if (!check) return null;
