@@ -11,6 +11,7 @@ import axios from "axios";
 import MbidadmBanner from "../components/MbidadmBanner";
 import { parseFileMeta, fileNameOf } from "../utils/fileMeta";
 import { getLiveShow, isLiveNow, liveStatus, useLiveClock } from "../utils/liveShow";
+import { watchTick, flushWatch } from "../utils/analytics";
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
@@ -1176,6 +1177,19 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   /* ── Continue Watching: throttled progress save while our HLS plays ── */
   const handleProgress = useCallback((time, duration) => {
     if (!movieMeta || !(time > 0)) return;
+    // Watch time for Admin → Analytics: every report, before the save throttle below.
+    {
+      const wep = currentOverlayEp;
+      watchTick({
+        slug: movieMeta.slug || routeSlug, title: movieMeta.title,
+        type: movieMeta.content_type === "tv" ? "tv" : "movie",
+        season: wep ? Number(wep.season) || 1 : undefined,
+        episode: wep ? Number(wep.episodeNumberInSeason || wep.episode) || undefined : undefined,
+        epTitle: wep ? (wep.title || wep.name || "") : "",
+        tmdbId: movieMeta.tmdb_id ? String(movieMeta.tmdb_id) : "",
+        poster: movieMeta.poster || "", source: activeServer?.name || "AnchorHD",
+      }, time, duration);
+    }
     const nearEnd = duration && time >= duration - 3;
     const now = Date.now();
     if (now - lastSaveRef.current < 4000 && !nearEnd) return;   // throttle to ~4s
@@ -1206,7 +1220,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       next,
       time, duration,
     });
-  }, [movieMeta, routeSlug, currentOverlayEp, numberedEpisodes]);
+  }, [movieMeta, routeSlug, currentOverlayEp, numberedEpisodes, activeServer]);
 
   const loadContinue = useCallback(() => setContinueList(readContinueList()), []);
   useEffect(() => { loadContinue(); }, [loadContinue]);
@@ -1360,6 +1374,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
   /* Closing the player: when we were opened straight from the mobile detail
      sheet, go back to it instead of revealing the watch page underneath. */
   const closeOverlay = useCallback(() => {
+    flushWatch();   // the seconds just watched, before the player goes
     playSeqRef.current++;
     setMxResolving(false);
     setResolvingLabel("");

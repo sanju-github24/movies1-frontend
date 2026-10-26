@@ -98,6 +98,7 @@ function start() {
     }
   });
   addEventListener("pagehide", () => {
+    flushWatch(true);
     if (counted(location.pathname)) send({ t: "leave", d: takeActive() }, true);
   });
 }
@@ -145,4 +146,42 @@ export function trackPage() {
     newVisitor = false;
     pending = { path, payload, timer: setTimeout(() => flush(document.title || ""), 1200) };
   } catch { /* never break the page */ }
+}
+
+/* ── Watch time in AnchorHD ──────────────────────────────────────────────
+   The player reports its position several times a second (the same calls
+   that keep Continue Watching). Only small forward steps count as watching:
+   paused, nothing arrives; a seek is one big jump and is skipped. The seconds
+   go out every 30 s, when the title or episode changes, and when the page
+   closes. meta = { slug, title, type, season, episode, epTitle, tmdbId, poster, source }. */
+const WATCH_EVERY_MS = 30e3;
+let watch = null;   // { key, meta, sec, pos, dur, lastT, lastSent }
+
+export function flushWatch(beacon = false) {
+  try {
+    if (!watch || watch.sec < 1) return;
+    send({ t: "watch", ...watch.meta, sec: Math.round(watch.sec), pos: Math.round(watch.pos), dur: Math.round(watch.dur || 0), u: email || undefined }, beacon);
+    watch.sec = 0;
+    watch.lastSent = Date.now();
+  } catch { /* never break playback */ }
+}
+
+export function watchTick(meta, time, duration) {
+  try {
+    if (isAdmin || !meta?.slug || !(time >= 0)) return;
+    start();
+    const key = `${meta.slug}|${meta.season || ""}|${meta.episode || ""}`;
+    if (!watch || watch.key !== key) {
+      flushWatch();
+      watch = { key, meta, sec: 0, pos: time, dur: duration || 0, lastT: time, lastSent: Date.now() };
+      return;
+    }
+    const step = time - watch.lastT;
+    watch.lastT = time;
+    if (step > 0 && step <= 3) watch.sec += step;
+    watch.pos = time;
+    if (duration > 0) watch.dur = duration;
+    watch.meta = meta;
+    if (Date.now() - watch.lastSent >= WATCH_EVERY_MS) flushWatch();
+  } catch { /* never break playback */ }
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, Users, Eye, Clock, LogOut, UserPlus, Globe2, MapPin, Smartphone, Monitor, Tablet, Tv,
   Chrome, Link2, Megaphone, FileText, DoorOpen, Languages, Maximize, RefreshCw, Search, ChevronDown,
-  ExternalLink, Loader2, Radio,
+  ExternalLink, Loader2, Radio, PlayCircle, Film,
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { supabase } from "../utils/supabaseClient";
@@ -57,6 +57,27 @@ const DeviceIcon = ({ type, size = 15, className = "" }) => {
 };
 const deviceText = (v) => [v.vendor && v.model ? `${v.vendor} ${v.model}` : v.model || v.deviceType, `${v.browser}${v.browserVer ? ` ${v.browserVer}` : ""}`, `${v.os}${v.osVer ? ` ${v.osVer}` : ""}`].filter(Boolean).join(" · ");
 const source = (v) => v.utmSource ? `${v.utmSource}${v.utmMedium ? ` / ${v.utmMedium}` : ""}` : v.refDomain || "Direct";
+
+const epLabel = (w) => (w?.season && w?.episode ? `S${w.season} E${w.episode}` : "");
+const hours = (s) => {
+  s = Math.round(s || 0);
+  if (s < 3600) return dur(s);
+  const h = s / 3600;
+  return `${h >= 100 ? Math.round(h).toLocaleString("en-IN") : h.toFixed(1)} h`;
+};
+const pct = (w) => (w?.duration > 0 ? Math.min(100, Math.round((w.maxPos / w.duration) * 100)) : null);
+
+/* How far into a title someone got: a bar and the percent. */
+const Progress = ({ w }) => {
+  const p = pct(w);
+  if (p == null) return <span className="text-xs text-gray-500">—</span>;
+  return (
+    <span className="flex items-center gap-2">
+      <span className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-800"><span className={`block h-full ${p >= 90 ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${p}%` }} /></span>
+      <span className="w-9 text-right tabular-nums text-xs text-gray-400">{p}%</span>
+    </span>
+  );
+};
 
 // ---------- pieces ----------
 const Card = ({ children, className = "" }) => (
@@ -221,9 +242,28 @@ function VisitDetails({ v }) {
           </React.Fragment>
         ))}
       </dl>
-      <div>
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Pages visited</p>
-        <Trail pages={v.pages} />
+      <div className="space-y-4">
+        {!!v.watched?.length && (
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Watched in AnchorHD</p>
+            <ul className="space-y-1.5">
+              {v.watched.map((w, i) => (
+                <li key={i} className="flex items-center gap-3 text-xs">
+                  <PlayCircle size={14} className="shrink-0 text-green-400" />
+                  <a href={`${SITE}/watch/${w.slug}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-gray-200 hover:underline">
+                    {w.title}{epLabel(w) ? <span className="text-gray-500"> · {epLabel(w)}</span> : null}
+                  </a>
+                  <span className="tabular-nums text-gray-300">{dur(w.seconds)}</span>
+                  <Progress w={w} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Pages visited</p>
+          <Trail pages={v.pages} />
+        </div>
       </div>
     </div>
   );
@@ -251,8 +291,17 @@ function VisitRow({ v, live }) {
           </div>
         </td>
         <td className="px-4 py-3 max-w-[18rem]">
-          <div className="truncate font-mono text-xs text-blue-300">{v.currentPath}</div>
-          <div className="truncate text-[11px] text-gray-500">{v.currentTitle}</div>
+          {v.playing ? (
+            <>
+              <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-green-400"><PlayCircle size={14} className="shrink-0" /> <span className="truncate">{v.playing.title}{epLabel(v.playing) ? ` · ${epLabel(v.playing)}` : ""}</span></div>
+              <div className="truncate text-[11px] text-gray-500">watching · {dur(v.playing.seconds)} so far{pct(v.playing) != null ? ` · at ${pct(v.playing)}%` : ""}</div>
+            </>
+          ) : (
+            <>
+              <div className="truncate font-mono text-xs text-blue-300">{v.currentPath}</div>
+              <div className="truncate text-[11px] text-gray-500">{v.currentTitle}</div>
+            </>
+          )}
         </td>
         <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">{source(v)}</td>
         <td className="px-4 py-3 text-sm text-gray-300 whitespace-nowrap tabular-nums">
@@ -291,6 +340,128 @@ const VisitTable = ({ visits, live, empty }) => (
 );
 
 const RANGES = [[1, "Today"], [7, "7 days"], [30, "30 days"], [90, "90 days"]];
+
+/* One title opened: each episode (a series), and who watched it, where, on what. */
+function TitleDetail({ slug, days }) {
+  const [d, setD] = useState(null);
+  useEffect(() => { api(`/watch/title?${new URLSearchParams({ slug, days: String(days) })}`).then(setD).catch(() => setD({ episodes: [], recent: [] })); }, [slug, days]);
+  if (!d) return <div className="flex items-center gap-2 px-5 py-4 text-sm text-gray-400"><Loader2 size={15} className="animate-spin" /> Loading…</div>;
+  const eps = d.episodes.filter((e) => e.season && e.episode);
+  return (
+    <div className="grid gap-5 bg-gray-950/60 px-5 py-4 lg:grid-cols-2">
+      {eps.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">By episode</p>
+          <table className="w-full text-left text-xs">
+            <thead><tr className="text-gray-500"><th className="py-1 font-semibold">Episode</th><th className="py-1 font-semibold text-right">Viewers</th><th className="py-1 font-semibold text-right">Watch time</th><th className="py-1 font-semibold text-right">Finished</th></tr></thead>
+            <tbody>
+              {eps.map((e) => (
+                <tr key={`${e.season}-${e.episode}`} className="border-t border-gray-800">
+                  <td className="py-1.5 pr-2 text-gray-200"><b>{epLabel(e)}</b> <span className="text-gray-500">{e.epTitle}</span></td>
+                  <td className="py-1.5 text-right tabular-nums text-gray-200">{n(e.viewers)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-gray-300">{hours(e.seconds)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-gray-400">{e.completion}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className={eps.length ? "" : "lg:col-span-2"}>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Who watched (latest {d.recent.length})</p>
+        <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+          {d.recent.map((w, i) => (
+            <li key={i} className="flex items-center gap-3 text-xs">
+              <span className="text-base leading-none">{flag(w.visit?.countryCode)}</span>
+              <span className="w-32 truncate text-gray-200">{w.visit?.city || w.visit?.country || "Unknown"}</span>
+              <DeviceIcon type={w.visit?.deviceType} size={13} className="shrink-0 text-gray-500" />
+              <span className="min-w-0 flex-1 truncate text-gray-400">{w.visit ? deviceText(w.visit) : ""}{w.visit?.user ? ` · ${w.visit.user}` : ""}</span>
+              {epLabel(w) && <span className="text-gray-500">{epLabel(w)}</span>}
+              <span className="w-16 text-right tabular-nums text-gray-200">{dur(w.seconds)}</span>
+              <Progress w={w} />
+              <span className="w-16 text-right text-gray-500">{ago(w.lastAt)}</span>
+            </li>
+          ))}
+          {!d.recent.length && <li className="text-xs text-gray-500">Nobody yet.</li>}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* Watch time in AnchorHD: how long titles actually played, and which titles. */
+function WatchSection({ days, watchingNow }) {
+  const [w, setW] = useState(null);
+  const [open, setOpen] = useState(null);
+  const load = useCallback(() => api(`/watch?days=${days}`).then(setW).catch(() => {}), [days]);
+  useEffect(() => { load(); const t = setInterval(load, 60e3); return () => clearInterval(t); }, [load]);
+  const t = w?.totals;
+  return (
+    <Card>
+      <Title icon={Film} right={<span className="text-xs text-gray-500">seconds actually played · pauses &amp; skips not counted</span>}>Watch time in AnchorHD</Title>
+      <div className="grid grid-cols-2 gap-3 px-5 pb-3 sm:grid-cols-3 xl:grid-cols-6">
+        {[
+          ["Watching now", n(watchingNow ?? w?.watchingNow), "text-green-400"],
+          ["Watched today", hours(w?.today?.seconds)],
+          [`Watch time · ${days === 1 ? "today" : `${days}d`}`, hours(t?.seconds)],
+          ["Viewers", n(t?.viewers)],
+          ["Plays", n(t?.plays)],
+          ["Avg per viewer", dur(t?.viewers ? t.seconds / t.viewers : 0)],
+        ].map(([k, v, c]) => (
+          <div key={k}><div className="text-[11px] uppercase tracking-wider text-gray-500">{k}</div><div className={`text-xl font-black tabular-nums ${c || ""}`}>{v}</div></div>
+        ))}
+      </div>
+      {days > 1 && w && (
+        <Bars values={w.daily.map((d) => Math.round(d.seconds / 60))} color="bg-blue-500" height="h-20"
+          labels={[w.daily[0]?.day.slice(5), w.daily[w.daily.length - 1]?.day.slice(5)]}
+          title={(i, v) => `${w.daily[i].day.slice(5)} · ${hours(v * 60)} · ${n(w.daily[i].viewers)} viewers`} />
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] text-left">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-2 font-semibold">#</th>
+              <th className="px-4 py-2 font-semibold">Title</th>
+              <th className="px-4 py-2 font-semibold text-right">Viewers</th>
+              <th className="px-4 py-2 font-semibold text-right">Plays</th>
+              <th className="px-4 py-2 font-semibold text-right">Watch time</th>
+              <th className="px-4 py-2 font-semibold text-right">Avg / viewer</th>
+              <th className="px-4 py-2 font-semibold text-right">Finished</th>
+              <th className="px-4 py-2 font-semibold">Last watched</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(w?.titles || []).map((x, i) => (
+              <React.Fragment key={x.slug}>
+                <tr onClick={() => setOpen(open === x.slug ? null : x.slug)} className="cursor-pointer border-t border-gray-800 hover:bg-gray-800/40">
+                  <td className="px-4 py-2.5 text-sm tabular-nums text-gray-500">{i + 1}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      {x.poster ? <img src={x.poster} alt="" loading="lazy" className="h-12 w-8 shrink-0 rounded object-cover" /> : <span className="h-12 w-8 shrink-0 rounded bg-gray-800" />}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-gray-100">{x.title || x.slug}</div>
+                        <div className="truncate text-[11px] text-gray-500">{x.contentType === "tv" ? `Series · ${n(x.episodes)} episode${x.episodes === 1 ? "" : "s"} watched` : "Movie"} · /watch/{x.slug}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-sm font-bold tabular-nums text-gray-100">{n(x.viewers)}</td>
+                  <td className="px-4 py-2.5 text-right text-sm tabular-nums text-gray-300">{n(x.plays)}</td>
+                  <td className="px-4 py-2.5 text-right text-sm tabular-nums text-gray-300">{hours(x.seconds)}</td>
+                  <td className="px-4 py-2.5 text-right text-sm tabular-nums text-gray-300">{dur(x.avgPerViewer)}</td>
+                  <td className="px-4 py-2.5 text-right text-sm tabular-nums text-gray-400">{x.completion}%</td>
+                  <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">{ago(x.lastAt)} <ChevronDown size={14} className={`ml-1 inline transition-transform ${open === x.slug ? "rotate-180" : ""}`} /></td>
+                </tr>
+                {open === x.slug && <tr><td colSpan={8} className="p-0"><TitleDetail slug={x.slug} days={days} /></td></tr>}
+              </React.Fragment>
+            ))}
+            {w && !w.titles.length && <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">Nothing watched in AnchorHD yet in this range.</td></tr>}
+            {!w && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500"><Loader2 className="inline animate-spin" /></td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
 
 export default function AdminAnalytics() {
   const [days, setDays] = useState(7);
@@ -412,6 +583,9 @@ export default function AdminAnalytics() {
             : <DailyChart daily={sum.daily} />)
             : <div className="flex h-56 items-center justify-center text-gray-500"><Loader2 className="animate-spin" /></div>}
         </Card>
+
+        {/* watch time */}
+        <WatchSection days={days} watchingNow={live?.watching} />
 
         {/* where */}
         <div className="grid gap-5 lg:grid-cols-2">
