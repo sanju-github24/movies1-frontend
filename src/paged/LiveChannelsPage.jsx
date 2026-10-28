@@ -6,6 +6,7 @@ import LiveTvBrowse from "../components/livetv/LiveTvBrowse";
 import LiveViewer from "../components/LiveViewer";
 import LiveNowRow from "../components/LiveNowRow";
 import { categoryOf, languageOf, displayName, isHD } from "../utils/channelMeta";
+import { backendUrl } from "../utils/api";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const tokens = {
@@ -576,6 +577,15 @@ const LiveChannelsPage = () => {
       .then((b) => setHotstar(Array.isArray(b?.channels) ? b.channels : []))
       .catch(() => { /* the JioTV channels still fill the page */ });
   }, []);
+  // Open IPTV channels (news, entertainment, sports, movies…) from our backend
+  // feed — plain HLS, no DRM, refreshed from the upstream repo on its own.
+  const [iptv, setIptv] = useState([]);
+  useEffect(() => {
+    fetch(`${backendUrl}/api/iptv/channels`)
+      .then((r) => r.json())
+      .then((d) => setIptv(Array.isArray(d?.channels) ? d.channels : []))
+      .catch(() => { /* the other channels still fill the page */ });
+  }, []);
   const [activeKey, setActiveKey] = useState(null);
   /* Channels play in AnchorHD's own live player — the one live sports uses —
      given the same player link the cards elsewhere pass: ?tab=bb&id= for
@@ -598,10 +608,26 @@ const LiveChannelsPage = () => {
         ? () => watch(ch.name, `${PLAYER}?tab=live&id=${encodeURIComponent(ch.id)}`, ch.logo)
         : () => playChannel(ch, ch._bundleMeta, ch._parsedBundle),
     }));
-    return [...hs, ...jio].map((c) => ({
+    const mapped = [...hs, ...jio].map((c) => ({
       ...c, category: categoryOf(c.rawName, c.group), lang: languageOf(c.rawName), hd: isHD(c.rawName),
     }));
-  }, [hotstar, allChannels, playChannel, watch]);
+    // The open IPTV channels: each plays its own HLS link(s) through our CORS
+    // proxy, in the same live player. Its category comes from the feed.
+    const proxied = (u) => `${backendUrl}/api/hls-proxy?url=${encodeURIComponent(u)}`;
+    const ipt = iptv.filter((c) => c?.name && c.streams?.length).map((c) => {
+      const sources = c.streams.map((s, i) => ({ label: s.label || `Link ${i + 1}`, src: proxied(s.url) }));
+      return {
+        key: `iptv:${c.provider}:${c.name}:${c.category}`, name: c.name, rawName: c.name, logo: c.logo,
+        category: c.category === "Movie" ? "Movies" : c.category,
+        lang: languageOf(c.name), hd: isHD(c.name),
+        play: () => setViewer({ title: c.name, sources, poster: c.logo }),
+      };
+    });
+    // Our curated channels first, then the IPTV feed; drop an IPTV channel we
+    // already list by name so it does not appear twice.
+    const have = new Set(mapped.map((c) => c.name.toLowerCase()));
+    return [...mapped, ...ipt.filter((c) => !have.has(c.name.toLowerCase()))];
+  }, [hotstar, allChannels, playChannel, watch, iptv]);
   const playTile = useCallback((c) => { setActiveKey(c.key); c.play(); }, []);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
@@ -823,7 +849,7 @@ const LiveChannelsPage = () => {
         ))}
       </LiveTvBrowse>
 
-      <LiveViewer open={!!viewer} title={viewer?.title || ""} src={viewer?.src || ""} poster={viewer?.poster}
+      <LiveViewer open={!!viewer} title={viewer?.title || ""} src={viewer?.src || ""} sources={viewer?.sources} poster={viewer?.poster}
         onClose={() => { setViewer(null); setActiveKey(null); }} />
     </div>
   );
