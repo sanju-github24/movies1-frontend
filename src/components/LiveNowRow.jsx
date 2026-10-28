@@ -24,7 +24,7 @@ export default function LiveNowRow({ className = "" }) {
           <button key={ev.id} type="button" onClick={() => setOpen(ev)}
             className="group relative shrink-0 w-64 sm:w-80 aspect-video rounded-xl overflow-hidden bg-gray-800 text-left ring-1 ring-white/10 hover:ring-white/30 transition">
             {ev.poster
-              ? <img src={ev.poster} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              ? <img src={ev.poster} alt={ev.title ? `${ev.title} — live` : "Live now"} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               : <div className="absolute inset-0 bg-gradient-to-br from-red-900/60 to-gray-900" />}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
             <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white">

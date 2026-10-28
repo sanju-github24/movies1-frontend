@@ -1979,6 +1979,13 @@ if (!alive) return;
           ...(seoYear ? { datePublished: seoYear } : {}),
           ...(movieMeta.poster ? { image: movieMeta.poster } : {}),
           ...(seoDesc ? { description: seoDesc.slice(0, 300) } : {}),
+          ...((movieMeta.genres || []).length ? { genre: movieMeta.genres.slice(0, 4) } : {}),
+          ...(metaLangs.length ? { inLanguage: metaLangs } : {}),
+          ...(isTVShow && numberedEpisodes.length ? { numberOfEpisodes: numberedEpisodes.length } : {}),
+          ...(movieMeta.imdbRating && movieMeta.imdbRating !== "0.0"
+            ? { aggregateRating: { "@type": "AggregateRating", ratingValue: String(movieMeta.imdbRating), bestRating: "10", ratingCount: Math.max(1, Number(tmdbMeta?.vote_count) || 100) } } : {}),
+          ...((tmdbMeta?.cast || []).length ? { actor: tmdbMeta.cast.slice(0, 8).filter((c) => c?.name).map((c) => ({ "@type": "Person", name: c.name })) } : {}),
+          potentialAction: { "@type": "WatchAction", target: canonical },
         })}</script>
       </Helmet>
 

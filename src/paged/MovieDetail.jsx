@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { personLink } from "../utils/person";
-import { absUrl, downloadFacets, facetPhrase, languagesFrom, humanList } from "../utils/seo";
+import { absUrl, downloadFacets, facetPhrase, languagesFrom, humanList, jsonLd } from "../utils/seo";
 import { displayTitle } from "../utils/cleanTitle";
 import { supabase } from "../utils/supabaseClient";
 import { backendUrl } from "../utils/api";
@@ -431,8 +431,26 @@ const MovieDetail = () => {
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={canonicalUrl} />
         <meta property="og:title" content={`${movieTitle}${quality ? ` ${quality}` : ""} Download | AnchorMovies`} />
-        {/* ... other meta tags ... */}
-      </Helmet>
+        {/* ... other meta tags ... */}
+        {/* Structured data: this page had none, so Google could not show it as a
+            rich result. A Movie (or TVSeries) with what we actually know, and a
+            WatchAction pointing at the player. */}
+        <script type="application/ld+json">{jsonLd({
+          "@context": "https://schema.org",
+          "@type": movie.subCategory?.includes("Series") ? "TVSeries" : "Movie",
+          "@id": canonicalUrl,
+          name: movieTitle,
+          url: canonicalUrl,
+          ...(movie.poster || backdrop ? { image: movie.poster || backdrop } : {}),
+          description: metaDescription,
+          ...(heroYear ? { datePublished: String(heroYear) } : {}),
+          ...(genres.length ? { genre: genres } : {}),
+          ...(langs.length ? { inLanguage: langs } : {}),
+          ...(rating ? { aggregateRating: { "@type": "AggregateRating", ratingValue: String(rating), bestRating: "10", ratingCount: Math.max(1, Number(x.vote_count) || 100) } } : {}),
+          ...(cast.length ? { actor: cast.slice(0, 8).map((c) => ({ "@type": "Person", name: c.name })) } : {}),
+          potentialAction: { "@type": "WatchAction", target: absUrl(`/watch/${code}`) },
+        })}</script>
+      </Helmet>
 
       {/* Movie Content */}
       <div className="bg-gray-800 text-white rounded-xl p-4 sm:p-6 w-full max-w-7xl shadow-2xl shadow-blue-900/50">
