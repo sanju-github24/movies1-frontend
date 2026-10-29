@@ -8,6 +8,7 @@ import { absUrl, jsonLd } from "../utils/seo";
 import LiveTabsSection from "../components/LiveTabsSection";
 import { backendUrl } from "../utils/api";
 import HighlightPlayer from "../components/HighlightPlayer";
+import CricfyLiveSection from "../components/CricfyLiveSection";
 
 function encodeMatchHash(payload) {
   // Escape Unicode as ASCII JSON before Base64 encoding.
@@ -885,6 +886,9 @@ function LiveNowStrip() {
     <div className="space-y-8">
 
       {/* ── Live now ── */}
+      {/* Cricfy live & scheduled matches — plays in the AnchorHD player */}
+      <CricfyLiveSection heading="Live Sports" />
+
       {showLive && (
         <div>
           <div className="flex items-center justify-between mb-3">

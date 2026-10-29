@@ -160,10 +160,12 @@ const VideoPlayer = ({
   contentAdvisory = "",       // e.g. "Some Violence, Action Sequences" — derived from genres if blank
   tmdbId = "",                // for Skip Intro / Next Episode: the title's real timings
   imdbId = "",
+  drmClearKey = "",           // "KID:KEY" (hex) for ClearKey DASH (Cricfy premium servers)
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const hlsRef = useRef(null);
+  const shakaRef = useRef(null);      // Shaka player for DASH + ClearKey (Cricfy premium)
   const didSeekRef = useRef(false);   // seek to startTime only once per source
   const appliedAudioRef = useRef(false);   // auto-pick preferred audio once per source
   const appliedSubRef = useRef(false);     // auto-enable default subtitle once per source
@@ -829,6 +831,39 @@ const VideoPlayer = ({
         window.removeEventListener("online", onOnline);
         setReconnecting(false);
         hls.destroy();
+      };
+    } else if (src.includes(".mpd")) {
+      // DASH + ClearKey (Cricfy's premium servers — Willow, FanCode-AQ). Their
+      // CDNs send Access-Control-Allow-Origin:* and need no Referer, so Shaka
+      // fetches them directly; the decryption key travels in drmClearKey ("KID:KEY").
+      let destroyed = false;
+      setIsBuffering(true);
+      import("shaka-player/dist/shaka-player.compiled.js").then((mod) => {
+        const shaka = mod.default || mod;
+        if (destroyed || !videoRef.current) return;
+        try { shaka.polyfill.installAll(); } catch {}
+        const player = new shaka.Player(videoRef.current);
+        shakaRef.current = player;
+        const clearKeys = {};
+        if (drmClearKey && drmClearKey.includes(":")) {
+          const [kid, key] = drmClearKey.split(":");
+          if (kid && key) clearKeys[kid.trim()] = key.trim();
+        }
+        player.configure({
+          drm: { clearKeys },
+          streaming: { bufferingGoal: 20, rebufferingGoal: 4,
+            retryParameters: { maxAttempts: 8, baseDelay: 500, timeout: 30000 } },
+        });
+        player.addEventListener("error", () => setReconnecting(true));
+        player.load(src)
+          .then(() => { setIsBuffering(false); setReconnecting(false); tryAutoplay(); })
+          .catch(() => setReconnecting(true));
+      }).catch(() => setReconnecting(true));
+
+      return () => {
+        destroyed = true;
+        if (shakaRef.current) { try { shakaRef.current.destroy(); } catch {} shakaRef.current = null; }
+        setReconnecting(false);
       };
     } else {
       // Native HLS (iPhone Safari): let the OS player prefetch, and start at the
