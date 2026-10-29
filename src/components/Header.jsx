@@ -2244,6 +2244,8 @@ const Header = () => {
         open={!!heroPlaying}
         title={heroPlaying?.title || ""}
         src={heroPlaying?.src || ""}
+        sources={heroPlaying?.sources}
+        poster={heroPlaying?.poster}
         onClose={() => setHeroPlaying(null)}
       />
 

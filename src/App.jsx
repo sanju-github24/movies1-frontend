@@ -92,7 +92,6 @@ const VideoPlayerPage = safeLazy(() => import('./paged/VideoPlayerPage'));
 const LiveCricket = safeLazy(() => import('./paged/LiveCricket'));
 const AdminLiveMatchUpload = safeLazy(() => import('./paged/AdminLiveMatchUpload'));
 const LiveStreamPlayer = safeLazy(() => import('./paged/LiveStreamPlayer'));
-const CricfyLivePlayer = safeLazy(() => import('./paged/CricfyLivePlayer'));
 const SeriesView = safeLazy(() => import('./paged/SeriesView'));
 const AuthPage = safeLazy(() => import('./paged/AuthPage'));
 const UpdatePassword = safeLazy(() => import('./paged/UpdatePassword'));
@@ -323,9 +322,7 @@ const AppContent = () => {
         <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
         <Route path="/live-cricket"           element={<LiveCricket />} />
         <Route path="/search-torrent"         element={<TorrentSearch />} />
-        <Route path="/sports"                 element={<Homeies />} />
-        <Route path="/sports/live/:id"        element={<CricfyLivePlayer />} />
-        <Route path="/tournament/:slug"       element={<TournamentPage />} />
+        <Route path="/sports"                 element={<Homeies />} />        <Route path="/tournament/:slug"       element={<TournamentPage />} />
         <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
         {/* Readable, stable match URL — what the sitemap lists and Google indexes. */}
         <Route path="/match/:slug"            element={<MatchCenter />} />

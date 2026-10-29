@@ -984,6 +984,8 @@ export default function HeroSection(){
             open={!!playing}
             title={playing?.playTitle || ""}
             src={playing?.playSrc || ""}
+            sources={playing?.sources}
+            poster={playing?.heroImage}
             onClose={()=>setPlaying(null)}
           />
         </div>
