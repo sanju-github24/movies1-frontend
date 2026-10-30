@@ -15,7 +15,32 @@ import LiveViewer from "./LiveViewer";
 const https = (u) => (u || "").replace(/^http:\/\//i, "https://");
 const IMG = { referrerPolicy: "no-referrer", loading: "lazy" };
 
-function Poster({ ev }) {
+// A poster built from the two team logos: crest — VS — crest, over a soft
+// gradient. Falls back to the single event logo for events that aren't a
+// two-team fixture (MotoGP, F1, a tournament).
+export function TeamsPoster({ ev, size = "card" }) {
+  const twoTeams = ev.logoA && ev.logoB && ev.teamA && ev.teamB && ev.teamA !== ev.teamB;
+  const crest = size === "hero" ? "w-20 h-20 sm:w-28 sm:h-28" : "w-12 h-12 sm:w-14 sm:h-14";
+  const vs = size === "hero" ? "text-2xl sm:text-3xl" : "text-sm";
+  if (twoTeams) {
+    const Crest = ({ u, name }) => (
+      <div className="flex flex-col items-center gap-1 min-w-0">
+        <img src={https(u)} alt="" {...IMG} className={`${crest} object-contain drop-shadow-lg`} onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+        <span className="text-[10px] sm:text-xs font-bold text-white/90 truncate max-w-[8ch]">{name}</span>
+      </div>
+    );
+    return (
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-black" />
+        <div className="absolute inset-0 flex items-center justify-center gap-3 sm:gap-5 px-3 pb-6">
+          <Crest u={ev.logoA} name={ev.teamA} />
+          <span className={`${vs} font-black text-white/50 italic`}>VS</span>
+          <Crest u={ev.logoB} name={ev.teamB} />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25" />
+      </div>
+    );
+  }
   const art = https(ev.poster || ev.logoA || ev.logoB || "");
   return (
     <div className="absolute inset-0">
@@ -36,20 +61,14 @@ function CricfyCard({ ev, onPlay }) {
       onClick={() => onPlay(ev)}
       className="group relative block w-full text-left rounded-xl overflow-hidden border border-white/[0.07] h-36 sm:h-40 bg-gray-900 transition hover:border-white/20 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
     >
-      <Poster ev={ev} />
+      <TeamsPoster ev={ev} />
       <div className={`absolute top-2 left-2 text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-wide ${live ? "bg-red-600 border-red-500 text-white animate-pulse motion-reduce:animate-none" : ended ? "bg-black/70 border-gray-600 text-gray-400" : "bg-black/70 border-amber-500/60 text-amber-300"}`}>
         {live ? "● Live" : ended ? "Ended" : "Soon"}
       </div>
-      {ev.logoA && ev.logoB && ev.teamA !== ev.teamB && (
-        <div className="absolute top-2 right-2 flex -space-x-2">
-          <img src={https(ev.logoA)} alt="" {...IMG} className="w-6 h-6 rounded-full bg-black/40 object-contain ring-1 ring-white/10" onError={(e) => (e.currentTarget.style.display = "none")} />
-          <img src={https(ev.logoB)} alt="" {...IMG} className="w-6 h-6 rounded-full bg-black/40 object-contain ring-1 ring-white/10" onError={(e) => (e.currentTarget.style.display = "none")} />
-        </div>
-      )}
-      <div className="absolute bottom-0 inset-x-0 p-3">
-        <p className="text-[11px] text-gray-300/90 font-semibold truncate">{ev.category}</p>
-        <h3 className="text-sm font-bold text-white leading-tight line-clamp-2">{ev.title}</h3>
-        <p className="text-[11px] text-gray-300 mt-0.5 truncate">{ev.timeLabel}</p>
+      <div className="absolute bottom-0 inset-x-0 p-2.5">
+        <p className="text-[10px] text-gray-300/90 font-semibold truncate">{ev.category}</p>
+        <h3 className="text-[13px] font-bold text-white leading-tight truncate">{ev.title}</h3>
+        <p className="text-[10px] text-gray-300 mt-0.5 truncate">{ev.timeLabel}</p>
       </div>
     </button>
   );
