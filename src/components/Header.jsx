@@ -22,7 +22,6 @@ import { STUDIOS } from "../utils/studios";
 import { CATEGORY_STUDIOS, hsImg } from "../utils/categories";
 import { readContinueList } from "../utils/continueWatching";
 import { fetchHeroFixtures, splitTeams, heroPlayUrl, BIGG_BOSS_KANNADA, withBiggBossArt } from "../utils/liveTabs";
-import { fetchCricfyEvents, cricfySources } from "../utils/cricfy";
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
 import LiveViewer from "./LiveViewer";
@@ -162,29 +161,6 @@ function useLiveSports() {
         });
       });
     } catch { /* the feeds are optional here */ }
-
-    // ── Cricfy live (cricket/football, two teams) ── the cover composes the two
-    // team logos (passed as the crest URLs), and it plays in LiveViewer.
-    try {
-      const https = (u) => (u || "").replace(/^http:\/\//i, "https://");
-      const evs = await fetchCricfyEvents();
-      (evs || []).filter((e) => e.status === "live" && e.teamA && e.teamB && e.teamA !== e.teamB
-        && ["cricket", "football"].includes((e.category || "").toLowerCase())).slice(0, 2).forEach((e) => {
-        out.push({
-          id: `cricfy-${e.id}`, sport: (e.category || "").toLowerCase() === "football" ? "football" : "cricket",
-          type: "fixture", badge: (e.category || "LIVE").toUpperCase(),
-          homeCode: e.teamA, awayCode: e.teamB,
-          homeFlagUrl: https(e.logoA), awayFlagUrl: https(e.logoB),
-          homeFlag: null, awayFlag: null,
-          homeScore: null, awayScore: null, homeOvers: "", striker: "",
-          status: "", homeName: e.teamA, awayName: e.teamB,
-          series: e.category, venue: "", matchOrder: "",
-          poster: https(e.poster || ""), cover_poster: https(e.poster || ""),
-          languages: [], playSrc: e.servers?.[0]?.url || "", playTitle: e.title,
-          sources: cricfySources(e),
-        });
-      });
-    } catch { /* Cricfy is optional in the hero */ }
 
     // WT20 Women's T20 WC
     try {
