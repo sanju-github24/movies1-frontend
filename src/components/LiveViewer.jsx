@@ -85,7 +85,8 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
         // A live added in the admin can be a stream's own address, played as it is.
         const direct = !ref && /\.(m3u8|mpd)(\?|$)/i.test(link)
           ? { kind: /\.mpd(\?|$)/i.test(link) ? "dash" : "hls", url: link, title,
-              ...(current?.drm ? { drm: current.drm } : {}) } : null;
+              ...(current?.drm ? { drm: current.drm } : {}),
+              ...(current?.proxy ? { proxy: current.proxy } : {}) } : null;
         if (!ref && !direct) throw new Error("This link does not say what to play.");
         const source = direct || await resolveSource(pickedId ? { ...ref, id: pickedId } : ref);
         if (dead) return;

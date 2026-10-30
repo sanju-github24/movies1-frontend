@@ -886,7 +886,10 @@ function LiveNowStrip() {
     <div className="space-y-8">
 
       {/* ── Live now ── */}
-      {/* Cricfy live & scheduled matches — plays in the AnchorHD player */}
+      {/* Cricfy LIVE matches, surfaced in the Live Now area (plays in AnchorHD) */}
+      <CricfyLiveSection liveOnly heading="Live Now" />
+
+      {/* Full Cricfy browse — live + scheduled, by sport */}
       <CricfyLiveSection heading="Live Sports" />
 
       {showLive && (
