@@ -5,8 +5,7 @@
 // with every server offered as a switchable source (DASH ClearKey included).
 import { useState, useEffect, useMemo } from "react";
 import { Radio, ChevronRight } from "lucide-react";
-import { fetchCricfyEvents } from "../utils/cricfy";
-import { backendUrl } from "../utils/api";
+import { fetchCricfyEvents, cricfySources } from "../utils/cricfy";
 import LiveViewer from "./LiveViewer";
 
 // External art is a mix of hosts; some come as http:// and get blocked as
@@ -74,26 +73,6 @@ function CricfyCard({ ev, onPlay }) {
   );
 }
 
-// Turn an event's servers into LiveViewer sources.
-//  - DASH plays direct from the CDN (CORS:* ) with its ClearKey → no VPS bandwidth.
-//  - HLS with a Referer requirement can't be set by a browser, so it goes through
-//    the backend hls-proxy (which injects Referer + fixes CORS). HLS without a
-//    Referer stays direct, so the heavy video stays off the VPS wherever possible.
-function toSources(ev) {
-  return (ev.servers || []).map((s) => {
-    const src = { label: `${s.name}${s.drm ? " · DRM" : ""}`, src: s.url };
-    if (s.kind === "dash" && s.drm && s.drm.includes(":")) {
-      const [keyId, key] = s.drm.split(":");
-      if (keyId && key) src.drm = { keyId: keyId.trim(), key: key.trim() };
-    } else if (s.kind !== "dash") {
-      // Live HLS CDNs usually send no CORS (and often need a Referer), neither of
-      // which a browser can do itself — so HLS goes through the hls-proxy.
-      src.proxy = { base: `${backendUrl}/api/hls-proxy`, ref: s.ref || "" };
-    }
-    return src;
-  });
-}
-
 export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = false }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -119,7 +98,7 @@ export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = 
   const live = rows.filter((e) => e.status === "live");
   const soon = rows.filter((e) => e.status === "upcoming");
 
-  const openEvent = (ev) => setViewer({ title: ev.title, sources: toSources(ev), poster: https(ev.poster || ev.logoA || "") });
+  const openEvent = (ev) => setViewer({ title: ev.title, sources: cricfySources(ev), poster: https(ev.poster || ev.logoA || "") });
 
   if (err) return null;                       // feed down → hide, don't break /sports
   if (!loading && events.length === 0) return null;

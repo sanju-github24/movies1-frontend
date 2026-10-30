@@ -32,3 +32,19 @@ export function cricfySource(server) {
     drmClearKey: server.kind === "dash" ? (server.drm || "") : "",
   };
 }
+
+/* An event's servers as LiveViewer sources (used by the cards and the heroes).
+   DASH plays direct from the CDN with its ClearKey; HLS goes through the
+   hls-proxy (live HLS CDNs send no CORS and often need a Referer). */
+export function cricfySources(ev) {
+  return (ev?.servers || []).map((s) => {
+    const src = { label: `${s.name}${s.drm ? " · DRM" : ""}`, src: s.url };
+    if (s.kind === "dash" && s.drm && s.drm.includes(":")) {
+      const [keyId, key] = s.drm.split(":");
+      if (keyId && key) src.drm = { keyId: keyId.trim(), key: key.trim() };
+    } else if (s.kind !== "dash") {
+      src.proxy = { base: `${backendUrl}/api/hls-proxy`, ref: s.ref || "" };
+    }
+    return src;
+  });
+}

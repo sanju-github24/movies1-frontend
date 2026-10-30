@@ -9,6 +9,7 @@ import LiveViewer from "../components/LiveViewer";
 import { codeForTeam } from "../utils/teamCrest";
 import { langName } from "../utils/langs";
 import { backendUrl } from "../utils/api";
+import { fetchCricfyEvents, cricfySources } from "../utils/cricfy";
 
 // Build a specific match-center link so the hero "Watch Live" goes to the match,
 // not the generic live-cricket page.
@@ -603,7 +604,7 @@ export default function HeroSection(){
   const timerRef=useRef(null);
 
   const buildSlides=useCallback(async()=>{
-    const ck="hero_slides_v11";   // v11: carries watchable fixtures; v10 caches have none
+    const ck="hero_slides_v12";   // v12: Cricfy live cricket/football slides added
     const cached=getCached(ck);
     if(cached){setSlides(cached);setLoading(false);return;}
 
@@ -896,7 +897,30 @@ export default function HeroSection(){
        then what is coming up. Without football to interleave, this is simply
        the cricket in priority order — the old version needed four branches to
        decide whose turn it was. */
-    const final=[...playC, ...liveC, ...finC, ...upC, ...playUpC].filter(Boolean).slice(0,4);
+    /* ── Cricfy live matches ── Two-team cricket/football fixtures become hero
+       slides: the existing renderer composes a crest-VS-crest poster from the
+       two logos, and they play in LiveViewer with their ClearKey/proxy. */
+    const cricfyC=[];
+    try{
+      const https=(u)=>(u||"").replace(/^http:\/\//i,"https://");
+      const evs=await fetchCricfyEvents();
+      const liveTeam=(evs||[]).filter(e=>e.status==="live" && e.teamA && e.teamB && e.teamA!==e.teamB
+        && ["cricket","football"].includes((e.category||"").toLowerCase()));
+      for(const e of liveTeam.slice(0,2)){
+        const sport=(e.category||"").toLowerCase()==="football"?"football":"cricket";
+        cricfyC.push({
+          id:`cricfy-${e.id}`, sport, status:"live",
+          link:null, playSrc:e.servers?.[0]?.url || "", playTitle:e.title, sources:cricfySources(e),
+          home:buildSide({ code:e.teamA, name:e.teamA, logo:https(e.logoA) }),
+          away:buildSide({ code:e.teamB, name:e.teamB, logo:https(e.logoB) }),
+          heroImage:https(e.poster||""), fancodeThumb:https(e.poster||""),
+          tournament:e.category, matchFmt:"", venue:"",
+          dateLabel:"", timeLabel:e.timeLabel, countdown:"", watchOn:"Cricfy", languages:[],
+        });
+      }
+    }catch{ /* Cricfy is optional in the hero */ }
+
+    const final=[...cricfyC, ...playC, ...liveC, ...finC, ...upC, ...playUpC].filter(Boolean).slice(0,4);
     if(final.length>0){setCache(ck,final);setSlides(final);}
     setLoading(false);
   },[]);
