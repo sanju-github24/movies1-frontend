@@ -1,40 +1,45 @@
 // src/components/CricfyLiveSection.jsx
-// Cricfy live & scheduled matches for the /sports page. Cards use the event logo
-// as the poster, grouped Live then Scheduled, with category tabs incl. "All".
-// Tapping a card opens the same LiveViewer the rest of /sports uses (AnchorHD),
-// with every server offered as a switchable source (DASH ClearKey included).
+// Cricfy live & scheduled matches for the /sports page. Cards show the two team
+// logos as a VS poster (or the event logo), grouped Live then Scheduled, with
+// category tabs incl. "All". Tapping a card opens the same LiveViewer the rest
+// of /sports uses. Rendering is capped + lazy so a big feed never floods the
+// page with hundreds of images at once (which locked the tab up).
 import { useState, useEffect, useMemo } from "react";
 import { Radio, ChevronRight } from "lucide-react";
 import { fetchCricfyEvents, cricfySources } from "../utils/cricfy";
 import LiveViewer from "./LiveViewer";
 
-// External art is a mix of hosts; some come as http:// and get blocked as
-// mixed content on our https site. Force https and never leak a referer
-// (several of these hosts hotlink-block on Referer).
+const CAP = 12;   // cards shown per group before "Show all"
+
+// External art is a mix of hosts; some are http:// (blocked as mixed content on
+// our https site) and several hotlink-block on Referer. Force https, no referer,
+// and decode off the main thread so a wall of logos can't jank the page.
 const https = (u) => (u || "").replace(/^http:\/\//i, "https://");
-const IMG = { referrerPolicy: "no-referrer", loading: "lazy" };
+const IMG = { referrerPolicy: "no-referrer", loading: "lazy", decoding: "async" };
+
+function Crest({ u, name, cls }) {
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-0">
+      <img src={https(u)} alt="" {...IMG} className={`${cls} object-contain drop-shadow-lg`} onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+      <span className="text-[10px] sm:text-xs font-bold text-white/90 truncate max-w-[8ch]">{name}</span>
+    </div>
+  );
+}
 
 // A poster built from the two team logos: crest — VS — crest, over a soft
-// gradient. Falls back to the single event logo for events that aren't a
-// two-team fixture (MotoGP, F1, a tournament).
+// gradient. Falls back to the single event logo for non-team events.
 export function TeamsPoster({ ev, size = "card" }) {
   const twoTeams = ev.logoA && ev.logoB && ev.teamA && ev.teamB && ev.teamA !== ev.teamB;
   const crest = size === "hero" ? "w-20 h-20 sm:w-28 sm:h-28" : "w-12 h-12 sm:w-14 sm:h-14";
   const vs = size === "hero" ? "text-2xl sm:text-3xl" : "text-sm";
   if (twoTeams) {
-    const Crest = ({ u, name }) => (
-      <div className="flex flex-col items-center gap-1 min-w-0">
-        <img src={https(u)} alt="" {...IMG} className={`${crest} object-contain drop-shadow-lg`} onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
-        <span className="text-[10px] sm:text-xs font-bold text-white/90 truncate max-w-[8ch]">{name}</span>
-      </div>
-    );
     return (
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-black" />
         <div className="absolute inset-0 flex items-center justify-center gap-3 sm:gap-5 px-3 pb-6">
-          <Crest u={ev.logoA} name={ev.teamA} />
+          <Crest u={ev.logoA} name={ev.teamA} cls={crest} />
           <span className={`${vs} font-black text-white/50 italic`}>VS</span>
-          <Crest u={ev.logoB} name={ev.teamB} />
+          <Crest u={ev.logoB} name={ev.teamB} cls={crest} />
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25" />
       </div>
@@ -73,6 +78,25 @@ function CricfyCard({ ev, onPlay }) {
   );
 }
 
+// A capped grid of cards with a "Show all N" expander.
+function CardGrid({ items, onPlay }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, CAP);
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {shown.map((e) => <CricfyCard key={e.id} ev={e} onPlay={onPlay} />)}
+      </div>
+      {items.length > CAP && (
+        <button onClick={() => setAll((v) => !v)}
+          className="mt-3 text-xs font-semibold text-blue-400 hover:text-blue-300">
+          {all ? "Show less" : `Show all ${items.length}`}
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = false }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,27 +119,21 @@ export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = 
   }, [events]);
 
   const rows = useMemo(() => events.filter((e) => cat === "All" || e.category === cat), [events, cat]);
-  const live = rows.filter((e) => e.status === "live");
-  const soon = rows.filter((e) => e.status === "upcoming");
+  const live = useMemo(() => rows.filter((e) => e.status === "live"), [rows]);
+  const soon = useMemo(() => rows.filter((e) => e.status === "upcoming"), [rows]);
+  const allLive = useMemo(() => events.filter((e) => e.status === "live"), [events]);
 
   const openEvent = (ev) => setViewer({ title: ev.title, sources: cricfySources(ev), poster: https(ev.poster || ev.logoA || "") });
 
-  if (err) return null;                       // feed down → hide, don't break /sports
+  if (err) return null;
   if (!loading && events.length === 0) return null;
 
   const viewerEl = (
-    <LiveViewer
-      open={!!viewer}
-      title={viewer?.title || ""}
-      sources={viewer?.sources || []}
-      poster={viewer?.poster || ""}
-      onClose={() => setViewer(null)}
-    />
+    <LiveViewer open={!!viewer} title={viewer?.title || ""} sources={viewer?.sources || []} poster={viewer?.poster || ""} onClose={() => setViewer(null)} />
   );
 
-  // Compact "Live Now" strip — only the live matches, no tabs/scheduled.
+  // Compact "Live Now" strip — only the live matches (capped), no tabs.
   if (liveOnly) {
-    const allLive = events.filter((e) => e.status === "live");
     if (!loading && allLive.length === 0) return null;
     return (
       <div>
@@ -124,11 +142,9 @@ export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = 
           <h2 className="text-lg sm:text-[22px] font-bold text-white tracking-tight">{heading || "Live Now"}</h2>
           <span className="text-xs font-semibold text-gray-500">{allLive.length} live</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {loading
-            ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-36 sm:h-40 rounded-xl bg-white/[0.04] animate-pulse" />)
-            : allLive.map((e) => <CricfyCard key={e.id} ev={e} onPlay={openEvent} />)}
-        </div>
+        {loading
+          ? <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-36 sm:h-40 rounded-xl bg-white/[0.04] animate-pulse" />)}</div>
+          : <CardGrid items={allLive} onPlay={openEvent} />}
         {viewerEl}
       </div>
     );
@@ -165,17 +181,13 @@ export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = 
               <p className="text-[11px] font-black uppercase tracking-widest text-red-400 mb-2 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" /> Live now · {live.length}
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {live.map((e) => <CricfyCard key={e.id} ev={e} onPlay={openEvent} />)}
-              </div>
+              <CardGrid key={`live-${cat}`} items={live} onPlay={openEvent} />
             </div>
           )}
           {soon.length > 0 && (
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">Scheduled · {soon.length}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {soon.map((e) => <CricfyCard key={e.id} ev={e} onPlay={openEvent} />)}
-              </div>
+              <CardGrid key={`soon-${cat}`} items={soon} onPlay={openEvent} />
             </div>
           )}
           {live.length === 0 && soon.length === 0 && (
@@ -184,13 +196,7 @@ export default function CricfyLiveSection({ heading = "Live Sports", liveOnly = 
         </>
       )}
 
-      <LiveViewer
-        open={!!viewer}
-        title={viewer?.title || ""}
-        sources={viewer?.sources || []}
-        poster={viewer?.poster || ""}
-        onClose={() => setViewer(null)}
-      />
+      {viewerEl}
     </div>
   );
 }
