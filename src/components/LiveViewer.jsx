@@ -83,8 +83,12 @@ const LiveViewer = ({ open, title, src, sources, poster, onClose }) => {
       try {
         const ref = parseSourceLink(link);
         // A live added in the admin can be a stream's own address, played as it is.
-        const direct = !ref && /\.(m3u8|mpd)(\?|$)/i.test(link)
-          ? { kind: /\.mpd(\?|$)/i.test(link) ? "dash" : "hls", url: link, title,
+        // A caller can state the kind (Cricfy does) for URLs that don't end in
+        // .m3u8/.mpd — e.g. a "load-playlist" endpoint that still returns HLS.
+        const kindHint = current?.kind;
+        const playable = kindHint || /\.(m3u8|mpd)(\?|$)/i.test(link);
+        const direct = !ref && playable
+          ? { kind: kindHint || (/\.mpd(\?|$)/i.test(link) ? "dash" : "hls"), url: link, title,
               ...(current?.drm ? { drm: current.drm } : {}),
               ...(current?.proxy ? { proxy: current.proxy } : {}) } : null;
         if (!ref && !direct) throw new Error("This link does not say what to play.");

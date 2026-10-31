@@ -38,11 +38,15 @@ export function cricfySource(server) {
    hls-proxy (live HLS CDNs send no CORS and often need a Referer). */
 export function cricfySources(ev) {
   return (ev?.servers || []).map((s) => {
-    const src = { label: `${s.name}${s.drm ? " · DRM" : ""}`, src: s.url };
-    if (s.kind === "dash" && s.drm && s.drm.includes(":")) {
+    // Anything that isn't DASH is an HLS playlist — including "load-playlist"
+    // URLs that have no .m3u8 in them. Pass the kind explicitly so the player
+    // doesn't have to guess from the extension.
+    const kind = s.kind === "dash" ? "dash" : "hls";
+    const src = { label: `${s.name}${s.drm ? " · DRM" : ""}`, src: s.url, kind };
+    if (kind === "dash" && s.drm && s.drm.includes(":")) {
       const [keyId, key] = s.drm.split(":");
       if (keyId && key) src.drm = { keyId: keyId.trim(), key: key.trim() };
-    } else if (s.kind !== "dash") {
+    } else if (kind !== "dash") {
       src.proxy = { base: `${backendUrl}/api/hls-proxy`, ref: s.ref || "" };
     }
     return src;
