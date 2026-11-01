@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { Globe, Loader2, RotateCcw, Save, Stethoscope, ExternalLink, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
+import { Globe, Loader2, RotateCcw, Save, Stethoscope, ExternalLink, AlertTriangle, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { supabase } from "../utils/supabaseClient";
 import { backendUrl } from "../utils/api";
@@ -81,6 +81,19 @@ function SiteCard({ row, onChanged }) {
     catch (e) { toast.error(e.message); }
     setBusy("");
   };
+  /* Fetch: when the source is down, probe its known domains and switch to a
+     working one — no need to hunt for the new domain by hand. */
+  const fetchNow = async () => {
+    setBusy("fetch"); setForceAsk("");
+    try {
+      const d = await call("POST", `/${row.site}/fetch`, {});
+      onChanged(d.site);
+      const hit = (d.tried || []).find((t) => t.base === d.found) || (d.tried || []).slice(-1)[0];
+      if (hit) setCheck(hit);
+      (d.success ? toast.success : toast.error)(d.message);
+    } catch (e) { toast.error(e.message); }
+    setBusy("");
+  };
 
   return (
     <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4 space-y-3">
@@ -100,6 +113,10 @@ function SiteCard({ row, onChanged }) {
         <button type="button" onClick={() => test()} disabled={!!busy}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-semibold disabled:opacity-50">
           {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />} Check
+        </button>
+        <button type="button" onClick={fetchNow} disabled={!!busy} title="Find a working domain automatically (use when the source is down)"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-sm font-semibold disabled:opacity-50">
+          {busy === "fetch" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Fetch
         </button>
         {row.override && (
           <button type="button" onClick={reset} disabled={!!busy} title={`Back to ${row.default}`}
@@ -148,8 +165,8 @@ export default function AdminSourceDomains() {
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2"><Globe className="w-6 h-6 text-red-500" /> Source domains</h1>
           <p className="text-sm text-gray-400 mt-1">
-            When 1TamilMV, HDHub4u or India4Movies moves to a new domain, enter it here. Every backend picks it up within a minute —
-            downloads, search and the fresh-releases list all switch over. Nothing needs redeploying.
+            When a source moves to a new domain, hit <span className="text-blue-300 font-semibold">Fetch</span> to auto-find a working one,
+            or type it in. Every backend picks it up within a minute — downloads, search and the fresh-releases list all switch over. Nothing needs redeploying.
           </p>
         </div>
         {!loaded && <p className="text-sm text-gray-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</p>}
