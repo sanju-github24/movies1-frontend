@@ -317,7 +317,12 @@ const castle = (o) => async () => {
   if (!d?.ok || !Array.isArray(d.servers)) return null;
   return d.servers
     .filter((s) => s?.url)
-    .map((s) => ({ name: `Castle • ${String(s.label || "HD").replace(/^Castle\s*/i, "")}`.trim(), url: s.url, own: true }));
+    // "Castle • Hindi 720p" — the player reads the language (SOURCE_LANG) and the
+    // quality (\d+p) from the name; Castle's playlist carries neither itself.
+    .map((s) => ({
+      name: `Castle • ${String(s.label || "HD").replace(/^Castle\s*/i, "")} ${s.quality || ""}`.replace(/\s+/g, " ").trim(),
+      url: s.url, own: true,
+    }));
 };
 
 const providers = (o) => [
