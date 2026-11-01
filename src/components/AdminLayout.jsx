@@ -17,6 +17,7 @@ import {
   LogOut,
   Tv, // Used for the Live Match Upload page
   Globe,
+  Film, // AnchorHD servers page
   Activity,
 } from "lucide-react"; // Using lucide-react for modern icons
 
@@ -52,6 +53,11 @@ const ADMIN_LINKS = [
     path: "/admin/source-domains",
     icon: Globe,
     label: "Source Domains",
+  },
+  {
+    path: "/admin/anchor-servers",
+    icon: Film,
+    label: "AnchorHD Servers",
   },
   {
     path: "/admin/upload-watch-html",

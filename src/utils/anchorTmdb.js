@@ -325,23 +325,61 @@ const castle = (o) => async () => {
     }));
 };
 
-const providers = (o) => [
-  // Ours. A title can be on our CDN without this page's row knowing it.
-  async () => {
-    const qs = new URLSearchParams({ tmdbId: String(o.tmdbId), type: o.type, season: String(o.season), episode: String(o.episode) });
-    const d = await getJson(`${o.backendUrl}/api/own-stream?${qs}`);
-    return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
-  },
-  moviboxHls(o),               // MoviBox, all languages in one stream — always right after our own
-  castle(o),                   // Castle, right after MoviBox — CDN-direct multi-language
-  ...byLanguages(o),           // then India4Movies, HDHub4u and 1TamilMV: the most languages first
-  singularity(o),
-  ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
-  scrape("Bastion", o),        // FilmU's, after those
-  scrape("RiveStream", o),     // Citadel · Zephyr · PrimeVids · Vanguard
-  scrape("MeowTV", o),         // FilmU Hindi
-  scrape("VidRock", o),        // Nova · Orion
+// Our own CDN. A title can be on it without this page's row knowing it.
+const ownStream = (o) => async () => {
+  const qs = new URLSearchParams({ tmdbId: String(o.tmdbId), type: o.type, season: String(o.season), episode: String(o.episode) });
+  const d = await getJson(`${o.backendUrl}/api/own-stream?${qs}`);
+  return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
+};
+
+/* The AnchorHD sources as keyed groups, so the admin page can reorder/disable
+   them (GET/PUT /api/anchor-servers). DEFAULT_SERVER_ORDER is the built-in order
+   — Castle first, then MoviBox — used when no admin order is set. Each key may
+   expand to several providers (languages = India4Movies/HDHub4u/1TamilMV). */
+export const SERVER_DEFS = [
+  { key: "own", label: "AnchorHD · our CDN" },
+  { key: "castle", label: "Castle · multi-language" },
+  { key: "moviebox", label: "MoviBox · multi-language" },
+  { key: "languages", label: "India4Movies / HDHub4u / 1TamilMV" },
+  { key: "singularity", label: "Singularity" },
+  { key: "bingr", label: "BingR servers" },
+  { key: "filmu", label: "FilmU (Bastion · RiveStream · MeowTV · VidRock)" },
 ];
+export const DEFAULT_SERVER_ORDER = SERVER_DEFS.map((s) => s.key);
+
+const providersForKey = (o, key) => {
+  switch (key) {
+    case "own": return [ownStream(o)];
+    case "castle": return [castle(o)];
+    case "moviebox": return [moviboxHls(o)];
+    case "languages": return byLanguages(o);
+    case "singularity": return [singularity(o)];
+    case "bingr": return BINGR.map(([srv, name]) => bingr(o, srv, name));
+    case "filmu": return [scrape("Bastion", o), scrape("RiveStream", o), scrape("MeowTV", o), scrape("VidRock", o)];
+    default: return [];
+  }
+};
+
+// Build the provider list for the given admin order (array of enabled keys).
+// Unlisted known keys are dropped (admin disabled them); an empty/absent order
+// falls back to the built-in order so the player always has its sources.
+const providers = (o, order) => {
+  const keys = Array.isArray(order) && order.length ? order : DEFAULT_SERVER_ORDER;
+  const out = [];
+  for (const key of keys) out.push(...providersForKey(o, key));
+  return out;
+};
+
+// Admin-set order, fetched once and cached ~a minute (public GET).
+let _orderCache = null, _orderAt = 0;
+async function serverOrder(backendUrl) {
+  if (_orderCache && Date.now() - _orderAt < 60000) return _orderCache;
+  try {
+    const d = await getJson(`${backendUrl}/api/anchor-servers`, 5000);
+    if (d && Array.isArray(d.order)) { _orderCache = d.order; _orderAt = Date.now(); return d.order; }
+  } catch { /* use the default order */ }
+  return null;
+}
 
 
 /* "It answered" and "it plays" are different things — a provider will hand
@@ -399,11 +437,12 @@ function titleVariants(title) {
 export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season = 1, episode = 1, title = "", year = "", original = "", backendUrl }) {
   const seen = new Set();
   const base = { tmdbId, imdbId: /^tt\d+$/.test(imdbId || "") ? imdbId : "", type, season, episode, year: String(year || "").slice(0, 4), original, backendUrl };
+  const order = await serverOrder(backendUrl);   // admin order, else the default
 
   /* Ask every provider for one title, best first. Shared across the title
      fallbacks so a stream already seen is never offered twice. */
   async function* askFor(o) {
-    const asked = providers(o).map((ask, i) => {
+    const asked = providers(o, order).map((ask, i) => {
       const p = Promise.resolve().then(ask).catch(() => null);
       return i === 0 ? withTimeout(p, OWN_TIMEOUT) : p;
     });

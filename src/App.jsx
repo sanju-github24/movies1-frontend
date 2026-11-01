@@ -53,6 +53,7 @@ import ScrollMemory from './components/ScrollMemory';
 import { loadLiveNow } from './utils/liveConfig';
 import AdminLiveNow from './paged/AdminLiveNow';
 import AdminSourceDomains from './paged/AdminSourceDomains';
+import AdminAnchorServers from './paged/AdminAnchorServers';
 import AdminAnalytics from './paged/AdminAnalytics';
 import { trackPage } from './utils/analytics';
 import Home from './paged/Home';
@@ -378,6 +379,7 @@ const AppContent = () => {
                 <Route path="live-channels"    element={<LiveChannelsUpload />} />
                 <Route path="live-now"         element={<AdminLiveNow />} />
                 <Route path="source-domains"   element={<AdminSourceDomains />} />
+                <Route path="anchor-servers"   element={<AdminAnchorServers />} />
                 <Route path="analytics"        element={<AdminAnalytics />} />
               </Routes>
             </ProtectedAdminRoute>
