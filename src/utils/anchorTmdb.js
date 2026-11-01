@@ -378,28 +378,53 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((res) => setTimeout(
  * checked together and the richest master goes first.
  *   { url, name } — url is ready for hls.js (worker-wrapped where needed)
  */
+/* Shorter forms of a title, tried in turn when the full one finds nothing. A
+   long descriptive title ("Aadarsha Kutumbam House No 47 AK47") is listed by the
+   sources under a shorter name ("Aadarsha Kutumbam"), so the full string matches
+   nobody. Full first, then a version without a trailing acronym/number tail, then
+   the first three and first two words. Only used as a fallback, so a precise full
+   title is never traded for a looser one. */
+function titleVariants(title) {
+  const t = String(title || "").trim();
+  if (!t) return [""];
+  const out = [t];
+  const noTail = t.replace(/[\s,–—-]+(?:no\.?\s*\d+|[A-Za-z]*\d+[A-Za-z]*|[A-Z]{2,})\s*$/i, "").trim();
+  if (noTail && noTail !== t) out.push(noTail);
+  const w = t.split(/\s+/).filter(Boolean);
+  if (w.length > 3) out.push(w.slice(0, 3).join(" "));
+  if (w.length > 2) out.push(w.slice(0, 2).join(" "));
+  return [...new Set(out.filter((x) => x && x.length >= 2))];
+}
+
 export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season = 1, episode = 1, title = "", year = "", original = "", backendUrl }) {
   const seen = new Set();
-  const o = { tmdbId, imdbId: /^tt\d+$/.test(imdbId || "") ? imdbId : "", type, season, episode, title, year: String(year || "").slice(0, 4), original, backendUrl };
-  /* All asked at once, taken in order. One after another, their round trips
-     added up before the player had anything; now the wait is only as long as
-     the slowest provider ahead of the one that answers. */
-  const asked = providers(o).map((ask, i) => {
-    const p = Promise.resolve().then(ask).catch(() => null);
-    return i === 0 ? withTimeout(p, OWN_TIMEOUT) : p;
-  });
-  for (const pending of asked) {
-    const got = await pending;
-    const fresh = (Array.isArray(got) ? got : [got])
-      .filter((c) => c?.url && !seen.has(c.url) && seen.add(c.url))
-      .slice(0, 16)
-      .map((c) => ({ name: c.name, file: c.file, score: c.score, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
-    // A plain file has no manifest to read; it keeps its provider's order.
-    // A provider may rank its own (MoviBox puts its MP4 dubs after its multi-audio stream).
-    const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.score ?? (c.file ? 100 - i : await manifestScore(c.url)) })));
-    for (const c of scored.filter((c) => c.score >= 0).sort((a, b) => b.score - a.score)) {
-      yield { url: c.url, name: c.name };
+  const base = { tmdbId, imdbId: /^tt\d+$/.test(imdbId || "") ? imdbId : "", type, season, episode, year: String(year || "").slice(0, 4), original, backendUrl };
+
+  /* Ask every provider for one title, best first. Shared across the title
+     fallbacks so a stream already seen is never offered twice. */
+  async function* askFor(o) {
+    const asked = providers(o).map((ask, i) => {
+      const p = Promise.resolve().then(ask).catch(() => null);
+      return i === 0 ? withTimeout(p, OWN_TIMEOUT) : p;
+    });
+    for (const pending of asked) {
+      const got = await pending;
+      const fresh = (Array.isArray(got) ? got : [got])
+        .filter((c) => c?.url && !seen.has(c.url) && seen.add(c.url))
+        .slice(0, 16)
+        .map((c) => ({ name: c.name, file: c.file, score: c.score, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
+      const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.score ?? (c.file ? 100 - i : await manifestScore(c.url)) })));
+      for (const c of scored.filter((c) => c.score >= 0).sort((a, b) => b.score - a.score)) {
+        yield { url: c.url, name: c.name };
+      }
     }
+  }
+
+  // Full title first; only if it yields nothing do we try shorter forms.
+  for (const t of titleVariants(title)) {
+    let any = false;
+    for await (const s of askFor({ ...base, title: t })) { any = true; yield s; }
+    if (any) return;
   }
 }
 
