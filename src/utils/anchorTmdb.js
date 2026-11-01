@@ -302,6 +302,24 @@ const byLanguages = (o) => {
 /* Each provider returns a candidate, a list of them, or null. In FilmU's own
    order of preference: Singularity's masters carry the most languages; the
    extractors behind it are what FilmU's page falls back to. */
+/* Castle (IndiaA), right after MoviBox: a CDN-direct, multi-language HLS source
+   resolved by title (and SxEy for series) via /api/castle/resolve. Its OSS/
+   Cloudflare CDN sends CORS and needs no Referer, so the m3u8 plays straight —
+   own:true, no relay/worker, no VPS bandwidth. Free tier only (<=720p); a
+   VIP/locked title just returns nothing and the next provider takes over. */
+const castle = (o) => async () => {
+  if (!o.backendUrl || !o.title) return null;
+  const qs = new URLSearchParams({
+    title: o.title, ...(o.year ? { year: String(o.year) } : {}),
+    ...(o.type === "tv" ? { season: String(o.season), episode: String(o.episode) } : {}),
+  });
+  const d = await getJson(`${o.backendUrl}/api/castle/resolve?${qs}`, 20000);
+  if (!d?.ok || !Array.isArray(d.servers)) return null;
+  return d.servers
+    .filter((s) => s?.url)
+    .map((s) => ({ name: `Castle • ${String(s.label || "HD").replace(/^Castle\s*/i, "")}`.trim(), url: s.url, own: true }));
+};
+
 const providers = (o) => [
   // Ours. A title can be on our CDN without this page's row knowing it.
   async () => {
@@ -310,6 +328,7 @@ const providers = (o) => [
     return d?.success && d.url ? { url: d.url, name: "AnchorHD • our CDN", own: true } : null;
   },
   moviboxHls(o),               // MoviBox, all languages in one stream — always right after our own
+  castle(o),                   // Castle, right after MoviBox — CDN-direct multi-language
   ...byLanguages(o),           // then India4Movies, HDHub4u and 1TamilMV: the most languages first
   singularity(o),
   ...BINGR.map(([srv, name]) => bingr(o, srv, name)),   // bingr's direct servers
