@@ -303,6 +303,10 @@ const buildServers = (meta, eps = []) => {
   );
   if (meta.video_url || eps.some(e => e.direct_url))
     srv.push({ id:"hls", name:"Direct", label:"HLS Stream", icon:<Video size={14}/> });
+  // Castle (IndiaA) — last-resort fallback. CDN-direct multi-language HLS,
+  // resolved by title (movies) or title + SxEy (series).
+  if (meta.tmdb_id)
+    srv.push({ id:"castle", name:"Castle", label:"Multi-Language · CDN", icon:<Languages size={14}/> });
   return srv;
 };
 
@@ -944,6 +948,43 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     setMxResolving(false);
   }, [movieMeta, routeSlug, maybeProxy, resolveStreamLink, mkvChoices]);
 
+  /* ── Castle (IndiaA) → CDN-direct multi-language HLS, the last fallback. ──
+     The backend only RESOLVES the title to an m3u8 (search → detail → getVideo);
+     the video streams straight from their Cloudflare/OSS CDN to the viewer
+     (CORS: *, no Referer), so it is played DIRECT — never through our hls-proxy,
+     which would put the whole movie on the VPS (the 1 TB box). Movies only:
+     their per-episode flow needs a mapping we don't offer yet for series. */
+  const playCastle = useCallback(async (ep = null) => {
+    const title = movieMeta?.title;
+    if (!title) return;
+    const year = String(movieMeta?.release_date || movieMeta?.year || movieMeta?.first_air_date || "").match(/(19|20)\d{2}/)?.[0] || "";
+    const season = ep ? (ep.season || 1) : null;                                   // series: SxEy
+    const episode = ep ? (ep.episodeNumberInSeason || ep.episode || 1) : null;
+    const label = ep
+      ? `${movieMeta.title || routeSlug} — S${season}E${episode}`
+      : (movieMeta.title || routeSlug);
+    setMxResolving(true);
+    try {
+      const q = new URLSearchParams({
+        title, ...(year ? { year } : {}),
+        ...(movieMeta?.tmdb_id ? { tmdb: String(movieMeta.tmdb_id) } : {}),
+        ...(ep ? { season: String(season), episode: String(episode) } : {}),
+      });
+      const r = await fetch(`${backendUrl}/api/castle/resolve?${q}`);
+      const j = await r.json().catch(() => null);
+      const url = j?.ok && Array.isArray(j.servers) ? j.servers[0]?.url : null;
+      if (url) {
+        if (ep) setCurrentOverlayEp(ep);
+        setResumeStart(getResumeTime(movieMeta.slug || routeSlug));
+        setFinalSource(url);          // DIRECT — Castle's CDN sends CORS:*, no proxy
+        setSourceType("hls");
+        setVideoTitle(label);
+        setShowOverlay(true);
+      }
+    } catch { /* ignore — user can pick another server */ }
+    setMxResolving(false);
+  }, [movieMeta, routeSlug, backendUrl]);
+
   /* ── Play one episode's stream link in our rich VideoPlayer (episode-wise). ── */
   /* Every play request takes a number; an async one that finishes after a
      newer request has started is dropped instead of replacing it. */
@@ -1302,6 +1343,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";  // else the embed mirror
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
+    if (serverId === "castle") { playCastle(ep); return; } // Castle resolves async → CDN-direct HLS (movies + episodes)
     if (serverId === "movibox" && movieMeta.tmdb_id) {
       const TVmb = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
       if (ep) setCurrentOverlayEp(ep);
@@ -1368,7 +1410,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       setVideoTitle(label);
       setShowOverlay(true);
     }
-  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playOurHls, playEpisodeStream, playAnchorTmdb, maybeProxy]);
+  }, [movieMeta, activeServer, availableServers, currentOverlayEp, episodes, routeSlug, playMx, playCastle, playOurHls, playEpisodeStream, playAnchorTmdb, maybeProxy]);
   handlePlayActionRef.current = handlePlayAction;
 
   /* Closing the player: when we were opened straight from the mobile detail
