@@ -1543,7 +1543,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
             imdb_id:      imdbId,
             content_type: contentType,
             poster:       safeURI(stateMovie.poster
-              || (stateMovie.poster_path ? `https://image.tmdb.org/t/p/w500${stateMovie.poster_path}` : "/default-poster.jpg")),
+              || (stateMovie.poster_path ? `https://image.tmdb.org/t/p/w780${stateMovie.poster_path}` : "/default-poster.jpg")),
             background:   safeURI(stateMovie.cover_poster
               || (stateMovie.backdrop_path ? `https://image.tmdb.org/t/p/original${stateMovie.backdrop_path}` : null)
               || stateMovie.poster || "/default-cover.jpg"),
