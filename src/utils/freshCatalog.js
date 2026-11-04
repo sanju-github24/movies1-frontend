@@ -32,7 +32,7 @@ export const freshEntry = (f) => {
 /** The latest releases as catalogue entries; [] if the backend does not answer. */
 export async function loadFresh() {
   try {
-    const d = await fetch(`${backendUrl}/api/fresh`).then((r) => r.json());
+    const d = await fetch(`${backendUrl}/api/fresh`, { cache: 'no-store' }).then((r) => r.json());
     return (d?.items || []).map(freshEntry);
   } catch { return []; }
 }
