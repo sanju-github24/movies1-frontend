@@ -1302,15 +1302,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       if (ep ? (ep.html || ep.html_code) : movieMeta.html_code) serverId = "embed";  // else the embed mirror
     }
     if (serverId === "mx") { playMx(ep); return; } // MX has its own async resolve path
-    if (serverId === "movibox" && movieMeta.tmdb_id) {
-      const TVmb = movieMeta.content_type === "tv" || episodes.length > 0 || !!ep;
-      if (ep) setCurrentOverlayEp(ep);
-      setFinalSource({ tv: TVmb, season: ep?.season || 1, episode: ep?.episodeNumberInSeason || ep?.episode || 1 });
-      setSourceType("movibox");
-      setVideoTitle(ep ? `${movieMeta.title || routeSlug} — S${ep.season || 1}E${ep.episodeNumberInSeason || ep.episode || 1}` : (movieMeta.title || routeSlug));
-      setShowOverlay(true);
-      return;
-    }
+    if (serverId === "movibox" && movieMeta.tmdb_id) { playAnchorTmdb(ep, "movibox"); return; }
     if (serverId === "tamilmv" && movieMeta.tmdb_id) { playAnchorTmdb(ep, "tamilmv"); return; }
 
     const imdb = (movieMeta.imdb_id || "").trim();

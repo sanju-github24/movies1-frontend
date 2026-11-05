@@ -127,6 +127,12 @@ const HEVC_OK = () => {
     return !!MS && MS.isTypeSupported('video/mp4; codecs="hev1.1.6.L93.90"');
   } catch { return false; }
 };
+export const isNoticeUrl = (u) => {
+  if (!u) return false;
+  const s = String(u);
+  return /index_4\d\d\.m3u8/i.test(s) || /flonub\.com.*index_/i.test(s) || /(?:notice|warning|interstitial|anti[_-]?piracy)/i.test(s);
+};
+
 /* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
    Malayalam) comes as its own stream after it, offered in the language
    menu beside the stream's tracks; on a browser without HEVC every language
@@ -138,11 +144,11 @@ const moviboxHls = (o) => async () => {
   const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: tv ? "tv" : "movie",
     ...(tv ? { se: String(o.season), ep: String(o.episode) } : {}) });
   const d = await getJson(`${o.backendUrl}/api/mbhls/title?${qs}`, 30000);
-  const out = hevc ? (d?.streams || []).map((s) => ({
+  const out = hevc ? (d?.streams || []).filter((s) => !isNoticeUrl(s.url)).map((s) => ({
     url: `${o.backendUrl}${s.url}`, own: true,
     name: `MoviBox • ${(s.languages || []).map((l) => l.name).join(", ")} ${s.height ? `${s.height}p` : ""}`.trim(),
   })) : [];
-  (d?.mp4 || []).filter((m) => !hevc || !m.inStream).forEach((m, i) => out.push({
+  (d?.mp4 || []).filter((m) => (!hevc || !m.inStream) && !isNoticeUrl(m.url)).forEach((m, i) => out.push({
     url: m.url, own: true, file: true,
     name: `MoviBox • ${m.name} ${m.resolution ? `${m.resolution}p` : ""}`.trim(),
     score: 1 - i / 1000,   // after the multi-audio stream, which the manifest scores above 1
@@ -196,6 +202,7 @@ const moviBox = (o) => async () => {
   for (const l of d?.languages || []) {
     const lang = LANG_NAME[l.code] || String(l.language || "").replace(/\s*dub$/i, "");
     for (const f of l.mp4 || []) {
+      if (isNoticeUrl(f.url)) continue;
       out.push({
         name: `MoviBox • ${lang} ${f.resolution}${l.original ? " (original)" : ""}`,
         url: `${RELAY}?u=${encodeURIComponent(f.url)}&play=1&n=${encodeURIComponent(`${o.title || "video"} ${lang} ${f.resolution}.mp4`)}`,
@@ -390,6 +397,7 @@ async function serverOrder(backendUrl) {
    more qualities is what our menus are for. Returns -1 for unplayable. */
 const manifestScore = async (url) => {
   try {
+    if (isNoticeUrl(url)) return -1;
     const r = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20000) });
     if (!r.ok) return -1;
     const m = await r.text();
@@ -401,6 +409,12 @@ const manifestScore = async (url) => {
     if (variants.length === 1 && !/#EXT-X-MEDIA:/.test(m)) {
       const h = Number((variants[0].match(/RESOLUTION=\d+x(\d+)/) || [])[1]) || 0;
       if (/tiles\.m3u8/.test(variants[0]) && h && h <= 720) return -1;
+    }
+    // Single media playlist (no variants): filter out short notice/warning clips (<180s, e.g. 25s MovieBox warning)
+    if (!variants.length) {
+      const segDurs = [...m.matchAll(/#EXTINF:([\d.]+)/g)].map((x) => Number(x[1]) || 0);
+      const totalSec = segDurs.reduce((a, b) => a + b, 0);
+      if (segDurs.length > 0 && totalSec < 180) return -1;
     }
     return audio * 10 + variants.length;
   } catch { return -1; }
@@ -474,7 +488,9 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
  */
 export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", backendUrl }) {
   const list = await moviBox({ tmdbId, type, season, episode, title, backendUrl })().catch(() => null);
-  for (const c of list || []) yield { url: c.url, name: c.name };
+  for (const c of list || []) {
+    if (!isNoticeUrl(c.url)) yield { url: c.url, name: c.name };
+  }
 }
 
 /* ── 1TamilMV, as its own server ─────────────────────────────────────────

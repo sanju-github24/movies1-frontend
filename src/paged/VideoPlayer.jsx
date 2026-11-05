@@ -568,6 +568,10 @@ const VideoPlayer = ({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
+    if (/index_4\d\d\.m3u8/i.test(src) || /flonub\.com.*index_/i.test(src)) {
+      refreshRef.current?.(0);
+      return;
+    }
     setIsBuffering(true);
     didSeekRef.current = false;        // new source → allow one resume-seek
     appliedAudioRef.current = false;   // new source → re-apply preferred audio
@@ -1369,12 +1373,18 @@ const VideoPlayer = ({
           if (onProgress) onProgress(v.currentTime, v.duration);
         }}
         onLoadedMetadata={() => {
-          setDuration(videoRef.current.duration);
-          videoRef.current.playbackRate = playbackRate;   // keep chosen speed across episodes
+          const v = videoRef.current; if (!v) return;
+          // Notice video guard: a 25-second warning video (or clip < 60s) is not a full movie or episode.
+          if (v.duration > 0 && v.duration < 60 && (tmdbId || episodes.length > 0)) {
+            refreshRef.current?.(0);
+            return;
+          }
+          setDuration(v.duration);
+          v.playbackRate = playbackRate;   // keep chosen speed across episodes
           // Resume: seek to the saved position once, if it's meaningfully into the video.
-          if (startTime > 1 && !didSeekRef.current && startTime < videoRef.current.duration - 5
-              && Math.abs(videoRef.current.currentTime - startTime) > 2) {
-            try { videoRef.current.currentTime = startTime; } catch {}
+          if (startTime > 1 && !didSeekRef.current && startTime < v.duration - 5
+              && Math.abs(v.currentTime - startTime) > 2) {
+            try { v.currentTime = startTime; } catch {}
           }
           didSeekRef.current = true;
         }}
