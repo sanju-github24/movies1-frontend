@@ -130,7 +130,17 @@ const HEVC_OK = () => {
 export const isNoticeUrl = (u) => {
   if (!u) return false;
   const s = String(u);
-  return /index_4\d\d\.m3u8/i.test(s) || /flonub\.com.*index_/i.test(s) || /(?:notice|warning|interstitial|anti[_-]?piracy)/i.test(s);
+  /* Also decode the URL: worker-wrapped URLs carry the original inside an
+     encoded query parameter (e.g. ?url=…%2Findex_405.m3u8…), and a plain
+     regex on the outer string would miss it. */
+  let decoded = s;
+  try { decoded = decodeURIComponent(s); } catch { /* keep as-is */ }
+  const check = (v) =>
+    /index_4\d\d\.m3u8/i.test(v)
+    || /flonub\.com/i.test(v)
+    || /(?:notice|warning|interstitial|anti[_-]?piracy)/i.test(v)
+    || /hls_mps\/[a-f0-9]{20,}\//i.test(v);
+  return check(s) || (decoded !== s && check(decoded));
 };
 
 /* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
@@ -415,6 +425,27 @@ const manifestScore = async (url) => {
       const segDurs = [...m.matchAll(/#EXTINF:([\d.]+)/g)].map((x) => Number(x[1]) || 0);
       const totalSec = segDurs.reduce((a, b) => a + b, 0);
       if (segDurs.length > 0 && totalSec < 180) return -1;
+    }
+    /* Master playlist with variants: fetch the first variant to check its
+       duration. A notice master wraps a 25 s media playlist inside a normal-
+       looking multi-variant manifest, so checking only the outer manifest
+       misses it. Only one extra request per candidate. */
+    if (variants.length > 0) {
+      const firstUri = variants[0].split("\n").pop()?.trim();
+      if (firstUri) {
+        try {
+          const variantUrl = firstUri.startsWith("http") ? firstUri : new URL(firstUri, url).href;
+          // Notice URLs hiding inside a variant
+          if (isNoticeUrl(variantUrl)) return -1;
+          const vr = await fetch(variantUrl, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+          if (vr.ok) {
+            const vm = await vr.text();
+            const segDurs = [...vm.matchAll(/#EXTINF:([\d.]+)/g)].map((x) => Number(x[1]) || 0);
+            const totalSec = segDurs.reduce((a, b) => a + b, 0);
+            if (segDurs.length > 0 && totalSec < 180) return -1;
+          }
+        } catch { /* variant fetch failed — let the score stand */ }
+      }
     }
     return audio * 10 + variants.length;
   } catch { return -1; }

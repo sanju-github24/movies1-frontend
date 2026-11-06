@@ -4,6 +4,7 @@ import PausedOverlay from "../components/PausedOverlay";
 import OnlineSubtitles from "../components/OnlineSubtitles";
 import SubtitleStyle, { loadSubStyle, saveSubStyle, subtitleCss } from "../components/SubtitleStyle";
 import { backendUrl as apiBase } from "../utils/api";
+import { isNoticeUrl } from "../utils/anchorTmdb";
 import {
   Settings, Zap,
   Volume1, Loader2, Check, Music, Layers, Activity, Languages,
@@ -568,7 +569,12 @@ const VideoPlayer = ({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
-    if (/index_4\d\d\.m3u8/i.test(src) || /flonub\.com.*index_/i.test(src)) {
+    /* Block MovieBox notice / warning m3u8 streams aggressively.  The raw
+       URL or a worker-wrapped version of it (where the original lives inside
+       an encoded query parameter) must both be caught. */
+    const decodedSrc = (() => { try { return decodeURIComponent(src); } catch { return src; } })();
+    if (isNoticeUrl(src) || isNoticeUrl(decodedSrc)) {
+      console.warn('[VideoPlayer] Blocked notice URL, refreshing source:', src);
       refreshRef.current?.(0);
       return;
     }
@@ -731,7 +737,21 @@ const VideoPlayer = ({
         // window as the first video and audio fragments, on the same connection.
         // They're switched on after playback has actually started (below).
       });
-      hls.on(Hls.Events.LEVEL_LOADED, syncTracks);
+      hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
+        syncTracks();
+        /* MovieBox notice guard: if the loaded level's total duration is under
+           180 s and this is a TMDB / episode stream, it is the ~25 s warning
+           video, not real content. Reject immediately and ask for the next
+           source. Checked here because this is the earliest moment hls.js
+           knows the real duration — MANIFEST_PARSED only has the variants. */
+        if ((tmdbId || episodes.length > 0) && data?.details?.totalduration > 0 && data.details.totalduration < 180) {
+          console.warn('[VideoPlayer] Blocked short notice stream (' + Math.round(data.details.totalduration) + 's), refreshing source');
+          try { hls.destroy(); } catch {}
+          hlsRef.current = null;
+          refreshRef.current?.(0);
+          return;
+        }
+      });
       // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => setSubtitleTracks(hls.subtitleTracks || []));
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => { setAudioTracks(allAudio(hls)); applyPreferredAudio(hls); });
@@ -1374,8 +1394,10 @@ const VideoPlayer = ({
         }}
         onLoadedMetadata={() => {
           const v = videoRef.current; if (!v) return;
-          // Notice video guard: a 25-second warning video (or clip < 60s) is not a full movie or episode.
-          if (v.duration > 0 && v.duration < 60 && (tmdbId || episodes.length > 0)) {
+          // Notice video guard: a short warning video (<3 min) is not a full movie or episode.
+          // Aggressively block it for any TMDB / episode playback — the real content is always longer.
+          if (v.duration > 0 && v.duration < 180 && (tmdbId || episodes.length > 0)) {
+            console.warn('[VideoPlayer] Blocked short notice video (' + Math.round(v.duration) + 's) via loadedmetadata');
             refreshRef.current?.(0);
             return;
           }
