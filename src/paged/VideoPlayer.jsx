@@ -706,50 +706,44 @@ const VideoPlayer = ({
         appliedAudioRef.current = true;
       };
 
+      /* Gate playback until LEVEL_LOADED confirms the stream is real content
+         (≥ 180 s). This prevents MovieBox's ~25 s notice video from ever
+         showing a frame — for movies AND episodes. Live streams are let
+         through immediately (their totalduration is 0 or absent). */
+      let durationConfirmed = false;
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         applyPreferredAudio(hls);
-        // Phones: never let ABR climb past 720p. 1080p/4K segments are several
-        // times larger for no visible gain on a 6" screen and are what made the
-        // first seconds crawl. Manual quality picks still override this.
-        // Resume: make sure the very first fragment request is the one at the
-        // saved position. Without this a re-attach can start at 0 and only seek
-        // after metadata — which is exactly the "coming back is slow" delay.
         if (resumeAt > 1 && (videoRef.current?.currentTime || 0) < resumeAt - 2) {
           try { hls.startLoad(resumeAt); } catch {}
         }
         if (smallScreen) {
-          /* The cap is a position in the list, and everything after it is
-             barred. A stream with an audio group per language lists every
-             height once per language, so the cap must be the LAST level at
-             the chosen height — the first was one language's copy, and every
-             other language's sat above it, unreachable: picking Kannada kept
-             playing Hindi. */
           const cap = (hls.levels || []).reduce(
             (best, l, i) => (l.height && l.height <= 720 &&
               (best < 0 || l.height >= hls.levels[best].height) ? i : best), -1);
           if (cap >= 0) hls.autoLevelCapping = cap;
         }
         syncTracks();
-        setIsBuffering(false);
-        tryAutoplay();
-        // NOTE: subtitles are deliberately NOT enabled here. Turning them on now
-        // makes hls.js fetch the subtitle playlist + VTT segments in the same
-        // window as the first video and audio fragments, on the same connection.
-        // They're switched on after playback has actually started (below).
+        /* Stay on the spinner — LEVEL_LOADED will unlock once duration is
+           confirmed or the stream is detected as live. */
       });
       hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
         syncTracks();
-        /* MovieBox notice guard: if the loaded level's total duration is under
-           180 s and this is a TMDB / episode stream, it is the ~25 s warning
-           video, not real content. Reject immediately and ask for the next
-           source. Checked here because this is the earliest moment hls.js
-           knows the real duration — MANIFEST_PARSED only has the variants. */
-        if ((tmdbId || episodes.length > 0) && data?.details?.totalduration > 0 && data.details.totalduration < 180) {
-          console.warn('[VideoPlayer] Blocked short notice stream (' + Math.round(data.details.totalduration) + 's), refreshing source');
+        const dur = data?.details?.totalduration || 0;
+        const live = data?.details?.live;
+        /* Short notice stream (< 180 s) — destroy without ever playing. */
+        if (!live && dur > 0 && dur < 180) {
+          console.warn('[VideoPlayer] Blocked short notice stream (' + Math.round(dur) + 's), refreshing source');
           try { hls.destroy(); } catch {}
           hlsRef.current = null;
           refreshRef.current?.(0);
           return;
+        }
+        /* Duration confirmed real, or it's a live stream — unlock playback. */
+        if (!durationConfirmed) {
+          durationConfirmed = true;
+          setIsBuffering(false);
+          tryAutoplay();
         }
       });
       // Subtitle & audio track lists often arrive AFTER manifest parse — keep them fresh.
@@ -1394,9 +1388,8 @@ const VideoPlayer = ({
         }}
         onLoadedMetadata={() => {
           const v = videoRef.current; if (!v) return;
-          // Notice video guard: a short warning video (<3 min) is not a full movie or episode.
-          // Aggressively block it for any TMDB / episode playback — the real content is always longer.
-          if (v.duration > 0 && v.duration < 180 && (tmdbId || episodes.length > 0)) {
+          // Notice video guard: a short clip (< 3 min) is not a real movie or episode.
+          if (v.duration > 0 && v.duration < 180) {
             console.warn('[VideoPlayer] Blocked short notice video (' + Math.round(v.duration) + 's) via loadedmetadata');
             refreshRef.current?.(0);
             return;
