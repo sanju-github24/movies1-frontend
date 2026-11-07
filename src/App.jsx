@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { supabase } from "./utils/supabaseClient";
@@ -28,7 +28,7 @@ const safeLazy = (importFn) =>
         } catch {
           window.location.reload();
         }
-        return new Promise(() => {});
+        return new Promise(() => { });
       }
       throw err;
     })
@@ -95,6 +95,7 @@ const AdminLiveMatchUpload = safeLazy(() => import('./paged/AdminLiveMatchUpload
 const LiveStreamPlayer = safeLazy(() => import('./paged/LiveStreamPlayer'));
 const SeriesView = safeLazy(() => import('./paged/SeriesView'));
 const AuthPage = safeLazy(() => import('./paged/AuthPage'));
+const QrApprove = safeLazy(() => import('./paged/QrApprove'));   // a signed-in phone approves a QR sign-in
 const UpdatePassword = safeLazy(() => import('./paged/UpdatePassword'));
 const TorrentSearch = safeLazy(() => import('./paged/Torrentsearch'));
 const LiveCricketTV = safeLazy(() => import('./paged/LiveCricketTV'));
@@ -170,6 +171,12 @@ const ProtectedAdminRoute = ({ children, session, initialized }) => {
   return children;
 };
 
+const AuthRedirect = () => {
+  const [p] = useSearchParams();
+  const n = p.get("next");
+  return <Navigate to={typeof n === "string" && /^\/(?!\/)/.test(n) ? n : "/watch"} replace />;
+};
+
 const AppContent = () => {
   const { isLoggedIn } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState("");
@@ -237,7 +244,7 @@ const AppContent = () => {
      What stays without chrome is only what is not a page in that sense: the
      auth screens, the admin studio, and the full-screen players, where a rail
      down the side of a video is just something covering the video. */
-  const authPaths = ["/login", "/auth", "/verify-account", "/reset-password", "/update-password"];
+  const authPaths = ["/login", "/auth", "/qr-approve", "/verify-account", "/reset-password", "/update-password"];
 
   /* /watch is the watchlist — a browsing page, and a rail destination.
      /watch/:slug is a title's page — details, servers, episodes, with the
@@ -298,96 +305,97 @@ const AppContent = () => {
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       }>
-      <Routes>
-        <Route path="/"                       element={<Home searchTerm={searchTerm} />} />
-        <Route path="/movie/:code"            element={<MovieDetail />} />
-        <Route path="/collection/:id"         element={<CollectionPage />} />
-        <Route path="/studio/:slug"           element={<StudioPage />} />
-        <Route path="/person/:key"            element={<PersonPage />} />
-        <Route path="/search"                 element={<SearchResults searchTerm={searchTerm} />} />
-        <Route path="/categories"             element={<CategoriesPage />} />
-        <Route path="/category/:name"         element={<CategoryPage />} />
-        <Route path="/genre/:name"            element={<CategoryPage kind="genre" />} />
-        <Route path="/latest"                 element={<LatestUploads />} />
-        <Route path="/blogs"                  element={<BlogList />} />
-        <Route path="/news"              element={<NewsViewer />} />
-        <Route path="/blogs/:slug"            element={<BlogViewer />} />
-        <Route path="/auth"                   element={session ? <Navigate to="/watch" /> : <AuthPage />} />
-        <Route path="/update-password"        element={<UpdatePassword />} />
-        <Route path="/watch"                  element={<WatchListPage />} />
-        <Route path="/mx-watch"               element={<MXWatch />} />
-        <Route path="/hls-watch"              element={<HlsWatch />} />
-        <Route path="/watch/search"           element={<SearchPage />} />
-        <Route path="/watch/:slug/*"          element={<WatchPage />} />
-        <Route path="/player/:slug?"          element={<VideoPlayerPage />} />
-        <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
-        <Route path="/live-cricket"           element={<LiveCricket />} />
-        <Route path="/search-torrent"         element={<TorrentSearch />} />
-        <Route path="/sports"                 element={<Homeies />} />        <Route path="/tournament/:slug"       element={<TournamentPage />} />
-        <Route path="/live-cricket-tv"        element={<LiveCricketTV />} />
-        {/* Readable, stable match URL — what the sitemap lists and Google indexes. */}
-        <Route path="/match/:slug"            element={<MatchCenter />} />
-        {/* Legacy base64 link, kept so shared URLs still open; it canonicalises
+        <Routes>
+          <Route path="/" element={<Home searchTerm={searchTerm} />} />
+          <Route path="/movie/:code" element={<MovieDetail />} />
+          <Route path="/collection/:id" element={<CollectionPage />} />
+          <Route path="/studio/:slug" element={<StudioPage />} />
+          <Route path="/person/:key" element={<PersonPage />} />
+          <Route path="/search" element={<SearchResults searchTerm={searchTerm} />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/category/:name" element={<CategoryPage />} />
+          <Route path="/genre/:name" element={<CategoryPage kind="genre" />} />
+          <Route path="/latest" element={<LatestUploads />} />
+          <Route path="/blogs" element={<BlogList />} />
+          <Route path="/news" element={<NewsViewer />} />
+          <Route path="/blogs/:slug" element={<BlogViewer />} />
+          <Route path="/auth" element={session ? <AuthRedirect /> : <AuthPage />} />
+          <Route path="/qr-approve" element={<QrApprove />} />
+          <Route path="/update-password" element={<UpdatePassword />} />
+          <Route path="/watch" element={<WatchListPage />} />
+          <Route path="/mx-watch" element={<MXWatch />} />
+          <Route path="/hls-watch" element={<HlsWatch />} />
+          <Route path="/watch/search" element={<SearchPage />} />
+          <Route path="/watch/:slug/*" element={<WatchPage />} />
+          <Route path="/player/:slug?" element={<VideoPlayerPage />} />
+          <Route path="/live-cricket/player/:slug" element={<LiveStreamPlayer />} />
+          <Route path="/live-cricket" element={<LiveCricket />} />
+          <Route path="/search-torrent" element={<TorrentSearch />} />
+          <Route path="/sports" element={<Homeies />} />        <Route path="/tournament/:slug" element={<TournamentPage />} />
+          <Route path="/live-cricket-tv" element={<LiveCricketTV />} />
+          {/* Readable, stable match URL — what the sitemap lists and Google indexes. */}
+          <Route path="/match/:slug" element={<MatchCenter />} />
+          {/* Legacy base64 link, kept so shared URLs still open; it canonicalises
             itself to the /match/:slug version. */}
-        <Route path="/match-center/:hash"     element={<MatchCenter />}
-/>
-        <Route path="/live-stream"            element={<LiveChannelsPage />} />
+          <Route path="/match-center/:hash" element={<MatchCenter />}
+          />
+          <Route path="/live-stream" element={<LiveChannelsPage />} />
 
-        {/* ── Music Feature Routes ── */}
-        <Route path="/music"                  element={<HomeLandingPage />} />
-        <Route path="/music/search"           element={<SearchResultsPage />} />
-        <Route path="/music/explore"          element={<MusicExplorePage />} />
-        <Route path="/music/artist/:id"       element={<ArtistPage />} />
-        <Route path="/music/library"          element={<MusicLibraryPage />} />
-        <Route path="/music/radio"            element={<RadioPage />} />
-        <Route path="/music/playlist/:id"     element={<PlaylistPage />} />
-        <Route path="/music/track/:id"        element={<TrackDetailPage />} />
+          {/* ── Music Feature Routes ── */}
+          <Route path="/music" element={<HomeLandingPage />} />
+          <Route path="/music/search" element={<SearchResultsPage />} />
+          <Route path="/music/explore" element={<MusicExplorePage />} />
+          <Route path="/music/artist/:id" element={<ArtistPage />} />
+          <Route path="/music/library" element={<MusicLibraryPage />} />
+          <Route path="/music/radio" element={<RadioPage />} />
+          <Route path="/music/playlist/:id" element={<PlaylistPage />} />
+          <Route path="/music/track/:id" element={<TrackDetailPage />} />
 
-        <Route path="/profile"                element={
-          <ProtectedRoute session={session} initialized={initialized}>
-            <Profile />
-          </ProtectedRoute>
-        } />
-        <Route path="/profile/settings"       element={
-          <ProtectedRoute session={session} initialized={initialized}>
-            <ProfileSettings />
-          </ProtectedRoute>
-        } />
-        <Route path="/verify-account"         element={<EmailVerify />} />
+          <Route path="/profile" element={
+            <ProtectedRoute session={session} initialized={initialized}>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile/settings" element={
+            <ProtectedRoute session={session} initialized={initialized}>
+              <ProfileSettings />
+            </ProtectedRoute>
+          } />
+          <Route path="/verify-account" element={<EmailVerify />} />
 
-        {!isLoggedIn && (
-          <>
-            <Route path="/login"          element={<Login />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-          </>
-        )}
+          {!isLoggedIn && (
+            <>
+              <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+            </>
+          )}
 
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedAdminRoute session={session} initialized={initialized}>
-              <Routes>
-                <Route index                   element={<Navigate to="upload" replace />} />
-                <Route path="upload"           element={<AdminUpload />} />
-                <Route path="dashboard"        element={<AdminDashboard />} />
-                <Route path="blog-editor"      element={<BlogEditor />} />
-                <Route path="stories"          element={<AdminStories />} />
-                <Route path="upload-watch-html" element={<UploadWatchHtml />} />
-                <Route path="live-upload"      element={<AdminLiveMatchUpload />} />
-                <Route path="members"          element={<AdminMembers />} />
-                <Route path="up4stream"        element={<AdminUp4streamFiles />} />
-                <Route path="live-channels"    element={<LiveChannelsUpload />} />
-                <Route path="live-now"         element={<AdminLiveNow />} />
-                <Route path="source-domains"   element={<AdminSourceDomains />} />
-                <Route path="anchor-servers"   element={<AdminAnchorServers />} />
-                <Route path="analytics"        element={<AdminAnalytics />} />
-              </Routes>
-            </ProtectedAdminRoute>
-          }
-        />
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedAdminRoute session={session} initialized={initialized}>
+                <Routes>
+                  <Route index element={<Navigate to="upload" replace />} />
+                  <Route path="upload" element={<AdminUpload />} />
+                  <Route path="dashboard" element={<AdminDashboard />} />
+                  <Route path="blog-editor" element={<BlogEditor />} />
+                  <Route path="stories" element={<AdminStories />} />
+                  <Route path="upload-watch-html" element={<UploadWatchHtml />} />
+                  <Route path="live-upload" element={<AdminLiveMatchUpload />} />
+                  <Route path="members" element={<AdminMembers />} />
+                  <Route path="up4stream" element={<AdminUp4streamFiles />} />
+                  <Route path="live-channels" element={<LiveChannelsUpload />} />
+                  <Route path="live-now" element={<AdminLiveNow />} />
+                  <Route path="source-domains" element={<AdminSourceDomains />} />
+                  <Route path="anchor-servers" element={<AdminAnchorServers />} />
+                  <Route path="analytics" element={<AdminAnalytics />} />
+                </Routes>
+              </ProtectedAdminRoute>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Suspense>
 
       {/* Bottom Ad slots and scripts for all pages except admin */}
