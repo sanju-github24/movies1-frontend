@@ -15,7 +15,7 @@ import { watchTick, flushWatch } from "../utils/analytics";
 import { toast } from "react-toastify";
 import { Helmet } from "react-helmet";
 import { sanitizeEmbed } from "../utils/sanitizeHtml";
-import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv, isMkvLink, mkvLanguages } from "../utils/anchorTmdb";
+import { tmdbStreams, moviboxStreams, tamilmvStreams, canPlayMkv, isMkvLink, mkvLanguages, isNoticeUrl, verifyStreamDuration } from "../utils/anchorTmdb";
 import { useRecommendations } from "../utils/recommendations";
 import { recordTrendingHit } from "../utils/trending";
 import { freshEntry } from "../utils/freshCatalog";
@@ -1013,6 +1013,20 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
       const item = search.items[i];
       if (!item || tmdbIterRef.current !== search) return null;
       if (item.bad) continue;
+
+      // Aggressive check: block notice URLs and any stream < 30 seconds before allowing into videoplayer
+      if (isNoticeUrl(item.url)) {
+        console.warn('[WatchPage] Blocked notice URL:', item.url);
+        item.bad = true;
+        continue;
+      }
+      const verified = await verifyStreamDuration(item.url);
+      if (!verified.valid) {
+        console.warn(`[WatchPage] Blocked short/fake stream (${verified.reason}, dur=${verified.duration}):`, item.url);
+        item.bad = true;
+        continue;
+      }
+
       search.at = i;
       return item;
     }
@@ -1046,10 +1060,21 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
     return search;
   }, [movieMeta, episodes, backendUrl, tmdbMeta?.original_language]);
   // The viewer picked one from the player's Sources menu.
-  const selectTmdbSource = useCallback((src, atSeconds) => {
+  const selectTmdbSource = useCallback(async (src, atSeconds) => {
     const search = tmdbIterRef.current;
     const i = search ? search.items.findIndex(x => x.url === src?.url) : -1;
     if (i < 0) return;
+    if (isNoticeUrl(src?.url)) {
+      search.items[i].bad = true;
+      toast.warn("Selected source is invalid");
+      return;
+    }
+    const verified = await verifyStreamDuration(src?.url);
+    if (!verified.valid) {
+      search.items[i].bad = true;
+      toast.warn("Selected source is too short or invalid");
+      return;
+    }
     search.at = i;
     setResumeStart(atSeconds || 0);
     setFinalSource(search.items[i].url);

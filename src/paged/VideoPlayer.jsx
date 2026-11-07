@@ -731,8 +731,8 @@ const VideoPlayer = ({
         syncTracks();
         const dur = data?.details?.totalduration || 0;
         const live = data?.details?.live;
-        /* Short notice stream (< 180 s) — destroy without ever playing. */
-        if (!live && dur > 0 && dur < 180) {
+        /* Short notice stream (< 30s or < 180 s) — destroy without ever playing. */
+        if (!live && dur > 0 && (dur < 30 || dur < 180)) {
           console.warn('[VideoPlayer] Blocked short notice stream (' + Math.round(dur) + 's), refreshing source');
           try { hls.destroy(); } catch {}
           hlsRef.current = null;
@@ -1383,14 +1383,31 @@ const VideoPlayer = ({
         }}
         onTimeUpdate={() => {
           const v = videoRef.current; if (!v) return;
+          if (v.duration > 0 && (v.duration < 30 || v.duration < 180)) {
+            console.warn('[VideoPlayer] Blocked short notice video (' + Math.round(v.duration) + 's) via onTimeUpdate');
+            try { v.pause(); } catch {}
+            refreshRef.current?.(0);
+            return;
+          }
           setCurrentTime(v.currentTime);
           if (onProgress) onProgress(v.currentTime, v.duration);
         }}
+        onDurationChange={() => {
+          const v = videoRef.current; if (!v) return;
+          if (v.duration > 0 && (v.duration < 30 || v.duration < 180)) {
+            console.warn('[VideoPlayer] Blocked short notice video (' + Math.round(v.duration) + 's) via onDurationChange');
+            try { v.pause(); } catch {}
+            refreshRef.current?.(0);
+            return;
+          }
+          setDuration(v.duration);
+        }}
         onLoadedMetadata={() => {
           const v = videoRef.current; if (!v) return;
-          // Notice video guard: a short clip (< 3 min) is not a real movie or episode.
-          if (v.duration > 0 && v.duration < 180) {
+          // Notice video guard: a short clip (< 30s or < 3 min) is not a real movie or episode.
+          if (v.duration > 0 && (v.duration < 30 || v.duration < 180)) {
             console.warn('[VideoPlayer] Blocked short notice video (' + Math.round(v.duration) + 's) via loadedmetadata');
+            try { v.pause(); } catch {}
             refreshRef.current?.(0);
             return;
           }
@@ -1404,8 +1421,25 @@ const VideoPlayer = ({
           didSeekRef.current = true;
         }}
         onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => { setIsBuffering(false); setIsPlaying(true); }}
-        onPlay={() => setIsPlaying(true)}
+        onPlaying={() => {
+          const v = videoRef.current;
+          if (v && v.duration > 0 && (v.duration < 30 || v.duration < 180)) {
+            try { v.pause(); } catch {}
+            refreshRef.current?.(0);
+            return;
+          }
+          setIsBuffering(false);
+          setIsPlaying(true);
+        }}
+        onPlay={() => {
+          const v = videoRef.current;
+          if (v && v.duration > 0 && (v.duration < 30 || v.duration < 180)) {
+            try { v.pause(); } catch {}
+            refreshRef.current?.(0);
+            return;
+          }
+          setIsPlaying(true);
+        }}
         onPause={() => setIsPlaying(false)}
         onEnded={handleVideoEnd}
       >

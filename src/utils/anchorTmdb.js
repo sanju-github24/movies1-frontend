@@ -138,10 +138,75 @@ export const isNoticeUrl = (u) => {
   const check = (v) =>
     /index_4\d\d\.m3u8/i.test(v)
     || /flonub\.com/i.test(v)
-    || /(?:notice|warning|interstitial|anti[_-]?piracy)/i.test(v)
-    || /hls_mps\/[a-f0-9]{20,}\//i.test(v);
+    || /(?:notice|warning|interstitial|anti[_-]?piracy|trailer|teaser|sample|preview)/i.test(v)
+    || /hls_mps\/[a-f0-9]{20,}\//i.test(v)
+    || /55518dd33236404e200a606811ea4da4/i.test(v)
+    || /(?:^|\.)aoneroom\.com\/other\//i.test(v)
+    || (/macdn\.aoneroom\.com/i.test(v) && /\/other\//i.test(v))
+    || /\/other\/\d{4}\/\d{2}\/\d{2}\/.*\.mp4/i.test(v);
   return check(s) || (decoded !== s && check(decoded));
 };
+
+/* Probes media (MP4/direct video) metadata offscreen to find real duration in seconds.
+   Returns duration in seconds or null if timed out / metadata unavailable. */
+export function probeMediaDuration(url, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (!url || typeof document === "undefined") return resolve(null);
+    let done = false;
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    let timer = null;
+    const finish = (val) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      v.onloadedmetadata = null;
+      v.ondurationchange = null;
+      v.onerror = null;
+      v.removeAttribute("src");
+      v.load();
+      resolve(val);
+    };
+    timer = setTimeout(() => finish(null), timeoutMs);
+    const check = () => {
+      const d = v.duration;
+      if (Number.isFinite(d) && d > 0) finish(d);
+    };
+    v.onloadedmetadata = check;
+    v.ondurationchange = check;
+    v.onerror = () => finish(null);
+    v.src = url;
+  });
+}
+
+/* Validates whether a candidate stream URL is real and ≥ 30 seconds.
+   Never allows notice URLs or clips lesser than 30 seconds into the player. */
+export async function verifyStreamDuration(url) {
+  if (!url) return { valid: false, reason: "empty_url", duration: 0 };
+  if (isNoticeUrl(url)) return { valid: false, reason: "notice_url", duration: 0 };
+
+  const isM3u8 = url.includes(".m3u8");
+  if (isM3u8) {
+    const score = await manifestScore(url);
+    if (score < 0) return { valid: false, reason: "m3u8_unplayable_or_too_short", duration: 0 };
+    return { valid: true, duration: null };
+  }
+
+  // MP4 or direct file
+  const dur = await probeMediaDuration(url, 5000);
+  if (dur !== null) {
+    if (dur < 30) {
+      return { valid: false, reason: "mp4_duration_under_30s", duration: dur };
+    }
+    if (dur < 180) {
+      return { valid: false, reason: "mp4_duration_under_180s_notice", duration: dur };
+    }
+    return { valid: true, duration: dur };
+  }
+
+  // If probe timed out, allow if not a notice URL
+  return { valid: !isNoticeUrl(url), reason: "probe_timeout_assumed_ok", duration: null };
+}
 
 /* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
    Malayalam) comes as its own stream after it, offered in the language
@@ -420,11 +485,11 @@ const manifestScore = async (url) => {
       const h = Number((variants[0].match(/RESOLUTION=\d+x(\d+)/) || [])[1]) || 0;
       if (/tiles\.m3u8/.test(variants[0]) && h && h <= 720) return -1;
     }
-    // Single media playlist (no variants): filter out short notice/warning clips (<180s, e.g. 25s MovieBox warning)
+    // Single media playlist (no variants): filter out short notice/warning clips (<180s, or any <30s)
     if (!variants.length) {
-      const segDurs = [...m.matchAll(/#EXTINF:([\d.]+)/g)].map((x) => Number(x[1]) || 0);
+      const segDurs = [...m.matchAll(/#EXTINF:\s*(-?[\d.]+)/g)].map((x) => Number(x[1]) || 0);
       const totalSec = segDurs.reduce((a, b) => a + b, 0);
-      if (segDurs.length > 0 && totalSec < 180) return -1;
+      if (segDurs.length > 0 && (totalSec < 30 || totalSec < 180)) return -1;
     }
     /* Master playlist with variants: fetch the first variant to check its
        duration. A notice master wraps a 25 s media playlist inside a normal-
@@ -440,9 +505,9 @@ const manifestScore = async (url) => {
           const vr = await fetch(variantUrl, { cache: "no-store", signal: AbortSignal.timeout(15000) });
           if (vr.ok) {
             const vm = await vr.text();
-            const segDurs = [...vm.matchAll(/#EXTINF:([\d.]+)/g)].map((x) => Number(x[1]) || 0);
+            const segDurs = [...vm.matchAll(/#EXTINF:\s*(-?[\d.]+)/g)].map((x) => Number(x[1]) || 0);
             const totalSec = segDurs.reduce((a, b) => a + b, 0);
-            if (segDurs.length > 0 && totalSec < 180) return -1;
+            if (segDurs.length > 0 && (totalSec < 30 || totalSec < 180)) return -1;
           }
         } catch { /* variant fetch failed — let the score stand */ }
       }
@@ -497,7 +562,15 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
         .filter((c) => c?.url && !seen.has(c.url) && seen.add(c.url))
         .slice(0, 16)
         .map((c) => ({ name: c.name, file: c.file, score: c.score, url: c.own ? c.url : viaWorker(c.url, { ref: c.ref, ua: c.ua }) }));
-      const scored = await Promise.all(fresh.map(async (c, i) => ({ ...c, score: c.score ?? (c.file ? 100 - i : await manifestScore(c.url)) })));
+      const scored = await Promise.all(fresh.map(async (c, i) => {
+        if (isNoticeUrl(c.url)) return { ...c, score: -1 };
+        if (c.file) {
+          const dur = await probeMediaDuration(c.url, 4000);
+          if (dur !== null && (dur < 30 || dur < 180)) return { ...c, score: -1 };
+          return { ...c, score: c.score ?? (100 - i) };
+        }
+        return { ...c, score: c.score ?? (await manifestScore(c.url)) };
+      }));
       for (const c of scored.filter((c) => c.score >= 0).sort((a, b) => b.score - a.score)) {
         yield { url: c.url, name: c.name };
       }
@@ -520,7 +593,10 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
 export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", backendUrl }) {
   const list = await moviBox({ tmdbId, type, season, episode, title, backendUrl })().catch(() => null);
   for (const c of list || []) {
-    if (!isNoticeUrl(c.url)) yield { url: c.url, name: c.name };
+    if (isNoticeUrl(c.url)) continue;
+    const dur = await probeMediaDuration(c.url, 4000);
+    if (dur !== null && (dur < 30 || dur < 180)) continue;
+    yield { url: c.url, name: c.name };
   }
 }
 
