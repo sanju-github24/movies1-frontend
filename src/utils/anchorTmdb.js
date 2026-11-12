@@ -135,10 +135,12 @@ export const isNoticeUrl = (u) => {
      regex on the outer string would miss it. */
   let decoded = s;
   try { decoded = decodeURIComponent(s); } catch { /* keep as-is */ }
+  /* Only match clearly synthetic notice/piracy clip paths — NOT generic words
+     like "trailer", "sample", "preview" that appear in legitimate movie URLs. */
   const check = (v) =>
     /index_4\d\d\.m3u8/i.test(v)
     || /flonub\.com/i.test(v)
-    || /(?:notice|warning|interstitial|anti[_-]?piracy|trailer|teaser|sample|preview)/i.test(v)
+    || /(?:\/notice\/|\/anti[_-]?piracy\/|\/interstitial\/|[?&]type=notice)/i.test(v)
     || /hls_mps\/[a-f0-9]{20,}\//i.test(v)
     || /55518dd33236404e200a606811ea4da4/i.test(v)
     || /(?:^|\.)aoneroom\.com\/other\//i.test(v)
@@ -180,7 +182,12 @@ export function probeMediaDuration(url, timeoutMs = 5000) {
 }
 
 /* Validates whether a candidate stream URL is real and ≥ 30 seconds.
-   Never allows notice URLs or clips lesser than 30 seconds into the player. */
+   Only used as a secondary gate for streams NOT already scored by manifestScore.
+   - For M3U8 streams: re-runs manifestScore (which already ran in tmdbStreams, so
+     avoid calling this on M3U8s that went through the normal scoring path).
+   - For MP4/file: probeMediaDuration. Backend relay/CDN URLs return null (CORS),
+     which we treat as "assume OK" — better to try and fail in the player than
+     block a valid stream before it loads. */
 export async function verifyStreamDuration(url) {
   if (!url) return { valid: false, reason: "empty_url", duration: 0 };
   if (isNoticeUrl(url)) return { valid: false, reason: "notice_url", duration: 0 };
@@ -192,20 +199,18 @@ export async function verifyStreamDuration(url) {
     return { valid: true, duration: null };
   }
 
-  // MP4 or direct file
+  // MP4 or direct file — probe only if the URL is likely directly playable in the browser.
+  // Backend relay/redirect URLs (api/*, ?u=*, ?url=*) cannot be probed due to CORS/redirect;
+  // they return null and we allow them through rather than blocking valid streams.
   const dur = await probeMediaDuration(url, 5000);
   if (dur !== null) {
-    if (dur < 30) {
-      return { valid: false, reason: "mp4_duration_under_30s", duration: dur };
-    }
-    if (dur < 180) {
-      return { valid: false, reason: "mp4_duration_under_180s_notice", duration: dur };
-    }
+    // Only block very short clips (< 30s); 30–180s films are legitimate short films.
+    if (dur < 30) return { valid: false, reason: "mp4_duration_under_30s", duration: dur };
     return { valid: true, duration: dur };
   }
 
-  // If probe timed out, allow if not a notice URL
-  return { valid: !isNoticeUrl(url), reason: "probe_timeout_assumed_ok", duration: null };
+  // Probe timed out or was blocked (CORS/redirect) — assume valid if not a notice URL
+  return { valid: true, reason: "probe_timeout_assumed_ok", duration: null };
 }
 
 /* A dub MoviBox has only as an H.264 MP4 (The Raja Saab's Tamil, Kannada,
@@ -485,16 +490,20 @@ const manifestScore = async (url) => {
       const h = Number((variants[0].match(/RESOLUTION=\d+x(\d+)/) || [])[1]) || 0;
       if (/tiles\.m3u8/.test(variants[0]) && h && h <= 720) return -1;
     }
-    // Single media playlist (no variants): filter out short notice/warning clips (<180s, or any <30s)
+    // Single media playlist (no variants): filter out short notice/warning clips (< 30s)
+    // Note: a 180s threshold is too aggressive — a short film or trailer is legitimate.
     if (!variants.length) {
       const segDurs = [...m.matchAll(/#EXTINF:\s*(-?[\d.]+)/g)].map((x) => Number(x[1]) || 0);
       const totalSec = segDurs.reduce((a, b) => a + b, 0);
-      if (segDurs.length > 0 && (totalSec < 30 || totalSec < 180)) return -1;
+      if (segDurs.length > 0 && totalSec < 30) return -1;
     }
     /* Master playlist with variants: fetch the first variant to check its
        duration. A notice master wraps a 25 s media playlist inside a normal-
        looking multi-variant manifest, so checking only the outer manifest
-       misses it. Only one extra request per candidate. */
+       misses it. Only one extra request per candidate.
+       IMPORTANT: for a live/chunked HLS stream, the first variant playlist
+       only holds the last ~3-4 segments (~30s). Only block if totalSec < 30 —
+       a live stream with normal segment lengths passes, a 25s notice does not. */
     if (variants.length > 0) {
       const firstUri = variants[0].split("\n").pop()?.trim();
       if (firstUri) {
@@ -507,7 +516,9 @@ const manifestScore = async (url) => {
             const vm = await vr.text();
             const segDurs = [...vm.matchAll(/#EXTINF:\s*(-?[\d.]+)/g)].map((x) => Number(x[1]) || 0);
             const totalSec = segDurs.reduce((a, b) => a + b, 0);
-            if (segDurs.length > 0 && (totalSec < 30 || totalSec < 180)) return -1;
+            /* Only block genuinely short clips (< 30s), not live streams where
+               the playlist window is a rolling 3-4 segments. */
+            if (segDurs.length > 0 && totalSec < 30) return -1;
           }
         } catch { /* variant fetch failed — let the score stand */ }
       }
@@ -593,9 +604,9 @@ export async function* tmdbStreams({ tmdbId, imdbId = "", type = "movie", season
 export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, episode = 1, title = "", backendUrl }) {
   const list = await moviBox({ tmdbId, type, season, episode, title, backendUrl })().catch(() => null);
   for (const c of list || []) {
+    // Only skip known notice CDN paths — do not probe duration (MoviBox CDN URLs require
+    // a Referer header the browser cannot send, so probeMediaDuration always times out).
     if (isNoticeUrl(c.url)) continue;
-    const dur = await probeMediaDuration(c.url, 4000);
-    if (dur !== null && (dur < 30 || dur < 180)) continue;
     yield { url: c.url, name: c.name };
   }
 }
