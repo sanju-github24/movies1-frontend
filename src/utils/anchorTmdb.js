@@ -233,6 +233,25 @@ const moviboxHls = (o) => async () => {
     name: `MoviBox • ${m.name} ${m.resolution ? `${m.resolution}p` : ""}`.trim(),
     score: 1 - i / 1000,   // after the multi-audio stream, which the manifest scores above 1
   }));
+  /* When the TV API returns nothing (some new titles), fall back to the web
+     API's MP4s through the download relay. The relay adds the Referer header
+     the CDN requires (a browser cannot set it itself). */
+  if (!out.length && RELAY) {
+    try {
+      const d2 = await getJson(`${o.backendUrl}/api/movibox?${qs}`, 30000);
+      for (const l of d2?.languages || []) {
+        const lang = LANG_NAME[l.code] || String(l.language || "").replace(/\s*dub$/i, "");
+        for (const f of l.mp4 || []) {
+          if (isNoticeUrl(f.url)) continue;
+          out.push({
+            name: `MoviBox • ${lang} ${f.resolution}${l.original ? " (original)" : ""}`,
+            url: `${RELAY}?u=${encodeURIComponent(f.url)}&play=1&n=${encodeURIComponent(`${o.title || "video"} ${lang} ${f.resolution}.mp4`)}`,
+            own: true, file: true,
+          });
+        }
+      }
+    } catch { /* web API also failed — give up on MoviBox */ }
+  }
   return out.length ? out : null;
 };
 
