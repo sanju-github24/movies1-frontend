@@ -221,18 +221,28 @@ const moviboxHls = (o) => async () => {
   if (!o.backendUrl || !o.tmdbId) return null;
   const hevc = HEVC_OK();
   const tv = o.type === "tv";
-  const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: tv ? "tv" : "movie",
-    ...(tv ? { se: String(o.season), ep: String(o.episode) } : {}) });
+  const qs = new URLSearchParams({
+    tmdb: String(o.tmdbId), type: tv ? "tv" : "movie",
+    ...(tv ? { se: String(o.season), ep: String(o.episode) } : {})
+  });
   const d = await getJson(`${o.backendUrl}/api/mbhls/title?${qs}`, 30000);
   const out = hevc ? (d?.streams || []).filter((s) => !isNoticeUrl(s.url)).map((s) => ({
     url: `${o.backendUrl}${s.url}`, own: true,
     name: `MoviBox • ${(s.languages || []).map((l) => l.name).join(", ")} ${s.height ? `${s.height}p` : ""}`.trim(),
   })) : [];
-  (d?.mp4 || []).filter((m) => (!hevc || !m.inStream) && !isNoticeUrl(m.url)).forEach((m, i) => out.push({
-    url: m.url, own: true, file: true,
-    name: `MoviBox • ${m.name} ${m.resolution ? `${m.resolution}p` : ""}`.trim(),
-    score: 1 - i / 1000,   // after the multi-audio stream, which the manifest scores above 1
-  }));
+  (d?.mp4 || []).filter((m) => (!hevc || !m.inStream) && !isNoticeUrl(m.url)).forEach((m, i) => {
+    /* `web`: a version the TV app's API has nothing for, found through
+       MoviBox's website API as AnchorMB does. Its CDN wants movibox.net as the
+       Referer, which a browser cannot send — only the download relay can — so
+       it plays through that, and is left out where no relay is set. */
+    if (m.web && !RELAY) return;
+    out.push({
+      url: m.web ? `${RELAY}?u=${encodeURIComponent(m.url)}&play=1&n=${encodeURIComponent(`${o.title || "video"} ${m.name} ${m.resolution}.mp4`)}` : m.url,
+      own: true, file: true,
+      name: `MoviBox • ${m.name} ${m.resolution ? `${m.resolution}p` : ""}`.trim(),
+      score: 1 - i / 1000,   // after the multi-audio stream, which the manifest scores above 1
+    });
+  });
   return out.length ? out : null;
 };
 
@@ -247,12 +257,14 @@ const moviboxHls = (o) => async () => {
    out: the player wants HLS, and the menu is for audio languages. */
 const BINGR_REF = "https://bingr.one/";
 const BINGR = [["s40", "Aphelion"], ["s70", "Polaris"], ["s80", "Moscow"], ["s81", "Novo"],
-  ["s62", "Bastion"], ["s30", "Nova"], ["s61", "Corvus"], ["s31", "Orion"]];
+["s62", "Bastion"], ["s30", "Nova"], ["s61", "Corvus"], ["s31", "Orion"]];
 const bingr = (o, srv, name) => async () => {
   if (!o.backendUrl || !o.title) return null;
   const tv = o.type === "tv";
-  const qs = new URLSearchParams({ srv, t: tv ? "tv" : "movie", id: String(o.tmdbId), title: o.title, year: o.year || "",
-    ...(tv ? { season: String(o.season), episode: String(o.episode) } : {}) });
+  const qs = new URLSearchParams({
+    srv, t: tv ? "tv" : "movie", id: String(o.tmdbId), title: o.title, year: o.year || "",
+    ...(tv ? { season: String(o.season), episode: String(o.episode) } : {})
+  });
   const d = await getJson(`${o.backendUrl}/api/bingr/stream?${qs}`, 45000);
   const out = (d?.sources || []).filter((x) => !x.isMP4 && !/\bsub\b/i.test(x.language || "")).map((x) => {
     // "Hindi" / "1080p", or Corvus's language "Original" with quality "720p | English"
@@ -272,8 +284,10 @@ const bingr = (o, srv, name) => async () => {
    for playing. Named "MoviBox • Tamil 1080p", the player reads the language
    from the name and offers each as a choice in its language menu. */
 const RELAY = import.meta.env.VITE_DL_RELAY || "";
-const LANG_NAME = { ta: "Tamil", te: "Telugu", hi: "Hindi", kn: "Kannada", ml: "Malayalam", en: "English",
-  bn: "Bengali", mr: "Marathi", pa: "Punjabi", gu: "Gujarati", ur: "Urdu", or: "Odia" };
+const LANG_NAME = {
+  ta: "Tamil", te: "Telugu", hi: "Hindi", kn: "Kannada", ml: "Malayalam", en: "English",
+  bn: "Bengali", mr: "Marathi", pa: "Punjabi", gu: "Gujarati", ur: "Urdu", or: "Odia"
+};
 const moviBox = (o) => async () => {
   if (!RELAY || !o.backendUrl) return null;
   const qs = new URLSearchParams({ tmdb: String(o.tmdbId), type: o.type, ...(o.type === "tv" ? { se: String(o.season), ep: String(o.episode) } : {}) });
@@ -343,8 +357,10 @@ const india4movies = (o) => async () => {
       seen.add(k); seen.add(id);
       const url = f.code ? `${o.backendUrl}/api/i4m/play?v=${encodeURIComponent(f.code)}`
         : `${o.backendUrl}/api/i4m/play?url=${encodeURIComponent(f.hub)}`;
-      const entry = { name: `India4Movies • ${lang} ${f.quality || ""}${lang === orig ? " (original)" : ""}${p.print ? ` · ${p.print}` : ""}`.replace(/\s+/g, " "),
-        url, own: true, file: true, lang, print: p.print };
+      const entry = {
+        name: `India4Movies • ${lang} ${f.quality || ""}${lang === orig ? " (original)" : ""}${p.print ? ` · ${p.print}` : ""}`.replace(/\s+/g, " "),
+        url, own: true, file: true, lang, print: p.print
+      };
       // A multi-audio file is opened below, for every language in it.
       if (isMulti && RELAY && multi.length < 4) multi.push({ entry, quality: f.quality || "" });
       else out.push(entry);
@@ -628,10 +644,12 @@ export async function* moviboxStreams({ tmdbId, type = "movie", season = 1, epis
    a five-language file becomes five choices in the player's language menu,
    named "<label> • Tamil 720p", and a switch carries on from the same second.
    null when the file has fewer than two named languages, or no relay is set. */
-const MKV_LANG = { hi: "Hindi", hin: "Hindi", te: "Telugu", tel: "Telugu", ta: "Tamil", tam: "Tamil",
+const MKV_LANG = {
+  hi: "Hindi", hin: "Hindi", te: "Telugu", tel: "Telugu", ta: "Tamil", tam: "Tamil",
   ml: "Malayalam", mal: "Malayalam", kn: "Kannada", kan: "Kannada", en: "English", eng: "English",
   bn: "Bengali", ben: "Bengali", mr: "Marathi", mar: "Marathi", pa: "Punjabi", pan: "Punjabi",
-  gu: "Gujarati", guj: "Gujarati", ur: "Urdu", urd: "Urdu", or: "Odia", ori: "Odia", ory: "Odia" };
+  gu: "Gujarati", guj: "Gujarati", ur: "Urdu", urd: "Urdu", or: "Odia", ori: "Odia", ory: "Odia"
+};
 export const isMkvLink = (u) => { try { return /\.mkv$/i.test(new URL(u).pathname); } catch { return false; } };
 /* What a browser decodes. A file's Dolby (AC3 / E-AC3 / TrueHD) or DTS
    tracks play silent — 1TamilMV's Moana 1080p carries its Tamil, Telugu and
@@ -653,8 +671,10 @@ export async function mkvLanguages(link, label = "AnchorHD", quality = "", { ori
     const lang = MKV_LANG[String(t.lang || "").toLowerCase().split("-")[0]];
     if (!lang || seen.has(lang)) return null;
     seen.add(lang);
-    return { name: `${label} • ${lang}${q ? ` ${q}` : ""}${lang === orig ? " (original)" : ""}`,
-      url: `${RELAY}?u=${encodeURIComponent(link)}&play=1&a=${t.a}`, lang, original: lang === orig };
+    return {
+      name: `${label} • ${lang}${q ? ` ${q}` : ""}${lang === orig ? " (original)" : ""}`,
+      url: `${RELAY}?u=${encodeURIComponent(link)}&play=1&a=${t.a}`, lang, original: lang === orig
+    };
   }).filter(Boolean).sort((a, b) => Number(b.original) - Number(a.original));
   return out.length >= min ? out : null;
 }
@@ -724,8 +744,10 @@ async function tamilmvFiles({ tmdbId, type = "movie", season = 1, episode = 1, t
     const k = `${lang}|${q}`;
     if (seen.has(k)) return;
     seen.add(k); covered.add(lang);
-    out.push({ name: `1TamilMV • ${lang} ${q}${x.l.print ? ` · ${x.l.print}` : ""}`,
-      url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}`, lang });
+    out.push({
+      name: `1TamilMV • ${lang} ${q}${x.l.print ? ` · ${x.l.print}` : ""}`,
+      url: `${backendUrl}/api/fresh/play?key=${encodeURIComponent(x.f.direct)}`, lang
+    });
   };
   files.filter((x) => x.l.langs.length === 1).forEach((x) => take(x, x.l.langs[0]));
   /* A multi-language file: each of its languages no single file covers, as
