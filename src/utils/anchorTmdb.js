@@ -438,7 +438,7 @@ const providersForKey = (o, key) => {
   switch (key) {
     case "own": return [ownStream(o)];
     case "castle": return [castle(o)];
-    case "moviebox": return [moviboxHls(o)];
+    case "moviebox": return [moviboxHls(o), moviBox(o)];
     case "languages": return byLanguages(o);
     case "singularity": return [singularity(o)];
     case "bingr": return BINGR.map(([srv, name]) => bingr(o, srv, name));
