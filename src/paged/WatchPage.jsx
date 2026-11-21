@@ -1608,7 +1608,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
                 collection: full.collection || meta.collection || null,
                 year:       isTmdbPick ? meta.year       : (full.year || meta.year),
                 description: isTmdbPick ? meta.description : (full.overview || full.description || meta.description),
-                imdbRating: isTmdbPick ? meta.imdbRating  : (full.imdb_rating != null ? String(full.imdb_rating) : meta.imdbRating),
+                imdbRating: (full.imdb_rating != null && full.imdb_rating !== "0.0") ? String(full.imdb_rating) : meta.imdbRating,
                 genres:     isTmdbPick ? meta.genres      : (fullGenres.length > 0 ? fullGenres : meta.genres),
               };
               if (Array.isArray(full.episodes) && full.episodes.length > 0) eps = full.episodes;
@@ -1694,7 +1694,7 @@ const fetchTmdbEpisodes = useCallback(async (tmdbId, imdbId) => {
                  offers the rest of them. Null for anything that is not part
                  of one, which is most titles and every TV show. */
               collection:   tData?.collection || null,
-              imdbRating:   watchData.imdb_rating || tData?.imdb_rating?.toFixed?.(1) || "0.0",
+              imdbRating:   (tData?.imdb_rating && tData.imdb_rating !== "0.0") ? String(tData.imdb_rating) : (watchData.imdb_rating || "0.0"),
               year:         watchData.year || tData?.year || null,
               description:  movieData?.description || tData?.overview || watchData?.description || "No description available.",
               genres:       watchData.genres
@@ -1725,7 +1725,7 @@ if (!alive) return;
                 poster:     safeURI(tv.poster_url || meta.poster),
                 background: safeURI(tv.cover_poster_url || meta.background),
                 year:       tv.year || meta.year,
-                imdbRating: tv.imdb_rating?.toFixed?.(1) || meta.imdbRating,
+                imdbRating: (tv.imdb_rating && String(tv.imdb_rating) !== "0.0") ? String(tv.imdb_rating) : meta.imdbRating,
                 genres:     (tv.genres || []).map(g => typeof g === "object" ? g.name : g) || meta.genres,
               };
             } else {
