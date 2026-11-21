@@ -4,6 +4,7 @@ import { Film, Loader2, Save, ArrowUp, ArrowDown, RotateCcw, Eye, EyeOff } from 
 import AdminLayout from "../components/AdminLayout";
 import { supabase } from "../utils/supabaseClient";
 import { backendUrl } from "../utils/api";
+import { clearServerOrderCache } from "../utils/anchorTmdb";
 
 /* Admin → AnchorHD servers.
  *
@@ -77,6 +78,7 @@ export default function AdminAnchorServers() {
       const r = await fetch(`${backendUrl}/api/anchor-servers`, { method: "PUT", headers: await authHeaders(), body: JSON.stringify({ order }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.success) throw new Error(d.message || `Save failed (${r.status})`);
+      clearServerOrderCache();   // player picks up new order immediately
       toast.success("AnchorHD server order saved");
     } catch (e) { toast.error(e.message); }
     setBusy(false);

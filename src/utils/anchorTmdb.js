@@ -483,6 +483,9 @@ async function serverOrder(backendUrl) {
   } catch { /* use the default order */ }
   return null;
 }
+/** Call after the admin saves a new server order so the player picks it up
+ *  immediately instead of waiting up to 60 s for the cache to expire. */
+export function clearServerOrderCache() { _orderCache = null; _orderAt = 0; }
 
 
 /* "It answered" and "it plays" are different things — a provider will hand
