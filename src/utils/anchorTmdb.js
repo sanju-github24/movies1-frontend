@@ -414,6 +414,7 @@ const castle = (o) => async () => {
   if (!o.backendUrl || !o.title) return null;
   const qs = new URLSearchParams({
     title: o.title, ...(o.year ? { year: String(o.year) } : {}),
+    type: o.type || "movie",
     ...(o.type === "tv" ? { season: String(o.season), episode: String(o.episode) } : {}),
   });
   const d = await getJson(`${o.backendUrl}/api/castle/resolve?${qs}`, 20000);
