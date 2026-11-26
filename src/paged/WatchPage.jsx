@@ -96,7 +96,7 @@ const sortDownloadBlocks = (blocks) => {
 
 /* Servers that play in someone else's embedded player — what the corner
    switcher offers once our own player has handed over. */
-const EMBED_IDS = new Set(["imdb_reader", "embed", "mirchi", "modiplay", "vidify", "videasy", "vidup", "tmdb", "2embed"]);
+const EMBED_IDS = new Set(["imdb_reader", "embed", "mirchi", "modiplay", "vidify", "videasy", "vidup", "tmdb", "2embed", "vidrift"]);
 
 /* ===== Group episodes by season ===== */
 const groupEpisodesBySeason = (episodes) => {
@@ -140,6 +140,7 @@ const COLOR = {
   tmdb: { glow: "rgba(59,130,246,0.3)", bg: "from-blue-500/10 to-blue-600/5", border: "border-blue-500/30", text: "text-blue-400", dot: "bg-blue-400" },
   "2embed": { glow: "rgba(249,115,22,0.3)", bg: "from-orange-500/10 to-orange-600/5", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
   modiplay: { glow: "rgba(236,72,153,0.3)", bg: "from-pink-500/10 to-pink-600/5", border: "border-pink-500/30", text: "text-pink-400", dot: "bg-pink-400" },
+  vidrift: { glow: "rgba(16,185,129,0.3)", bg: "from-emerald-500/10 to-emerald-600/5", border: "border-emerald-500/30", text: "text-emerald-400", dot: "bg-emerald-400" },
   hls: { glow: "rgba(34,197,94,0.3)", bg: "from-green-500/10 to-green-600/5", border: "border-green-500/30", text: "text-green-400", dot: "bg-green-400" },
 };
 
@@ -185,6 +186,7 @@ const SRV_COLOR = {
   tmdb: "text-blue-400   bg-blue-500/10   border-blue-500/20   hover:border-blue-500/50",
   "2embed": "text-orange-400 bg-orange-500/10 border-orange-500/20 hover:border-orange-500/50",
   modiplay: "text-pink-400   bg-pink-500/10   border-pink-500/20   hover:border-pink-500/50",
+  vidrift:  "text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/50",
   hls: "text-green-400  bg-green-500/10  border-green-500/20  hover:border-green-500/50",
 };
 
@@ -244,10 +246,10 @@ const lookupMx = async (title, isTV) => {
    default (index 0 becomes the active server):
      1. AnchorHD    — our own stream, when we host this title
      2. Multi Audio — our uploaded mirror, the next best thing we control
-     3. Omega       — first of the third-party servers
+     3. VidRift     — first of the third-party servers (free, no key, TMDB id)
      4. everything else
    So a title we host never opens on a third-party embed, and a title we don't
-   host opens on Omega. */
+   host opens on VidRift. */
 const buildServers = (meta, eps = []) => {
   /* WHILE IT IS ON AIR, a nightly telecast goes out on our own feed and nowhere
      else — no third-party server carries it, so listing them would hand the
@@ -286,6 +288,9 @@ const buildServers = (meta, eps = []) => {
 
   if (meta.tmdb_id)
     srv.push({ id: "mirchi", name: "Mirchi", label: "Hindi Audio", icon: <Languages size={14} /> });
+  // VidRift — free TMDB embed, no key needed; default fallback when AnchorHD finds nothing
+  if (meta.tmdb_id)
+    srv.push({ id: "vidrift", name: "VidRift", label: "Free · Multi-Server", icon: <Globe size={14} /> });
   // Always include Omega — at play-time we fall back to tmdb_id if imdb_id is absent
   srv.push({ id: "imdb_reader", name: "Omega", label: "Direct Stream", icon: <Cpu size={14} /> });
   if (meta.tmdb_id)
@@ -1099,11 +1104,11 @@ const WatchHtmlPage = () => {
     if (!found) {
       tmdbIterRef.current = null;
       tmdbCacheRef.current.delete(search.key);   // ask again next time
-      // Nobody has it — hand over to Omega, the first embed server, rather
+      // Nobody has it — hand over to VidRift, the default embed server, rather
       // than leave a dead button. (Its corner switcher offers the others.)
-      const next = availableServers.find(sv => sv.id === "imdb_reader");
-      toast.info(next ? `${who} couldn't find this one — trying Omega` : `${who} couldn't find this one`);
-      if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, "imdb_reader"); }
+      const next = availableServers.find(sv => sv.id === "vidrift") || availableServers.find(sv => sv.id === "imdb_reader");
+      toast.info(next ? `${who} couldn't find this one — trying ${next.name}` : `${who} couldn't find this one`);
+      if (next) { setActiveServer(next); handlePlayActionRef.current?.(ep, next.id); }
       return;
     }
     if (ep) setCurrentOverlayEp(ep);
@@ -1353,6 +1358,7 @@ const WatchHtmlPage = () => {
       case "tmdb": if (tmdb) src = TV ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}` : `https://vidlink.pro/movie/${tmdb}`; break;
       case "2embed": if (id) src = TV ? `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}` : `https://www.2embed.cc/embed/${id}`; break;
       case "modiplay": if (tmdb) src = TV ? `https://rozgarlelo.modiplay.xyz/embed/tmdb/tv?id=${tmdb}&s=${s}&e=${e}` : `https://rozgarlelo.modiplay.xyz/embed/tmdb/movie?id=${tmdb}`; break;
+      case "vidrift": if (tmdb) src = TV ? `https://embed.vidrift.net/embed/tv/${tmdb}/${s}/${e}` : `https://embed.vidrift.net/embed/movie/${tmdb}`; break;
       case "hls":
         // Direct server → our VideoPlayer, so ANY HLS (.m3u8) or direct URL plays.
         src = ep ? (ep.direct_url || ep.hls_url) : (movieMeta.video_url || movieMeta.hls_url);
@@ -1363,11 +1369,11 @@ const WatchHtmlPage = () => {
       default: break;
     }
 
-    // Ultimate fallback — videasy works for both movies and TV with just tmdb_id
+    // Ultimate fallback — VidRift works for both movies and TV with just tmdb_id, no key needed
     if (!src && tmdb) {
       src = TV
-        ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}?${p_videasy}`
-        : `https://player.videasy.net/movie/${tmdb}?${p_videasy}`;
+        ? `https://embed.vidrift.net/embed/tv/${tmdb}/${s}/${e}`
+        : `https://embed.vidrift.net/embed/movie/${tmdb}`;
     }
 
     if (src) {
